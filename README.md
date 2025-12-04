@@ -1,174 +1,210 @@
-# [LitmusChaos](https://litmuschaos.io/)
-<img alt="LitmusChaos" src="https://avatars.githubusercontent.com/u/49853472?s=200&v=4" width="200" align="left">
+# AgentCert
 
-### Open Source Chaos Engineering Platform
+### AI Agent Benchmarking Platform for Chaos Engineering
 
-[![Slack Channel](https://img.shields.io/badge/Slack-Join-purple)](https://slack.litmuschaos.io)
-![GitHub Workflow](https://github.com/litmuschaos/litmus/actions/workflows/push.yml/badge.svg?branch=master)
-[![Docker Pulls](https://img.shields.io/docker/pulls/litmuschaos/chaos-operator.svg)](https://hub.docker.com/r/litmuschaos/chaos-operator)
-[![GitHub stars](https://img.shields.io/github/stars/litmuschaos/litmus?style=social)](https://github.com/litmuschaos/litmus/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/litmuschaos/litmus)](https://github.com/litmuschaos/litmus/issues)
-[![Twitter Follow](https://img.shields.io/twitter/follow/litmuschaos?style=social)](https://twitter.com/LitmusChaos)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/3202/badge)](https://www.bestpractices.dev/projects/3202)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Flitmuschaos%2Flitmus.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Flitmuschaos%2Flitmus?ref=badge_shield)
-[![YouTube Channel](https://img.shields.io/badge/YouTube-Subscribe-red)](https://www.youtube.com/channel/UCa57PMqmz_j0wnteRa9nCaw)
-[![Gurubase](https://img.shields.io/badge/Gurubase-Ask%20LitmusChaos%20Guru-006BFF)](https://gurubase.io/g/litmuschaos)
-<br><br><br><br>
+## What is AgentCert?
 
-#### *Read this in [other languages](translations/TRANSLATIONS.md).*
+**AgentCert** is a groundbreaking platform that brings **AI Agent Benchmarking** capabilities to the world of **Chaos Engineering**. Built on the proven foundation of [LitmusChaos](docs/litmus-core/README.md), AgentCert introduces a comprehensive framework for evaluating how AI agents perform when your Kubernetes infrastructure experiences failures.
 
-[🇰🇷](translations/README-ko.md) [🇨🇳](translations/README-chn.md) [🇧🇷](translations/README-pt-br.md) [🇮🇳](translations/README-hi.md)
+In today's AI-driven operations landscape, autonomous agents are increasingly responsible for detecting, diagnosing, and remediating infrastructure issues. But how do you know if your AI agent will respond effectively when a critical pod crashes or network latency spikes? **AgentCert answers this question.**
 
+## Why AgentCert?
 
-## Overview
+### The Challenge
 
-LitmusChaos is an open source Chaos Engineering platform that enables teams to identify weaknesses & potential outages in infrastructures by 
-inducing chaos tests in a controlled way. Developers & SREs can practice Chaos Engineering with LitmusChaos as it is easy to use, based on modern 
-Chaos Engineering principles & community collaborated. It is 100% open source & a CNCF project.
+Modern cloud-native applications rely on AI agents for:
+- Automated incident detection and response
+- Intelligent resource optimization
+- Predictive failure prevention
+- Self-healing infrastructure management
 
-LitmusChaos takes a cloud-native approach to create, manage and monitor chaos. The platform itself runs as a set of microservices and uses Kubernetes 
-custom resources (CRs) to define the chaos intent, as well as the steady state hypothesis. 
+But without proper validation, you're trusting these agents to handle production incidents **blindly**. Traditional testing doesn't expose agents to the chaotic, unpredictable nature of real-world failures.
 
-At a high-level, Litmus comprises of:  
+### The Solution
 
-- **Chaos Control Plane**: A centralized chaos management tool called chaos-center, which helps construct, schedule and visualize Litmus chaos workflows  
-- **Chaos Execution Plane Services**: Made up of a chaos agent and multiple operators that execute & monitor the experiment within a defined 
-  target Kubernetes environment. 
+AgentCert creates **controlled chaos experiments** in your Kubernetes clusters and evaluates how your AI agents respond. It measures:
 
-![architecture summary](/images/litmus-control-and-execution-plane-overview.png)
+- ⏱️ **Time to Detect (TTD)**: How quickly does your agent notice the problem?
+- 🔧 **Time to Remediate (TTR)**: How fast can it fix the issue?
+- ✅ **Success Rate**: Does the agent actually resolve the fault?
+- 🎯 **Decision Quality**: Are the agent's actions logical and safe?
+- 💡 **Resource Efficiency**: Does the agent consume excessive resources?
 
-At the heart of the platform are the following chaos custom resources: 
+By injecting faults like pod crashes, network failures, resource exhaustion, etc. AgentCert validates your agent's resilience **before production incidents happen**.
 
-- **ChaosExperiment**: A resource to group the configuration parameters of a particular fault. ChaosExperiment CRs are essentially installable templates 
-  that describe the library carrying out the fault, indicate permissions needed to run it & the defaults it will operate with. Through the ChaosExperiment,  Litmus supports BYOC (bring-your-own-chaos) that helps integrate (optional) any third-party tooling to perform the fault injection. 
+## How It Works
 
-- **ChaosEngine**: A resource to link a Kubernetes application workload/service, node or an infra component to a fault described by the ChaosExperiment. 
-  It also provides options to tune the run properties and specify the steady state validation constraints using 'probes'. ChaosEngine is watched by the 
-  Chaos-Operator, which reconciles it (triggers experiment execution) via runners. 
+AgentCert combines three powerful technologies:
 
-The ChaosExperiment & ChaosEngine CRs are embedded within a Workflow object that can string together one or more experiments in a desired order.
+### 1. LitmusChaos Foundation
+Built on the proven LitmusChaos platform, AgentCert inherits:
+- **Battle-tested fault injection** for Kubernetes, cloud services, and infrastructure
+- **Workflow orchestration** via Argo Workflows for complex multi-stage scenarios
+- **Community-driven chaos hub** with pre-built experiment templates
+- **CNCF-backed reliability** and enterprise-grade security
 
-- **ChaosResult**: A resource to hold the results of the experiment run. It provides details of the success of each validation constraint, 
-  the revert/rollback status of the fault as well as a verdict. The Chaos-exporter reads the results and exposes information as prometheus metrics. 
-  ChaosResults are especially useful during automated runs. 
+### 2. NVIDIA NeMo Agent Toolkit (NAT)
+AgentCert uses NAT as the standard evaluation framework, providing:
+- **Task-Agent-Evaluator model** for structured benchmarking
+- **Built-in evaluators** (RAGAS for LLM reasoning, Trajectory for action sequences)
+- **Custom chaos evaluators** for TTD, TTR, and remediation quality
+- **Production-ready runtime** for agent execution and monitoring
 
-ChaosExperiment CRs are hosted on <a href="https://hub.litmuschaos.io" target="_blank">hub.litmuschaos.io</a>. It is a central hub where the 
-application developers or vendors share their chaos experiments so that their users can use them to increase the resilience of the applications 
-in production.
-
-## Use cases
-
-- **For Developers**: To run chaos experiments during application development as an extension of unit testing or integration testing.
-- **For CI/CD pipeline builders**: To run chaos as a pipeline stage to find bugs when the application is subjected to fail paths in a pipeline.
-- **For SREs**: To plan and schedule chaos experiments into the application and/or surrounding infrastructure. This practice identifies the weaknesses 
-  in the deployment system and increases resilience.
-
-## Getting Started with Litmus
-
-To get started, check out the <a href="https://docs.litmuschaos.io/docs/introduction/what-is-litmus" target="_blank">Litmus Docs</a> and specifically the <a href="https://docs.litmuschaos.io/docs/getting-started/installation#prerequisites" target="_blank">Installation section</a> of the <a href="https://docs.litmuschaos.io/docs/getting-started/installation" target="_blank">Getting Started with Litmus</a> page.
-
-## Contributing to Chaos Hub
-
-Check out the <a href="https://github.com/litmuschaos/community-charts/blob/master/CONTRIBUTING.md" target="_blank">Contributing Guidelines for the Chaos Hub</a>
+### 3. Langfuse Observability
+All agent behavior is tracked through Langfuse, offering:
+- **Complete trace visibility** of every agent decision and action
+- **Real-time metrics dashboard** for performance monitoring
+- **Historical analysis** to compare agent versions and configurations
 
 
-## Community
+## Quick Example: Pod Crash Benchmark
 
-### Community Resources:
+Here's what happens when you benchmark an AI agent's response to a pod crash:
 
-Feel free to reach out if you have any queries,concerns, or feature requests
+```
+1. AgentCert injects fault → Pod crashes in target cluster
+2. NAT Runtime monitors → AI agent queries Kubernetes API
+3. Agent detects crash → Decides to restart the pod
+4. Agent remediates → Executes kubectl commands
+5. System recovers → Pod returns to healthy state
+6. NAT evaluates → Calculates TTD, TTR, Success Percentage, etc.
+7. Langfuse persists → Trace, metrics, and scores stored permanently
+8. Dashboard updates → Real-time performance visualization
+```
 
-- Give us a star ⭐️ - If you are using LitmusChaos or think it is an interesting project, we would love a star ❤️
+## Key Features
 
-- Follow LitmusChaos on Twitter [@LitmusChaos](https://twitter.com/LitmusChaos).
+### AI Agent Management
+- **Centralized Registry**: Register agents with metadata, endpoints, and capabilities
+- **Multi-Agent Support**: Benchmark multiple agents simultaneously for comparison
+- **Version Tracking**: Compare different versions of the same agent
+- **Credential Management**: Secure storage of API keys and authentication tokens
 
-- Subscribe to the [LitmusChaos YouTube channel](https://www.youtube.com/channel/UCa57PMqmz_j0wnteRa9nCaw) for regular updates & meeting recordings. 
+### Benchmark Scenarios
+- **Pre-built Templates**: Pod crashes, network latency, disk pressure, resource exhaustion
+- **Custom Scenarios**: Define your own fault patterns and expected behaviors
+- **Multi-Fault Sequences**: Test agent resilience against cascading failures
+- **Difficulty Levels**: Progressive complexity from basic to advanced scenarios
 
-- To join our [Slack Community](https://slack.litmuschaos.io/) and meet our community members, put forward your questions & opinions, join the #litmus channel on the [Kubernetes Slack](https://slack.k8s.io/). 
+### Evaluation & Analytics
+- **Automated Scoring**: NAT evaluators measure TTD, TTR, and success rates
+- **RAGAS Evaluation**: Validates LLM-based reasoning quality for intelligent agents
+- **Trajectory Analysis**: Ensures agents follow safe, optimal action sequences
+- **Comparative Reports**: Side-by-side performance of multiple agents or versions
 
-### Community Meetings
+#### NAT Built-in Evaluators
 
-1. Community Meetings
-- These will be hosted every 3rd Wednesday of every month at  5:30 PM GMT /6:30 PM CEST /10 PM IST
-- These meetings cover community updates, new feature or release announcements, and user/adopter stories. Everyone in the community is welcome to join and participate in discussions.
+AgentCert leverages industry-standard evaluators from NVIDIA's NeMo Agent Toolkit:
 
+| Evaluator | Purpose | Why It Matters for Chaos Engineering |
+|-----------|---------|-------------------------------------|
+| **RAGAS** | Evaluates quality of LLM-generated responses based on retrieved context | Many AI agents use RAG patterns to analyze Kubernetes state (pod logs, events, metrics). RAGAS validates whether agent reasoning is grounded in actual cluster data, not hallucinations. |
+| **Trajectory Evaluator** | Evaluates the sequence of actions taken by an agent | Critical for chaos scenarios where action sequence matters (e.g., must drain node before terminating pods). Ensures agents don't skip steps that could cause cascading failures. |
 
-2. Contributor Meetings
-- These will be hosted every second & last Thursday of every month at  2:30 PM GMT /3:30 PM CEST /7 PM IST
-- These meetings focus on both technical and non-technical contributions to LitmusChaos. Maintainers, current contributors, and aspiring contributors are encouraged to join to discuss issues, fixes, enhancements, and future contributions.
+#### Custom Chaos Evaluators
 
-Fill out the [LitmusChaos Meetings invite form](https://forms.gle/qawjtFUeL431jmpv7) to get your Calendar invite!  
+Built on top of NAT's framework specifically for chaos resilience:
 
-- [Sync Up Agenda & Meeting Notes](https://hackmd.io/a4Zu_sH4TZGeih-xCimi3Q)
-- [Release Tracker](https://github.com/litmuschaos/litmus/milestones)
+- **TTD (Time to Detect)**: Measures time from fault injection to first agent action indicating detection
+- **TTR (Time to Remediate)**: Measures time from detection to complete system recovery
+- **Remediation Success**: Validates that agent actions actually resolved the fault
+- **Resource Efficiency**: Measures CPU/memory overhead during agent operation
+- **Decision Quality**: Uses RAGAS to assess quality of LLM-based agent reasoning
 
-### Videos
+### Standards-Based Integration
+- **NAT Framework**: Industry-standard agent evaluation toolkit from NVIDIA
+- **Langfuse Platform**: Production-ready LLM observability without custom infrastructure
+- **ChaosHub Compatibility**: Reuse existing chaos experiments from the community
+- **Argo Workflows**: Proven orchestration for complex benchmark pipelines
 
-- [What if Your System Experiences an Outage? Let's Build a Resilient Systems with Chaos Engineering](https://www.youtube.com/watch?v=3mjGEh905u4&t=1s) @ [CNCF](https://www.youtube.com/@cncf)
-- [Enhancing Cyber Resilience Through Zero Trust Chaos Experiments in Cloud Native Environments](https://youtu.be/BelNIk4Bkng) @ [CNCF](https://www.youtube.com/@cncf)
-- [LitmusChaos, with Karthik Satchitanand](https://www.youtube.com/watch?v=ks2R57hhFZk&t=503s) @ [The Kubernetes Podcast from Google](https://www.youtube.com/@TheKubernetesPodcast)
-- [Cultural Shifts: Fostering a Chaos First Mindset in Platform Engineering](https://www.youtube.com/watch?v=WUXFKxgZRsk) @ [CNCF](https://www.youtube.com/@cncf)
-- [Fire in the Cloud: Bringing Managed Services Under the Ambit of Cloud-Native Chaos Engineering](https://www.youtube.com/watch?v=xCDQp5E3VUs) @ [CNCF](https://www.youtube.com/@cncf)
-- [Security Controls for Safe Chaos Experimentation](https://www.youtube.com/watch?v=whCkvLKAw74) @ [CNCF](https://www.youtube.com/@cncf)
-- [Chaos Engineering For Hybrid Targets With LitmusChaos](https://www.youtube.com/watch?v=BZL-ngvbpbU&t=751s) @ [CNCF](https://www.youtube.com/@cncf)
-- [Cloud Native Live: Litmus Chaos Engine and a microservices demo app](https://youtu.be/hOghvd9qCzI)
-- [Chaos Engineering hands-on - An SRE ideating Chaos Experiments and using LitmusChaos | July 2022](https://youtu.be/_x_7SiesjF0) 
-- [Achieve Digital Product Resiliency with Chaos Engineering](https://youtu.be/PQrmBHgk0ps)
-- [Case Study: Bringing Chaos Engineering to the Cloud Native Developers](https://youtu.be/KSl-oKk6TPA) @ [CNCF](https://www.youtube.com/@cncf)
-- [Cloud Native Chaos Engineering with LitmusChaos](https://www.youtube.com/watch?v=ItUUqejdXr0) @ [CNCF](https://www.youtube.com/@cncf)
-- [How to create Chaos Experiments with Litmus | Litmus Chaos tutorial](https://youtu.be/mwu5eLgUKq4) @ [Is it Observable](https://www.youtube.com/c/IsitObservable)
-- [Cloud Native Chaos Engineering Preview With LitmusChaos](https://youtu.be/pMWqhS-F3tQ)
-- [Get started with Chaos Engineering with Litmus](https://youtu.be/5CI8d-SKBfc) @ [Containers from the Couch](https://www.youtube.com/c/ContainersfromtheCouch)
-- [Litmus 2 - Chaos Engineering Meets Argo Workflows](https://youtu.be/B8DfYnDh2F4) @ [DevOps Toolkit](https://youtube.com/c/devopstoolkit)
-- [Hands-on with Litmus 2.0 | Rawkode Live](https://youtu.be/D0t3emVLLko) @ [Rawkode Academy](https://www.youtube.com/channel/UCrber_mFvp_FEF7D9u8PDEA)
-- [Introducing LitmusChaos 2.0 / Dok Talks #74](https://youtu.be/97BiCNtJbDw) @ [DoK.community](https://www.youtube.com/channel/UCUnXJbHQ89R2uSfKsqQwGvQ)
-- [Introduction to Cloud Native Chaos Engineering](https://youtu.be/LK0oDLQE4S8) @ [Kunal Kushwaha](https://www.youtube.com/channel/UCBGOUQHNNtNGcGzVq5rIXjw)
-- [#EveryoneCanContribute cafe: Litmus - Chaos Engineering for your Kubernetes](https://youtu.be/IiyrEiK4stQ) @ [GitLab Unfiltered](https://www.youtube.com/channel/UCMtZ0sc1HHNtGGWZFDRTh5A)
-- [Litmus - Chaos Engineering for Kubernetes (CNCFMinutes 9)](https://youtu.be/rDQ9XKbSJIc) @ [Saiyam Pathak](https://www.youtube.com/channel/UCi-1nnN0eC9nRleXdZA6ncg)
-- [Chaos Engineering with Litmus Chaos by Prithvi Raj || HACKODISHA Workshop](https://youtu.be/eyAG0svCsQA) @ [Webwiz](https://www.youtube.com/channel/UC9yM_PkV0QIIsPA3qPrp)
+## Getting Started
 
-[And More....](https://www.youtube.com/channel/UCa57PMqmz_j0wnteRa9nCaw)
+### Prerequisites
+- Kubernetes cluster (v1.20+)
+- kubectl configured with cluster access
+- Helm 3.x (for installation)
+- AI agent with REST API or SDK integration
 
-### Blogs
+### Installation
 
-- CNCF: [Introduction to LitmusChaos](https://www.cncf.io/blog/2020/08/28/introduction-to-litmuschaos/)
-- Hackernoon: [Manage and Monitor Chaos via Litmus Custom Resources](https://hackernoon.com/solid-tips-on-how-to-manage-and-monitor-chaos-via-litmus-custom-resources-5g1s33m9)
-- [Observability Considerations in Chaos: The Metrics Story](https://dev.to/ksatchit/observability-considerations-in-chaos-the-metrics-story-6cb)
+*To Do - Add commands*
 
-Community Blogs:
+### Register Your First Agent
 
-- LiveWyer: [LitmusChaos Showcase: Chaos Experiments in a Helm Chart Test Suite](https://livewyer.io/blog/2021/03/22/litmuschaos-showcase-chaos-experiments-in-a-helm-chart-test-suite/)
-- Jessica Cherry: [Test Kubernetes cluster failures and experiments in your terminal](https://opensource.com/article/21/6/kubernetes-litmus-chaos)
-- Yang Chuansheng(KubeSphere): [KubeSphere 部署 Litmus 至 Kubernetes 开启混沌实验](https://kubesphere.io/zh/blogs/litmus-kubesphere/)
-- Saiyam Pathak(Civo): [Chaos Experiments on Kubernetes using Litmus to ensure your cluster is production ready](https://www.civo.com/learn/chaos-engineering-kubernetes-litmus)
-- Andreas Krivas(Container Solutions):[Comparing Chaos Engineering Tools for Kubernetes Workloads](https://blog.container-solutions.com/comparing-chaos-engineering-tools)
-- Akram Riahi(WeScale):[Chaos Engineering : Litmus sous tous les angles](https://blog.wescale.fr/2021/03/11/chaos-engineering-litmus-sous-tous-les-angles/)
-- Prashanto Priyanshu(LensKart):[Lenskart’s approach to Chaos Engineering-Part 2](https://blog.lenskart.com/lenskarts-approach-to-chaos-engineering-part-2-6290e4f3a74e)
-- DevsDay.ru(Russian):[LitmusChaos at Kubecon EU '21](https://devsday.ru/blog/details/40746)
+```bash
+# Using LitmusCtl CLI
+*To Do - Add commands*
 
+# Or via Web UI: http://<agentcert-url>/agents/register
+```
 
-## Adopters
+### Run Your First Benchmark
 
-Check out the <a href="https://github.com/litmuschaos/litmus/blob/master/ADOPTERS.md" target="_blank">Adopters of LitmusChaos</a>
+```bash
+# Create a benchmark project
+*To Do - Add commands*
 
-(_Send a PR to the above page if you are using Litmus in your chaos engineering practice_)
+# Start the benchmark
+*To Do - Add commands*
+
+# View real-time results
+*To Do - Add commands*
+```
+
+### View Results in Langfuse Dashboard
+
+Access your Langfuse dashboard to see:
+- Complete trace of agent actions and decisions
+- TTD and TTR metrics for each benchmark run
+- Comparative performance across multiple runs
+
+## Use Cases
+
+### For AI Agent Developers
+- **Validate agent logic** before deploying to production
+- **Benchmark performance** against industry baselines
+- **Compare agent versions** to measure improvements
+- **Test edge cases** that are hard to reproduce manually
+
+### For Platform Engineering Teams
+- **Certify agent reliability** for production readiness
+- **Establish SLAs** for incident response (e.g., TTD < 30s, TTR < 2m)
+- **Regression testing** after infrastructure changes
+
+### For SREs & Operations
+- **Validate incident response** automation before outages occur
+- **Test agent behavior** under multi-fault scenarios
+- **Evaluate decision quality** for safety-critical actions
+- **Monitor agent performance** trends over time
+
+### For Researchers & Academia
+- **Benchmark new agent algorithms** against standard scenarios
+- **Publish reproducible results** using community scenarios
+- **Compare different approaches** (rule-based vs. LLM-based agents)
+- **Contribute evaluation metrics** to the open-source community
+
+## What Makes AgentCert Different?
+
+| Traditional Testing | AgentCert Approach |
+|---------------------|-------------------|
+| Synthetic test data | Real Kubernetes fault injection |
+| Isolated unit tests | End-to-end chaos scenarios |
+| Manual verification | Automated scoring with NAT |
+| No production simulation | Controlled production-like failures |
+| Basic pass/fail | Quantified metrics (TTD, TTR, quality) |
 
 ## License
 
-Litmus is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text. Some of the projects used by the Litmus project may be governed by a different license, please refer to its specific license.
+AgentCert is licensed under the **Apache License, Version 2.0**. See [LICENSE](./LICENSE) for the full license text.
 
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Flitmuschaos%2Flitmus.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Flitmuschaos%2Flitmus?ref=badge_large)
+This project builds on LitmusChaos, which is also Apache 2.0 licensed. Some integrated components (NAT, Langfuse) may be governed by different licenses - please refer to their respective documentation.
 
-Litmus Chaos is part of the CNCF Projects.
+## Acknowledgments
 
-[![CNCF](https://github.com/cncf/artwork/blob/main/other/cncf/horizontal/color/cncf-color.png)](https://landscape.cncf.io/?selected=litmus)
+AgentCert stands on the shoulders of giants:
 
-## Important Links
-
-<a href="https://docs.litmuschaos.io">
-  Litmus Docs <img src="https://avatars0.githubusercontent.com/u/49853472?s=200&v=4" alt="Litmus Docs" height="15">
-</a>
-<br>
-<a href="https://landscape.cncf.io/?selected=litmus">
-  CNCF Landscape <img src="https://landscape.cncf.io/images/cncf-landscape-horizontal-color.svg" alt="Litmus on CNCF Landscape" height="15">
-</a>
+- [LitmusChaos](https://litmuschaos.io): For the robust chaos engineering foundation
+- [NVIDIA NeMo Agent Toolkit](https://developer.nvidia.com/nemo-agent-toolkit): For the NAT framework and agent evaluation standards
+- [Langfuse](https://langfuse.com): For the production-ready LLM observability platform
+- [Kubernetes](https://kubernetes.io/): For the orchestration platform that powers modern infrastructure
+- [Argo Workflows](https://argoproj.github.io/workflows) - Kubernetes-native Workflow Engine
