@@ -1,13 +1,4 @@
----
-goal: Implement Agent Registry Service for AI Agent Lifecycle Management in AgentCert Platform
-version: 1.0
-date_created: 2026-01-06
-last_updated: 2026-01-06
-owner: AgentCert Development Team
-status: Planned
-tags: [feature, agent-registry, graphql, mongodb, langfuse, kubernetes]
----
-# Feature 1.3: Agent Registry Service
+# Feature: Agent Registry Service
 ## Implementation Plan
 
 **Document Version**: 1.0

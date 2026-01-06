@@ -1,4 +1,4 @@
-# Feature 1.3: Agent Registry Service
+# Feature: Agent Registry Service
 ## Design Document
 
 **Document Version**: 1.0
