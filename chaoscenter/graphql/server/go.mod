@@ -19,7 +19,7 @@ require (
 	github.com/mrz1836/go-sanitize v1.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.17.3
 	github.com/tidwall/sjson v1.2.5
 	github.com/vektah/gqlparser/v2 v2.5.16
