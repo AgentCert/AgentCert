@@ -358,7 +358,33 @@ cd chaoscenter/authentication/apigo run main.go
 Step-1: Export the following environment variables
 
 ```bash
-export DB_SERVER="mongodb://m1:27015,m2:27016,m3:27017/?replicaSet=rs0"export DB_USER=adminexport DB_PASSWORD=1234export JWT_SECRET=litmus-portal@123export PORTAL_ENDPOINT=http://localhost:8080export LITMUS_SVC_ENDPOINT=""export SELF_AGENT=falseexport INFRA_SCOPE=clusterexport INFRA_NAMESPACE=litmusexport LITMUS_PORTAL_NAMESPACE=litmusexport PORTAL_SCOPE=namespaceexport SUBSCRIBER_IMAGE=litmuschaos/litmusportal-subscriber:ciexport EVENT_TRACKER_IMAGE=litmuschaos/litmusportal-event-tracker:ciexport CONTAINER_RUNTIME_EXECUTOR=k8sapiexport ARGO_WORKFLOW_CONTROLLER_IMAGE=argoproj/workflow-controller:v2.11.0export ARGO_WORKFLOW_EXECUTOR_IMAGE=argoproj/argoexec:v2.11.0export CHAOS_CENTER_SCOPE=clusterexport WORKFLOW_HELPER_IMAGE_VERSION=3.0.0export LITMUS_CHAOS_OPERATOR_IMAGE=litmuschaos/chaos-operator:3.0.0export LITMUS_CHAOS_RUNNER_IMAGE=litmuschaos/chaos-runner:3.0.0export LITMUS_CHAOS_EXPORTER_IMAGE=litmuschaos/chaos-exporter:3.0.0export ADMIN_USERNAME=adminexport ADMIN_PASSWORD=litmusexport VERSION=ciexport HUB_BRANCH_NAME=v2.0.xexport INFRA_DEPLOYMENTS="["app=chaos-exporter", "name=chaos-operator", "app=event-tracker","app=workflow-controller"]"export INFRA_COMPATIBLE_VERSIONS='["0.2.0", "0.1.0","ci"]'export DEFAULT_HUB_BRANCH_NAME=masterexport ALLOWED_ORIGINS=".*"
+export DB_SERVER="mongodb://m1:27015,m2:27016,m3:27017/?replicaSet=rs0"
+export DB_USER=admin
+export DB_PASSWORD=1234
+export JWT_SECRET=litmus-portal@123
+export PORTAL_ENDPOINT=http://localhost:8080
+export LITMUS_SVC_ENDPOINT=""
+export SELF_AGENT=false
+export INFRA_SCOPE=cluster
+export INFRA_NAMESPACE=litmus
+export LITMUS_PORTAL_NAMESPACE=litmus
+export PORTAL_SCOPE=namespace
+export SUBSCRIBER_IMAGE=litmuschaos/litmusportal-subscriber:ci
+export EVENT_TRACKER_IMAGE=litmuschaos/litmusportal-event-tracker:ci
+export CONTAINER_RUNTIME_EXECUTOR=k8sapi
+export ARGO_WORKFLOW_CONTROLLER_IMAGE=argoproj/workflow-controller:v2.11.0
+export ARGO_WORKFLOW_EXECUTOR_IMAGE=argoproj/argoexec:v2.11.0
+export CHAOS_CENTER_SCOPE=cluster
+export WORKFLOW_HELPER_IMAGE_VERSION=3.0.0
+export LITMUS_CHAOS_OPERATOR_IMAGE=litmuschaos/chaos-operator:3.0.0
+export LITMUS_CHAOS_RUNNER_IMAGE=litmuschaos/chaos-runner:3.0.0
+export LITMUS_CHAOS_EXPORTER_IMAGE=litmuschaos/chaos-exporter:3.0.0
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=litmusexport VERSION=ci
+export HUB_BRANCH_NAME=v2.0.x
+export INFRA_DEPLOYMENTS="["app=chaos-exporter", "name=chaos-operator", "app=event-tracker","app=workflow-controller"]"export INFRA_COMPATIBLE_VERSIONS='["0.2.0", "0.1.0","ci"]'
+export DEFAULT_HUB_BRANCH_NAME=master
+export ALLOWED_ORIGINS=".*"
 ```
 
 Step-2: Run the go application
