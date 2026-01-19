@@ -46,6 +46,7 @@ export interface StringsMap {
   'addtoHubLoading': unknown
   'advanced': unknown
   'advancedOptions': unknown
+  'agentOnboarding': unknown
   'all': unknown
   'allChaosEnabled': unknown
   'allExecutions': unknown
@@ -606,6 +607,14 @@ export interface StringsMap {
   'on': unknown
   'onThe': unknown
   'onThisPage': unknown
+  'onboard': unknown
+  'onboardUsingAPIs': unknown
+  'onboardUsingAPIsDesc': unknown
+  'onboardUsingFaaS': unknown
+  'onboardUsingFaaSDesc': unknown
+  'onboardUsingHelmChart': unknown
+  'onboardUsingHelmChartDesc': unknown
+  'onboardYourAgent': unknown
   'openInNewTab': unknown
   'operation': unknown
   'operator': unknown

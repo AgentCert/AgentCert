@@ -113,6 +113,7 @@ export default function SideNav(): ReactElement {
             <SidebarLink label={getString('environments')} to={paths.toEnvironments()} />
             <SidebarLink label={getString('resilienceProbes')} to={paths.toChaosProbes()} />
             <SidebarLink label={getString('chaoshubs')} to={paths.toChaosHubs()} />
+            <SidebarLink label={getString('agentOnboarding')} to={paths.toAgentOnboarding()} />
             {projectRole === PermissionGroup.OWNER && (
               <NavExpandable title={getString('projectSetup')} route={paths.toProjectSetup()}>
                 <SidebarLink label={getString('members')} to={paths.toProjectMembers()} />
