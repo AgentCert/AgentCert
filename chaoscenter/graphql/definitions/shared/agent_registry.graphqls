@@ -1,0 +1,539 @@
+"""
+Defines the status of an AI agent
+"""
+enum AgentStatus {
+  REGISTERED
+  VALIDATING
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
+"""
+Defines the type of agent endpoint
+"""
+enum EndpointType {
+  REST
+  GRPC
+}
+
+"""
+Defines how the agent endpoint was discovered
+"""
+enum EndpointDiscoveryType {
+  AUTO
+  MANUAL
+}
+
+"""
+Defines container image details for an agent
+"""
+type ContainerImage {
+  """
+  Container registry URL
+  """
+  registry: String!
+  """
+  Repository name
+  """
+  repository: String!
+  """
+  Image tag
+  """
+  tag: String!
+}
+
+"""
+Defines input for container image
+"""
+input ContainerImageInput {
+  """
+  Container registry URL
+  """
+  registry: String!
+  """
+  Repository name
+  """
+  repository: String!
+  """
+  Image tag
+  """
+  tag: String!
+}
+
+"""
+Defines endpoint configuration for an agent
+"""
+type AgentEndpoint {
+  """
+  Endpoint URL
+  """
+  url: String!
+  """
+  Type of endpoint (REST or GRPC)
+  """
+  type: EndpointType!
+  """
+  How the endpoint was discovered
+  """
+  discoveryType: EndpointDiscoveryType!
+  """
+  Health check path
+  """
+  healthPath: String!
+  """
+  Readiness check path
+  """
+  readyPath: String!
+}
+
+"""
+Defines input for agent endpoint
+"""
+input AgentEndpointInput {
+  """
+  Endpoint URL
+  """
+  url: String!
+  """
+  Type of endpoint (REST or GRPC)
+  """
+  type: EndpointType!
+  """
+  How the endpoint was discovered
+  """
+  discoveryType: EndpointDiscoveryType!
+  """
+  Health check path
+  """
+  healthPath: String!
+  """
+  Readiness check path
+  """
+  readyPath: String!
+}
+
+"""
+Defines Langfuse integration configuration
+"""
+type LangfuseConfig {
+  """
+  Langfuse project ID
+  """
+  projectId: String!
+  """
+  Whether sync to Langfuse is enabled
+  """
+  syncEnabled: Boolean!
+  """
+  Timestamp of last sync
+  """
+  lastSyncedAt: String
+}
+
+"""
+Defines input for Langfuse configuration
+"""
+input LangfuseConfigInput {
+  """
+  Langfuse project ID
+  """
+  projectId: String!
+  """
+  Whether sync to Langfuse is enabled
+  """
+  syncEnabled: Boolean!
+}
+
+"""
+Defines additional metadata for an agent
+"""
+type AgentMetadata {
+  """
+  Key-value labels (JSON string)
+  """
+  labels: String
+  """
+  Key-value annotations (JSON string)
+  """
+  annotations: String
+}
+
+"""
+Defines input for agent metadata
+"""
+input AgentMetadataInput {
+  """
+  Key-value labels (JSON string)
+  """
+  labels: String
+  """
+  Key-value annotations (JSON string)
+  """
+  annotations: String
+}
+
+"""
+Defines audit information for an agent
+"""
+type AgentAuditInfo {
+  """
+  Timestamp when agent was created
+  """
+  createdAt: String!
+  """
+  User who created the agent
+  """
+  createdBy: String!
+  """
+  Timestamp when agent was last updated
+  """
+  updatedAt: String!
+  """
+  User who last updated the agent
+  """
+  updatedBy: String!
+  """
+  Timestamp of last health check
+  """
+  lastHealthCheck: String
+}
+
+"""
+Defines an AI agent registered in the platform
+"""
+type Agent implements ResourceDetails & Audit {
+  """
+  Unique identifier for the agent
+  """
+  agentID: ID!
+  """
+  Project ID the agent belongs to
+  """
+  projectID: ID!
+  """
+  Name of the agent
+  """
+  name: String!
+  """
+  Description of the agent
+  """
+  description: String
+  """
+  Tags for the agent
+  """
+  tags: [String!]
+  """
+  Version of the agent
+  """
+  version: String!
+  """
+  Vendor/provider of the agent
+  """
+  vendor: String!
+  """
+  Capabilities supported by the agent
+  """
+  capabilities: [String!]!
+  """
+  Container image details
+  """
+  containerImage: ContainerImage
+  """
+  Kubernetes namespace where agent is deployed
+  """
+  namespace: String!
+  """
+  Endpoint configuration
+  """
+  endpoint: AgentEndpoint
+  """
+  Langfuse integration configuration
+  """
+  langfuseConfig: LangfuseConfig
+  """
+  Current status of the agent
+  """
+  status: AgentStatus!
+  """
+  Additional metadata
+  """
+  metadata: AgentMetadata
+  """
+  Timestamp when the agent was created
+  """
+  createdAt: String!
+  """
+  Timestamp when the agent was last updated
+  """
+  updatedAt: String!
+  """
+  User who created the agent
+  """
+  createdBy: UserDetails
+  """
+  User who last updated the agent
+  """
+  updatedBy: UserDetails
+}
+
+"""
+Defines input for registering a new agent
+"""
+input RegisterAgentInput {
+  """
+  Project ID the agent belongs to
+  """
+  projectID: ID!
+  """
+  Name of the agent
+  """
+  name: String!
+  """
+  Version of the agent
+  """
+  version: String!
+  """
+  Vendor/provider of the agent
+  """
+  vendor: String!
+  """
+  Capabilities supported by the agent
+  """
+  capabilities: [String!]!
+  """
+  Container image details
+  """
+  containerImage: ContainerImageInput
+  """
+  Kubernetes namespace where agent is deployed
+  """
+  namespace: String!
+  """
+  Endpoint configuration (optional, will auto-discover if not provided)
+  """
+  endpoint: AgentEndpointInput
+  """
+  Langfuse integration configuration
+  """
+  langfuseConfig: LangfuseConfigInput
+  """
+  Additional metadata
+  """
+  metadata: AgentMetadataInput
+}
+
+"""
+Defines input for updating an existing agent
+"""
+input UpdateAgentInput {
+  """
+  Name of the agent
+  """
+  name: String
+  """
+  Version of the agent
+  """
+  version: String
+  """
+  Vendor/provider of the agent
+  """
+  vendor: String
+  """
+  Capabilities supported by the agent
+  """
+  capabilities: [String!]
+  """
+  Container image details
+  """
+  containerImage: ContainerImageInput
+  """
+  Endpoint configuration
+  """
+  endpoint: AgentEndpointInput
+  """
+  Langfuse integration configuration
+  """
+  langfuseConfig: LangfuseConfigInput
+  """
+  Additional metadata
+  """
+  metadata: AgentMetadataInput
+}
+
+"""
+Defines filter criteria for listing agents
+"""
+input AgentFilterInput {
+  """
+  Filter by project ID
+  """
+  projectID: ID!
+  """
+  Filter by agent status
+  """
+  status: AgentStatus
+  """
+  Filter by multiple statuses
+  """
+  statuses: [AgentStatus!]
+  """
+  Filter by capabilities (agents must have all specified capabilities)
+  """
+  capabilities: [String!]
+  """
+  Search term for name/vendor
+  """
+  searchTerm: String
+}
+
+"""
+Defines pagination parameters
+"""
+input PaginationInput {
+  """
+  Page number (1-indexed)
+  """
+  page: Int!
+  """
+  Number of items per page
+  """
+  limit: Int!
+}
+
+"""
+Defines the response for listing agents
+"""
+type AgentListResponse {
+  """
+  List of agents
+  """
+  agents: [Agent!]!
+  """
+  Total number of agents matching the filter
+  """
+  totalCount: Int!
+  """
+  Current page number
+  """
+  currentPage: Int!
+  """
+  Total number of pages
+  """
+  totalPages: Int!
+  """
+  Whether there are more pages
+  """
+  hasNextPage: Boolean!
+}
+
+"""
+Defines the response for deleting an agent
+"""
+type DeleteAgentResponse {
+  """
+  Whether the deletion was successful
+  """
+  success: Boolean!
+  """
+  Message describing the result
+  """
+  message: String!
+}
+
+"""
+Defines the result of a health check
+"""
+type HealthCheckResult {
+  """
+  Whether the agent is healthy
+  """
+  healthy: Boolean!
+  """
+  Health check message
+  """
+  message: String!
+  """
+  Response time in milliseconds
+  """
+  responseTime: String!
+  """
+  Timestamp when health check was performed
+  """
+  checkedAt: String!
+}
+
+"""
+Defines a capability definition in the taxonomy
+"""
+type CapabilityDefinition {
+  """
+  Unique identifier for the capability
+  """
+  id: ID!
+  """
+  Name of the capability
+  """
+  name: String!
+  """
+  Description of the capability
+  """
+  description: String!
+  """
+  Category of the capability
+  """
+  category: String!
+}
+
+extend type Query {
+  """
+  Get an agent by ID
+  """
+  getAgent(agentID: ID!): Agent! @authorized
+
+  """
+  List agents with filtering and pagination
+  """
+  listAgents(
+    filter: AgentFilterInput!
+    pagination: PaginationInput!
+  ): AgentListResponse! @authorized
+
+  """
+  Get agents by capabilities
+  """
+  getAgentsByCapabilities(
+    projectID: ID!
+    capabilities: [String!]!
+  ): [Agent!]! @authorized
+
+  """
+  Validate agent health
+  """
+  validateAgentHealth(agentID: ID!): HealthCheckResult! @authorized
+
+  """
+  Get the capabilities taxonomy
+  """
+  getCapabilitiesTaxonomy: [CapabilityDefinition!]! @authorized
+}
+
+extend type Mutation {
+  """
+  Register a new agent
+  """
+  registerAgent(input: RegisterAgentInput!): Agent! @authorized
+
+  """
+  Update an existing agent
+  """
+  updateAgent(agentID: ID!, input: UpdateAgentInput!): Agent! @authorized
+
+  """
+  Delete an agent
+  """
+  deleteAgent(
+    agentID: ID!
+    hardDelete: Boolean
+  ): DeleteAgentResponse! @authorized
+}
