@@ -1,0 +1,63 @@
+.container {
+  padding: var(--spacing-xlarge);
+  max-width: 800px;
+}
+
+.heading {
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.radioCard {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-medium) var(--spacing-large);
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--white);
+
+  &:hover {
+    border-color: var(--primary-7);
+    background: var(--primary-1);
+  }
+
+  &.selected {
+    border-color: var(--primary-7);
+    background: var(--primary-1);
+  }
+}
+
+.radioInput {
+  margin-right: var(--spacing-medium);
+  accent-color: var(--primary-7);
+  width: 18px;
+  height: 18px;
+}
+
+.radioContent {
+  display: flex;
+  flex-direction: column;
+}
+
+.radioTitle {
+  font-weight: 600;
+  color: var(--grey-900);
+}
+
+.radioDescription {
+  font-size: 12px;
+  color: var(--grey-500);
+  margin-top: 4px;
+}
+
+.buttonContainer {
+  margin-top: var(--spacing-xlarge);
+}
