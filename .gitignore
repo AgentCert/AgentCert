@@ -21,3 +21,6 @@ litmus-portal-app
 litmus-portal/graphql-server/server
 
 **/client_id
+
+# Langfuse environment file (contains API keys)
+.env.langfuse
