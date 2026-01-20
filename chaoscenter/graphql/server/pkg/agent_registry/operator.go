@@ -41,7 +41,7 @@ type operatorImpl struct {
 // NewOperator creates a new Operator instance.
 func NewOperator(database *mongo.Database) Operator {
 	return &operatorImpl{
-		collection: database.Collection(AgentRegistryCollection),
+		collection: database.Collection("agentRegistry"),
 	}
 }
 

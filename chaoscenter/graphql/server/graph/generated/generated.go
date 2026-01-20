@@ -60,11 +60,9 @@ type ComplexityRoot struct {
 
 	Agent struct {
 		AgentID        func(childComplexity int) int
+		AuditInfo      func(childComplexity int) int
 		Capabilities   func(childComplexity int) int
 		ContainerImage func(childComplexity int) int
-		CreatedAt      func(childComplexity int) int
-		CreatedBy      func(childComplexity int) int
-		Description    func(childComplexity int) int
 		Endpoint       func(childComplexity int) int
 		LangfuseConfig func(childComplexity int) int
 		Metadata       func(childComplexity int) int
@@ -72,19 +70,8 @@ type ComplexityRoot struct {
 		Namespace      func(childComplexity int) int
 		ProjectID      func(childComplexity int) int
 		Status         func(childComplexity int) int
-		Tags           func(childComplexity int) int
-		UpdatedAt      func(childComplexity int) int
-		UpdatedBy      func(childComplexity int) int
 		Vendor         func(childComplexity int) int
 		Version        func(childComplexity int) int
-	}
-
-	AgentAuditInfo struct {
-		CreatedAt       func(childComplexity int) int
-		CreatedBy       func(childComplexity int) int
-		LastHealthCheck func(childComplexity int) int
-		UpdatedAt       func(childComplexity int) int
-		UpdatedBy       func(childComplexity int) int
 	}
 
 	AgentEndpoint struct {
@@ -108,6 +95,14 @@ type ComplexityRoot struct {
 		Labels      func(childComplexity int) int
 	}
 
+	AgentStatusResponse struct {
+		AgentID              func(childComplexity int) int
+		Healthy              func(childComplexity int) int
+		LastCheckedAt        func(childComplexity int) int
+		LastSyncedToLangfuse func(childComplexity int) int
+		Status               func(childComplexity int) int
+	}
+
 	Annotation struct {
 		Categories       func(childComplexity int) int
 		ChartDescription func(childComplexity int) int
@@ -115,6 +110,14 @@ type ComplexityRoot struct {
 		Repository       func(childComplexity int) int
 		Support          func(childComplexity int) int
 		Vendor           func(childComplexity int) int
+	}
+
+	AuditInfo struct {
+		CreatedAt       func(childComplexity int) int
+		CreatedBy       func(childComplexity int) int
+		LastHealthCheck func(childComplexity int) int
+		UpdatedAt       func(childComplexity int) int
+		UpdatedBy       func(childComplexity int) int
 	}
 
 	CapabilityDefinition struct {
@@ -475,6 +478,11 @@ type ComplexityRoot struct {
 		Version              func(childComplexity int) int
 	}
 
+	KeyValuePair struct {
+		Key   func(childComplexity int) int
+		Value func(childComplexity int) int
+	}
+
 	KubeNamespace struct {
 		Name func(childComplexity int) int
 	}
@@ -578,7 +586,7 @@ type ComplexityRoot struct {
 		CreateChaosExperiment     func(childComplexity int, request model.ChaosExperimentRequest, projectID string) int
 		CreateEnvironment         func(childComplexity int, projectID string, request *model.CreateEnvironmentRequest) int
 		CreateImageRegistry       func(childComplexity int, projectID string, imageRegistryInfo model.ImageRegistryInput) int
-		DeleteAgent               func(childComplexity int, agentID string, hardDelete *bool) int
+		DeleteAgent               func(childComplexity int, id string, hardDelete *bool) int
 		DeleteChaosExperiment     func(childComplexity int, experimentID string, experimentRunID *string, projectID string) int
 		DeleteChaosHub            func(childComplexity int, projectID string, hubID string) int
 		DeleteEnvironment         func(childComplexity int, projectID string, environmentID string) int
@@ -599,8 +607,9 @@ type ComplexityRoot struct {
 		SaveChaosExperiment       func(childComplexity int, request model.SaveChaosExperimentRequest, projectID string) int
 		SaveChaosHub              func(childComplexity int, projectID string, request model.CreateChaosHubRequest) int
 		StopExperimentRuns        func(childComplexity int, projectID string, experimentID string, experimentRunID *string, notifyID *string) int
+		SyncAgentToLangfuse       func(childComplexity int, id string) int
 		SyncChaosHub              func(childComplexity int, id string, projectID string) int
-		UpdateAgent               func(childComplexity int, agentID string, input model.UpdateAgentInput) int
+		UpdateAgent               func(childComplexity int, id string, input model.UpdateAgentInput) int
 		UpdateChaosExperiment     func(childComplexity int, request model.ChaosExperimentRequest, projectID string) int
 		UpdateChaosHub            func(childComplexity int, projectID string, request model.UpdateChaosHubRequest) int
 		UpdateCronExperimentState func(childComplexity int, experimentID string, disable bool, projectID string) int
@@ -608,6 +617,7 @@ type ComplexityRoot struct {
 		UpdateGitOps              func(childComplexity int, projectID string, configurations model.GitConfig) int
 		UpdateImageRegistry       func(childComplexity int, imageRegistryID string, projectID string, imageRegistryInfo model.ImageRegistryInput) int
 		UpdateProbe               func(childComplexity int, request model.ProbeRequest, projectID string) int
+		ValidateAgentHealth       func(childComplexity int, id string) int
 	}
 
 	ObjectData struct {
@@ -686,42 +696,42 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		GetAgent                  func(childComplexity int, agentID string) int
-		GetAgentsByCapabilities   func(childComplexity int, projectID string, capabilities []string) int
-		GetCapabilitiesTaxonomy   func(childComplexity int) int
-		GetChaosFault             func(childComplexity int, projectID string, request model.ExperimentRequest) int
-		GetChaosHub               func(childComplexity int, projectID string, chaosHubID string) int
-		GetChaosHubStats          func(childComplexity int, projectID string) int
-		GetEnvironment            func(childComplexity int, projectID string, environmentID string) int
-		GetExperiment             func(childComplexity int, projectID string, experimentID string) int
-		GetExperimentRun          func(childComplexity int, projectID string, experimentRunID *string, notifyID *string) int
-		GetExperimentRunStats     func(childComplexity int, projectID string) int
-		GetExperimentStats        func(childComplexity int, projectID string) int
-		GetGitOpsDetails          func(childComplexity int, projectID string) int
-		GetImageRegistry          func(childComplexity int, projectID string) int
-		GetInfra                  func(childComplexity int, projectID string, infraID string) int
-		GetInfraDetails           func(childComplexity int, infraID string, projectID string) int
-		GetInfraManifest          func(childComplexity int, infraID string, upgrade bool, projectID string) int
-		GetInfraStats             func(childComplexity int, projectID string) int
-		GetPredefinedExperiment   func(childComplexity int, hubID string, experimentName []string, projectID string) int
-		GetProbe                  func(childComplexity int, projectID string, probeName string) int
-		GetProbeReference         func(childComplexity int, projectID string, probeName string) int
-		GetProbeYaml              func(childComplexity int, projectID string, request model.GetProbeYAMLRequest) int
-		GetProbesInExperimentRun  func(childComplexity int, projectID string, experimentRunID string, faultName string) int
-		GetServerVersion          func(childComplexity int) int
-		GetVersionDetails         func(childComplexity int, projectID string) int
-		ListAgents                func(childComplexity int, filter model.AgentFilterInput, pagination model.PaginationInput) int
-		ListChaosFaults           func(childComplexity int, hubID string, projectID string) int
-		ListChaosHub              func(childComplexity int, projectID string, request *model.ListChaosHubRequest) int
-		ListEnvironments          func(childComplexity int, projectID string, request *model.ListEnvironmentRequest) int
-		ListExperiment            func(childComplexity int, projectID string, request model.ListExperimentRequest) int
-		ListExperimentRun         func(childComplexity int, projectID string, request model.ListExperimentRunRequest) int
-		ListImageRegistry         func(childComplexity int, projectID string) int
-		ListInfras                func(childComplexity int, projectID string, request *model.ListInfraRequest) int
-		ListPredefinedExperiments func(childComplexity int, hubID string, projectID string) int
-		ListProbes                func(childComplexity int, projectID string, infrastructureType *model.InfrastructureType, probeNames []string, filter *model.ProbeFilterInput) int
-		ValidateAgentHealth       func(childComplexity int, agentID string) int
-		ValidateUniqueProbe       func(childComplexity int, projectID string, probeName string) int
+		GetAgent                     func(childComplexity int, id string) int
+		GetAgentCapabilitiesTaxonomy func(childComplexity int) int
+		GetAgentStatus               func(childComplexity int, id string) int
+		GetAgentsByCapabilities      func(childComplexity int, projectID string, capabilities []string) int
+		GetChaosFault                func(childComplexity int, projectID string, request model.ExperimentRequest) int
+		GetChaosHub                  func(childComplexity int, projectID string, chaosHubID string) int
+		GetChaosHubStats             func(childComplexity int, projectID string) int
+		GetEnvironment               func(childComplexity int, projectID string, environmentID string) int
+		GetExperiment                func(childComplexity int, projectID string, experimentID string) int
+		GetExperimentRun             func(childComplexity int, projectID string, experimentRunID *string, notifyID *string) int
+		GetExperimentRunStats        func(childComplexity int, projectID string) int
+		GetExperimentStats           func(childComplexity int, projectID string) int
+		GetGitOpsDetails             func(childComplexity int, projectID string) int
+		GetImageRegistry             func(childComplexity int, projectID string) int
+		GetInfra                     func(childComplexity int, projectID string, infraID string) int
+		GetInfraDetails              func(childComplexity int, infraID string, projectID string) int
+		GetInfraManifest             func(childComplexity int, infraID string, upgrade bool, projectID string) int
+		GetInfraStats                func(childComplexity int, projectID string) int
+		GetPredefinedExperiment      func(childComplexity int, hubID string, experimentName []string, projectID string) int
+		GetProbe                     func(childComplexity int, projectID string, probeName string) int
+		GetProbeReference            func(childComplexity int, projectID string, probeName string) int
+		GetProbeYaml                 func(childComplexity int, projectID string, request model.GetProbeYAMLRequest) int
+		GetProbesInExperimentRun     func(childComplexity int, projectID string, experimentRunID string, faultName string) int
+		GetServerVersion             func(childComplexity int) int
+		GetVersionDetails            func(childComplexity int, projectID string) int
+		ListAgents                   func(childComplexity int, filter *model.ListAgentsFilter, pagination model.PaginationInput) int
+		ListChaosFaults              func(childComplexity int, hubID string, projectID string) int
+		ListChaosHub                 func(childComplexity int, projectID string, request *model.ListChaosHubRequest) int
+		ListEnvironments             func(childComplexity int, projectID string, request *model.ListEnvironmentRequest) int
+		ListExperiment               func(childComplexity int, projectID string, request model.ListExperimentRequest) int
+		ListExperimentRun            func(childComplexity int, projectID string, request model.ListExperimentRunRequest) int
+		ListImageRegistry            func(childComplexity int, projectID string) int
+		ListInfras                   func(childComplexity int, projectID string, request *model.ListInfraRequest) int
+		ListPredefinedExperiments    func(childComplexity int, hubID string, projectID string) int
+		ListProbes                   func(childComplexity int, projectID string, infrastructureType *model.InfrastructureType, probeNames []string, filter *model.ProbeFilterInput) int
+		ValidateUniqueProbe          func(childComplexity int, projectID string, probeName string) int
 	}
 
 	RecentExecutions struct {
@@ -739,6 +749,11 @@ type ComplexityRoot struct {
 		RunSequence     func(childComplexity int) int
 		UpdatedAt       func(childComplexity int) int
 		UpdatedBy       func(childComplexity int) int
+	}
+
+	RegisterAgentResponse struct {
+		Agent              func(childComplexity int) int
+		LangfuseSyncStatus func(childComplexity int) int
 	}
 
 	RegisterInfraResponse struct {
@@ -802,6 +817,12 @@ type ComplexityRoot struct {
 		InfraConnect     func(childComplexity int, request model.InfraIdentity) int
 	}
 
+	SyncResponse struct {
+		Message  func(childComplexity int) int
+		Success  func(childComplexity int) int
+		SyncedAt func(childComplexity int) int
+	}
+
 	UserDetails struct {
 		Email    func(childComplexity int) int
 		UserID   func(childComplexity int) int
@@ -821,8 +842,10 @@ type MutationResolver interface {
 	DeleteChaosExperiment(ctx context.Context, experimentID string, experimentRunID *string, projectID string) (bool, error)
 	UpdateCronExperimentState(ctx context.Context, experimentID string, disable bool, projectID string) (bool, error)
 	RegisterAgent(ctx context.Context, input model.RegisterAgentInput) (*model.Agent, error)
-	UpdateAgent(ctx context.Context, agentID string, input model.UpdateAgentInput) (*model.Agent, error)
-	DeleteAgent(ctx context.Context, agentID string, hardDelete *bool) (*model.DeleteAgentResponse, error)
+	UpdateAgent(ctx context.Context, id string, input model.UpdateAgentInput) (*model.Agent, error)
+	DeleteAgent(ctx context.Context, id string, hardDelete *bool) (*model.DeleteAgentResponse, error)
+	ValidateAgentHealth(ctx context.Context, id string) (*model.HealthCheckResult, error)
+	SyncAgentToLangfuse(ctx context.Context, id string) (*model.SyncResponse, error)
 	ChaosExperimentRun(ctx context.Context, request model.ExperimentRunRequest) (string, error)
 	RunChaosExperiment(ctx context.Context, experimentID string, projectID string) (*model.RunChaosExperimentResponse, error)
 	StopExperimentRuns(ctx context.Context, projectID string, experimentID string, experimentRunID *string, notifyID *string) (bool, error)
@@ -858,11 +881,11 @@ type QueryResolver interface {
 	GetExperiment(ctx context.Context, projectID string, experimentID string) (*model.GetExperimentResponse, error)
 	ListExperiment(ctx context.Context, projectID string, request model.ListExperimentRequest) (*model.ListExperimentResponse, error)
 	GetExperimentStats(ctx context.Context, projectID string) (*model.GetExperimentStatsResponse, error)
-	GetAgent(ctx context.Context, agentID string) (*model.Agent, error)
-	ListAgents(ctx context.Context, filter model.AgentFilterInput, pagination model.PaginationInput) (*model.AgentListResponse, error)
+	GetAgent(ctx context.Context, id string) (*model.Agent, error)
+	ListAgents(ctx context.Context, filter *model.ListAgentsFilter, pagination model.PaginationInput) (*model.AgentListResponse, error)
 	GetAgentsByCapabilities(ctx context.Context, projectID string, capabilities []string) ([]*model.Agent, error)
-	ValidateAgentHealth(ctx context.Context, agentID string) (*model.HealthCheckResult, error)
-	GetCapabilitiesTaxonomy(ctx context.Context) ([]*model.CapabilityDefinition, error)
+	GetAgentStatus(ctx context.Context, id string) (*model.AgentStatusResponse, error)
+	GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*model.CapabilityDefinition, error)
 	GetExperimentRun(ctx context.Context, projectID string, experimentRunID *string, notifyID *string) (*model.ExperimentRun, error)
 	ListExperimentRun(ctx context.Context, projectID string, request model.ListExperimentRunRequest) (*model.ListExperimentRunResponse, error)
 	GetExperimentRunStats(ctx context.Context, projectID string) (*model.GetExperimentRunStatsResponse, error)
@@ -968,6 +991,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Agent.AgentID(childComplexity), true
 
+	case "Agent.auditInfo":
+		if e.complexity.Agent.AuditInfo == nil {
+			break
+		}
+
+		return e.complexity.Agent.AuditInfo(childComplexity), true
+
 	case "Agent.capabilities":
 		if e.complexity.Agent.Capabilities == nil {
 			break
@@ -981,27 +1011,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Agent.ContainerImage(childComplexity), true
-
-	case "Agent.createdAt":
-		if e.complexity.Agent.CreatedAt == nil {
-			break
-		}
-
-		return e.complexity.Agent.CreatedAt(childComplexity), true
-
-	case "Agent.createdBy":
-		if e.complexity.Agent.CreatedBy == nil {
-			break
-		}
-
-		return e.complexity.Agent.CreatedBy(childComplexity), true
-
-	case "Agent.description":
-		if e.complexity.Agent.Description == nil {
-			break
-		}
-
-		return e.complexity.Agent.Description(childComplexity), true
 
 	case "Agent.endpoint":
 		if e.complexity.Agent.Endpoint == nil {
@@ -1052,27 +1061,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Agent.Status(childComplexity), true
 
-	case "Agent.tags":
-		if e.complexity.Agent.Tags == nil {
-			break
-		}
-
-		return e.complexity.Agent.Tags(childComplexity), true
-
-	case "Agent.updatedAt":
-		if e.complexity.Agent.UpdatedAt == nil {
-			break
-		}
-
-		return e.complexity.Agent.UpdatedAt(childComplexity), true
-
-	case "Agent.updatedBy":
-		if e.complexity.Agent.UpdatedBy == nil {
-			break
-		}
-
-		return e.complexity.Agent.UpdatedBy(childComplexity), true
-
 	case "Agent.vendor":
 		if e.complexity.Agent.Vendor == nil {
 			break
@@ -1086,41 +1074,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Agent.Version(childComplexity), true
-
-	case "AgentAuditInfo.createdAt":
-		if e.complexity.AgentAuditInfo.CreatedAt == nil {
-			break
-		}
-
-		return e.complexity.AgentAuditInfo.CreatedAt(childComplexity), true
-
-	case "AgentAuditInfo.createdBy":
-		if e.complexity.AgentAuditInfo.CreatedBy == nil {
-			break
-		}
-
-		return e.complexity.AgentAuditInfo.CreatedBy(childComplexity), true
-
-	case "AgentAuditInfo.lastHealthCheck":
-		if e.complexity.AgentAuditInfo.LastHealthCheck == nil {
-			break
-		}
-
-		return e.complexity.AgentAuditInfo.LastHealthCheck(childComplexity), true
-
-	case "AgentAuditInfo.updatedAt":
-		if e.complexity.AgentAuditInfo.UpdatedAt == nil {
-			break
-		}
-
-		return e.complexity.AgentAuditInfo.UpdatedAt(childComplexity), true
-
-	case "AgentAuditInfo.updatedBy":
-		if e.complexity.AgentAuditInfo.UpdatedBy == nil {
-			break
-		}
-
-		return e.complexity.AgentAuditInfo.UpdatedBy(childComplexity), true
 
 	case "AgentEndpoint.discoveryType":
 		if e.complexity.AgentEndpoint.DiscoveryType == nil {
@@ -1206,6 +1159,41 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.AgentMetadata.Labels(childComplexity), true
 
+	case "AgentStatusResponse.agentID":
+		if e.complexity.AgentStatusResponse.AgentID == nil {
+			break
+		}
+
+		return e.complexity.AgentStatusResponse.AgentID(childComplexity), true
+
+	case "AgentStatusResponse.healthy":
+		if e.complexity.AgentStatusResponse.Healthy == nil {
+			break
+		}
+
+		return e.complexity.AgentStatusResponse.Healthy(childComplexity), true
+
+	case "AgentStatusResponse.lastCheckedAt":
+		if e.complexity.AgentStatusResponse.LastCheckedAt == nil {
+			break
+		}
+
+		return e.complexity.AgentStatusResponse.LastCheckedAt(childComplexity), true
+
+	case "AgentStatusResponse.lastSyncedToLangfuse":
+		if e.complexity.AgentStatusResponse.LastSyncedToLangfuse == nil {
+			break
+		}
+
+		return e.complexity.AgentStatusResponse.LastSyncedToLangfuse(childComplexity), true
+
+	case "AgentStatusResponse.status":
+		if e.complexity.AgentStatusResponse.Status == nil {
+			break
+		}
+
+		return e.complexity.AgentStatusResponse.Status(childComplexity), true
+
 	case "Annotation.categories":
 		if e.complexity.Annotation.Categories == nil {
 			break
@@ -1247,6 +1235,41 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Annotation.Vendor(childComplexity), true
+
+	case "AuditInfo.createdAt":
+		if e.complexity.AuditInfo.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.AuditInfo.CreatedAt(childComplexity), true
+
+	case "AuditInfo.createdBy":
+		if e.complexity.AuditInfo.CreatedBy == nil {
+			break
+		}
+
+		return e.complexity.AuditInfo.CreatedBy(childComplexity), true
+
+	case "AuditInfo.lastHealthCheck":
+		if e.complexity.AuditInfo.LastHealthCheck == nil {
+			break
+		}
+
+		return e.complexity.AuditInfo.LastHealthCheck(childComplexity), true
+
+	case "AuditInfo.updatedAt":
+		if e.complexity.AuditInfo.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.AuditInfo.UpdatedAt(childComplexity), true
+
+	case "AuditInfo.updatedBy":
+		if e.complexity.AuditInfo.UpdatedBy == nil {
+			break
+		}
+
+		return e.complexity.AuditInfo.UpdatedBy(childComplexity), true
 
 	case "CapabilityDefinition.category":
 		if e.complexity.CapabilityDefinition.Category == nil {
@@ -3019,6 +3042,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.K8SProbe.Version(childComplexity), true
 
+	case "KeyValuePair.key":
+		if e.complexity.KeyValuePair.Key == nil {
+			break
+		}
+
+		return e.complexity.KeyValuePair.Key(childComplexity), true
+
+	case "KeyValuePair.value":
+		if e.complexity.KeyValuePair.Value == nil {
+			break
+		}
+
+		return e.complexity.KeyValuePair.Value(childComplexity), true
+
 	case "KubeNamespace.name":
 		if e.complexity.KubeNamespace.Name == nil {
 			break
@@ -3468,7 +3505,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.DeleteAgent(childComplexity, args["agentID"].(string), args["hardDelete"].(*bool)), true
+		return e.complexity.Mutation.DeleteAgent(childComplexity, args["id"].(string), args["hardDelete"].(*bool)), true
 
 	case "Mutation.deleteChaosExperiment":
 		if e.complexity.Mutation.DeleteChaosExperiment == nil {
@@ -3705,6 +3742,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.StopExperimentRuns(childComplexity, args["projectID"].(string), args["experimentID"].(string), args["experimentRunID"].(*string), args["notifyID"].(*string)), true
 
+	case "Mutation.syncAgentToLangfuse":
+		if e.complexity.Mutation.SyncAgentToLangfuse == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_syncAgentToLangfuse_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.SyncAgentToLangfuse(childComplexity, args["id"].(string)), true
+
 	case "Mutation.syncChaosHub":
 		if e.complexity.Mutation.SyncChaosHub == nil {
 			break
@@ -3727,7 +3776,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.UpdateAgent(childComplexity, args["agentID"].(string), args["input"].(model.UpdateAgentInput)), true
+		return e.complexity.Mutation.UpdateAgent(childComplexity, args["id"].(string), args["input"].(model.UpdateAgentInput)), true
 
 	case "Mutation.updateChaosExperiment":
 		if e.complexity.Mutation.UpdateChaosExperiment == nil {
@@ -3812,6 +3861,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.UpdateProbe(childComplexity, args["request"].(model.ProbeRequest), args["projectID"].(string)), true
+
+	case "Mutation.validateAgentHealth":
+		if e.complexity.Mutation.ValidateAgentHealth == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_validateAgentHealth_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.ValidateAgentHealth(childComplexity, args["id"].(string)), true
 
 	case "ObjectData.labels":
 		if e.complexity.ObjectData.Labels == nil {
@@ -4159,7 +4220,26 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.GetAgent(childComplexity, args["agentID"].(string)), true
+		return e.complexity.Query.GetAgent(childComplexity, args["id"].(string)), true
+
+	case "Query.getAgentCapabilitiesTaxonomy":
+		if e.complexity.Query.GetAgentCapabilitiesTaxonomy == nil {
+			break
+		}
+
+		return e.complexity.Query.GetAgentCapabilitiesTaxonomy(childComplexity), true
+
+	case "Query.getAgentStatus":
+		if e.complexity.Query.GetAgentStatus == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getAgentStatus_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetAgentStatus(childComplexity, args["id"].(string)), true
 
 	case "Query.getAgentsByCapabilities":
 		if e.complexity.Query.GetAgentsByCapabilities == nil {
@@ -4171,14 +4251,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.GetAgentsByCapabilities(childComplexity, args["projectID"].(string), args["capabilities"].([]string)), true
-
-	case "Query.getCapabilitiesTaxonomy":
-		if e.complexity.Query.GetCapabilitiesTaxonomy == nil {
-			break
-		}
-
-		return e.complexity.Query.GetCapabilitiesTaxonomy(childComplexity), true
+		return e.complexity.Query.GetAgentsByCapabilities(childComplexity, args["projectId"].(string), args["capabilities"].([]string)), true
 
 	case "Query.getChaosFault":
 		if e.complexity.Query.GetChaosFault == nil {
@@ -4437,7 +4510,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.ListAgents(childComplexity, args["filter"].(model.AgentFilterInput), args["pagination"].(model.PaginationInput)), true
+		return e.complexity.Query.ListAgents(childComplexity, args["filter"].(*model.ListAgentsFilter), args["pagination"].(model.PaginationInput)), true
 
 	case "Query.listChaosFaults":
 		if e.complexity.Query.ListChaosFaults == nil {
@@ -4547,18 +4620,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.ListProbes(childComplexity, args["projectID"].(string), args["infrastructureType"].(*model.InfrastructureType), args["probeNames"].([]string), args["filter"].(*model.ProbeFilterInput)), true
 
-	case "Query.validateAgentHealth":
-		if e.complexity.Query.ValidateAgentHealth == nil {
-			break
-		}
-
-		args, err := ec.field_Query_validateAgentHealth_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Query.ValidateAgentHealth(childComplexity, args["agentID"].(string)), true
-
 	case "Query.validateUniqueProbe":
 		if e.complexity.Query.ValidateUniqueProbe == nil {
 			break
@@ -4647,6 +4708,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.RecentExperimentRun.UpdatedBy(childComplexity), true
+
+	case "RegisterAgentResponse.agent":
+		if e.complexity.RegisterAgentResponse.Agent == nil {
+			break
+		}
+
+		return e.complexity.RegisterAgentResponse.Agent(childComplexity), true
+
+	case "RegisterAgentResponse.langfuseSyncStatus":
+		if e.complexity.RegisterAgentResponse.LangfuseSyncStatus == nil {
+			break
+		}
+
+		return e.complexity.RegisterAgentResponse.LangfuseSyncStatus(childComplexity), true
 
 	case "RegisterInfraResponse.infraID":
 		if e.complexity.RegisterInfraResponse.InfraID == nil {
@@ -4911,6 +4986,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Subscription.InfraConnect(childComplexity, args["request"].(model.InfraIdentity)), true
 
+	case "SyncResponse.message":
+		if e.complexity.SyncResponse.Message == nil {
+			break
+		}
+
+		return e.complexity.SyncResponse.Message(childComplexity), true
+
+	case "SyncResponse.success":
+		if e.complexity.SyncResponse.Success == nil {
+			break
+		}
+
+		return e.complexity.SyncResponse.Success(childComplexity), true
+
+	case "SyncResponse.syncedAt":
+		if e.complexity.SyncResponse.SyncedAt == nil {
+			break
+		}
+
+		return e.complexity.SyncResponse.SyncedAt(childComplexity), true
+
 	case "UserDetails.email":
 		if e.complexity.UserDetails.Email == nil {
 			break
@@ -4955,7 +5051,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := executionContext{rc, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAgentEndpointInput,
-		ec.unmarshalInputAgentFilterInput,
 		ec.unmarshalInputAgentMetadataInput,
 		ec.unmarshalInputCMDProbeRequest,
 		ec.unmarshalInputChaosExperimentRequest,
@@ -4983,6 +5078,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputInfraFilterInput,
 		ec.unmarshalInputInfraIdentity,
 		ec.unmarshalInputK8SProbeRequest,
+		ec.unmarshalInputKeyValuePairInput,
 		ec.unmarshalInputKubeGVRRequest,
 		ec.unmarshalInputKubeNamespaceData,
 		ec.unmarshalInputKubeNamespaceRequest,
@@ -4991,6 +5087,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputKubernetesCMDProbeRequest,
 		ec.unmarshalInputKubernetesHTTPProbeRequest,
 		ec.unmarshalInputLangfuseConfigInput,
+		ec.unmarshalInputListAgentsFilter,
 		ec.unmarshalInputListChaosHubRequest,
 		ec.unmarshalInputListEnvironmentRequest,
 		ec.unmarshalInputListExperimentRequest,
@@ -5129,9 +5226,10 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "../../../definitions/shared/agent_registry.graphqls", Input: `"""
-Defines the status of an AI agent
-"""
+	{Name: "../../../definitions/shared/agent_registry.graphqls", Input: `# Agent Registry Service GraphQL Schema
+
+# Enums
+
 enum AgentStatus {
   REGISTERED
   VALIDATING
@@ -5140,533 +5238,249 @@ enum AgentStatus {
   DELETED
 }
 
-"""
-Defines the type of agent endpoint
-"""
-enum EndpointType {
-  REST
-  GRPC
-}
-
-"""
-Defines how the agent endpoint was discovered
-"""
 enum EndpointDiscoveryType {
   AUTO
   MANUAL
 }
 
-"""
-Defines container image details for an agent
-"""
+enum EndpointType {
+  REST
+  GRPC
+}
+
+enum LangfuseSyncStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+# Types
+
+type Agent {
+  agentID: ID!
+  projectID: String!
+  name: String!
+  version: String!
+  vendor: String!
+  capabilities: [String!]!
+  containerImage: ContainerImage!
+  namespace: String!
+  endpoint: AgentEndpoint
+  langfuseConfig: LangfuseConfig
+  status: AgentStatus!
+  metadata: AgentMetadata
+  auditInfo: AuditInfo!
+}
+
 type ContainerImage {
-  """
-  Container registry URL
-  """
   registry: String!
-  """
-  Repository name
-  """
   repository: String!
-  """
-  Image tag
-  """
   tag: String!
 }
 
-"""
-Defines input for container image
-"""
-input ContainerImageInput {
-  """
-  Container registry URL
-  """
-  registry: String!
-  """
-  Repository name
-  """
-  repository: String!
-  """
-  Image tag
-  """
-  tag: String!
-}
-
-"""
-Defines endpoint configuration for an agent
-"""
 type AgentEndpoint {
-  """
-  Endpoint URL
-  """
   url: String!
-  """
-  Type of endpoint (REST or GRPC)
-  """
   type: EndpointType!
-  """
-  How the endpoint was discovered
-  """
   discoveryType: EndpointDiscoveryType!
-  """
-  Health check path
-  """
   healthPath: String!
-  """
-  Readiness check path
-  """
   readyPath: String!
 }
 
-"""
-Defines input for agent endpoint
-"""
-input AgentEndpointInput {
-  """
-  Endpoint URL
-  """
-  url: String!
-  """
-  Type of endpoint (REST or GRPC)
-  """
-  type: EndpointType!
-  """
-  How the endpoint was discovered
-  """
-  discoveryType: EndpointDiscoveryType!
-  """
-  Health check path
-  """
-  healthPath: String!
-  """
-  Readiness check path
-  """
-  readyPath: String!
-}
-
-"""
-Defines Langfuse integration configuration
-"""
 type LangfuseConfig {
-  """
-  Langfuse project ID
-  """
   projectId: String!
-  """
-  Whether sync to Langfuse is enabled
-  """
   syncEnabled: Boolean!
-  """
-  Timestamp of last sync
-  """
   lastSyncedAt: String
 }
 
-"""
-Defines input for Langfuse configuration
-"""
-input LangfuseConfigInput {
-  """
-  Langfuse project ID
-  """
-  projectId: String!
-  """
-  Whether sync to Langfuse is enabled
-  """
-  syncEnabled: Boolean!
-}
-
-"""
-Defines additional metadata for an agent
-"""
 type AgentMetadata {
-  """
-  Key-value labels (JSON string)
-  """
-  labels: String
-  """
-  Key-value annotations (JSON string)
-  """
-  annotations: String
+  labels: [KeyValuePair!]
+  annotations: [KeyValuePair!]
 }
 
-"""
-Defines input for agent metadata
-"""
-input AgentMetadataInput {
-  """
-  Key-value labels (JSON string)
-  """
-  labels: String
-  """
-  Key-value annotations (JSON string)
-  """
-  annotations: String
+type KeyValuePair {
+  key: String!
+  value: String!
 }
 
-"""
-Defines audit information for an agent
-"""
-type AgentAuditInfo {
-  """
-  Timestamp when agent was created
-  """
+type AuditInfo {
   createdAt: String!
-  """
-  User who created the agent
-  """
   createdBy: String!
-  """
-  Timestamp when agent was last updated
-  """
   updatedAt: String!
-  """
-  User who last updated the agent
-  """
   updatedBy: String!
-  """
-  Timestamp of last health check
-  """
   lastHealthCheck: String
 }
 
-"""
-Defines an AI agent registered in the platform
-"""
-type Agent implements ResourceDetails & Audit {
-  """
-  Unique identifier for the agent
-  """
-  agentID: ID!
-  """
-  Project ID the agent belongs to
-  """
-  projectID: ID!
-  """
-  Name of the agent
-  """
-  name: String!
-  """
-  Description of the agent
-  """
-  description: String
-  """
-  Tags for the agent
-  """
-  tags: [String!]
-  """
-  Version of the agent
-  """
-  version: String!
-  """
-  Vendor/provider of the agent
-  """
-  vendor: String!
-  """
-  Capabilities supported by the agent
-  """
-  capabilities: [String!]!
-  """
-  Container image details
-  """
-  containerImage: ContainerImage
-  """
-  Kubernetes namespace where agent is deployed
-  """
-  namespace: String!
-  """
-  Endpoint configuration
-  """
-  endpoint: AgentEndpoint
-  """
-  Langfuse integration configuration
-  """
-  langfuseConfig: LangfuseConfig
-  """
-  Current status of the agent
-  """
-  status: AgentStatus!
-  """
-  Additional metadata
-  """
-  metadata: AgentMetadata
-  """
-  Timestamp when the agent was created
-  """
-  createdAt: String!
-  """
-  Timestamp when the agent was last updated
-  """
-  updatedAt: String!
-  """
-  User who created the agent
-  """
-  createdBy: UserDetails
-  """
-  User who last updated the agent
-  """
-  updatedBy: UserDetails
-}
+# Input Types
 
-"""
-Defines input for registering a new agent
-"""
 input RegisterAgentInput {
-  """
-  Project ID the agent belongs to
-  """
-  projectID: ID!
-  """
-  Name of the agent
-  """
+  projectId: String!
   name: String!
-  """
-  Version of the agent
-  """
   version: String!
-  """
-  Vendor/provider of the agent
-  """
   vendor: String!
-  """
-  Capabilities supported by the agent
-  """
   capabilities: [String!]!
-  """
-  Container image details
-  """
-  containerImage: ContainerImageInput
-  """
-  Kubernetes namespace where agent is deployed
-  """
+  containerImage: ContainerImageInput!
   namespace: String!
-  """
-  Endpoint configuration (optional, will auto-discover if not provided)
-  """
   endpoint: AgentEndpointInput
-  """
-  Langfuse integration configuration
-  """
   langfuseConfig: LangfuseConfigInput
-  """
-  Additional metadata
-  """
   metadata: AgentMetadataInput
 }
 
-"""
-Defines input for updating an existing agent
-"""
+input ContainerImageInput {
+  registry: String!
+  repository: String!
+  tag: String!
+}
+
+input AgentEndpointInput {
+  url: String!
+  type: EndpointType!
+  discoveryType: EndpointDiscoveryType!
+  healthPath: String
+  readyPath: String
+}
+
+input LangfuseConfigInput {
+  projectId: String!
+  syncEnabled: Boolean!
+}
+
+input AgentMetadataInput {
+  labels: [KeyValuePairInput!]
+  annotations: [KeyValuePairInput!]
+}
+
+input KeyValuePairInput {
+  key: String!
+  value: String!
+}
+
 input UpdateAgentInput {
-  """
-  Name of the agent
-  """
   name: String
-  """
-  Version of the agent
-  """
   version: String
-  """
-  Vendor/provider of the agent
-  """
   vendor: String
-  """
-  Capabilities supported by the agent
-  """
   capabilities: [String!]
-  """
-  Container image details
-  """
   containerImage: ContainerImageInput
-  """
-  Endpoint configuration
-  """
   endpoint: AgentEndpointInput
-  """
-  Langfuse integration configuration
-  """
   langfuseConfig: LangfuseConfigInput
-  """
-  Additional metadata
-  """
   metadata: AgentMetadataInput
 }
 
-"""
-Defines filter criteria for listing agents
-"""
-input AgentFilterInput {
-  """
-  Filter by project ID
-  """
-  projectID: ID!
-  """
-  Filter by agent status
-  """
+input ListAgentsFilter {
+  projectId: String
   status: AgentStatus
-  """
-  Filter by multiple statuses
-  """
-  statuses: [AgentStatus!]
-  """
-  Filter by capabilities (agents must have all specified capabilities)
-  """
   capabilities: [String!]
-  """
-  Search term for name/vendor
-  """
   searchTerm: String
 }
 
-"""
-Defines pagination parameters
-"""
 input PaginationInput {
-  """
-  Page number (1-indexed)
-  """
   page: Int!
-  """
-  Number of items per page
-  """
   limit: Int!
 }
 
-"""
-Defines the response for listing agents
-"""
+# Response Types
+
+type RegisterAgentResponse {
+  agent: Agent!
+  langfuseSyncStatus: LangfuseSyncStatus!
+}
+
 type AgentListResponse {
-  """
-  List of agents
-  """
   agents: [Agent!]!
-  """
-  Total number of agents matching the filter
-  """
   totalCount: Int!
-  """
-  Current page number
-  """
   currentPage: Int!
-  """
-  Total number of pages
-  """
   totalPages: Int!
-  """
-  Whether there are more pages
-  """
   hasNextPage: Boolean!
 }
 
-"""
-Defines the response for deleting an agent
-"""
-type DeleteAgentResponse {
-  """
-  Whether the deletion was successful
-  """
-  success: Boolean!
-  """
-  Message describing the result
-  """
-  message: String!
+type AgentStatusResponse {
+  agentID: ID!
+  status: AgentStatus!
+  healthy: Boolean!
+  lastCheckedAt: String
+  lastSyncedToLangfuse: String
 }
 
-"""
-Defines the result of a health check
-"""
 type HealthCheckResult {
-  """
-  Whether the agent is healthy
-  """
   healthy: Boolean!
-  """
-  Health check message
-  """
   message: String!
-  """
-  Response time in milliseconds
-  """
-  responseTime: String!
-  """
-  Timestamp when health check was performed
-  """
+  responseTime: Int!
   checkedAt: String!
 }
 
-"""
-Defines a capability definition in the taxonomy
-"""
 type CapabilityDefinition {
-  """
-  Unique identifier for the capability
-  """
-  id: ID!
-  """
-  Name of the capability
-  """
+  id: String!
   name: String!
-  """
-  Description of the capability
-  """
   description: String!
-  """
-  Category of the capability
-  """
   category: String!
 }
 
+type DeleteAgentResponse {
+  success: Boolean!
+  message: String
+}
+
+type SyncResponse {
+  success: Boolean!
+  syncedAt: String
+  message: String
+}
+
+# Queries
+
 extend type Query {
   """
-  Get an agent by ID
+  Get agent by ID
   """
-  getAgent(agentID: ID!): Agent! @authorized
+  getAgent(id: ID!): Agent!
 
   """
-  List agents with filtering and pagination
+  List agents with optional filtering and pagination
   """
-  listAgents(
-    filter: AgentFilterInput!
-    pagination: PaginationInput!
-  ): AgentListResponse! @authorized
+  listAgents(filter: ListAgentsFilter, pagination: PaginationInput!): AgentListResponse!
 
   """
-  Get agents by capabilities
+  Get agents that support ALL specified capabilities (AND logic)
   """
-  getAgentsByCapabilities(
-    projectID: ID!
-    capabilities: [String!]!
-  ): [Agent!]! @authorized
+  getAgentsByCapabilities(projectId: String!, capabilities: [String!]!): [Agent!]!
 
   """
-  Validate agent health
+  Get agent status with health check information
   """
-  validateAgentHealth(agentID: ID!): HealthCheckResult! @authorized
+  getAgentStatus(id: ID!): AgentStatusResponse!
 
   """
-  Get the capabilities taxonomy
+  Get the taxonomy of supported agent capabilities
   """
-  getCapabilitiesTaxonomy: [CapabilityDefinition!]! @authorized
+  getAgentCapabilitiesTaxonomy: [CapabilityDefinition!]!
 }
+
+# Mutations
 
 extend type Mutation {
   """
-  Register a new agent
+  Register a new agent in the platform
   """
-  registerAgent(input: RegisterAgentInput!): Agent! @authorized
+  registerAgent(input: RegisterAgentInput!): Agent!
 
   """
-  Update an existing agent
+  Update an existing agent's metadata
   """
-  updateAgent(agentID: ID!, input: UpdateAgentInput!): Agent! @authorized
+  updateAgent(id: ID!, input: UpdateAgentInput!): Agent!
 
   """
-  Delete an agent
+  Delete an agent (soft delete by default, hard delete if specified)
   """
-  deleteAgent(
-    agentID: ID!
-    hardDelete: Boolean
-  ): DeleteAgentResponse! @authorized
+  deleteAgent(id: ID!, hardDelete: Boolean): DeleteAgentResponse!
+
+  """
+  Validate agent health by checking health and ready endpoints
+  """
+  validateAgentHealth(id: ID!): HealthCheckResult!
+
+  """
+  Manually trigger sync of agent metadata to Langfuse
+  """
+  syncAgentToLangfuse(id: ID!): SyncResponse!
 }
 `, BuiltIn: false},
 	{Name: "../../../definitions/shared/chaos_experiment.graphqls", Input: `"""
@@ -9625,14 +9439,14 @@ func (ec *executionContext) field_Mutation_deleteAgent_args(ctx context.Context,
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
-	if tmp, ok := rawArgs["agentID"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agentID"))
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
 		arg0, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["agentID"] = arg0
+	args["id"] = arg0
 	var arg1 *bool
 	if tmp, ok := rawArgs["hardDelete"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("hardDelete"))
@@ -10092,6 +9906,21 @@ func (ec *executionContext) field_Mutation_stopExperimentRuns_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_syncAgentToLangfuse_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_syncChaosHub_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -10120,14 +9949,14 @@ func (ec *executionContext) field_Mutation_updateAgent_args(ctx context.Context,
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
-	if tmp, ok := rawArgs["agentID"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agentID"))
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
 		arg0, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["agentID"] = arg0
+	args["id"] = arg0
 	var arg1 model.UpdateAgentInput
 	if tmp, ok := rawArgs["input"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
@@ -10326,6 +10155,21 @@ func (ec *executionContext) field_Mutation_updateProbe_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_validateAgentHealth_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -10341,18 +10185,33 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_getAgent_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Query_getAgentStatus_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
-	if tmp, ok := rawArgs["agentID"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agentID"))
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
 		arg0, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["agentID"] = arg0
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getAgent_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["id"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -10360,14 +10219,14 @@ func (ec *executionContext) field_Query_getAgentsByCapabilities_args(ctx context
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
-	if tmp, ok := rawArgs["projectID"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
-		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+	if tmp, ok := rawArgs["projectId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
+		arg0, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["projectID"] = arg0
+	args["projectId"] = arg0
 	var arg1 []string
 	if tmp, ok := rawArgs["capabilities"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("capabilities"))
@@ -10836,10 +10695,10 @@ func (ec *executionContext) field_Query_getVersionDetails_args(ctx context.Conte
 func (ec *executionContext) field_Query_listAgents_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 model.AgentFilterInput
+	var arg0 *model.ListAgentsFilter
 	if tmp, ok := rawArgs["filter"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
-		arg0, err = ec.unmarshalNAgentFilterInput2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentFilterInput(ctx, tmp)
+		arg0, err = ec.unmarshalOListAgentsFilter2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListAgentsFilter(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -11079,21 +10938,6 @@ func (ec *executionContext) field_Query_listProbes_args(ctx context.Context, raw
 		}
 	}
 	args["filter"] = arg3
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_validateAgentHealth_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 string
-	if tmp, ok := rawArgs["agentID"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agentID"))
-		arg0, err = ec.unmarshalNID2string(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["agentID"] = arg0
 	return args, nil
 }
 
@@ -11564,7 +11408,7 @@ func (ec *executionContext) _Agent_projectID(ctx context.Context, field graphql.
 	}
 	res := resTmp.(string)
 	fc.Result = res
-	return ec.marshalNID2string(ctx, field.Selections, res)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Agent_projectID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -11574,7 +11418,7 @@ func (ec *executionContext) fieldContext_Agent_projectID(_ context.Context, fiel
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -11612,88 +11456,6 @@ func (ec *executionContext) _Agent_name(ctx context.Context, field graphql.Colle
 }
 
 func (ec *executionContext) fieldContext_Agent_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Agent",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Agent_description(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Agent_description(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Description, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*string)
-	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_Agent_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Agent",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Agent_tags(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Agent_tags(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Tags, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.([]string)
-	fc.Result = res
-	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_Agent_tags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Agent",
 		Field:      field,
@@ -11859,11 +11621,14 @@ func (ec *executionContext) _Agent_containerImage(ctx context.Context, field gra
 		return graphql.Null
 	}
 	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
 		return graphql.Null
 	}
 	res := resTmp.(*model.ContainerImage)
 	fc.Result = res
-	return ec.marshalOContainerImage2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContainerImage(ctx, field.Selections, res)
+	return ec.marshalNContainerImage2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContainerImage(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Agent_containerImage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -12124,8 +11889,8 @@ func (ec *executionContext) fieldContext_Agent_metadata(_ context.Context, field
 	return fc, nil
 }
 
-func (ec *executionContext) _Agent_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Agent_createdAt(ctx, field)
+func (ec *executionContext) _Agent_auditInfo(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Agent_auditInfo(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -12138,7 +11903,7 @@ func (ec *executionContext) _Agent_createdAt(ctx context.Context, field graphql.
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.CreatedAt, nil
+		return obj.AuditInfo, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -12150,97 +11915,12 @@ func (ec *executionContext) _Agent_createdAt(ctx context.Context, field graphql.
 		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*model.AuditInfo)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalNAuditInfo2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAuditInfo(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Agent_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Agent",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Agent_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Agent_updatedAt(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.UpdatedAt, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_Agent_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Agent",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Agent_createdBy(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Agent_createdBy(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.CreatedBy, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*model.UserDetails)
-	fc.Result = res
-	return ec.marshalOUserDetails2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUserDetails(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_Agent_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Agent_auditInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Agent",
 		Field:      field,
@@ -12248,280 +11928,18 @@ func (ec *executionContext) fieldContext_Agent_createdBy(_ context.Context, fiel
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "userID":
-				return ec.fieldContext_UserDetails_userID(ctx, field)
-			case "username":
-				return ec.fieldContext_UserDetails_username(ctx, field)
-			case "email":
-				return ec.fieldContext_UserDetails_email(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_AuditInfo_createdAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_AuditInfo_createdBy(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_AuditInfo_updatedAt(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_AuditInfo_updatedBy(ctx, field)
+			case "lastHealthCheck":
+				return ec.fieldContext_AuditInfo_lastHealthCheck(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type UserDetails", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Agent_updatedBy(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Agent_updatedBy(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.UpdatedBy, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*model.UserDetails)
-	fc.Result = res
-	return ec.marshalOUserDetails2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUserDetails(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_Agent_updatedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Agent",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "userID":
-				return ec.fieldContext_UserDetails_userID(ctx, field)
-			case "username":
-				return ec.fieldContext_UserDetails_username(ctx, field)
-			case "email":
-				return ec.fieldContext_UserDetails_email(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type UserDetails", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _AgentAuditInfo_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.AgentAuditInfo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_AgentAuditInfo_createdAt(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.CreatedAt, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_AgentAuditInfo_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "AgentAuditInfo",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _AgentAuditInfo_createdBy(ctx context.Context, field graphql.CollectedField, obj *model.AgentAuditInfo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_AgentAuditInfo_createdBy(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.CreatedBy, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_AgentAuditInfo_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "AgentAuditInfo",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _AgentAuditInfo_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.AgentAuditInfo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_AgentAuditInfo_updatedAt(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.UpdatedAt, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_AgentAuditInfo_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "AgentAuditInfo",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _AgentAuditInfo_updatedBy(ctx context.Context, field graphql.CollectedField, obj *model.AgentAuditInfo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_AgentAuditInfo_updatedBy(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.UpdatedBy, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_AgentAuditInfo_updatedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "AgentAuditInfo",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _AgentAuditInfo_lastHealthCheck(ctx context.Context, field graphql.CollectedField, obj *model.AgentAuditInfo) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_AgentAuditInfo_lastHealthCheck(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.LastHealthCheck, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*string)
-	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_AgentAuditInfo_lastHealthCheck(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "AgentAuditInfo",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, fmt.Errorf("no field named %q was found under type AuditInfo", field.Name)
 		},
 	}
 	return fc, nil
@@ -12792,10 +12210,6 @@ func (ec *executionContext) fieldContext_AgentListResponse_agents(_ context.Cont
 				return ec.fieldContext_Agent_projectID(ctx, field)
 			case "name":
 				return ec.fieldContext_Agent_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Agent_description(ctx, field)
-			case "tags":
-				return ec.fieldContext_Agent_tags(ctx, field)
 			case "version":
 				return ec.fieldContext_Agent_version(ctx, field)
 			case "vendor":
@@ -12814,14 +12228,8 @@ func (ec *executionContext) fieldContext_AgentListResponse_agents(_ context.Cont
 				return ec.fieldContext_Agent_status(ctx, field)
 			case "metadata":
 				return ec.fieldContext_Agent_metadata(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Agent_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Agent_updatedAt(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_Agent_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_Agent_updatedBy(ctx, field)
+			case "auditInfo":
+				return ec.fieldContext_Agent_auditInfo(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Agent", field.Name)
 		},
@@ -13028,9 +12436,9 @@ func (ec *executionContext) _AgentMetadata_labels(ctx context.Context, field gra
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(*string)
+	res := resTmp.([]*model.KeyValuePair)
 	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+	return ec.marshalOKeyValuePair2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_AgentMetadata_labels(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -13040,7 +12448,13 @@ func (ec *executionContext) fieldContext_AgentMetadata_labels(_ context.Context,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_KeyValuePair_key(ctx, field)
+			case "value":
+				return ec.fieldContext_KeyValuePair_value(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KeyValuePair", field.Name)
 		},
 	}
 	return fc, nil
@@ -13069,14 +12483,234 @@ func (ec *executionContext) _AgentMetadata_annotations(ctx context.Context, fiel
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(*string)
+	res := resTmp.([]*model.KeyValuePair)
 	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+	return ec.marshalOKeyValuePair2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_AgentMetadata_annotations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "AgentMetadata",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_KeyValuePair_key(ctx, field)
+			case "value":
+				return ec.fieldContext_KeyValuePair_value(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KeyValuePair", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentStatusResponse_agentID(ctx context.Context, field graphql.CollectedField, obj *model.AgentStatusResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentStatusResponse_agentID(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AgentID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentStatusResponse_agentID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentStatusResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentStatusResponse_status(ctx context.Context, field graphql.CollectedField, obj *model.AgentStatusResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentStatusResponse_status(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Status, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.AgentStatus)
+	fc.Result = res
+	return ec.marshalNAgentStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatus(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentStatusResponse_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentStatusResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type AgentStatus does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentStatusResponse_healthy(ctx context.Context, field graphql.CollectedField, obj *model.AgentStatusResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentStatusResponse_healthy(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Healthy, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentStatusResponse_healthy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentStatusResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentStatusResponse_lastCheckedAt(ctx context.Context, field graphql.CollectedField, obj *model.AgentStatusResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentStatusResponse_lastCheckedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastCheckedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentStatusResponse_lastCheckedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentStatusResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentStatusResponse_lastSyncedToLangfuse(ctx context.Context, field graphql.CollectedField, obj *model.AgentStatusResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentStatusResponse_lastSyncedToLangfuse(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastSyncedToLangfuse, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentStatusResponse_lastSyncedToLangfuse(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentStatusResponse",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -13351,6 +12985,223 @@ func (ec *executionContext) fieldContext_Annotation_chartDescription(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _AuditInfo_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.AuditInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AuditInfo_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AuditInfo_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AuditInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AuditInfo_createdBy(ctx context.Context, field graphql.CollectedField, obj *model.AuditInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AuditInfo_createdBy(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedBy, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AuditInfo_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AuditInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AuditInfo_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.AuditInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AuditInfo_updatedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AuditInfo_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AuditInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AuditInfo_updatedBy(ctx context.Context, field graphql.CollectedField, obj *model.AuditInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AuditInfo_updatedBy(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedBy, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AuditInfo_updatedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AuditInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AuditInfo_lastHealthCheck(ctx context.Context, field graphql.CollectedField, obj *model.AuditInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AuditInfo_lastHealthCheck(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastHealthCheck, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AuditInfo_lastHealthCheck(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AuditInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CapabilityDefinition_id(ctx context.Context, field graphql.CollectedField, obj *model.CapabilityDefinition) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_CapabilityDefinition_id(ctx, field)
 	if err != nil {
@@ -13379,7 +13230,7 @@ func (ec *executionContext) _CapabilityDefinition_id(ctx context.Context, field 
 	}
 	res := resTmp.(string)
 	fc.Result = res
-	return ec.marshalNID2string(ctx, field.Selections, res)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_CapabilityDefinition_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -13389,7 +13240,7 @@ func (ec *executionContext) fieldContext_CapabilityDefinition_id(_ context.Conte
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -16598,14 +16449,11 @@ func (ec *executionContext) _DeleteAgentResponse_message(ctx context.Context, fi
 		return graphql.Null
 	}
 	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_DeleteAgentResponse_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -21645,9 +21493,9 @@ func (ec *executionContext) _HealthCheckResult_responseTime(ctx context.Context,
 		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(int)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_HealthCheckResult_responseTime(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -21657,7 +21505,7 @@ func (ec *executionContext) fieldContext_HealthCheckResult_responseTime(_ contex
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -24718,6 +24566,94 @@ func (ec *executionContext) fieldContext_K8SProbe_operation(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _KeyValuePair_key(ctx context.Context, field graphql.CollectedField, obj *model.KeyValuePair) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KeyValuePair_key(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Key, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KeyValuePair_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KeyValuePair",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KeyValuePair_value(ctx context.Context, field graphql.CollectedField, obj *model.KeyValuePair) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KeyValuePair_value(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Value, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KeyValuePair_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KeyValuePair",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _KubeNamespace_name(ctx context.Context, field graphql.CollectedField, obj *model.KubeNamespace) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_KubeNamespace_name(ctx, field)
 	if err != nil {
@@ -27390,28 +27326,8 @@ func (ec *executionContext) _Mutation_registerAgent(ctx context.Context, field g
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().RegisterAgent(rctx, fc.Args["input"].(model.RegisterAgentInput))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			if ec.directives.Authorized == nil {
-				return nil, errors.New("directive authorized is not implemented")
-			}
-			return ec.directives.Authorized(ctx, nil, directive0)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.Agent); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.Agent`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().RegisterAgent(rctx, fc.Args["input"].(model.RegisterAgentInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -27442,10 +27358,6 @@ func (ec *executionContext) fieldContext_Mutation_registerAgent(ctx context.Cont
 				return ec.fieldContext_Agent_projectID(ctx, field)
 			case "name":
 				return ec.fieldContext_Agent_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Agent_description(ctx, field)
-			case "tags":
-				return ec.fieldContext_Agent_tags(ctx, field)
 			case "version":
 				return ec.fieldContext_Agent_version(ctx, field)
 			case "vendor":
@@ -27464,14 +27376,8 @@ func (ec *executionContext) fieldContext_Mutation_registerAgent(ctx context.Cont
 				return ec.fieldContext_Agent_status(ctx, field)
 			case "metadata":
 				return ec.fieldContext_Agent_metadata(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Agent_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Agent_updatedAt(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_Agent_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_Agent_updatedBy(ctx, field)
+			case "auditInfo":
+				return ec.fieldContext_Agent_auditInfo(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Agent", field.Name)
 		},
@@ -27503,28 +27409,8 @@ func (ec *executionContext) _Mutation_updateAgent(ctx context.Context, field gra
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().UpdateAgent(rctx, fc.Args["agentID"].(string), fc.Args["input"].(model.UpdateAgentInput))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			if ec.directives.Authorized == nil {
-				return nil, errors.New("directive authorized is not implemented")
-			}
-			return ec.directives.Authorized(ctx, nil, directive0)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.Agent); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.Agent`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpdateAgent(rctx, fc.Args["id"].(string), fc.Args["input"].(model.UpdateAgentInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -27555,10 +27441,6 @@ func (ec *executionContext) fieldContext_Mutation_updateAgent(ctx context.Contex
 				return ec.fieldContext_Agent_projectID(ctx, field)
 			case "name":
 				return ec.fieldContext_Agent_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Agent_description(ctx, field)
-			case "tags":
-				return ec.fieldContext_Agent_tags(ctx, field)
 			case "version":
 				return ec.fieldContext_Agent_version(ctx, field)
 			case "vendor":
@@ -27577,14 +27459,8 @@ func (ec *executionContext) fieldContext_Mutation_updateAgent(ctx context.Contex
 				return ec.fieldContext_Agent_status(ctx, field)
 			case "metadata":
 				return ec.fieldContext_Agent_metadata(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Agent_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Agent_updatedAt(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_Agent_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_Agent_updatedBy(ctx, field)
+			case "auditInfo":
+				return ec.fieldContext_Agent_auditInfo(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Agent", field.Name)
 		},
@@ -27616,28 +27492,8 @@ func (ec *executionContext) _Mutation_deleteAgent(ctx context.Context, field gra
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().DeleteAgent(rctx, fc.Args["agentID"].(string), fc.Args["hardDelete"].(*bool))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			if ec.directives.Authorized == nil {
-				return nil, errors.New("directive authorized is not implemented")
-			}
-			return ec.directives.Authorized(ctx, nil, directive0)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.DeleteAgentResponse); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.DeleteAgentResponse`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().DeleteAgent(rctx, fc.Args["id"].(string), fc.Args["hardDelete"].(*bool))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -27678,6 +27534,134 @@ func (ec *executionContext) fieldContext_Mutation_deleteAgent(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteAgent_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_validateAgentHealth(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_validateAgentHealth(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().ValidateAgentHealth(rctx, fc.Args["id"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.HealthCheckResult)
+	fc.Result = res
+	return ec.marshalNHealthCheckResult2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHealthCheckResult(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_validateAgentHealth(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "healthy":
+				return ec.fieldContext_HealthCheckResult_healthy(ctx, field)
+			case "message":
+				return ec.fieldContext_HealthCheckResult_message(ctx, field)
+			case "responseTime":
+				return ec.fieldContext_HealthCheckResult_responseTime(ctx, field)
+			case "checkedAt":
+				return ec.fieldContext_HealthCheckResult_checkedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type HealthCheckResult", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_validateAgentHealth_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_syncAgentToLangfuse(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_syncAgentToLangfuse(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().SyncAgentToLangfuse(rctx, fc.Args["id"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.SyncResponse)
+	fc.Result = res
+	return ec.marshalNSyncResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐSyncResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_syncAgentToLangfuse(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "success":
+				return ec.fieldContext_SyncResponse_success(ctx, field)
+			case "syncedAt":
+				return ec.fieldContext_SyncResponse_syncedAt(ctx, field)
+			case "message":
+				return ec.fieldContext_SyncResponse_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SyncResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_syncAgentToLangfuse_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -32458,28 +32442,8 @@ func (ec *executionContext) _Query_getAgent(ctx context.Context, field graphql.C
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Query().GetAgent(rctx, fc.Args["agentID"].(string))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			if ec.directives.Authorized == nil {
-				return nil, errors.New("directive authorized is not implemented")
-			}
-			return ec.directives.Authorized(ctx, nil, directive0)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.Agent); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.Agent`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GetAgent(rctx, fc.Args["id"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -32510,10 +32474,6 @@ func (ec *executionContext) fieldContext_Query_getAgent(ctx context.Context, fie
 				return ec.fieldContext_Agent_projectID(ctx, field)
 			case "name":
 				return ec.fieldContext_Agent_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Agent_description(ctx, field)
-			case "tags":
-				return ec.fieldContext_Agent_tags(ctx, field)
 			case "version":
 				return ec.fieldContext_Agent_version(ctx, field)
 			case "vendor":
@@ -32532,14 +32492,8 @@ func (ec *executionContext) fieldContext_Query_getAgent(ctx context.Context, fie
 				return ec.fieldContext_Agent_status(ctx, field)
 			case "metadata":
 				return ec.fieldContext_Agent_metadata(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Agent_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Agent_updatedAt(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_Agent_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_Agent_updatedBy(ctx, field)
+			case "auditInfo":
+				return ec.fieldContext_Agent_auditInfo(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Agent", field.Name)
 		},
@@ -32571,28 +32525,8 @@ func (ec *executionContext) _Query_listAgents(ctx context.Context, field graphql
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Query().ListAgents(rctx, fc.Args["filter"].(model.AgentFilterInput), fc.Args["pagination"].(model.PaginationInput))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			if ec.directives.Authorized == nil {
-				return nil, errors.New("directive authorized is not implemented")
-			}
-			return ec.directives.Authorized(ctx, nil, directive0)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.AgentListResponse); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.AgentListResponse`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().ListAgents(rctx, fc.Args["filter"].(*model.ListAgentsFilter), fc.Args["pagination"].(model.PaginationInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -32658,28 +32592,8 @@ func (ec *executionContext) _Query_getAgentsByCapabilities(ctx context.Context, 
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Query().GetAgentsByCapabilities(rctx, fc.Args["projectID"].(string), fc.Args["capabilities"].([]string))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			if ec.directives.Authorized == nil {
-				return nil, errors.New("directive authorized is not implemented")
-			}
-			return ec.directives.Authorized(ctx, nil, directive0)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*model.Agent); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.Agent`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GetAgentsByCapabilities(rctx, fc.Args["projectId"].(string), fc.Args["capabilities"].([]string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -32710,10 +32624,6 @@ func (ec *executionContext) fieldContext_Query_getAgentsByCapabilities(ctx conte
 				return ec.fieldContext_Agent_projectID(ctx, field)
 			case "name":
 				return ec.fieldContext_Agent_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Agent_description(ctx, field)
-			case "tags":
-				return ec.fieldContext_Agent_tags(ctx, field)
 			case "version":
 				return ec.fieldContext_Agent_version(ctx, field)
 			case "vendor":
@@ -32732,14 +32642,8 @@ func (ec *executionContext) fieldContext_Query_getAgentsByCapabilities(ctx conte
 				return ec.fieldContext_Agent_status(ctx, field)
 			case "metadata":
 				return ec.fieldContext_Agent_metadata(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Agent_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Agent_updatedAt(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_Agent_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_Agent_updatedBy(ctx, field)
+			case "auditInfo":
+				return ec.fieldContext_Agent_auditInfo(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Agent", field.Name)
 		},
@@ -32758,8 +32662,8 @@ func (ec *executionContext) fieldContext_Query_getAgentsByCapabilities(ctx conte
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_validateAgentHealth(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Query_validateAgentHealth(ctx, field)
+func (ec *executionContext) _Query_getAgentStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getAgentStatus(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -32771,28 +32675,8 @@ func (ec *executionContext) _Query_validateAgentHealth(ctx context.Context, fiel
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Query().ValidateAgentHealth(rctx, fc.Args["agentID"].(string))
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			if ec.directives.Authorized == nil {
-				return nil, errors.New("directive authorized is not implemented")
-			}
-			return ec.directives.Authorized(ctx, nil, directive0)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.(*model.HealthCheckResult); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.HealthCheckResult`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GetAgentStatus(rctx, fc.Args["id"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -32804,12 +32688,12 @@ func (ec *executionContext) _Query_validateAgentHealth(ctx context.Context, fiel
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.HealthCheckResult)
+	res := resTmp.(*model.AgentStatusResponse)
 	fc.Result = res
-	return ec.marshalNHealthCheckResult2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHealthCheckResult(ctx, field.Selections, res)
+	return ec.marshalNAgentStatusResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatusResponse(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_validateAgentHealth(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_getAgentStatus(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -32817,16 +32701,18 @@ func (ec *executionContext) fieldContext_Query_validateAgentHealth(ctx context.C
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
+			case "agentID":
+				return ec.fieldContext_AgentStatusResponse_agentID(ctx, field)
+			case "status":
+				return ec.fieldContext_AgentStatusResponse_status(ctx, field)
 			case "healthy":
-				return ec.fieldContext_HealthCheckResult_healthy(ctx, field)
-			case "message":
-				return ec.fieldContext_HealthCheckResult_message(ctx, field)
-			case "responseTime":
-				return ec.fieldContext_HealthCheckResult_responseTime(ctx, field)
-			case "checkedAt":
-				return ec.fieldContext_HealthCheckResult_checkedAt(ctx, field)
+				return ec.fieldContext_AgentStatusResponse_healthy(ctx, field)
+			case "lastCheckedAt":
+				return ec.fieldContext_AgentStatusResponse_lastCheckedAt(ctx, field)
+			case "lastSyncedToLangfuse":
+				return ec.fieldContext_AgentStatusResponse_lastSyncedToLangfuse(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type HealthCheckResult", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type AgentStatusResponse", field.Name)
 		},
 	}
 	defer func() {
@@ -32836,15 +32722,15 @@ func (ec *executionContext) fieldContext_Query_validateAgentHealth(ctx context.C
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_validateAgentHealth_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_getAgentStatus_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_getCapabilitiesTaxonomy(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Query_getCapabilitiesTaxonomy(ctx, field)
+func (ec *executionContext) _Query_getAgentCapabilitiesTaxonomy(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getAgentCapabilitiesTaxonomy(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -32856,28 +32742,8 @@ func (ec *executionContext) _Query_getCapabilitiesTaxonomy(ctx context.Context, 
 		}
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		directive0 := func(rctx context.Context) (interface{}, error) {
-			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Query().GetCapabilitiesTaxonomy(rctx)
-		}
-		directive1 := func(ctx context.Context) (interface{}, error) {
-			if ec.directives.Authorized == nil {
-				return nil, errors.New("directive authorized is not implemented")
-			}
-			return ec.directives.Authorized(ctx, nil, directive0)
-		}
-
-		tmp, err := directive1(rctx)
-		if err != nil {
-			return nil, graphql.ErrorOnPath(ctx, err)
-		}
-		if tmp == nil {
-			return nil, nil
-		}
-		if data, ok := tmp.([]*model.CapabilityDefinition); ok {
-			return data, nil
-		}
-		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.CapabilityDefinition`, tmp)
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GetAgentCapabilitiesTaxonomy(rctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -32894,7 +32760,7 @@ func (ec *executionContext) _Query_getCapabilitiesTaxonomy(ctx context.Context, 
 	return ec.marshalNCapabilityDefinition2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCapabilityDefinitionᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_getCapabilitiesTaxonomy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_getAgentCapabilitiesTaxonomy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -36081,6 +35947,122 @@ func (ec *executionContext) fieldContext_RecentExperimentRun_runSequence(_ conte
 	return fc, nil
 }
 
+func (ec *executionContext) _RegisterAgentResponse_agent(ctx context.Context, field graphql.CollectedField, obj *model.RegisterAgentResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RegisterAgentResponse_agent(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Agent, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Agent)
+	fc.Result = res
+	return ec.marshalNAgent2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgent(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RegisterAgentResponse_agent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RegisterAgentResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "agentID":
+				return ec.fieldContext_Agent_agentID(ctx, field)
+			case "projectID":
+				return ec.fieldContext_Agent_projectID(ctx, field)
+			case "name":
+				return ec.fieldContext_Agent_name(ctx, field)
+			case "version":
+				return ec.fieldContext_Agent_version(ctx, field)
+			case "vendor":
+				return ec.fieldContext_Agent_vendor(ctx, field)
+			case "capabilities":
+				return ec.fieldContext_Agent_capabilities(ctx, field)
+			case "containerImage":
+				return ec.fieldContext_Agent_containerImage(ctx, field)
+			case "namespace":
+				return ec.fieldContext_Agent_namespace(ctx, field)
+			case "endpoint":
+				return ec.fieldContext_Agent_endpoint(ctx, field)
+			case "langfuseConfig":
+				return ec.fieldContext_Agent_langfuseConfig(ctx, field)
+			case "status":
+				return ec.fieldContext_Agent_status(ctx, field)
+			case "metadata":
+				return ec.fieldContext_Agent_metadata(ctx, field)
+			case "auditInfo":
+				return ec.fieldContext_Agent_auditInfo(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Agent", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RegisterAgentResponse_langfuseSyncStatus(ctx context.Context, field graphql.CollectedField, obj *model.RegisterAgentResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RegisterAgentResponse_langfuseSyncStatus(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LangfuseSyncStatus, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.LangfuseSyncStatus)
+	fc.Result = res
+	return ec.marshalNLangfuseSyncStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐLangfuseSyncStatus(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RegisterAgentResponse_langfuseSyncStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RegisterAgentResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type LangfuseSyncStatus does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _RegisterInfraResponse_token(ctx context.Context, field graphql.CollectedField, obj *model.RegisterInfraResponse) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_RegisterInfraResponse_token(ctx, field)
 	if err != nil {
@@ -37772,6 +37754,132 @@ func (ec *executionContext) fieldContext_Subscription_getKubeNamespace(ctx conte
 	if fc.Args, err = ec.field_Subscription_getKubeNamespace_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SyncResponse_success(ctx context.Context, field graphql.CollectedField, obj *model.SyncResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SyncResponse_success(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Success, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SyncResponse_success(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SyncResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SyncResponse_syncedAt(ctx context.Context, field graphql.CollectedField, obj *model.SyncResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SyncResponse_syncedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SyncedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SyncResponse_syncedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SyncResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SyncResponse_message(ctx context.Context, field graphql.CollectedField, obj *model.SyncResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_SyncResponse_message(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Message, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_SyncResponse_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SyncResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
 	}
 	return fc, nil
 }
@@ -39806,73 +39914,18 @@ func (ec *executionContext) unmarshalInputAgentEndpointInput(ctx context.Context
 			it.DiscoveryType = data
 		case "healthPath":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("healthPath"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.HealthPath = data
 		case "readyPath":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("readyPath"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ReadyPath = data
-		}
-	}
-
-	return it, nil
-}
-
-func (ec *executionContext) unmarshalInputAgentFilterInput(ctx context.Context, obj interface{}) (model.AgentFilterInput, error) {
-	var it model.AgentFilterInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"projectID", "status", "statuses", "capabilities", "searchTerm"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "projectID":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
-			data, err := ec.unmarshalNID2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.ProjectID = data
-		case "status":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("status"))
-			data, err := ec.unmarshalOAgentStatus2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatus(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Status = data
-		case "statuses":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("statuses"))
-			data, err := ec.unmarshalOAgentStatus2ᚕgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatusᚄ(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Statuses = data
-		case "capabilities":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("capabilities"))
-			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Capabilities = data
-		case "searchTerm":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("searchTerm"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.SearchTerm = data
+			it.ReadyPath = data
 		}
 	}
 
@@ -39895,14 +39948,14 @@ func (ec *executionContext) unmarshalInputAgentMetadataInput(ctx context.Context
 		switch k {
 		case "labels":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("labels"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			data, err := ec.unmarshalOKeyValuePairInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairInputᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
 			it.Labels = data
 		case "annotations":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("annotations"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			data, err := ec.unmarshalOKeyValuePairInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairInputᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -41560,6 +41613,40 @@ func (ec *executionContext) unmarshalInputK8SProbeRequest(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputKeyValuePairInput(ctx context.Context, obj interface{}) (model.KeyValuePairInput, error) {
+	var it model.KeyValuePairInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"key", "value"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "key":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Key = data
+		case "value":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Value = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputKubeGVRRequest(ctx context.Context, obj interface{}) (model.KubeGVRRequest, error) {
 	var it model.KubeGVRRequest
 	asMap := map[string]interface{}{}
@@ -41987,6 +42074,54 @@ func (ec *executionContext) unmarshalInputLangfuseConfigInput(ctx context.Contex
 				return it, err
 			}
 			it.SyncEnabled = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputListAgentsFilter(ctx context.Context, obj interface{}) (model.ListAgentsFilter, error) {
+	var it model.ListAgentsFilter
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"projectId", "status", "capabilities", "searchTerm"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "projectId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProjectID = data
+		case "status":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("status"))
+			data, err := ec.unmarshalOAgentStatus2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatus(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Status = data
+		case "capabilities":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("capabilities"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Capabilities = data
+		case "searchTerm":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("searchTerm"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SearchTerm = data
 		}
 	}
 
@@ -42804,16 +42939,16 @@ func (ec *executionContext) unmarshalInputRegisterAgentInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"projectID", "name", "version", "vendor", "capabilities", "containerImage", "namespace", "endpoint", "langfuseConfig", "metadata"}
+	fieldsInOrder := [...]string{"projectId", "name", "version", "vendor", "capabilities", "containerImage", "namespace", "endpoint", "langfuseConfig", "metadata"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "projectID":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
-			data, err := ec.unmarshalNID2string(ctx, v)
+		case "projectId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -42848,7 +42983,7 @@ func (ec *executionContext) unmarshalInputRegisterAgentInput(ctx context.Context
 			it.Capabilities = data
 		case "containerImage":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("containerImage"))
-			data, err := ec.unmarshalOContainerImageInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContainerImageInput(ctx, v)
+			data, err := ec.unmarshalNContainerImageInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContainerImageInput(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -43461,13 +43596,6 @@ func (ec *executionContext) _Audit(ctx context.Context, sel ast.SelectionSet, ob
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
-	case model.Agent:
-		return ec._Agent(ctx, sel, &obj)
-	case *model.Agent:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._Agent(ctx, sel, obj)
 	case model.Experiment:
 		return ec._Experiment(ctx, sel, &obj)
 	case *model.Experiment:
@@ -43577,13 +43705,6 @@ func (ec *executionContext) _ResourceDetails(ctx context.Context, sel ast.Select
 	switch obj := (obj).(type) {
 	case nil:
 		return graphql.Null
-	case model.Agent:
-		return ec._Agent(ctx, sel, &obj)
-	case *model.Agent:
-		if obj == nil {
-			return graphql.Null
-		}
-		return ec._Agent(ctx, sel, obj)
 	case model.Experiment:
 		return ec._Experiment(ctx, sel, &obj)
 	case *model.Experiment:
@@ -43693,7 +43814,7 @@ func (ec *executionContext) _ActionPayload(ctx context.Context, sel ast.Selectio
 	return out
 }
 
-var agentImplementors = []string{"Agent", "ResourceDetails", "Audit"}
+var agentImplementors = []string{"Agent"}
 
 func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, obj *model.Agent) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, agentImplementors)
@@ -43719,10 +43840,6 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "description":
-			out.Values[i] = ec._Agent_description(ctx, field, obj)
-		case "tags":
-			out.Values[i] = ec._Agent_tags(ctx, field, obj)
 		case "version":
 			out.Values[i] = ec._Agent_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -43740,6 +43857,9 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "containerImage":
 			out.Values[i] = ec._Agent_containerImage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "namespace":
 			out.Values[i] = ec._Agent_namespace(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -43756,76 +43876,11 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "metadata":
 			out.Values[i] = ec._Agent_metadata(ctx, field, obj)
-		case "createdAt":
-			out.Values[i] = ec._Agent_createdAt(ctx, field, obj)
+		case "auditInfo":
+			out.Values[i] = ec._Agent_auditInfo(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "updatedAt":
-			out.Values[i] = ec._Agent_updatedAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "createdBy":
-			out.Values[i] = ec._Agent_createdBy(ctx, field, obj)
-		case "updatedBy":
-			out.Values[i] = ec._Agent_updatedBy(ctx, field, obj)
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
-
-	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var agentAuditInfoImplementors = []string{"AgentAuditInfo"}
-
-func (ec *executionContext) _AgentAuditInfo(ctx context.Context, sel ast.SelectionSet, obj *model.AgentAuditInfo) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, agentAuditInfoImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("AgentAuditInfo")
-		case "createdAt":
-			out.Values[i] = ec._AgentAuditInfo_createdAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "createdBy":
-			out.Values[i] = ec._AgentAuditInfo_createdBy(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "updatedAt":
-			out.Values[i] = ec._AgentAuditInfo_updatedAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "updatedBy":
-			out.Values[i] = ec._AgentAuditInfo_updatedBy(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "lastHealthCheck":
-			out.Values[i] = ec._AgentAuditInfo_lastHealthCheck(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -44005,6 +44060,59 @@ func (ec *executionContext) _AgentMetadata(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var agentStatusResponseImplementors = []string{"AgentStatusResponse"}
+
+func (ec *executionContext) _AgentStatusResponse(ctx context.Context, sel ast.SelectionSet, obj *model.AgentStatusResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, agentStatusResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentStatusResponse")
+		case "agentID":
+			out.Values[i] = ec._AgentStatusResponse_agentID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._AgentStatusResponse_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "healthy":
+			out.Values[i] = ec._AgentStatusResponse_healthy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastCheckedAt":
+			out.Values[i] = ec._AgentStatusResponse_lastCheckedAt(ctx, field, obj)
+		case "lastSyncedToLangfuse":
+			out.Values[i] = ec._AgentStatusResponse_lastSyncedToLangfuse(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var annotationImplementors = []string{"Annotation"}
 
 func (ec *executionContext) _Annotation(ctx context.Context, sel ast.SelectionSet, obj *model.Annotation) graphql.Marshaler {
@@ -44046,6 +44154,62 @@ func (ec *executionContext) _Annotation(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var auditInfoImplementors = []string{"AuditInfo"}
+
+func (ec *executionContext) _AuditInfo(ctx context.Context, sel ast.SelectionSet, obj *model.AuditInfo) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, auditInfoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AuditInfo")
+		case "createdAt":
+			out.Values[i] = ec._AuditInfo_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdBy":
+			out.Values[i] = ec._AuditInfo_createdBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._AuditInfo_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedBy":
+			out.Values[i] = ec._AuditInfo_updatedBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastHealthCheck":
+			out.Values[i] = ec._AuditInfo_lastHealthCheck(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -44659,9 +44823,6 @@ func (ec *executionContext) _DeleteAgentResponse(ctx context.Context, sel ast.Se
 			}
 		case "message":
 			out.Values[i] = ec._DeleteAgentResponse_message(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -46263,6 +46424,50 @@ func (ec *executionContext) _K8SProbe(ctx context.Context, sel ast.SelectionSet,
 	return out
 }
 
+var keyValuePairImplementors = []string{"KeyValuePair"}
+
+func (ec *executionContext) _KeyValuePair(ctx context.Context, sel ast.SelectionSet, obj *model.KeyValuePair) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, keyValuePairImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("KeyValuePair")
+		case "key":
+			out.Values[i] = ec._KeyValuePair_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value":
+			out.Values[i] = ec._KeyValuePair_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var kubeNamespaceImplementors = []string{"KubeNamespace"}
 
 func (ec *executionContext) _KubeNamespace(ctx context.Context, sel ast.SelectionSet, obj *model.KubeNamespace) graphql.Marshaler {
@@ -47035,6 +47240,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteAgent":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteAgent(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "validateAgentHealth":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_validateAgentHealth(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "syncAgentToLangfuse":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_syncAgentToLangfuse(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -47900,7 +48119,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "validateAgentHealth":
+		case "getAgentStatus":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -47909,7 +48128,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_validateAgentHealth(ctx, field)
+				res = ec._Query_getAgentStatus(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -47922,7 +48141,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "getCapabilitiesTaxonomy":
+		case "getAgentCapabilitiesTaxonomy":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -47931,7 +48150,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_getCapabilitiesTaxonomy(ctx, field)
+				res = ec._Query_getAgentCapabilitiesTaxonomy(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -48696,6 +48915,50 @@ func (ec *executionContext) _RecentExperimentRun(ctx context.Context, sel ast.Se
 	return out
 }
 
+var registerAgentResponseImplementors = []string{"RegisterAgentResponse"}
+
+func (ec *executionContext) _RegisterAgentResponse(ctx context.Context, sel ast.SelectionSet, obj *model.RegisterAgentResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, registerAgentResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RegisterAgentResponse")
+		case "agent":
+			out.Values[i] = ec._RegisterAgentResponse_agent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "langfuseSyncStatus":
+			out.Values[i] = ec._RegisterAgentResponse_langfuseSyncStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var registerInfraResponseImplementors = []string{"RegisterInfraResponse"}
 
 func (ec *executionContext) _RegisterInfraResponse(ctx context.Context, sel ast.SelectionSet, obj *model.RegisterInfraResponse) graphql.Marshaler {
@@ -49127,6 +49390,49 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
+}
+
+var syncResponseImplementors = []string{"SyncResponse"}
+
+func (ec *executionContext) _SyncResponse(ctx context.Context, sel ast.SelectionSet, obj *model.SyncResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, syncResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SyncResponse")
+		case "success":
+			out.Values[i] = ec._SyncResponse_success(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "syncedAt":
+			out.Values[i] = ec._SyncResponse_syncedAt(ctx, field, obj)
+		case "message":
+			out.Values[i] = ec._SyncResponse_message(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
 }
 
 var userDetailsImplementors = []string{"UserDetails"}
@@ -49616,11 +49922,6 @@ func (ec *executionContext) marshalNAgent2ᚖgithubᚗcomᚋlitmuschaosᚋlitmus
 	return ec._Agent(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNAgentFilterInput2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentFilterInput(ctx context.Context, v interface{}) (model.AgentFilterInput, error) {
-	res, err := ec.unmarshalInputAgentFilterInput(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
 func (ec *executionContext) marshalNAgentListResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentListResponse(ctx context.Context, sel ast.SelectionSet, v model.AgentListResponse) graphql.Marshaler {
 	return ec._AgentListResponse(ctx, sel, &v)
 }
@@ -49645,6 +49946,20 @@ func (ec *executionContext) marshalNAgentStatus2githubᚗcomᚋlitmuschaosᚋlit
 	return v
 }
 
+func (ec *executionContext) marshalNAgentStatusResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatusResponse(ctx context.Context, sel ast.SelectionSet, v model.AgentStatusResponse) graphql.Marshaler {
+	return ec._AgentStatusResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAgentStatusResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatusResponse(ctx context.Context, sel ast.SelectionSet, v *model.AgentStatusResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AgentStatusResponse(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNAnnotation2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAnnotation(ctx context.Context, sel ast.SelectionSet, v *model.Annotation) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -49653,6 +49968,16 @@ func (ec *executionContext) marshalNAnnotation2ᚖgithubᚗcomᚋlitmuschaosᚋl
 		return graphql.Null
 	}
 	return ec._Annotation(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAuditInfo2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAuditInfo(ctx context.Context, sel ast.SelectionSet, v *model.AuditInfo) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AuditInfo(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNAuthType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAuthType(ctx context.Context, v interface{}) (model.AuthType, error) {
@@ -49900,6 +50225,21 @@ func (ec *executionContext) marshalNConfirmInfraRegistrationResponse2ᚖgithub�
 		return graphql.Null
 	}
 	return ec._ConfirmInfraRegistrationResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNContainerImage2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContainerImage(ctx context.Context, sel ast.SelectionSet, v *model.ContainerImage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ContainerImage(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNContainerImageInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContainerImageInput(ctx context.Context, v interface{}) (*model.ContainerImageInput, error) {
+	res, err := ec.unmarshalInputContainerImageInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNCreateChaosHubRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCreateChaosHubRequest(ctx context.Context, v interface{}) (model.CreateChaosHubRequest, error) {
@@ -50615,6 +50955,21 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
+func (ec *executionContext) marshalNKeyValuePair2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePair(ctx context.Context, sel ast.SelectionSet, v *model.KeyValuePair) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._KeyValuePair(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNKeyValuePairInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairInput(ctx context.Context, v interface{}) (*model.KeyValuePairInput, error) {
+	res, err := ec.unmarshalInputKeyValuePairInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNKubeNamespace2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKubeNamespace(ctx context.Context, sel ast.SelectionSet, v []*model.KubeNamespace) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -50709,6 +51064,16 @@ func (ec *executionContext) marshalNKubeObjectResponse2ᚖgithubᚗcomᚋlitmusc
 		return graphql.Null
 	}
 	return ec._KubeObjectResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNLangfuseSyncStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐLangfuseSyncStatus(ctx context.Context, v interface{}) (model.LangfuseSyncStatus, error) {
+	var res model.LangfuseSyncStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNLangfuseSyncStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐLangfuseSyncStatus(ctx context.Context, sel ast.SelectionSet, v model.LangfuseSyncStatus) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNLink2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐLinkᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Link) graphql.Marshaler {
@@ -51348,6 +51713,20 @@ func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel
 	return ret
 }
 
+func (ec *executionContext) marshalNSyncResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐSyncResponse(ctx context.Context, sel ast.SelectionSet, v model.SyncResponse) graphql.Marshaler {
+	return ec._SyncResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNSyncResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐSyncResponse(ctx context.Context, sel ast.SelectionSet, v *model.SyncResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._SyncResponse(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNUpdateAgentInput2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUpdateAgentInput(ctx context.Context, v interface{}) (model.UpdateAgentInput, error) {
 	res, err := ec.unmarshalInputUpdateAgentInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -51727,73 +52106,6 @@ func (ec *executionContext) unmarshalOAgentMetadataInput2ᚖgithubᚗcomᚋlitmu
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalOAgentStatus2ᚕgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatusᚄ(ctx context.Context, v interface{}) ([]model.AgentStatus, error) {
-	if v == nil {
-		return nil, nil
-	}
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
-	var err error
-	res := make([]model.AgentStatus, len(vSlice))
-	for i := range vSlice {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNAgentStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatus(ctx, vSlice[i])
-		if err != nil {
-			return nil, err
-		}
-	}
-	return res, nil
-}
-
-func (ec *executionContext) marshalOAgentStatus2ᚕgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatusᚄ(ctx context.Context, sel ast.SelectionSet, v []model.AgentStatus) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalNAgentStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatus(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
 func (ec *executionContext) unmarshalOAgentStatus2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatus(ctx context.Context, v interface{}) (*model.AgentStatus, error) {
 	if v == nil {
 		return nil, nil
@@ -51865,13 +52177,6 @@ func (ec *executionContext) marshalOChaosHubStatus2ᚖgithubᚗcomᚋlitmuschaos
 		return graphql.Null
 	}
 	return ec._ChaosHubStatus(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalOContainerImage2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContainerImage(ctx context.Context, sel ast.SelectionSet, v *model.ContainerImage) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	return ec._ContainerImage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOContainerImageInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContainerImageInput(ctx context.Context, v interface{}) (*model.ContainerImageInput, error) {
@@ -52373,6 +52678,73 @@ func (ec *executionContext) unmarshalOK8SProbeRequest2ᚖgithubᚗcomᚋlitmusch
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalOKeyValuePair2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.KeyValuePair) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNKeyValuePair2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePair(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) unmarshalOKeyValuePairInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairInputᚄ(ctx context.Context, v interface{}) ([]*model.KeyValuePairInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]*model.KeyValuePairInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNKeyValuePairInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
 func (ec *executionContext) unmarshalOKubeGVRRequest2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKubeGVRRequest(ctx context.Context, v interface{}) (*model.KubeGVRRequest, error) {
 	if v == nil {
 		return nil, nil
@@ -52430,6 +52802,14 @@ func (ec *executionContext) unmarshalOLangfuseConfigInput2ᚖgithubᚗcomᚋlitm
 		return nil, nil
 	}
 	res, err := ec.unmarshalInputLangfuseConfigInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOListAgentsFilter2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListAgentsFilter(ctx context.Context, v interface{}) (*model.ListAgentsFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputListAgentsFilter(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 

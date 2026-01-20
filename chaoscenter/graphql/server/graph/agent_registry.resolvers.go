@@ -6,6 +6,7 @@ package graph
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
@@ -30,7 +31,7 @@ func (r *mutationResolver) RegisterAgent(ctx context.Context, input model.Regist
 }
 
 // UpdateAgent is the resolver for the updateAgent field.
-func (r *mutationResolver) UpdateAgent(ctx context.Context, agentID string, input model.UpdateAgentInput) (*model.Agent, error) {
+func (r *mutationResolver) UpdateAgent(ctx context.Context, id string, input model.UpdateAgentInput) (*model.Agent, error) {
 	// Convert GraphQL input to service request
 	req, err := agent_registry.MapUpdateAgentInputToRequest(input)
 	if err != nil {
@@ -38,7 +39,7 @@ func (r *mutationResolver) UpdateAgent(ctx context.Context, agentID string, inpu
 	}
 
 	// Call service layer
-	agent, err := r.agentRegistryService.UpdateAgent(ctx, agentID, req)
+	agent, err := r.agentRegistryService.UpdateAgent(ctx, id, req)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +49,7 @@ func (r *mutationResolver) UpdateAgent(ctx context.Context, agentID string, inpu
 }
 
 // DeleteAgent is the resolver for the deleteAgent field.
-func (r *mutationResolver) DeleteAgent(ctx context.Context, agentID string, hardDelete *bool) (*model.DeleteAgentResponse, error) {
+func (r *mutationResolver) DeleteAgent(ctx context.Context, id string, hardDelete *bool) (*model.DeleteAgentResponse, error) {
 	// Default to soft delete if not specified
 	isHardDelete := false
 	if hardDelete != nil {
@@ -56,7 +57,7 @@ func (r *mutationResolver) DeleteAgent(ctx context.Context, agentID string, hard
 	}
 
 	// Call service layer
-	response, err := r.agentRegistryService.DeleteAgent(ctx, agentID, isHardDelete)
+	response, err := r.agentRegistryService.DeleteAgent(ctx, id, isHardDelete)
 	if err != nil {
 		return nil, err
 	}
@@ -65,10 +66,20 @@ func (r *mutationResolver) DeleteAgent(ctx context.Context, agentID string, hard
 	return agent_registry.MapDeleteAgentResponseToModel(response), nil
 }
 
+// ValidateAgentHealth is the resolver for the validateAgentHealth field.
+func (r *mutationResolver) ValidateAgentHealth(ctx context.Context, id string) (*model.HealthCheckResult, error) {
+	panic(fmt.Errorf("not implemented: ValidateAgentHealth - validateAgentHealth"))
+}
+
+// SyncAgentToLangfuse is the resolver for the syncAgentToLangfuse field.
+func (r *mutationResolver) SyncAgentToLangfuse(ctx context.Context, id string) (*model.SyncResponse, error) {
+	panic(fmt.Errorf("not implemented: SyncAgentToLangfuse - syncAgentToLangfuse"))
+}
+
 // GetAgent is the resolver for the getAgent field.
-func (r *queryResolver) GetAgent(ctx context.Context, agentID string) (*model.Agent, error) {
+func (r *queryResolver) GetAgent(ctx context.Context, id string) (*model.Agent, error) {
 	// Call service layer
-	agent, err := r.agentRegistryService.GetAgent(ctx, agentID)
+	agent, err := r.agentRegistryService.GetAgent(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +89,7 @@ func (r *queryResolver) GetAgent(ctx context.Context, agentID string) (*model.Ag
 }
 
 // ListAgents is the resolver for the listAgents field.
-func (r *queryResolver) ListAgents(ctx context.Context, filter model.AgentFilterInput, pagination model.PaginationInput) (*model.AgentListResponse, error) {
+func (r *queryResolver) ListAgents(ctx context.Context, filter *model.ListAgentsFilter, pagination model.PaginationInput) (*model.AgentListResponse, error) {
 	// Convert GraphQL inputs to service types
 	serviceFilter := agent_registry.MapAgentFilterInputToFilter(filter)
 	servicePagination := agent_registry.MapPaginationInputToPagination(pagination)
@@ -110,7 +121,22 @@ func (r *queryResolver) GetAgentsByCapabilities(ctx context.Context, projectID s
 	return gqlAgents, nil
 }
 
-// ValidateAgentHealth is the resolver for the validateAgentHealth field.
+// GetAgentStatus is the resolver for the getAgentStatus field.
+func (r *queryResolver) GetAgentStatus(ctx context.Context, id string) (*model.AgentStatusResponse, error) {
+	panic(fmt.Errorf("not implemented: GetAgentStatus - getAgentStatus"))
+}
+
+// GetAgentCapabilitiesTaxonomy is the resolver for the getAgentCapabilitiesTaxonomy field.
+func (r *queryResolver) GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*model.CapabilityDefinition, error) {
+	panic(fmt.Errorf("not implemented: GetAgentCapabilitiesTaxonomy - getAgentCapabilitiesTaxonomy"))
+}
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//     it when you're done.
+//   - You have helper methods in this file. Move them out to keep these resolver files clean.
 func (r *queryResolver) ValidateAgentHealth(ctx context.Context, agentID string) (*model.HealthCheckResult, error) {
 	// Call service layer
 	result, err := r.agentRegistryService.ValidateAgentHealth(ctx, agentID)
@@ -121,8 +147,6 @@ func (r *queryResolver) ValidateAgentHealth(ctx context.Context, agentID string)
 	// Convert service response to GraphQL model
 	return agent_registry.MapHealthCheckResultToModel(result), nil
 }
-
-// GetCapabilitiesTaxonomy is the resolver for the getCapabilitiesTaxonomy field.
 func (r *queryResolver) GetCapabilitiesTaxonomy(ctx context.Context) ([]*model.CapabilityDefinition, error) {
 	// Call service layer
 	capabilities, err := r.agentRegistryService.GetCapabilitiesTaxonomy(ctx)

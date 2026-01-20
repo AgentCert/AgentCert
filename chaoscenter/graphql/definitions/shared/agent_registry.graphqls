@@ -1,256 +1,546 @@
-# Agent Registry Service GraphQL Schema
+# Agent Registry GraphQL Schema
 
-# Enums
-
-enum AgentStatus {
-  REGISTERED
-  VALIDATING
-  ACTIVE
-  INACTIVE
-  DELETED
-}
-
-enum EndpointDiscoveryType {
-  AUTO
-  MANUAL
-}
-
-enum EndpointType {
-  REST
-  GRPC
-}
-
-enum LangfuseSyncStatus {
-  SUCCESS
-  FAILED
-  SKIPPED
-}
-
-# Types
-
+"""
+Agent represents a registered AI agent in the system with its metadata,
+capabilities, and configuration.
+"""
 type Agent {
-  agentId: ID!
-  projectId: String!
+  """Unique identifier for the agent (UUID format)"""
+  agentID: ID!
+  
+  """Project ID that owns this agent"""
+  projectID: String!
+  
+  """Human-readable name of the agent (must be unique within project)"""
   name: String!
+  
+  """Optional description of the agent's purpose and functionality"""
+  description: String
+  
+  """Tags for categorization and filtering"""
+  tags: [String!]
+  
+  """Semantic version of the agent (e.g., v1.2.3)"""
   version: String!
+  
+  """Vendor or organization that created the agent"""
   vendor: String!
+  
+  """List of capabilities that this agent supports"""
   capabilities: [String!]!
+  
+  """Container image information for deploying the agent"""
   containerImage: ContainerImage!
+  
+  """Kubernetes namespace where the agent is deployed"""
   namespace: String!
-  endpoint: AgentEndpoint
+  
+  """Endpoint configuration for communicating with the agent"""
+  endpoint: AgentEndpoint!
+  
+  """Langfuse integration configuration for observability"""
   langfuseConfig: LangfuseConfig
+  
+  """Current status of the agent"""
   status: AgentStatus!
+  
+  """Additional metadata with labels and annotations"""
   metadata: AgentMetadata
+  
+  """Audit information for tracking creation and updates"""
   auditInfo: AuditInfo!
 }
 
+"""
+ContainerImage contains the registry, repository, and tag information
+for the agent's container image.
+"""
 type ContainerImage {
+  """Container registry (e.g., docker.io, gcr.io)"""
   registry: String!
+  
+  """Repository path (e.g., chaos/agent)"""
   repository: String!
+  
+  """Image tag (e.g., v1.0.0, latest)"""
   tag: String!
 }
 
+"""
+AgentEndpoint defines how to communicate with the agent service,
+including discovery method and health check paths.
+"""
 type AgentEndpoint {
+  """Base URL of the agent service"""
   url: String!
-  type: EndpointType!
+  
+  """Method used to discover the endpoint"""
   discoveryType: EndpointDiscoveryType!
+  
+  """Type of endpoint protocol"""
+  endpointType: EndpointType!
+  
+  """Path for health check endpoint (default: /health)"""
   healthPath: String!
+  
+  """Path for readiness check endpoint (default: /ready)"""
   readyPath: String!
 }
 
+"""
+EndpointDiscoveryType indicates how the agent endpoint was determined.
+"""
+enum EndpointDiscoveryType {
+  """Endpoint was automatically discovered from Kubernetes Service"""
+  AUTO
+  
+  """Endpoint was manually provided during registration"""
+  MANUAL
+}
+
+"""
+EndpointType indicates the protocol used by the agent endpoint.
+"""
+enum EndpointType {
+  """RESTful HTTP/HTTPS endpoint"""
+  REST
+  
+  """gRPC endpoint"""
+  GRPC
+}
+
+"""
+LangfuseConfig contains configuration for syncing agent metadata
+to Langfuse for observability and tracing.
+"""
 type LangfuseConfig {
+  """Langfuse project ID for this agent"""
   projectId: String!
+  
+  """Whether automatic sync to Langfuse is enabled"""
   syncEnabled: Boolean!
+  
+  """Timestamp of the last successful sync to Langfuse"""
   lastSyncedAt: String
 }
 
+"""
+AgentStatus represents the current state of the agent in its lifecycle.
+"""
+enum AgentStatus {
+  """Agent is registered but not yet validated"""
+  REGISTERED
+  
+  """Agent health check is in progress"""
+  VALIDATING
+  
+  """Agent is active and healthy"""
+  ACTIVE
+  
+  """Agent is inactive or unhealthy"""
+  INACTIVE
+  
+  """Agent has been deleted (soft delete)"""
+  DELETED
+}
+
+"""
+AgentMetadata contains additional labels and annotations for the agent.
+"""
 type AgentMetadata {
+  """Key-value pairs for labels (stored as JSON string)"""
   labels: [KeyValuePair!]
+  
+  """Key-value pairs for annotations (stored as JSON string)"""
   annotations: [KeyValuePair!]
 }
 
+"""
+KeyValuePair represents a simple key-value pair for metadata.
+"""
 type KeyValuePair {
+  """Key identifier"""
   key: String!
+  
+  """Value associated with the key"""
   value: String!
 }
 
+"""
+AuditInfo tracks creation and modification information for the agent.
+"""
 type AuditInfo {
+  """Timestamp when the agent was created"""
   createdAt: String!
+  
+  """User ID who created the agent"""
   createdBy: String!
+  
+  """Timestamp when the agent was last updated"""
   updatedAt: String!
+  
+  """User ID who last updated the agent"""
   updatedBy: String!
+  
+  """Timestamp of the last health check"""
   lastHealthCheck: String
 }
 
 # Input Types
 
+"""
+RegisterAgentInput contains all required information to register a new agent.
+"""
 input RegisterAgentInput {
-  projectId: String!
+  """Project ID that will own this agent"""
+  projectID: String!
+  
+  """Unique name for the agent within the project"""
   name: String!
+  
+  """Optional description of the agent"""
+  description: String
+  
+  """Optional tags for categorization"""
+  tags: [String!]
+  
+  """Semantic version of the agent"""
   version: String!
+  
+  """Vendor or organization name"""
   vendor: String!
+  
+  """List of capabilities this agent supports"""
   capabilities: [String!]!
+  
+  """Container image information"""
   containerImage: ContainerImageInput!
+  
+  """Kubernetes namespace for deployment"""
   namespace: String!
+  
+  """Optional endpoint configuration (auto-discovered if not provided)"""
   endpoint: AgentEndpointInput
+  
+  """Optional Langfuse configuration"""
   langfuseConfig: LangfuseConfigInput
+  
+  """Optional metadata"""
   metadata: AgentMetadataInput
 }
 
+"""
+ContainerImageInput for specifying container image details.
+"""
 input ContainerImageInput {
+  """Container registry"""
   registry: String!
+  
+  """Repository path"""
   repository: String!
+  
+  """Image tag"""
   tag: String!
 }
 
+"""
+AgentEndpointInput for manually specifying agent endpoint.
+"""
 input AgentEndpointInput {
+  """Base URL of the agent service"""
   url: String!
-  type: EndpointType!
-  discoveryType: EndpointDiscoveryType!
+  
+  """Type of endpoint protocol"""
+  endpointType: EndpointType!
+  
+  """Optional custom health check path"""
   healthPath: String
+  
+  """Optional custom readiness check path"""
   readyPath: String
 }
 
+"""
+LangfuseConfigInput for configuring Langfuse integration.
+"""
 input LangfuseConfigInput {
+  """Langfuse project ID"""
   projectId: String!
-  syncEnabled: Boolean!
+  
+  """Enable automatic sync (default: true)"""
+  syncEnabled: Boolean
 }
 
+"""
+AgentMetadataInput for providing labels and annotations.
+"""
 input AgentMetadataInput {
+  """List of label key-value pairs"""
   labels: [KeyValuePairInput!]
+  
+  """List of annotation key-value pairs"""
   annotations: [KeyValuePairInput!]
 }
 
+"""
+KeyValuePairInput for metadata key-value pairs.
+"""
 input KeyValuePairInput {
+  """Key identifier"""
   key: String!
+  
+  """Value associated with the key"""
   value: String!
 }
 
+"""
+UpdateAgentInput contains fields that can be updated for an existing agent.
+All fields are optional - only provided fields will be updated.
+"""
 input UpdateAgentInput {
+  """Update agent name"""
   name: String
+  
+  """Update description"""
+  description: String
+  
+  """Update tags"""
+  tags: [String!]
+  
+  """Update version"""
   version: String
+  
+  """Update vendor"""
   vendor: String
+  
+  """Update capabilities"""
   capabilities: [String!]
+  
+  """Update container image"""
   containerImage: ContainerImageInput
+  
+  """Update namespace"""
+  namespace: String
+  
+  """Update endpoint"""
   endpoint: AgentEndpointInput
+  
+  """Update Langfuse configuration"""
   langfuseConfig: LangfuseConfigInput
+  
+  """Update status"""
+  status: AgentStatus
+  
+  """Update metadata"""
   metadata: AgentMetadataInput
 }
 
+"""
+ListAgentsFilter for filtering agents in list queries.
+"""
 input ListAgentsFilter {
-  projectId: String
+  """Filter by project ID"""
+  projectID: String
+  
+  """Filter by status"""
   status: AgentStatus
+  
+  """Filter by capabilities (agents must have ALL specified capabilities)"""
   capabilities: [String!]
+  
+  """Search term to match against name, description, vendor"""
   searchTerm: String
+  
+  """Filter by tags"""
+  tags: [String!]
 }
 
+"""
+PaginationInput for controlling pagination in list queries.
+"""
 input PaginationInput {
+  """Page number (1-based)"""
   page: Int!
+  
+  """Number of items per page"""
   limit: Int!
 }
 
 # Response Types
 
+"""
+RegisterAgentResponse returned after successful agent registration.
+"""
 type RegisterAgentResponse {
+  """The registered agent"""
   agent: Agent!
-  langfuseSyncStatus: LangfuseSyncStatus!
+  
+  """Status of Langfuse sync operation"""
+  langfuseSyncStatus: SyncStatus!
 }
 
+"""
+AgentListResponse returned from list queries with pagination info.
+"""
 type AgentListResponse {
+  """List of agents matching the filter"""
   agents: [Agent!]!
+  
+  """Total number of agents matching the filter"""
   totalCount: Int!
+  
+  """Current page number"""
   currentPage: Int!
+  
+  """Total number of pages"""
   totalPages: Int!
+  
+  """Whether there are more pages available"""
   hasNextPage: Boolean!
 }
 
+"""
+AgentStatusResponse provides health and sync status for an agent.
+"""
 type AgentStatusResponse {
-  agentId: ID!
+  """Agent ID"""
+  agentID: ID!
+  
+  """Current status"""
   status: AgentStatus!
+  
+  """Whether the agent is currently healthy"""
   healthy: Boolean!
+  
+  """Timestamp of last health check"""
   lastCheckedAt: String
+  
+  """Timestamp of last sync to Langfuse"""
   lastSyncedToLangfuse: String
+  
+  """Latest health check result"""
+  healthCheckResult: HealthCheckResult
 }
 
+"""
+HealthCheckResult contains detailed information from a health check.
+"""
 type HealthCheckResult {
+  """Whether the health check passed"""
   healthy: Boolean!
+  
+  """Message describing the health check result"""
   message: String!
+  
+  """Response time in milliseconds"""
   responseTime: Int!
+  
+  """Timestamp when the check was performed"""
   checkedAt: String!
 }
 
+"""
+CapabilityDefinition describes a capability that agents can support.
+"""
 type CapabilityDefinition {
+  """Unique capability identifier"""
   id: String!
+  
+  """Human-readable capability name"""
   name: String!
+  
+  """Description of what this capability does"""
   description: String!
+  
+  """Category for grouping capabilities"""
   category: String!
 }
 
+"""
+DeleteAgentResponse returned after agent deletion.
+"""
 type DeleteAgentResponse {
+  """Whether the deletion was successful"""
   success: Boolean!
-  message: String
+  
+  """Message describing the deletion result"""
+  message: String!
 }
 
+"""
+SyncResponse returned from Langfuse sync operations.
+"""
 type SyncResponse {
+  """Whether the sync was successful"""
   success: Boolean!
+  
+  """Timestamp when sync occurred"""
   syncedAt: String
-  message: String
+  
+  """Message describing the sync result"""
+  message: String!
+}
+
+"""
+SyncStatus indicates the result of a Langfuse sync operation.
+"""
+enum SyncStatus {
+  """Sync completed successfully"""
+  SUCCESS
+  
+  """Sync failed"""
+  FAILED
+  
+  """Sync was skipped (e.g., sync disabled)"""
+  SKIPPED
 }
 
 # Queries
 
 extend type Query {
-  """
-  Get agent by ID
-  """
-  getAgent(id: ID!): Agent!
-
-  """
-  List agents with optional filtering and pagination
-  """
-  listAgents(filter: ListAgentsFilter, pagination: PaginationInput!): AgentListResponse!
-
-  """
-  Get agents that support ALL specified capabilities (AND logic)
-  """
-  getAgentsByCapabilities(projectId: String!, capabilities: [String!]!): [Agent!]!
-
-  """
-  Get agent status with health check information
-  """
-  getAgentStatus(id: ID!): AgentStatusResponse!
-
-  """
-  Get the taxonomy of supported agent capabilities
-  """
+  """Get an agent by its ID"""
+  getAgent(agentID: ID!): Agent!
+  
+  """List agents with optional filtering and pagination"""
+  listAgents(
+    filter: ListAgentsFilter
+    pagination: PaginationInput!
+  ): AgentListResponse!
+  
+  """Get agents that support specific capabilities"""
+  getAgentsByCapabilities(
+    projectID: String!
+    capabilities: [String!]!
+  ): [Agent!]!
+  
+  """Get the current status and health of an agent"""
+  getAgentStatus(agentID: ID!): AgentStatusResponse!
+  
+  """Get the taxonomy of available agent capabilities"""
   getAgentCapabilitiesTaxonomy: [CapabilityDefinition!]!
 }
 
 # Mutations
 
 extend type Mutation {
-  """
-  Register a new agent in the platform
-  """
+  """Register a new agent in the system"""
   registerAgent(input: RegisterAgentInput!): RegisterAgentResponse!
-
-  """
-  Update an existing agent's metadata
-  """
-  updateAgent(id: ID!, input: UpdateAgentInput!): Agent!
-
-  """
-  Delete an agent (soft delete by default, hard delete if specified)
-  """
-  deleteAgent(id: ID!, hardDelete: Boolean): DeleteAgentResponse!
-
-  """
-  Validate agent health by checking health and ready endpoints
-  """
-  validateAgentHealth(id: ID!): HealthCheckResult!
-
-  """
-  Manually trigger sync of agent metadata to Langfuse
-  """
-  syncAgentToLangfuse(id: ID!): SyncResponse!
+  
+  """Update an existing agent's information"""
+  updateAgent(
+    agentID: ID!
+    input: UpdateAgentInput!
+  ): Agent!
+  
+  """Delete an agent (soft or hard delete)"""
+  deleteAgent(
+    agentID: ID!
+    hardDelete: Boolean
+  ): DeleteAgentResponse!
+  
+  """Manually trigger a health check for an agent"""
+  validateAgentHealth(agentID: ID!): AgentStatusResponse!
+  
+  """Manually sync an agent's metadata to Langfuse"""
+  syncAgentToLangfuse(agentID: ID!): SyncResponse!
 }

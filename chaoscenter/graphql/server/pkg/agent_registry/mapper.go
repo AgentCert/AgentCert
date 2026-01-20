@@ -1,8 +1,6 @@
 package agent_registry
 
 import (
-	"encoding/json"
-	"fmt"
 	"strconv"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
@@ -30,12 +28,22 @@ func MapRegisterAgentInputToRequest(input model.RegisterAgentInput) (*RegisterAg
 
 	// Map Endpoint
 	if input.Endpoint != nil {
+		healthPath := "/health"
+		readyPath := "/ready"
+		
+		if input.Endpoint.HealthPath != nil {
+			healthPath = *input.Endpoint.HealthPath
+		}
+		if input.Endpoint.ReadyPath != nil {
+			readyPath = *input.Endpoint.ReadyPath
+		}
+		
 		req.Endpoint = &AgentEndpoint{
 			URL:           input.Endpoint.URL,
 			Type:          EndpointType(input.Endpoint.Type),
 			DiscoveryType: EndpointDiscoveryType(input.Endpoint.DiscoveryType),
-			HealthPath:    input.Endpoint.HealthPath,
-			ReadyPath:     input.Endpoint.ReadyPath,
+			HealthPath:    healthPath,
+			ReadyPath:     readyPath,
 		}
 	}
 
@@ -51,20 +59,20 @@ func MapRegisterAgentInputToRequest(input model.RegisterAgentInput) (*RegisterAg
 	if input.Metadata != nil {
 		metadata := &AgentMetadata{}
 
-		// Parse labels from JSON string
-		if input.Metadata.Labels != nil {
+		// Map labels from KeyValuePair array
+		if len(input.Metadata.Labels) > 0 {
 			labels := make(map[string]string)
-			if err := json.Unmarshal([]byte(*input.Metadata.Labels), &labels); err != nil {
-				return nil, fmt.Errorf("failed to parse labels: %w", err)
+			for _, kv := range input.Metadata.Labels {
+				labels[kv.Key] = kv.Value
 			}
 			metadata.Labels = labels
 		}
 
-		// Parse annotations from JSON string
-		if input.Metadata.Annotations != nil {
+		// Map annotations from KeyValuePair array
+		if len(input.Metadata.Annotations) > 0 {
 			annotations := make(map[string]string)
-			if err := json.Unmarshal([]byte(*input.Metadata.Annotations), &annotations); err != nil {
-				return nil, fmt.Errorf("failed to parse annotations: %w", err)
+			for _, kv := range input.Metadata.Annotations {
+				annotations[kv.Key] = kv.Value
 			}
 			metadata.Annotations = annotations
 		}
@@ -88,19 +96,29 @@ func MapUpdateAgentInputToRequest(input model.UpdateAgentInput) (*UpdateAgentReq
 	if input.ContainerImage != nil {
 		req.ContainerImage = &ContainerImage{
 			Registry:   input.ContainerImage.Registry,
-			Repository: input.ContainerImage.Repository,
+			Repository:input.ContainerImage.Repository,
 			Tag:        input.ContainerImage.Tag,
 		}
 	}
 
 	// Map Endpoint
 	if input.Endpoint != nil {
+		healthPath := "/health"
+		readyPath := "/ready"
+		
+		if input.Endpoint.HealthPath != nil {
+			healthPath = *input.Endpoint.HealthPath
+		}
+		if input.Endpoint.ReadyPath != nil {
+			readyPath = *input.Endpoint.ReadyPath
+		}
+		
 		req.Endpoint = &AgentEndpoint{
 			URL:           input.Endpoint.URL,
 			Type:          EndpointType(input.Endpoint.Type),
 			DiscoveryType: EndpointDiscoveryType(input.Endpoint.DiscoveryType),
-			HealthPath:    input.Endpoint.HealthPath,
-			ReadyPath:     input.Endpoint.ReadyPath,
+			HealthPath:    healthPath,
+			ReadyPath:     readyPath,
 		}
 	}
 
@@ -116,20 +134,20 @@ func MapUpdateAgentInputToRequest(input model.UpdateAgentInput) (*UpdateAgentReq
 	if input.Metadata != nil {
 		metadata := &AgentMetadata{}
 
-		// Parse labels from JSON string
-		if input.Metadata.Labels != nil {
+		// Map labels from KeyValuePair array
+		if len(input.Metadata.Labels) > 0 {
 			labels := make(map[string]string)
-			if err := json.Unmarshal([]byte(*input.Metadata.Labels), &labels); err != nil {
-				return nil, fmt.Errorf("failed to parse labels: %w", err)
+			for _, kv := range input.Metadata.Labels {
+				labels[kv.Key] = kv.Value
 			}
 			metadata.Labels = labels
 		}
 
-		// Parse annotations from JSON string
-		if input.Metadata.Annotations != nil {
+		// Map annotations from KeyValuePair array
+		if len(input.Metadata.Annotations) > 0 {
 			annotations := make(map[string]string)
-			if err := json.Unmarshal([]byte(*input.Metadata.Annotations), &annotations); err != nil {
-				return nil, fmt.Errorf("failed to parse annotations: %w", err)
+			for _, kv := range input.Metadata.Annotations {
+				annotations[kv.Key] = kv.Value
 			}
 			metadata.Annotations = annotations
 		}
@@ -141,26 +159,28 @@ func MapUpdateAgentInputToRequest(input model.UpdateAgentInput) (*UpdateAgentReq
 }
 
 // MapAgentFilterInputToFilter converts GraphQL filter input to service filter.
-func MapAgentFilterInputToFilter(input model.AgentFilterInput) *AgentFilter {
-	filter := &AgentFilter{
-		ProjectID:    input.ProjectID,
-		Capabilities: input.Capabilities,
-		SearchTerm:   input.SearchTerm,
+func MapAgentFilterInputToFilter(input *model.ListAgentsFilter) *AgentFilter {
+	if input == nil {
+		return &AgentFilter{}
 	}
-
-	// Map Status
+	
+	filter := &AgentFilter{}
+	
+	if input.ProjectID != nil {
+		filter.ProjectID = *input.ProjectID
+	}
+	
 	if input.Status != nil {
 		status := AgentStatus(*input.Status)
 		filter.Status = &status
 	}
-
-	// Map Statuses
-	if len(input.Statuses) > 0 {
-		statuses := make([]AgentStatus, len(input.Statuses))
-		for i, s := range input.Statuses {
-			statuses[i] = AgentStatus(s)
-		}
-		filter.Statuses = statuses
+	
+	if len(input.Capabilities) > 0 {
+		filter.Capabilities = input.Capabilities
+	}
+	
+	if input.SearchTerm != nil {
+		filter.SearchTerm = input.SearchTerm
 	}
 
 	return filter
@@ -185,8 +205,6 @@ func MapAgentToModel(agent *Agent) *model.Agent {
 		Capabilities: agent.Capabilities,
 		Namespace:    agent.Namespace,
 		Status:       model.AgentStatus(agent.Status),
-		CreatedAt:    strconv.FormatInt(agent.AuditInfo.CreatedAt, 10),
-		UpdatedAt:    strconv.FormatInt(agent.AuditInfo.UpdatedAt, 10),
 	}
 
 	// Map ContainerImage
@@ -226,34 +244,45 @@ func MapAgentToModel(agent *Agent) *model.Agent {
 	if agent.Metadata != nil {
 		metadata := &model.AgentMetadata{}
 
-		// Convert labels map to JSON string
+		// Convert labels map to KeyValuePair array
 		if len(agent.Metadata.Labels) > 0 {
-			labelsJSON, _ := json.Marshal(agent.Metadata.Labels)
-			labelsStr := string(labelsJSON)
-			metadata.Labels = &labelsStr
+			labels := make([]*model.KeyValuePair, 0, len(agent.Metadata.Labels))
+			for k, v := range agent.Metadata.Labels {
+				labels = append(labels, &model.KeyValuePair{
+					Key:   k,
+					Value: v,
+				})
+			}
+			metadata.Labels = labels
 		}
 
-		// Convert annotations map to JSON string
+		// Convert annotations map to KeyValuePair array
 		if len(agent.Metadata.Annotations) > 0 {
-			annotationsJSON, _ := json.Marshal(agent.Metadata.Annotations)
-			annotationsStr := string(annotationsJSON)
-			metadata.Annotations = &annotationsStr
+			annotations := make([]*model.KeyValuePair, 0, len(agent.Metadata.Annotations))
+			for k, v := range agent.Metadata.Annotations {
+				annotations = append(annotations, &model.KeyValuePair{
+					Key:   k,
+					Value: v,
+				})
+			}
+			metadata.Annotations = annotations
 		}
 
 		gqlAgent.Metadata = metadata
 	}
 
-	// Map CreatedBy and UpdatedBy
-	gqlAgent.CreatedBy = &model.UserDetails{
-		UserID:   agent.AuditInfo.CreatedBy,
-		Username: agent.AuditInfo.CreatedBy,
-		Email:    agent.AuditInfo.CreatedBy + "@example.com", // Placeholder
-	}
-
-	gqlAgent.UpdatedBy = &model.UserDetails{
-		UserID:   agent.AuditInfo.UpdatedBy,
-		Username: agent.AuditInfo.UpdatedBy,
-		Email:    agent.AuditInfo.UpdatedBy + "@example.com", // Placeholder
+	// Map AuditInfo
+	if agent.AuditInfo != nil {
+		gqlAgent.AuditInfo = &model.AuditInfo{
+			CreatedAt:  strconv.FormatInt(agent.AuditInfo.CreatedAt, 10),
+			CreatedBy:  agent.AuditInfo.CreatedBy,
+			UpdatedAt:  strconv.FormatInt(agent.AuditInfo.UpdatedAt, 10),
+			UpdatedBy:  agent.AuditInfo.UpdatedBy,
+		}
+		if agent.AuditInfo.LastHealthCheck != nil {
+			lastCheck := strconv.FormatInt(*agent.AuditInfo.LastHealthCheck, 10)
+			gqlAgent.AuditInfo.LastHealthCheck = &lastCheck
+		}
 	}
 
 	return gqlAgent
@@ -277,10 +306,13 @@ func MapAgentListResponseToModel(response *AgentListResponse) *model.AgentListRe
 
 // MapDeleteAgentResponseToModel converts service response to GraphQL model.
 func MapDeleteAgentResponseToModel(response *DeleteAgentResponse) *model.DeleteAgentResponse {
-	return &model.DeleteAgentResponse{
+	result := &model.DeleteAgentResponse{
 		Success: response.Success,
-		Message: response.Message,
 	}
+	if response.Message != "" {
+		result.Message = &response.Message
+	}
+	return result
 }
 
 // MapHealthCheckResultToModel converts service result to GraphQL model.
@@ -288,7 +320,7 @@ func MapHealthCheckResultToModel(result *HealthCheckResult) *model.HealthCheckRe
 	return &model.HealthCheckResult{
 		Healthy:      result.Healthy,
 		Message:      result.Message,
-		ResponseTime: strconv.FormatInt(result.ResponseTime, 10),
+		ResponseTime: int(result.ResponseTime),
 		CheckedAt:    strconv.FormatInt(result.CheckedAt, 10),
 	}
 }

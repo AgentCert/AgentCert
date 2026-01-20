@@ -69,8 +69,12 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	gitOpsService := gitops3.NewGitOpsService(gitopsOperator, chaosExperimentService, *chaosExperimentOperator)
 	imageRegistryService := image_registry.NewImageRegistryService(imageRegistryOperator)
 	environmentService := envHandler.NewEnvironmentService(EnvironmentOperator)
-	// TODO: Initialize agent registry operator, validator, langfuse client, k8s client
-	agentRegistryService := agent_registry.NewService(nil, nil, nil, nil)
+	
+	// Initialize Agent Registry dependencies
+	agentRegistryOperator := agent_registry.NewOperator(mongodbOperator.(*mongodb.MongoOperations).MongoClient.Database)
+	agentRegistryValidator := agent_registry.NewValidator(agentRegistryOperator)
+	langfuseClient := agent_registry.NewLangfuseClient("", "") // Empty config for now
+	agentRegistryService := agent_registry.NewService(agentRegistryOperator, agentRegistryValidator, langfuseClient, nil)
 
 	//handler
 	chaosExperimentHandler := handler.NewChaosExperimentHandler(chaosExperimentService, chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)

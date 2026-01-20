@@ -53,150 +53,62 @@ type ActionPayload struct {
 	Username     *string `json:"username,omitempty"`
 }
 
-// Defines an AI agent registered in the platform
 type Agent struct {
-	// Unique identifier for the agent
-	AgentID string `json:"agentID"`
-	// Project ID the agent belongs to
-	ProjectID string `json:"projectID"`
-	// Name of the agent
-	Name string `json:"name"`
-	// Description of the agent
-	Description *string `json:"description,omitempty"`
-	// Tags for the agent
-	Tags []string `json:"tags,omitempty"`
-	// Version of the agent
-	Version string `json:"version"`
-	// Vendor/provider of the agent
-	Vendor string `json:"vendor"`
-	// Capabilities supported by the agent
-	Capabilities []string `json:"capabilities"`
-	// Container image details
-	ContainerImage *ContainerImage `json:"containerImage,omitempty"`
-	// Kubernetes namespace where agent is deployed
-	Namespace string `json:"namespace"`
-	// Endpoint configuration
-	Endpoint *AgentEndpoint `json:"endpoint,omitempty"`
-	// Langfuse integration configuration
+	AgentID        string          `json:"agentID"`
+	ProjectID      string          `json:"projectID"`
+	Name           string          `json:"name"`
+	Version        string          `json:"version"`
+	Vendor         string          `json:"vendor"`
+	Capabilities   []string        `json:"capabilities"`
+	ContainerImage *ContainerImage `json:"containerImage"`
+	Namespace      string          `json:"namespace"`
+	Endpoint       *AgentEndpoint  `json:"endpoint,omitempty"`
 	LangfuseConfig *LangfuseConfig `json:"langfuseConfig,omitempty"`
-	// Current status of the agent
-	Status AgentStatus `json:"status"`
-	// Additional metadata
-	Metadata *AgentMetadata `json:"metadata,omitempty"`
-	// Timestamp when the agent was created
-	CreatedAt string `json:"createdAt"`
-	// Timestamp when the agent was last updated
-	UpdatedAt string `json:"updatedAt"`
-	// User who created the agent
-	CreatedBy *UserDetails `json:"createdBy,omitempty"`
-	// User who last updated the agent
-	UpdatedBy *UserDetails `json:"updatedBy,omitempty"`
+	Status         AgentStatus     `json:"status"`
+	Metadata       *AgentMetadata  `json:"metadata,omitempty"`
+	AuditInfo      *AuditInfo      `json:"auditInfo"`
 }
 
-func (Agent) IsResourceDetails()           {}
-func (this Agent) GetName() string         { return this.Name }
-func (this Agent) GetDescription() *string { return this.Description }
-func (this Agent) GetTags() []string {
-	if this.Tags == nil {
-		return nil
-	}
-	interfaceSlice := make([]string, 0, len(this.Tags))
-	for _, concrete := range this.Tags {
-		interfaceSlice = append(interfaceSlice, concrete)
-	}
-	return interfaceSlice
-}
-
-func (Agent) IsAudit()                        {}
-func (this Agent) GetUpdatedAt() *string      { return &this.UpdatedAt }
-func (this Agent) GetCreatedAt() *string      { return &this.CreatedAt }
-func (this Agent) GetUpdatedBy() *UserDetails { return this.UpdatedBy }
-func (this Agent) GetCreatedBy() *UserDetails { return this.CreatedBy }
-
-// Defines audit information for an agent
-type AgentAuditInfo struct {
-	// Timestamp when agent was created
-	CreatedAt string `json:"createdAt"`
-	// User who created the agent
-	CreatedBy string `json:"createdBy"`
-	// Timestamp when agent was last updated
-	UpdatedAt string `json:"updatedAt"`
-	// User who last updated the agent
-	UpdatedBy string `json:"updatedBy"`
-	// Timestamp of last health check
-	LastHealthCheck *string `json:"lastHealthCheck,omitempty"`
-}
-
-// Defines endpoint configuration for an agent
 type AgentEndpoint struct {
-	// Endpoint URL
-	URL string `json:"url"`
-	// Type of endpoint (REST or GRPC)
-	Type EndpointType `json:"type"`
-	// How the endpoint was discovered
+	URL           string                `json:"url"`
+	Type          EndpointType          `json:"type"`
 	DiscoveryType EndpointDiscoveryType `json:"discoveryType"`
-	// Health check path
-	HealthPath string `json:"healthPath"`
-	// Readiness check path
-	ReadyPath string `json:"readyPath"`
+	HealthPath    string                `json:"healthPath"`
+	ReadyPath     string                `json:"readyPath"`
 }
 
-// Defines input for agent endpoint
 type AgentEndpointInput struct {
-	// Endpoint URL
-	URL string `json:"url"`
-	// Type of endpoint (REST or GRPC)
-	Type EndpointType `json:"type"`
-	// How the endpoint was discovered
+	URL           string                `json:"url"`
+	Type          EndpointType          `json:"type"`
 	DiscoveryType EndpointDiscoveryType `json:"discoveryType"`
-	// Health check path
-	HealthPath string `json:"healthPath"`
-	// Readiness check path
-	ReadyPath string `json:"readyPath"`
+	HealthPath    *string               `json:"healthPath,omitempty"`
+	ReadyPath     *string               `json:"readyPath,omitempty"`
 }
 
-// Defines filter criteria for listing agents
-type AgentFilterInput struct {
-	// Filter by project ID
-	ProjectID string `json:"projectID"`
-	// Filter by agent status
-	Status *AgentStatus `json:"status,omitempty"`
-	// Filter by multiple statuses
-	Statuses []AgentStatus `json:"statuses,omitempty"`
-	// Filter by capabilities (agents must have all specified capabilities)
-	Capabilities []string `json:"capabilities,omitempty"`
-	// Search term for name/vendor
-	SearchTerm *string `json:"searchTerm,omitempty"`
-}
-
-// Defines the response for listing agents
 type AgentListResponse struct {
-	// List of agents
-	Agents []*Agent `json:"agents"`
-	// Total number of agents matching the filter
-	TotalCount int `json:"totalCount"`
-	// Current page number
-	CurrentPage int `json:"currentPage"`
-	// Total number of pages
-	TotalPages int `json:"totalPages"`
-	// Whether there are more pages
-	HasNextPage bool `json:"hasNextPage"`
+	Agents      []*Agent `json:"agents"`
+	TotalCount  int      `json:"totalCount"`
+	CurrentPage int      `json:"currentPage"`
+	TotalPages  int      `json:"totalPages"`
+	HasNextPage bool     `json:"hasNextPage"`
 }
 
-// Defines additional metadata for an agent
 type AgentMetadata struct {
-	// Key-value labels (JSON string)
-	Labels *string `json:"labels,omitempty"`
-	// Key-value annotations (JSON string)
-	Annotations *string `json:"annotations,omitempty"`
+	Labels      []*KeyValuePair `json:"labels,omitempty"`
+	Annotations []*KeyValuePair `json:"annotations,omitempty"`
 }
 
-// Defines input for agent metadata
 type AgentMetadataInput struct {
-	// Key-value labels (JSON string)
-	Labels *string `json:"labels,omitempty"`
-	// Key-value annotations (JSON string)
-	Annotations *string `json:"annotations,omitempty"`
+	Labels      []*KeyValuePairInput `json:"labels,omitempty"`
+	Annotations []*KeyValuePairInput `json:"annotations,omitempty"`
+}
+
+type AgentStatusResponse struct {
+	AgentID              string      `json:"agentID"`
+	Status               AgentStatus `json:"status"`
+	Healthy              bool        `json:"healthy"`
+	LastCheckedAt        *string     `json:"lastCheckedAt,omitempty"`
+	LastSyncedToLangfuse *string     `json:"lastSyncedToLangfuse,omitempty"`
 }
 
 type Annotation struct {
@@ -206,6 +118,14 @@ type Annotation struct {
 	Repository       string `json:"repository"`
 	Support          string `json:"support"`
 	ChartDescription string `json:"chartDescription"`
+}
+
+type AuditInfo struct {
+	CreatedAt       string  `json:"createdAt"`
+	CreatedBy       string  `json:"createdBy"`
+	UpdatedAt       string  `json:"updatedAt"`
+	UpdatedBy       string  `json:"updatedBy"`
+	LastHealthCheck *string `json:"lastHealthCheck,omitempty"`
 }
 
 // Defines the input for CMD probe properties
@@ -234,16 +154,11 @@ type CMDProbeRequest struct {
 	Source *string `json:"source,omitempty"`
 }
 
-// Defines a capability definition in the taxonomy
 type CapabilityDefinition struct {
-	// Unique identifier for the capability
-	ID string `json:"id"`
-	// Name of the capability
-	Name string `json:"name"`
-	// Description of the capability
+	ID          string `json:"id"`
+	Name        string `json:"name"`
 	Description string `json:"description"`
-	// Category of the capability
-	Category string `json:"category"`
+	Category    string `json:"category"`
 }
 
 // Defines the details for a chaos experiment
@@ -496,24 +411,16 @@ type ConfirmInfraRegistrationResponse struct {
 	InfraID          *string `json:"infraID,omitempty"`
 }
 
-// Defines container image details for an agent
 type ContainerImage struct {
-	// Container registry URL
-	Registry string `json:"registry"`
-	// Repository name
+	Registry   string `json:"registry"`
 	Repository string `json:"repository"`
-	// Image tag
-	Tag string `json:"tag"`
+	Tag        string `json:"tag"`
 }
 
-// Defines input for container image
 type ContainerImageInput struct {
-	// Container registry URL
-	Registry string `json:"registry"`
-	// Repository name
+	Registry   string `json:"registry"`
 	Repository string `json:"repository"`
-	// Image tag
-	Tag string `json:"tag"`
+	Tag        string `json:"tag"`
 }
 
 // Defines the details required for creating a chaos hub
@@ -575,12 +482,9 @@ type DateRange struct {
 	EndDate *string `json:"endDate,omitempty"`
 }
 
-// Defines the response for deleting an agent
 type DeleteAgentResponse struct {
-	// Whether the deletion was successful
-	Success bool `json:"success"`
-	// Message describing the result
-	Message string `json:"message"`
+	Success bool    `json:"success"`
+	Message *string `json:"message,omitempty"`
 }
 
 type Environment struct {
@@ -1055,16 +959,11 @@ type HTTPProbeRequest struct {
 	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
-// Defines the result of a health check
 type HealthCheckResult struct {
-	// Whether the agent is healthy
-	Healthy bool `json:"healthy"`
-	// Health check message
-	Message string `json:"message"`
-	// Response time in milliseconds
-	ResponseTime string `json:"responseTime"`
-	// Timestamp when health check was performed
-	CheckedAt string `json:"checkedAt"`
+	Healthy      bool   `json:"healthy"`
+	Message      string `json:"message"`
+	ResponseTime int    `json:"responseTime"`
+	CheckedAt    string `json:"checkedAt"`
 }
 
 // Defines details for image registry
@@ -1351,6 +1250,16 @@ type K8SProbeRequest struct {
 	Operation string `json:"operation"`
 }
 
+type KeyValuePair struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type KeyValuePairInput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 type KubeGVRRequest struct {
 	Group    string `json:"group"`
 	Version  string `json:"version"`
@@ -1581,27 +1490,27 @@ type KubernetesHTTPProbeRequest struct {
 	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
-// Defines Langfuse integration configuration
 type LangfuseConfig struct {
-	// Langfuse project ID
-	ProjectID string `json:"projectId"`
-	// Whether sync to Langfuse is enabled
-	SyncEnabled bool `json:"syncEnabled"`
-	// Timestamp of last sync
+	ProjectID    string  `json:"projectId"`
+	SyncEnabled  bool    `json:"syncEnabled"`
 	LastSyncedAt *string `json:"lastSyncedAt,omitempty"`
 }
 
-// Defines input for Langfuse configuration
 type LangfuseConfigInput struct {
-	// Langfuse project ID
-	ProjectID string `json:"projectId"`
-	// Whether sync to Langfuse is enabled
-	SyncEnabled bool `json:"syncEnabled"`
+	ProjectID   string `json:"projectId"`
+	SyncEnabled bool   `json:"syncEnabled"`
 }
 
 type Link struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
+}
+
+type ListAgentsFilter struct {
+	ProjectID    *string      `json:"projectId,omitempty"`
+	Status       *AgentStatus `json:"status,omitempty"`
+	Capabilities []string     `json:"capabilities,omitempty"`
+	SearchTerm   *string      `json:"searchTerm,omitempty"`
 }
 
 type ListChaosHubRequest struct {
@@ -1860,11 +1769,8 @@ type Pagination struct {
 	Limit int `json:"limit"`
 }
 
-// Defines pagination parameters
 type PaginationInput struct {
-	// Page number (1-indexed)
-	Page int `json:"page"`
-	// Number of items per page
+	Page  int `json:"page"`
 	Limit int `json:"limit"`
 }
 
@@ -2065,28 +1971,22 @@ func (this RecentExperimentRun) GetCreatedAt() *string      { return &this.Creat
 func (this RecentExperimentRun) GetUpdatedBy() *UserDetails { return this.UpdatedBy }
 func (this RecentExperimentRun) GetCreatedBy() *UserDetails { return this.CreatedBy }
 
-// Defines input for registering a new agent
 type RegisterAgentInput struct {
-	// Project ID the agent belongs to
-	ProjectID string `json:"projectID"`
-	// Name of the agent
-	Name string `json:"name"`
-	// Version of the agent
-	Version string `json:"version"`
-	// Vendor/provider of the agent
-	Vendor string `json:"vendor"`
-	// Capabilities supported by the agent
-	Capabilities []string `json:"capabilities"`
-	// Container image details
-	ContainerImage *ContainerImageInput `json:"containerImage,omitempty"`
-	// Kubernetes namespace where agent is deployed
-	Namespace string `json:"namespace"`
-	// Endpoint configuration (optional, will auto-discover if not provided)
-	Endpoint *AgentEndpointInput `json:"endpoint,omitempty"`
-	// Langfuse integration configuration
+	ProjectID      string               `json:"projectId"`
+	Name           string               `json:"name"`
+	Version        string               `json:"version"`
+	Vendor         string               `json:"vendor"`
+	Capabilities   []string             `json:"capabilities"`
+	ContainerImage *ContainerImageInput `json:"containerImage"`
+	Namespace      string               `json:"namespace"`
+	Endpoint       *AgentEndpointInput  `json:"endpoint,omitempty"`
 	LangfuseConfig *LangfuseConfigInput `json:"langfuseConfig,omitempty"`
-	// Additional metadata
-	Metadata *AgentMetadataInput `json:"metadata,omitempty"`
+	Metadata       *AgentMetadataInput  `json:"metadata,omitempty"`
+}
+
+type RegisterAgentResponse struct {
+	Agent              *Agent             `json:"agent"`
+	LangfuseSyncStatus LangfuseSyncStatus `json:"langfuseSyncStatus"`
 }
 
 // Defines the details for the new infra being connected
@@ -2214,6 +2114,12 @@ type StopExperimentRunsRequest struct {
 type Subscription struct {
 }
 
+type SyncResponse struct {
+	Success  bool    `json:"success"`
+	SyncedAt *string `json:"syncedAt,omitempty"`
+	Message  *string `json:"message,omitempty"`
+}
+
 type Toleration struct {
 	TolerationSeconds *int    `json:"tolerationSeconds,omitempty"`
 	Key               *string `json:"key,omitempty"`
@@ -2222,24 +2128,15 @@ type Toleration struct {
 	Value             *string `json:"value,omitempty"`
 }
 
-// Defines input for updating an existing agent
 type UpdateAgentInput struct {
-	// Name of the agent
-	Name *string `json:"name,omitempty"`
-	// Version of the agent
-	Version *string `json:"version,omitempty"`
-	// Vendor/provider of the agent
-	Vendor *string `json:"vendor,omitempty"`
-	// Capabilities supported by the agent
-	Capabilities []string `json:"capabilities,omitempty"`
-	// Container image details
+	Name           *string              `json:"name,omitempty"`
+	Version        *string              `json:"version,omitempty"`
+	Vendor         *string              `json:"vendor,omitempty"`
+	Capabilities   []string             `json:"capabilities,omitempty"`
 	ContainerImage *ContainerImageInput `json:"containerImage,omitempty"`
-	// Endpoint configuration
-	Endpoint *AgentEndpointInput `json:"endpoint,omitempty"`
-	// Langfuse integration configuration
+	Endpoint       *AgentEndpointInput  `json:"endpoint,omitempty"`
 	LangfuseConfig *LangfuseConfigInput `json:"langfuseConfig,omitempty"`
-	// Additional metadata
-	Metadata *AgentMetadataInput `json:"metadata,omitempty"`
+	Metadata       *AgentMetadataInput  `json:"metadata,omitempty"`
 }
 
 type UpdateChaosHubRequest struct {
@@ -2309,7 +2206,6 @@ type Workload struct {
 	Namespace string `json:"namespace"`
 }
 
-// Defines the status of an AI agent
 type AgentStatus string
 
 const (
@@ -2402,7 +2298,6 @@ func (e AuthType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
-// Defines how the agent endpoint was discovered
 type EndpointDiscoveryType string
 
 const (
@@ -2444,7 +2339,6 @@ func (e EndpointDiscoveryType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
-// Defines the type of agent endpoint
 type EndpointType string
 
 const (
@@ -2963,6 +2857,49 @@ func (e *Invitation) UnmarshalGQL(v interface{}) error {
 }
 
 func (e Invitation) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type LangfuseSyncStatus string
+
+const (
+	LangfuseSyncStatusSuccess LangfuseSyncStatus = "SUCCESS"
+	LangfuseSyncStatusFailed  LangfuseSyncStatus = "FAILED"
+	LangfuseSyncStatusSkipped LangfuseSyncStatus = "SKIPPED"
+)
+
+var AllLangfuseSyncStatus = []LangfuseSyncStatus{
+	LangfuseSyncStatusSuccess,
+	LangfuseSyncStatusFailed,
+	LangfuseSyncStatusSkipped,
+}
+
+func (e LangfuseSyncStatus) IsValid() bool {
+	switch e {
+	case LangfuseSyncStatusSuccess, LangfuseSyncStatusFailed, LangfuseSyncStatusSkipped:
+		return true
+	}
+	return false
+}
+
+func (e LangfuseSyncStatus) String() string {
+	return string(e)
+}
+
+func (e *LangfuseSyncStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LangfuseSyncStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LangfuseSyncStatus", str)
+	}
+	return nil
+}
+
+func (e LangfuseSyncStatus) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	//"k8s.io/client-go/kubernetes"
 )
 
 // Service defines the business logic interface for Agent Registry operations.
@@ -47,17 +47,17 @@ type serviceImpl struct {
 	operator       Operator
 	validator      Validator
 	langfuseClient LangfuseClient
-	k8sClient      kubernetes.Interface
+	//k8sClient      kubernetes.Interface
 	// logger will be added for structured logging
 }
 
 // NewService creates a new Service instance.
-func NewService(operator Operator, validator Validator, langfuseClient LangfuseClient, k8sClient kubernetes.Interface) Service {
+func NewService(operator Operator, validator Validator, langfuseClient LangfuseClient, k8sClient interface{}) Service {
 	return &serviceImpl{
 		operator:       operator,
 		validator:      validator,
 		langfuseClient: langfuseClient,
-		k8sClient:      k8sClient,
+		//k8sClient:      k8sClient,
 	}
 }
 
@@ -208,33 +208,33 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 
 // discoverAgentEndpoint discovers agent endpoint from Kubernetes Service.
 func (s *serviceImpl) discoverAgentEndpoint(ctx context.Context, agentName, namespace string) (*AgentEndpoint, error) {
-	if s.k8sClient == nil {
+	//if s.k8sClient == nil {
 		return nil, fmt.Errorf("Kubernetes client not configured; please provide endpoint manually")
-	}
+	//}
 	
 	// Try to find service matching agent name
-	service, err := s.k8sClient.CoreV1().Services(namespace).Get(ctx, agentName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("service '%s' not found in namespace '%s': %w. "+
-			"Please provide endpoint manually or ensure service exists", agentName, namespace, err)
-	}
-	
-	// Get port from service
-	port := int32(8080) // Default port
-	if len(service.Spec.Ports) > 0 {
-		port = service.Spec.Ports[0].Port
-	}
-	
-	// Construct endpoint URL
-	url := fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", service.Name, namespace, port)
-	
-	return &AgentEndpoint{
-		URL:           url,
-		Type:          EndpointTypeREST,
-		DiscoveryType: EndpointDiscoveryAuto,
-		HealthPath:    DefaultHealthPath,
-		ReadyPath:     DefaultReadyPath,
-	}, nil
+	//service, err := s.k8sClient.CoreV1().Services(namespace).Get(ctx, agentName, metav1.GetOptions{})
+	//if err != nil {
+	//	return nil, fmt.Errorf("service '%s' not found in namespace '%s': %w. "+
+	//		"Please provide endpoint manually or ensure service exists", agentName, namespace, err)
+	//}
+	//
+	//// Get port from service
+	//port := int32(8080) // Default port
+	//if len(service.Spec.Ports) > 0 {
+	//	port = service.Spec.Ports[0].Port
+	//}
+	//
+	//// Construct endpoint URL
+	//url := fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", service.Name, namespace, port)
+	//
+	//return &AgentEndpoint{
+	//	URL:           url,
+	//	Type:          EndpointTypeREST,
+	//	DiscoveryType: EndpointDiscoveryAuto,
+	//	HealthPath:    DefaultHealthPath,
+	//	ReadyPath:     DefaultReadyPath,
+	//}, nil
 }
 
 // GetAgent retrieves an agent by ID.
