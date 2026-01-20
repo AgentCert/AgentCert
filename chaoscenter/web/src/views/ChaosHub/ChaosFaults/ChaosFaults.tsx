@@ -144,7 +144,7 @@ function ChaosFaults({ hubDetails, faultCategories, loading, searchValue }: Chao
                   style={{ objectFit: 'contain' }}
                 />
               ) : (
-                <Icon size={23} name="chaos-litmuschaos" />
+                <Icon size={23} name="main-code" />
               )}
 
               <Text font={{ variation: FontVariation.BODY, weight: 'semi-bold' }} color={Color.PRIMARY_7}>
