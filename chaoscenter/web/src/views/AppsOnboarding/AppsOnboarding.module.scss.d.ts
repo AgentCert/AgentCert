@@ -1,11 +1,11 @@
-declare namespace AgentOnboardingModuleScssNamespace {
-  export interface IAgentOnboardingModuleScss {
+declare namespace AppsOnboardingModuleScssNamespace {
+  export interface IAppsOnboardingModuleScss {
     actionLink: string;
-    agentsTable: string;
+    appsTable: string;
     buttonContainer: string;
     container: string;
     heading: string;
-    newAgentButtonContainer: string;
+    newAppButtonContainer: string;
     radioCard: string;
     radioContent: string;
     radioDescription: string;
@@ -18,6 +18,6 @@ declare namespace AgentOnboardingModuleScssNamespace {
   }
 }
 
-declare const AgentOnboardingModuleScssModule: AgentOnboardingModuleScssNamespace.IAgentOnboardingModuleScss;
+declare const AppsOnboardingModuleScssModule: AppsOnboardingModuleScssNamespace.IAppsOnboardingModuleScss;
 
-export = AgentOnboardingModuleScssModule;
+export = AppsOnboardingModuleScssModule;

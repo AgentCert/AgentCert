@@ -7,12 +7,13 @@ import cx from 'classnames';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
 import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
-import css from './AgentOnboarding.module.scss';
+import css from './AppsOnboarding.module.scss';
 
 export enum OnboardingMethod {
+  KUBERNETES_MANIFEST = 'kubernetes-manifest',
+  DOCKER_IMAGE = 'docker-image',
   HELM_CHART = 'helm-chart',
-  APIS = 'apis',
-  FAAS = 'faas'
+  CLOUD_MANAGED = 'cloud-managed'
 }
 
 interface RadioOption {
@@ -21,7 +22,7 @@ interface RadioOption {
   description: string;
 }
 
-interface Agent {
+interface Application {
   id: string;
   name: string;
   method: string;
@@ -29,14 +30,15 @@ interface Agent {
   createdAt: string;
 }
 
-// Mock data for agents table
-const mockAgents: Agent[] = [
-  { id: '1', name: 'Production Agent', method: 'Helm Chart', status: 'Active', createdAt: '2026-01-15' },
-  { id: '2', name: 'Staging Agent', method: 'APIs', status: 'Active', createdAt: '2026-01-10' },
-  { id: '3', name: 'Dev Agent', method: 'FaaS', status: 'Inactive', createdAt: '2026-01-05' }
+// Mock data for applications table
+const mockApplications: Application[] = [
+  { id: '1', name: 'Payment Service', method: 'Kubernetes Manifest', status: 'Active', createdAt: '2026-01-18' },
+  { id: '2', name: 'User Auth API', method: 'Docker Image', status: 'Active', createdAt: '2026-01-12' },
+  { id: '3', name: 'Notification Service', method: 'Helm Chart', status: 'Inactive', createdAt: '2026-01-08' },
+  { id: '4', name: 'Analytics Dashboard', method: 'Cloud Managed', status: 'Active', createdAt: '2026-01-03' }
 ];
 
-export default function AgentOnboardingView(): React.ReactElement {
+export default function AppsOnboardingView(): React.ReactElement {
   const { getString } = useStrings();
   const { showSuccess } = useToaster();
   const location = useLocation();
@@ -45,25 +47,27 @@ export default function AgentOnboardingView(): React.ReactElement {
   const searchParams = new URLSearchParams(location.search);
   const showOptions = searchParams.get('step') === 'select';
   const [selectedMethod, setSelectedMethod] = useState<OnboardingMethod | null>(null);
-  const [agents, setAgents] = useState<Agent[]>(mockAgents);
+  const [applications, setApplications] = useState<Application[]>(mockApplications);
 
-  useDocumentTitle(getString('agentOnboarding'));
+  useDocumentTitle(getString('appsOnboarding'));
 
   const breadcrumbs = [
     {
-      label: getString('agentOnboarding'),
-      url: paths.toAgentOnboarding()
+      label: getString('appsOnboarding'),
+      url: paths.toAppsOnboarding()
     }
   ];
 
   const getMethodLabel = (method: OnboardingMethod): string => {
     switch (method) {
+      case OnboardingMethod.KUBERNETES_MANIFEST:
+        return getString('onboardAppUsingKubernetesManifest');
+      case OnboardingMethod.DOCKER_IMAGE:
+        return getString('onboardAppUsingDockerImage');
       case OnboardingMethod.HELM_CHART:
-        return getString('onboardUsingHelmChart');
-      case OnboardingMethod.APIS:
-        return getString('onboardUsingAPIs');
-      case OnboardingMethod.FAAS:
-        return getString('onboardUsingFaaS');
+        return getString('onboardAppUsingHelmChart');
+      case OnboardingMethod.CLOUD_MANAGED:
+        return getString('onboardAppUsingCloudManaged');
       default:
         return method;
     }
@@ -71,19 +75,24 @@ export default function AgentOnboardingView(): React.ReactElement {
 
   const radioOptions: RadioOption[] = [
     {
+      value: OnboardingMethod.KUBERNETES_MANIFEST,
+      title: getString('onboardAppUsingKubernetesManifest'),
+      description: getString('onboardAppUsingKubernetesManifestDesc')
+    },
+    {
+      value: OnboardingMethod.DOCKER_IMAGE,
+      title: getString('onboardAppUsingDockerImage'),
+      description: getString('onboardAppUsingDockerImageDesc')
+    },
+    {
       value: OnboardingMethod.HELM_CHART,
-      title: getString('onboardUsingHelmChart'),
-      description: getString('onboardUsingHelmChartDesc')
+      title: getString('onboardAppUsingHelmChart'),
+      description: getString('onboardAppUsingHelmChartDesc')
     },
     {
-      value: OnboardingMethod.APIS,
-      title: getString('onboardUsingAPIs'),
-      description: getString('onboardUsingAPIsDesc')
-    },
-    {
-      value: OnboardingMethod.FAAS,
-      title: getString('onboardUsingFaaS'),
-      description: getString('onboardUsingFaaSDesc')
+      value: OnboardingMethod.CLOUD_MANAGED,
+      title: getString('onboardAppUsingCloudManaged'),
+      description: getString('onboardAppUsingCloudManagedDesc')
     }
   ];
 
@@ -93,7 +102,7 @@ export default function AgentOnboardingView(): React.ReactElement {
     }
   };
 
-  const handleNewAgent = (): void => {
+  const handleNewApplication = (): void => {
     history.push({ search: '?step=select' });
   };
 
@@ -101,20 +110,20 @@ export default function AgentOnboardingView(): React.ReactElement {
     history.push({ search: '' });
   };
 
-  const handleEditAgent = (agent: Agent): void => {
-    showSuccess(`Editing agent: ${agent.name}`);
+  const handleEditApplication = (app: Application): void => {
+    showSuccess(`Editing application: ${app.name}`);
   };
 
-  const handleDeleteAgent = (agent: Agent): void => {
-    setAgents(prev => prev.filter(a => a.id !== agent.id));
-    showSuccess(`Deleted agent: ${agent.name}`);
+  const handleDeleteApplication = (app: Application): void => {
+    setApplications(prev => prev.filter(a => a.id !== app.id));
+    showSuccess(`Deleted application: ${app.name}`);
   };
 
-  const columns: Column<Agent>[] = [
+  const columns: Column<Application>[] = [
     {
       Header: getString('name'),
       accessor: 'name',
-      Cell: ({ value }: CellProps<Agent>) => (
+      Cell: ({ value }: CellProps<Application>) => (
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_900}>
           {value}
         </Text>
@@ -123,7 +132,7 @@ export default function AgentOnboardingView(): React.ReactElement {
     {
       Header: getString('method'),
       accessor: 'method',
-      Cell: ({ value }: CellProps<Agent>) => (
+      Cell: ({ value }: CellProps<Application>) => (
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
           {value}
         </Text>
@@ -132,7 +141,7 @@ export default function AgentOnboardingView(): React.ReactElement {
     {
       Header: getString('status'),
       accessor: 'status',
-      Cell: ({ value }: CellProps<Agent>) => (
+      Cell: ({ value }: CellProps<Application>) => (
         <Text 
           font={{ variation: FontVariation.BODY }} 
           color={value === 'Active' ? Color.GREEN_700 : Color.GREY_500}
@@ -144,7 +153,7 @@ export default function AgentOnboardingView(): React.ReactElement {
     {
       Header: getString('createdAt'),
       accessor: 'createdAt',
-      Cell: ({ value }: CellProps<Agent>) => (
+      Cell: ({ value }: CellProps<Application>) => (
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
           {value}
         </Text>
@@ -153,19 +162,19 @@ export default function AgentOnboardingView(): React.ReactElement {
     {
       Header: getString('actions'),
       id: 'actions',
-      Cell: ({ row }: CellProps<Agent>) => (
+      Cell: ({ row }: CellProps<Application>) => (
         <Layout.Horizontal spacing="medium">
           <Text
             className={css.actionLink}
             color={Color.PRIMARY_7}
-            onClick={() => handleEditAgent(row.original)}
+            onClick={() => handleEditApplication(row.original)}
           >
             {getString('edit')}
           </Text>
           <Text
             className={css.actionLink}
             color={Color.RED_600}
-            onClick={() => handleDeleteAgent(row.original)}
+            onClick={() => handleDeleteApplication(row.original)}
           >
             {getString('delete')}
           </Text>
@@ -177,7 +186,7 @@ export default function AgentOnboardingView(): React.ReactElement {
   return (
     <DefaultLayoutTemplate
       breadcrumbs={breadcrumbs}
-      title={getString('agentOnboarding')}
+      title={getString('appsOnboarding')}
     >
       <Container className={css.container}>
         {!showOptions ? (
@@ -187,30 +196,30 @@ export default function AgentOnboardingView(): React.ReactElement {
               color={Color.GREY_800}
               className={css.heading}
             >
-              {getString('agentOnboarding')}
+              {getString('appsOnboarding')}
             </Text>
-            <Container className={css.newAgentButtonContainer}>
+            <Container className={css.newAppButtonContainer}>
               <Button
                 variation={ButtonVariation.PRIMARY}
-                text={getString('newAgent')}
+                text={getString('newApplication')}
                 icon="plus"
-                onClick={handleNewAgent}
+                onClick={handleNewApplication}
               />
             </Container>
 
-            {agents.length > 0 && (
+            {applications.length > 0 && (
               <Container className={css.tableContainer}>
                 <Text
                   font={{ variation: FontVariation.H5 }}
                   color={Color.GREY_800}
                   className={css.tableHeading}
                 >
-                  {getString('onboardedAgents')}
+                  {getString('onboardedApplications')}
                 </Text>
-                <TableV2<Agent>
+                <TableV2<Application>
                   columns={columns}
-                  data={agents}
-                  className={css.agentsTable}
+                  data={applications}
+                  className={css.appsTable}
                 />
               </Container>
             )}
@@ -222,7 +231,7 @@ export default function AgentOnboardingView(): React.ReactElement {
               color={Color.GREY_800}
               className={css.heading}
             >
-              {getString('onboardYourAgent')}
+              {getString('onboardYourApp')}
             </Text>
 
             <div className={css.radioGroup}>
