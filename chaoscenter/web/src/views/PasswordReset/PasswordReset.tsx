@@ -1,4 +1,5 @@
 import { Color, FontVariation } from '@harnessio/design-system';
+import { Icon } from '@harnessio/icons';
 import { Button, ButtonVariation, Container, Layout, Text } from '@harnessio/uicore';
 import React from 'react';
 import { Form, Formik } from 'formik';

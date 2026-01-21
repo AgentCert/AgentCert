@@ -44,8 +44,9 @@ describe('OverviewView Component', () => {
         <OverviewView {...props} />
       </TestWrapper>
     );
-    const loadingText = await screen.findByText('litmus');
-    expect(loadingText).toBeVisible();
+    const loadingTexts = await screen.findAllByAltText('AgentCert');
+    expect(loadingTexts.length).toBeGreaterThan(0);
+    expect(loadingTexts[0]).toBeVisible();
   });
 
   test('renders NewUserLanding if no experiment data is present', async () => {
@@ -54,7 +55,8 @@ describe('OverviewView Component', () => {
         <OverviewView {...NoExperimentProps} />
       </TestWrapper>
     );
-    const loadingText = await screen.findByText('litmus');
-    expect(loadingText).toBeVisible();
+    const loadingTexts = await screen.findAllByAltText('AgentCert');
+    expect(loadingTexts.length).toBeGreaterThan(0);
+    expect(loadingTexts[0]).toBeVisible();
   });
 });
