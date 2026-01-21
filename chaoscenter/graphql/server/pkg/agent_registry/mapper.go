@@ -1,10 +1,36 @@
+
 package agent_registry
 
 import (
 	"strconv"
-
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 )
+
+// MapSyncResponseToModel converts service SyncResponse to GraphQL model.
+func MapSyncResponseToModel(resp *SyncResponse) *model.SyncResponse {
+	if resp == nil {
+		return nil
+	}
+	return &model.SyncResponse{
+		Success:  resp.Success,
+		SyncedAt: resp.SyncedAt,
+		Message:  resp.Message,
+	}
+}
+
+// MapAgentStatusResponseToModel converts service AgentStatusResponse to GraphQL model.
+func MapAgentStatusResponseToModel(resp *AgentStatusResponse) *model.AgentStatusResponse {
+	if resp == nil {
+		return nil
+	}
+	return &model.AgentStatusResponse{
+		AgentID:              resp.AgentID,
+		Status:               model.AgentStatus(resp.Status),
+		Healthy:              resp.Healthy,
+		LastCheckedAt:        resp.LastCheckedAt,
+		LastSyncedToLangfuse: resp.LastSyncedToLangfuse,
+	}
+}
 
 // MapRegisterAgentInputToRequest converts GraphQL input to service request.
 func MapRegisterAgentInputToRequest(input model.RegisterAgentInput) (*RegisterAgentRequest, error) {
