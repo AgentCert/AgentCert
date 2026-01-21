@@ -5,16 +5,22 @@ declare namespace AppsOnboardingModuleScssNamespace {
     buttonContainer: string;
     container: string;
     heading: string;
+    inputSection: string;
     newAppButtonContainer: string;
     radioCard: string;
     radioContent: string;
     radioDescription: string;
     radioGroup: string;
     radioInput: string;
+    radioRow: string;
     radioTitle: string;
     selected: string;
     tableContainer: string;
     tableHeading: string;
+    uploadButton: string;
+    uploadSection: string;
+    uploadedFileName: string;
+    urlTextbox: string;
   }
 }
 

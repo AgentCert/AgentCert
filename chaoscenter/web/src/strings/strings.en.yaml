@@ -149,6 +149,7 @@ uploadedSuccessfully: File uploaded successfully
 pleaseUploadFile: Please upload the required file to proceed
 uploadedFileName: Uploaded file name
 enterApiUrl: Enter API endpoint URL
+enterCloudManagedUrl: Enter Cloud Managed service URL
 enterFaasUrl: Enter Function as a Service URL
 checkConnection: Check Connection
 checkLogs: Check the Chaos Infrastructure Logs

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2 } from '@harnessio/uicore';
+import React, { useState, useRef } from 'react';
+import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput } from '@harnessio/uicore';
 import { Color, FontVariation } from '@harnessio/design-system';
 import { useLocation, useHistory } from 'react-router-dom';
 import type { Column, CellProps } from 'react-table';
@@ -10,8 +10,6 @@ import { useStrings } from '@strings';
 import css from './AppsOnboarding.module.scss';
 
 export enum OnboardingMethod {
-  KUBERNETES_MANIFEST = 'kubernetes-manifest',
-  DOCKER_IMAGE = 'docker-image',
   HELM_CHART = 'helm-chart',
   CLOUD_MANAGED = 'cloud-managed'
 }
@@ -20,6 +18,11 @@ interface RadioOption {
   value: OnboardingMethod;
   title: string;
   description: string;
+}
+
+interface UploadedFile {
+  name: string;
+  method: OnboardingMethod;
 }
 
 interface Application {
@@ -47,6 +50,9 @@ export default function AppsOnboardingView(): React.ReactElement {
   const searchParams = new URLSearchParams(location.search);
   const showOptions = searchParams.get('step') === 'select';
   const [selectedMethod, setSelectedMethod] = useState<OnboardingMethod | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
+  const [cloudManagedUrl, setCloudManagedUrl] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [applications, setApplications] = useState<Application[]>(mockApplications);
 
   useDocumentTitle(getString('appsOnboarding'));
@@ -60,10 +66,6 @@ export default function AppsOnboardingView(): React.ReactElement {
 
   const getMethodLabel = (method: OnboardingMethod): string => {
     switch (method) {
-      case OnboardingMethod.KUBERNETES_MANIFEST:
-        return getString('onboardAppUsingKubernetesManifest');
-      case OnboardingMethod.DOCKER_IMAGE:
-        return getString('onboardAppUsingDockerImage');
       case OnboardingMethod.HELM_CHART:
         return getString('onboardAppUsingHelmChart');
       case OnboardingMethod.CLOUD_MANAGED:
@@ -74,16 +76,6 @@ export default function AppsOnboardingView(): React.ReactElement {
   };
 
   const radioOptions: RadioOption[] = [
-    {
-      value: OnboardingMethod.KUBERNETES_MANIFEST,
-      title: getString('onboardAppUsingKubernetesManifest'),
-      description: getString('onboardAppUsingKubernetesManifestDesc')
-    },
-    {
-      value: OnboardingMethod.DOCKER_IMAGE,
-      title: getString('onboardAppUsingDockerImage'),
-      description: getString('onboardAppUsingDockerImageDesc')
-    },
     {
       value: OnboardingMethod.HELM_CHART,
       title: getString('onboardAppUsingHelmChart'),
@@ -97,8 +89,76 @@ export default function AppsOnboardingView(): React.ReactElement {
   ];
 
   const handleOnboard = (): void => {
-    if (selectedMethod) {
-      showSuccess(`You have selected: ${getMethodLabel(selectedMethod)}`);
+    if (selectedMethod && uploadedFile) {
+      showSuccess(`You have selected: ${getMethodLabel(selectedMethod)} with file: ${uploadedFile.name}`);
+    }
+  };
+
+  const handleUploadClick = (): void => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (file && selectedMethod) {
+      setUploadedFile({ name: file.name, method: selectedMethod });
+      showSuccess(getString('uploadedSuccessfully'));
+    }
+    // Reset the input so the same file can be selected again if needed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const getAcceptedFileTypes = (method: OnboardingMethod): string => {
+    switch (method) {
+      case OnboardingMethod.HELM_CHART:
+        return '.yaml,.yml,.tgz';
+      case OnboardingMethod.CLOUD_MANAGED:
+        return '.yaml,.yml,.json';
+      default:
+        return '*';
+    }
+  };
+
+  const isOnboardDisabled = (): boolean => {
+    if (!selectedMethod) return true;
+    
+    switch (selectedMethod) {
+      case OnboardingMethod.HELM_CHART:
+        return !uploadedFile || uploadedFile.method !== selectedMethod;
+      case OnboardingMethod.CLOUD_MANAGED:
+        return !cloudManagedUrl.trim() || !uploadedFile || uploadedFile.method !== selectedMethod;
+      default:
+        return true;
+    }
+  };
+
+  const getTextboxValue = (method: OnboardingMethod): string => {
+    switch (method) {
+      case OnboardingMethod.HELM_CHART:
+        return uploadedFile && uploadedFile.method === method ? uploadedFile.name : '';
+      case OnboardingMethod.CLOUD_MANAGED:
+        return cloudManagedUrl;
+      default:
+        return '';
+    }
+  };
+
+  const handleTextboxChange = (method: OnboardingMethod, value: string): void => {
+    if (method === OnboardingMethod.CLOUD_MANAGED) {
+      setCloudManagedUrl(value);
+    }
+  };
+
+  const getTextboxPlaceholder = (method: OnboardingMethod): string => {
+    switch (method) {
+      case OnboardingMethod.HELM_CHART:
+        return getString('uploadedFileName');
+      case OnboardingMethod.CLOUD_MANAGED:
+        return getString('enterCloudManagedUrl');
+      default:
+        return '';
     }
   };
 
@@ -234,31 +294,63 @@ export default function AppsOnboardingView(): React.ReactElement {
               {getString('onboardYourApp')}
             </Text>
 
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={selectedMethod ? getAcceptedFileTypes(selectedMethod) : '*'}
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+
             <div className={css.radioGroup}>
               {radioOptions.map(option => (
-                <label
-                  key={option.value}
-                  className={cx(css.radioCard, {
-                    [css.selected]: selectedMethod === option.value
-                  })}
-                >
-                  <input
-                    type="radio"
-                    name="onboardingMethod"
-                    value={option.value}
-                    checked={selectedMethod === option.value}
-                    onChange={() => setSelectedMethod(option.value)}
-                    className={css.radioInput}
-                  />
-                  <div className={css.radioContent}>
-                    <Text font={{ variation: FontVariation.BODY1 }} color={Color.GREY_900} className={css.radioTitle}>
-                      {option.title}
-                    </Text>
-                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500} className={css.radioDescription}>
-                      {option.description}
-                    </Text>
-                  </div>
-                </label>
+                <div key={option.value} className={css.radioRow}>
+                  <label
+                    className={cx(css.radioCard, {
+                      [css.selected]: selectedMethod === option.value
+                    })}
+                  >
+                    <input
+                      type="radio"
+                      name="onboardingMethod"
+                      value={option.value}
+                      checked={selectedMethod === option.value}
+                      onChange={() => setSelectedMethod(option.value)}
+                      className={css.radioInput}
+                    />
+                    <div className={css.radioContent}>
+                      <Text font={{ variation: FontVariation.BODY1 }} color={Color.GREY_900} className={css.radioTitle}>
+                        {option.title}
+                      </Text>
+                      <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500} className={css.radioDescription}>
+                        {option.description}
+                      </Text>
+                    </div>
+                  </label>
+                  {selectedMethod === option.value && (
+                    <div className={css.inputSection}>
+                      <TextInput
+                        placeholder={getTextboxPlaceholder(option.value)}
+                        value={getTextboxValue(option.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextboxChange(option.value, e.target.value)}
+                        disabled={option.value === OnboardingMethod.HELM_CHART}
+                        className={css.urlTextbox}
+                      />
+                      <Button
+                        variation={ButtonVariation.SECONDARY}
+                        text={getString('upload')}
+                        icon="upload"
+                        onClick={handleUploadClick}
+                        className={css.uploadButton}
+                      />
+                      {uploadedFile && uploadedFile.method === option.value && (
+                        <Text font={{ variation: FontVariation.SMALL }} color={Color.GREEN_700} className={css.uploadedFileName}>
+                          ✓
+                        </Text>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
 
@@ -273,7 +365,7 @@ export default function AppsOnboardingView(): React.ReactElement {
                 variation={ButtonVariation.PRIMARY}
                 text={getString('onboard')}
                 onClick={handleOnboard}
-                disabled={!selectedMethod}
+                disabled={isOnboardDisabled()}
               />
             </Container>
           </Layout.Vertical>

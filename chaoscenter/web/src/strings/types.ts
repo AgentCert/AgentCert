@@ -285,6 +285,7 @@ export interface StringsMap {
   'endedAt': unknown
   'endpoint': unknown
   'enterApiUrl': unknown
+  'enterCloudManagedUrl': unknown
   'enterCustomCron': unknown
   'enterFaasUrl': unknown
   'enterHubAccountURL': unknown
