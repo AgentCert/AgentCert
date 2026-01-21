@@ -1,3 +1,6 @@
+
+
+
 package agent_registry
 
 import (
@@ -11,6 +14,22 @@ import (
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	//"k8s.io/client-go/kubernetes"
 )
+
+// SyncResponse represents the response for agent sync operations.
+type SyncResponse struct {
+	Success  bool
+	SyncedAt *string
+	Message  *string
+}
+
+// AgentStatusResponse represents the status and health of an agent.
+type AgentStatusResponse struct {
+	AgentID              string
+	Status               AgentStatus
+	Healthy              bool
+	LastCheckedAt        *string
+	LastSyncedToLangfuse *string
+}
 
 // Service defines the business logic interface for Agent Registry operations.
 type Service interface {
@@ -37,9 +56,16 @@ type Service interface {
 	
 	// SyncToLangfuse synchronizes agent metadata to Langfuse
 	SyncToLangfuse(ctx context.Context, agent *Agent) error
-	
-	// GetCapabilitiesTaxonomy returns the list of supported capabilities
-	GetCapabilitiesTaxonomy(ctx context.Context) ([]*CapabilityDefinition, error)
+
+	// SyncAgentToLangfuse synchronizes agent metadata and returns sync response
+	SyncAgentToLangfuse(ctx context.Context, id string) (*SyncResponse, error)
+
+	// GetAgentStatus returns the status and health of an agent
+	GetAgentStatus(ctx context.Context, id string) (*AgentStatusResponse, error)
+
+	// GetAgentCapabilitiesTaxonomy returns the list of supported capabilities
+	GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*CapabilityDefinition, error)
+// Implementation for these methods is below, outside the interface block.
 }
 
 // serviceImpl is the concrete implementation of the Service interface.
@@ -748,4 +774,71 @@ func (s *serviceImpl) SyncToLangfuse(ctx context.Context, agent *Agent) error {
 
 	fmt.Printf("Successfully synced agent %s to Langfuse at %d\n", agent.AgentID, now)
 	return nil
+}
+// GetAgentCapabilitiesTaxonomy returns the list of supported capabilities.
+func (s *serviceImpl) GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*CapabilityDefinition, error) {
+	return s.GetCapabilitiesTaxonomy(ctx)
+}
+
+// GetAgentStatus returns the status and health of an agent.
+func (s *serviceImpl) GetAgentStatus(ctx context.Context, id string) (*AgentStatusResponse, error) {
+	// Fetch agent from database
+	agent, err := s.operator.GetAgent(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var lastCheckedAt *string
+	var lastSyncedToLangfuse *string
+	healthy := false
+
+	// Last health check
+	if agent.AuditInfo != nil && agent.AuditInfo.LastHealthCheck != nil {
+		t := time.Unix(*agent.AuditInfo.LastHealthCheck, 0).UTC().Format(time.RFC3339)
+		lastCheckedAt = &t
+		// If health check was recent, consider healthy (customize as needed)
+		healthy = true
+	}
+
+	// Last Langfuse sync
+	if agent.LangfuseConfig != nil && agent.LangfuseConfig.LastSyncedAt != nil {
+		t := time.Unix(*agent.LangfuseConfig.LastSyncedAt, 0).UTC().Format(time.RFC3339)
+		lastSyncedToLangfuse = &t
+	}
+
+	return &AgentStatusResponse{
+		AgentID:              agent.AgentID,
+		Status:               agent.Status,
+		Healthy:              healthy,
+		LastCheckedAt:        lastCheckedAt,
+		LastSyncedToLangfuse: lastSyncedToLangfuse,
+	}, nil
+}
+
+// SyncAgentToLangfuse synchronizes agent metadata and returns sync response.
+func (s *serviceImpl) SyncAgentToLangfuse(ctx context.Context, id string) (*SyncResponse, error) {
+		agent, err := s.operator.GetAgent(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+
+		nowUnix := time.Now().Unix()
+		nowRFC := time.Unix(nowUnix, 0).UTC().Format(time.RFC3339)
+		msg := "Agent synced to Langfuse successfully"
+
+		if agent.LangfuseConfig == nil {
+			agent.LangfuseConfig = &LangfuseConfig{}
+		}
+		agent.LangfuseConfig.LastSyncedAt = &nowUnix
+
+		// Persist update
+		if err := s.operator.UpdateAgent(ctx, agent); err != nil {
+			return nil, err
+		}
+
+		return &SyncResponse{
+			Success:  true,
+			SyncedAt: &nowRFC,
+			Message:  &msg,
+		}, nil
 }

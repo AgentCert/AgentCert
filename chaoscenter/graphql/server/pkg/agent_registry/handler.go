@@ -531,7 +531,7 @@ func (h *Handler) GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*model.Ca
 	logrus.Debug("retrieving agent capabilities taxonomy")
 
 	// Call service to get capabilities taxonomy
-	capabilities, err := h.service.GetCapabilitiesTaxonomy(ctx)
+	capabilities, err := h.service.GetAgentCapabilitiesTaxonomy(ctx)
 	if err != nil {
 		logrus.WithError(err).Error("failed to get capabilities taxonomy")
 		return nil, err
