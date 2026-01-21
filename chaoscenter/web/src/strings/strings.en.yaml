@@ -121,6 +121,21 @@ chaosStudio: Chaos Studio
 chaoshubDisconnectedWillSync: ChaosHub is disconnected, will attempt to sync
 chaoshubs: ChaosHubs
 agentOnboarding: Agent Onboarding
+newAgent: New Agent
+onboardedAgents: List of Onboarded Agents
+onboardedApplications: List of Onboarded Applications
+actions: Actions
+appsOnboarding: Apps Onboarding
+newApplication: New Application
+onboardYourApp: Onboard Your Application
+onboardAppUsingKubernetesManifest: Onboard app using Kubernetes Manifest
+onboardAppUsingKubernetesManifestDesc: Deploy your application using Kubernetes manifest files
+onboardAppUsingDockerImage: Onboard app using Docker Image
+onboardAppUsingDockerImageDesc: Containerize and deploy your application using Docker images
+onboardAppUsingHelmChart: Onboard app using Helm Chart
+onboardAppUsingHelmChartDesc: Deploy your application using Kubernetes Helm charts for easy installation
+onboardAppUsingCloudManaged: Onboard app using Cloud Managed Services
+onboardAppUsingCloudManagedDesc: Deploy your application using cloud-managed services like AWS, Azure, or GCP
 onboardYourAgent: Onboard Your Agent
 onboardUsingHelmChart: Onboard agent using Helm Chart
 onboardUsingHelmChartDesc: Deploy your agent using Kubernetes Helm charts for easy installation and management

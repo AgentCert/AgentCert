@@ -28,6 +28,7 @@ import ChaosProbeController from '@controllers/ChaosProbe';
 import ProjectDashboardController from '@controllers/ProjectDashboard';
 import PasswordResetController from '@controllers/PasswordReset';
 import AgentOnboardingController from '@controllers/AgentOnboarding';
+import AppsOnboardingController from '@controllers/AppsOnboarding';
 
 const experimentID = ':experimentID';
 const runID = ':runID';
@@ -108,6 +109,8 @@ export function RoutesWithAuthentication(): React.ReactElement {
       <Route exact path={projectMatchPaths.toChaosFault({ hubID, faultName })} component={ChaosFaultController} />
       {/* Agent Onboarding */}
       <Route exact path={projectMatchPaths.toAgentOnboarding()} component={AgentOnboardingController} />
+      {/* Apps Onboarding */}
+      <Route exact path={projectMatchPaths.toAppsOnboarding()} component={AppsOnboardingController} />
       {/*Environments */}
       <Route exact path={projectMatchPaths.toEnvironments()} component={EnvironmentController} />
       {/* Kubernetes Chaos Infrastructure */}

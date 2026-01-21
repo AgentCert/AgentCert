@@ -104,4 +104,64 @@
 
 .buttonContainer {
   margin-top: var(--spacing-xlarge);
+  display: flex;
+  gap: var(--spacing-medium);
+}
+
+.newAgentButtonContainer {
+  margin-top: var(--spacing-large);
+}
+
+.tableContainer {
+  margin-top: 120px;
+  margin-left: 700px;
+}
+
+.tableHeading {
+  margin-bottom: 48px;
+  font-weight: 600;
+}
+
+.agentsTable {
+  width: 100%;
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+  overflow: hidden;
+
+  :global {
+    .TableV2--header {
+      background-color: var(--grey-100);
+      border-bottom: 2px solid var(--grey-300);
+    }
+
+    .TableV2--header [role="columnheader"] {
+      font-weight: 600;
+      color: var(--grey-900);
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      padding: var(--spacing-medium) var(--spacing-large);
+    }
+
+    .TableV2--row {
+      border-bottom: 1px solid var(--grey-200);
+
+      &:hover {
+        background-color: var(--grey-50);
+      }
+    }
+
+    .TableV2--cell {
+      padding: var(--spacing-medium) var(--spacing-large);
+    }
+  }
+}
+
+.actionLink {
+  cursor: pointer;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
