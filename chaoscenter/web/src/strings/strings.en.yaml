@@ -129,6 +129,12 @@ onboardUsingAPIsDesc: Integrate your agent programmatically using our REST APIs
 onboardUsingFaaS: Onboard agent using Function as a Service
 onboardUsingFaaSDesc: Deploy your agent as serverless functions on cloud platforms
 onboard: Onboard
+upload: Upload
+uploadedSuccessfully: File uploaded successfully
+pleaseUploadFile: Please upload the required file to proceed
+uploadedFileName: Uploaded file name
+enterApiUrl: Enter API endpoint URL
+enterFaasUrl: Enter Function as a Service URL
 checkConnection: Check Connection
 checkLogs: Check the Chaos Infrastructure Logs
 checkStatus: Check the status of your Chaos Infrastructure on your cluster

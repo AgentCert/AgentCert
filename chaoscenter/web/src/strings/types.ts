@@ -282,7 +282,9 @@ export interface StringsMap {
   'endTime': unknown
   'endedAt': unknown
   'endpoint': unknown
+  'enterApiUrl': unknown
   'enterCustomCron': unknown
+  'enterFaasUrl': unknown
   'enterHubAccountURL': unknown
   'enterHubName': unknown
   'enterHubRepositoryBranch': unknown
@@ -648,6 +650,7 @@ export interface StringsMap {
   'pleaseComplete': unknown
   'pleaseSelectLeastOneExperiment': unknown
   'pleaseSpecifyYAMLValues': unknown
+  'pleaseUploadFile': unknown
   'points': unknown
   'pollingInterval': unknown
   'preProd': unknown
@@ -980,6 +983,7 @@ export interface StringsMap {
   'updatedBy': unknown
   'upgradeChaosInfrastructure': unknown
   'upgradeManifestDownloadedSuccessfully': unknown
+  'upload': unknown
   'uploadYAMLButton': unknown
   'uploadYAMLDescription': unknown
   'uploadYAMLDescriptionBuilder': unknown
@@ -987,6 +991,8 @@ export interface StringsMap {
   'uploadYAMLTitle': unknown
   'uploadYAMLTitleBuilder': unknown
   'uploadYaml': unknown
+  'uploadedFileName': unknown
+  'uploadedSuccessfully': unknown
   'url': unknown
   'useIntegerValue': unknown
   'useThisTemplate': unknown
