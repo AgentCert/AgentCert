@@ -27,6 +27,7 @@ const (
 	ProjectCollection
 	EnvironmentCollection
 	ChaosProbeCollection
+	AgentRegistryCollection
 )
 
 // MongoInterface requires a MongoClient that implements the Initialize method to create the Mongo DB client
@@ -51,6 +52,7 @@ type MongoClient struct {
 	ProjectCollection             *mongo.Collection
 	EnvironmentCollection         *mongo.Collection
 	ChaosProbeCollection          *mongo.Collection
+	AgentRegistryCollection       *mongo.Collection
 }
 
 var (
@@ -68,6 +70,7 @@ var (
 		UserCollection:                "user",
 		ProjectCollection:             "project",
 		EnvironmentCollection:         "environment",
+		AgentRegistryCollection:       "agentRegistry",
 	}
 
 	DbName            = "litmus"
@@ -310,5 +313,47 @@ func (m *MongoClient) initAllCollection() {
 	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to create indexes for chaosProbes collection")
+	}
+
+	// Agent Registry Collection
+	err = m.Database.CreateCollection(backgroundContext, Collections[AgentRegistryCollection], nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			logrus.Info(Collections[AgentRegistryCollection] + "'s collection already exists, continuing with the existing mongo collection")
+		} else {
+			logrus.WithError(err).Error("failed to create agentRegistry collection")
+		}
+	}
+
+	m.AgentRegistryCollection = m.Database.Collection(Collections[AgentRegistryCollection])
+	_, err = m.AgentRegistryCollection.Indexes().CreateMany(backgroundContext, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "agentId", Value: 1},
+			},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "projectId", Value: 1},
+				{Key: "name", Value: 1},
+			},
+			Options: options.Index().SetUnique(true).SetPartialFilterExpression(bson.D{{
+				Key: "status", Value: bson.D{{Key: "$ne", Value: "DEREGISTERED"}},
+			}}),
+		},
+		{
+			Keys: bson.D{
+				{Key: "projectId", Value: 1},
+			},
+		},
+		{
+			Keys: bson.D{
+				{Key: "status", Value: 1},
+			},
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Error("failed to create indexes for agentRegistry collection")
 	}
 }
