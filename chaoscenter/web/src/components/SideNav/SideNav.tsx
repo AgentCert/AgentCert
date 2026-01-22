@@ -9,6 +9,7 @@ import { useLogout, useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
 import ProjectSelectorController from '@controllers/ProjectSelector';
 import NavExpandable from '@components/NavExpandable';
+import AgentCertLogo from '@components/AgentCertLogo';
 import { getUserDetails } from '@utils';
 import { PermissionGroup } from '@models';
 import css from './SideNav.module.scss';
@@ -113,6 +114,8 @@ export default function SideNav(): ReactElement {
             <SidebarLink label={getString('environments')} to={paths.toEnvironments()} />
             <SidebarLink label={getString('resilienceProbes')} to={paths.toChaosProbes()} />
             <SidebarLink label={getString('chaoshubs')} to={paths.toChaosHubs()} />
+            <SidebarLink label={getString('agentOnboarding')} to={paths.toAgentOnboarding()} />
+            <SidebarLink label={getString('appsOnboarding')} to={paths.toAppsOnboarding()} />
             {projectRole === PermissionGroup.OWNER && (
               <NavExpandable title={getString('projectSetup')} route={paths.toProjectSetup()}>
                 <SidebarLink label={getString('members')} to={paths.toProjectMembers()} />
@@ -126,7 +129,8 @@ export default function SideNav(): ReactElement {
       <Container className={css.bottomContainer} data-isroutepresent={isPathPresent('settings')}>
         {!isPathPresent('settings') && (
           <div className={css.iconContainer}>
-            <Icon className={css.icon} name={'chaos-litmuschaos'} size={200} />
+            {/* Logo size: 300px (original: 200px) - revert if layout issues */}
+            <AgentCertLogo size={300} className={css.icon} />
           </div>
         )}
         <div className={css.titleContainer}>
@@ -144,7 +148,7 @@ export default function SideNav(): ReactElement {
           ) : (
             <Layout.Vertical>
               <Text color={Color.WHITE} className={css.title}>
-                {getString('litmus')} 3.0
+                {getString('litmus')}
               </Text>
             </Layout.Vertical>
           )}

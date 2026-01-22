@@ -1,0 +1,167 @@
+.container {
+  padding: var(--spacing-xlarge);
+  max-width: 800px;
+}
+
+.heading {
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.radioRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.radioCard {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-medium) var(--spacing-large);
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--white);
+  flex: 1;
+
+  &:hover {
+    border-color: var(--primary-7);
+    background: var(--primary-1);
+  }
+
+  &.selected {
+    border-color: var(--primary-7);
+    background: var(--primary-1);
+  }
+}
+
+.radioInput {
+  margin-right: var(--spacing-medium);
+  accent-color: var(--primary-7);
+  width: 18px;
+  height: 18px;
+}
+
+.radioContent {
+  display: flex;
+  flex-direction: column;
+}
+
+.radioTitle {
+  font-weight: 600;
+  color: var(--grey-900);
+}
+
+.radioDescription {
+  font-size: 12px;
+  color: var(--grey-500);
+  margin-top: 4px;
+}
+
+.buttonContainer {
+  margin-top: var(--spacing-xlarge);
+  display: flex;
+  gap: var(--spacing-medium);
+}
+
+.inputSection {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-width: 500px;
+}
+
+.urlTextbox {
+  flex: 1;
+  min-width: 400px;
+  
+  input {
+    width: 100%;
+  }
+
+  &:disabled {
+    background-color: var(--grey-100);
+    cursor: not-allowed;
+  }
+}
+
+.uploadSection {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-width: 200px;
+}
+
+.uploadButton {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.uploadedFileName {
+  white-space: nowrap;
+}
+
+.newAppButtonContainer {
+  margin-top: var(--spacing-large);
+}
+
+.tableContainer {
+  margin-top: 120px;
+  margin-left: 700px;
+}
+
+.tableHeading {
+  margin-bottom: 48px;
+  font-weight: 600;
+}
+
+.appsTable {
+  width: 100%;
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+  overflow: hidden;
+
+  :global {
+    .TableV2--header {
+      background-color: var(--grey-100);
+      border-bottom: 2px solid var(--grey-300);
+    }
+
+    .TableV2--header [role="columnheader"] {
+      font-weight: 600;
+      color: var(--grey-900);
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      padding: var(--spacing-medium) var(--spacing-large);
+    }
+
+    .TableV2--row {
+      border-bottom: 1px solid var(--grey-200);
+
+      &:hover {
+        background-color: var(--grey-50);
+      }
+    }
+
+    .TableV2--cell {
+      padding: var(--spacing-medium) var(--spacing-large);
+    }
+  }
+}
+
+.actionLink {
+  cursor: pointer;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}

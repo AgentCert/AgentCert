@@ -40,6 +40,8 @@ func (g *GetCollectionStruct) getCollection(collectionType int) (*mongo.Collecti
 		return mongoClient.(*MongoClient).EnvironmentCollection, nil
 	case ChaosProbeCollection:
 		return mongoClient.(*MongoClient).ChaosProbeCollection, nil
+	case AgentRegistryCollection:
+		return mongoClient.(*MongoClient).AgentRegistryCollection, nil
 	default:
 		return nil, errors.New("unknown collection name")
 	}

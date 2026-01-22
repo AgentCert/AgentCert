@@ -13,7 +13,7 @@ export default function LitmusBreadCrumbs({ baseUrl, ...rest }: LitmusBreadCrumb
     {
       label: projectName || 'My Project',
       url: '/',
-      iconProps: { name: 'chaos-litmuschaos' as any } // cast to 'any' to avoid TS type issue
+      iconProps: { name: 'main-applications' as any } // Using applications icon for AgentCert
     },
     ...(rest.links || [])
   ];
