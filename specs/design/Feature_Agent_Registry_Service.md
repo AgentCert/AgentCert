@@ -1,7 +1,7 @@
 # Feature: Agent Registry Service
 ## Design Document
 
-**Document Version**: 1.0
+**Document Version**: 2.0
 
 ---
 
@@ -12,7 +12,8 @@ The Agent Registry Service is a core backend component of the AgentCert platform
 
 ### 1.2 Scope
 This document covers the design of:
-- Agent registration and metadata management
+- Helm-based agent onboarding and metadata management
+- Kubernetes event-driven agent discovery and registration
 - GraphQL API for agent operations
 - MongoDB data persistence layer
 - Langfuse metadata synchronization
@@ -25,13 +26,17 @@ This document covers the design of:
 
 ### 2.1 Position in AgentCert Architecture
 
-The Agent Registry Service operates within the Chaos Control Plane (ChaosCenter) as a new Go package module integrated into the existing GraphQL server.
+The Agent Registry Service operates within the Chaos Control Plane (ChaosCenter) as a new Go package module integrated into the existing GraphQL server. It consists of two main components: a Kubernetes Watcher for event-driven agent discovery and a GraphQL API for querying and managing registered agents.
 
 ```
 User Layer (Web UI/CLI)
-    ↓ GraphQL Operations
+    ↓ Helm Install (Agent Chart)
+Kubernetes Cluster
+    ↓ Watch Events (ConfigMaps, Deployments, Services)
+Agent Registry Watcher (pkg/agent_registry/watcher/)
+    ↓
 Agent Registry Service (pkg/agent_registry/)
-    ↓                              ↓
+    ↓ GraphQL Operations            ↓
 MongoDB (agent_registry_collection)    Langfuse (Metadata Sync)
 ```
 
@@ -39,13 +44,14 @@ MongoDB (agent_registry_collection)    Langfuse (Metadata Sync)
 
 | Component | Relationship | Interface |
 |-----------|-------------|-----------|
-| **Web UI** | Consumer | GraphQL mutations/queries via Apollo Client |
+| **Web UI** | Consumer | GraphQL queries via Apollo Client; Displays Helm install instructions |
 | **LitmusCtl CLI** | Consumer | GraphQL API via HTTP |
 | **GraphQL Server** | Host | Embedded as Go package in graphql/server |
 | **MongoDB** | Storage | Native MongoDB driver (existing patterns) |
 | **Langfuse** | Observability | HTTP REST API client |
 | **Authentication Service** | Dependency | gRPC for user/project validation |
-| **Agent Helm Chart** | Deployment Target | Agent metadata informs chart deployment |
+| **Kubernetes API Server** | Event Source | Watch API for ConfigMaps, Deployments, Services with agent labels |
+| **Agent Helm Chart** | Deployment Method | Contains agent workloads + metadata ConfigMap with required fields |
 
 ### 2.3 Design Constraints
 
@@ -61,33 +67,69 @@ MongoDB (agent_registry_collection)    Langfuse (Metadata Sync)
 
 ### 3.1 Core Capabilities
 
-#### FR-1: Agent Registration
-**Description**: Register new AI agents with comprehensive metadata  
-**Input**:
-- Agent name (unique within project)
-- Version (semantic versioning)
-- Vendor/organization
-- Capabilities list (fault remediation types)
-- Container image (registry URL + tag)
-- Kubernetes namespace (for endpoint auto-discovery)
-- Endpoint (optional, auto-discovered if not provided)
-- Langfuse project ID (optional)
+#### FR-1: Agent Registration via Helm Chart Deployment
+**Description**: Automatically register AI agents when deployed via Helm chart with metadata annotations/ConfigMap  
+
+**User Workflow**:
+1. User navigates to AI Agent Onboarding screen in Web UI
+2. UI displays Helm install command template and metadata requirements (hardcoded in UI)
+3. User prepares Helm chart containing:
+   - Agent workload (Deployment, StatefulSet, etc.)
+   - Kubernetes Service for the agent
+   - ConfigMap with agent metadata
+4. User runs `helm install <release-name> <chart>` or `helm upgrade`
+5. Backend Kubernetes Watcher detects new/updated resources with agent labels
+6. System extracts metadata from ConfigMap, validates, performs health checks, and persists to database
+
+**Metadata Input** (via ConfigMap with key `agent-metadata.yaml` or `agent-metadata.json`):
+- Agent name (unique within project/namespace) - **Required**
+- Version (semantic versioning) - **Required**
+- Project ID (AgentCert project association) - **Required**
+- Capabilities list (fault remediation types) - **Required**
+- Langfuse configuration (projectId, syncEnabled) - **Required**
+- Vendor/organization - Optional
+- Description - Optional
+- Category (e.g., "fault-remediation", "observability") - Optional
+- Kubernetes namespace (auto-detected from resource)
 
 **Output**: Unique agent ID, registration timestamp, initial status, auto-discovered endpoint
 
 **Business Rules**:
-- Agent name must be unique within a project scope
-- Container image must follow standard format: `registry/repository:tag`
+- Agent resources MUST have label `agentcert.io/agent=true` for discovery
+- Agent name must be unique within a project/namespace scope
+- ConfigMap MUST contain metadata with key `agent-metadata.yaml` or `agent-metadata.json`
+- Required metadata fields: `name`, `version`, `projectId`, `capabilities`, `langfuseConfig`
 - Capabilities must be from predefined taxonomy (extensible)
+- LangfuseConfig must include valid `projectId` and `syncEnabled` boolean
 - Langfuse project must exist if specified
-- Endpoint auto-discovered from Kubernetes Service if not provided (convention: `http://{agent-name}.{namespace}.svc.cluster.local:8080`)
+- Endpoint auto-discovered from Kubernetes Service matching agent name (convention: `http://{agent-name}.{namespace}.svc.cluster.local:8080`)
 - Agent containers MUST expose `/health` and `/ready` endpoints
+- Helm upgrades trigger metadata updates, not duplicate registrations
 
-#### FR-2: Agent Metadata Management
+#### FR-2: Kubernetes Event-Driven Discovery
+**Description**: Watch Kubernetes resources for agent deployments and automatically register/update agents
+
+**Operations**:
+- **Watch ConfigMaps**: Monitor ConfigMaps with label `agentcert.io/agent-metadata=true`
+- **Watch Deployments**: Monitor Deployments with label `agentcert.io/agent=true`
+- **Watch Services**: Monitor Services for endpoint discovery
+- **Event Processing**: On `ADDED` event, extract metadata and register agent; On `MODIFIED` event, update agent metadata; On `DELETED` event, mark agent as inactive
+- **Health Check Trigger**: After registration, immediately trigger health validation
+
+**Metadata Extraction**:
+- **From ConfigMap**: Parse structured data (JSON/YAML) containing agent metadata fields with key `agent-metadata.yaml` or `agent-metadata.json`
+
+**Business Rules**:
+- Only process resources with label selector `agentcert.io/agent=true`
+- Ignore resources without required metadata fields
+- Use resource UID or name+namespace as idempotency key to prevent duplicates
+- Failed metadata validation logs warning but doesn't block resource deployment
+
+#### FR-3: Agent Metadata Management
 **Description**: Update and retrieve agent information
 
 **Operations**:
-- **Update Agent**: Modify version, capabilities, endpoint, container image, status
+- **Update Agent**: Modify version, category, capabilities, endpoint, status
 - **Get Agent**: Retrieve complete agent record by ID
 - **List Agents**: Retrieve all agents with filtering and pagination
 - **Delete Agent**: Soft delete (mark as inactive) or hard delete
@@ -97,7 +139,7 @@ MongoDB (agent_registry_collection)    Langfuse (Metadata Sync)
 - Deletion requires confirmation and checks for active benchmarks
 - Status transitions follow defined state machine
 
-#### FR-3: Capability-Based Querying
+#### FR-4: Capability-Based Querying
 **Description**: Retrieve agents matching specific fault remediation capabilities
 
 **Input**: List of required capabilities (e.g., ["pod-crash-remediation", "network-latency-handling"])
@@ -106,7 +148,7 @@ MongoDB (agent_registry_collection)    Langfuse (Metadata Sync)
 
 **Use Case**: Benchmark scenario selection - "Find all agents capable of handling disk-pressure faults"
 
-#### FR-4: Agent Health Validation
+#### FR-5: Agent Health Validation
 **Description**: Validate agent availability and readiness
 
 **Operations**:
@@ -117,13 +159,13 @@ MongoDB (agent_registry_collection)    Langfuse (Metadata Sync)
 
 **Status Transitions**:
 ```
-REGISTERED → VALIDATING → ACTIVE
+DISCOVERED → VALIDATING → ACTIVE
 ACTIVE → INACTIVE (failed health checks)
 INACTIVE → ACTIVE (health restored)
 ACTIVE → DELETED (user-initiated)
 ```
 
-#### FR-5: Langfuse Metadata Synchronization
+#### FR-6: Langfuse Metadata Synchronization
 **Description**: Sync agent metadata to Langfuse for observability correlation
 
 **Sync Operations**:
@@ -134,8 +176,9 @@ ACTIVE → DELETED (user-initiated)
 
 **Metadata Synced**:
 - Agent ID, name, version
+- Vendor, category
 - Capabilities list
-- Container image reference
+- Helm release information
 - Registration and update timestamps
 - Current operational status
 
@@ -187,6 +230,7 @@ graph TB
             Service["Service<br/>(service.go)<br/>Core operations"]
             Validator["Validator<br/>(validator.go)<br/>Input validation"]
             LangfuseClient["Langfuse Client<br/>(langfuse_client.go)<br/>API integration"]
+            K8sWatcher["Kubernetes Watcher<br/>(watcher.go)<br/>Event-driven discovery"]
         end
         
         subgraph "Data Access Layer"
@@ -195,11 +239,15 @@ graph TB
         end
     end
     
+    K8s["Kubernetes API Server<br/>Watch Events"]
+    
     GraphQLResolvers -->|"Delegates"| Handler
     Handler -->|"Calls"| Service
     Service -->|"Uses"| Validator
     Service -->|"Syncs"| LangfuseClient
     Service -->|"Persists"| Operator
+    K8sWatcher -->|"Triggers"| Service
+    K8sWatcher -->|"Watches"| K8s
     Operator -->|"Uses"| Model
     
     Operator -->|"Query/Insert/Update"| MongoDB[(MongoDB<br/>agent_registry_collection)]
@@ -211,9 +259,9 @@ graph TB
     classDef external fill:#ffebee,stroke:#c62828,stroke-width:2px
     
     class GraphQLResolvers resolver
-    class Handler,Service,Validator,LangfuseClient service
+    class Handler,Service,Validator,LangfuseClient,K8sWatcher service
     class Operator,Model data
-    class MongoDB,Langfuse external
+    class MongoDB,Langfuse,K8s external
 ```
 
 ### 5.2 Module Structure
@@ -226,6 +274,8 @@ chaoscenter/graphql/server/pkg/agent_registry/
 ├── model.go                # Data structures and types
 ├── validator.go            # Input validation logic
 ├── langfuse_client.go      # Langfuse API client
+├── watcher.go              # Kubernetes resource watcher (event-driven discovery)
+├── metadata_extractor.go   # Extract agent metadata from ConfigMaps/Annotations
 ├── health_scheduler.go     # Health check scheduler (Go routine)
 ├── constants.go            # Constants and enums
 ├── errors.go               # Custom error types
@@ -245,11 +295,20 @@ chaoscenter/graphql/server/pkg/agent_registry/
   "version": "string",
   "vendor": "string",
   "description": "string",
+  "category": "string",
   "capabilities": ["string"],
-  "containerImage": {
-    "registry": "string",
-    "repository": "string",
-    "tag": "string"
+  "helmRelease": {
+    "releaseName": "string",
+    "namespace": "string",
+    "chartName": "string",
+    "chartVersion": "string"
+  },
+  "kubernetesResources": {
+    "deploymentName": "string",
+    "serviceName": "string",
+    "configMapName": "string",
+    "resourceUID": "string",
+    "labels": {"key": "value"}
   },
   "endpoint": {
     "discoveryType": "string (AUTO|MANUAL)",
@@ -265,14 +324,13 @@ chaoscenter/graphql/server/pkg/agent_registry/
     "userId": "string (Langfuse user ID)",
     "syncEnabled": "boolean"
   },
-  "status": "string (REGISTERED|VALIDATING|ACTIVE|INACTIVE|DELETED)",
+  "status": "string (DISCOVERED|VALIDATING|ACTIVE|INACTIVE|DELETED)",
   "metadata": {
     "labels": {"key": "value"},
     "annotations": {"key": "value"}
   },
   "auditInfo": {
-    "createdBy": "string",
-    "createdAt": "timestamp",
+    "discoveredAt": "timestamp",
     "updatedBy": "string",
     "updatedAt": "timestamp",
     "lastHealthCheck": "timestamp"
@@ -308,13 +366,30 @@ type Agent {
   version: String!
   vendor: String
   description: String
+  category: String
   capabilities: [String!]!
-  containerImage: ContainerImage!
+  helmRelease: HelmReleaseInfo
+  kubernetesResources: KubernetesResourceInfo
   endpoint: AgentEndpoint
   langfuseConfig: LangfuseConfig
   status: AgentStatus!
   metadata: AgentMetadata
   auditInfo: AuditInfo!
+}
+
+type HelmReleaseInfo {
+  releaseName: String!
+  namespace: String!
+  chartName: String
+  chartVersion: String
+}
+
+type KubernetesResourceInfo {
+  deploymentName: String
+  serviceName: String
+  configMapName: String
+  resourceUID: String!
+  labels: [KeyValuePair!]
 }
 
 type ContainerImage {
@@ -351,7 +426,7 @@ type LangfuseConfig {
 }
 
 enum AgentStatus {
-  REGISTERED
+  DISCOVERED
   VALIDATING
   ACTIVE
   INACTIVE
@@ -369,8 +444,7 @@ type KeyValuePair {
 }
 
 type AuditInfo {
-  createdBy: String!
-  createdAt: String!
+  discoveredAt: String!
   updatedBy: String
   updatedAt: String
   lastHealthCheck: String
@@ -383,12 +457,20 @@ input RegisterAgentInput {
   version: String!
   vendor: String
   description: String
+  category: String
   capabilities: [String!]!
-  containerImage: ContainerImageInput!
-  namespace: String!  # Kubernetes namespace for auto-discovery
+  helmRelease: HelmReleaseInfoInput!
+  namespace: String!  # Kubernetes namespace
   endpoint: AgentEndpointInput  # Optional: auto-discovered if not provided
   langfuseConfig: LangfuseConfigInput
   metadata: AgentMetadataInput
+}
+
+input HelmReleaseInfoInput {
+  releaseName: String!
+  namespace: String!
+  chartName: String
+  chartVersion: String
 }
 
 input ContainerImageInput {
@@ -423,8 +505,8 @@ input KeyValuePairInput {
 input UpdateAgentInput {
   version: String
   description: String
+  category: String
   capabilities: [String!]
-  containerImage: ContainerImageInput
   endpoint: AgentEndpointInput
   langfuseConfig: LangfuseConfigInput
   status: AgentStatus
@@ -509,9 +591,9 @@ type CapabilityDefinition {
 # Mutation Operations
 type Mutation {
   """
-  Register a new agent
+  Manually trigger agent discovery for a specific namespace (optional - auto-discovery via watcher)
   """
-  registerAgent(input: RegisterAgentInput!): RegisterAgentResponse!
+  triggerAgentDiscovery(namespace: String, projectId: String!): DiscoveryResponse!
 
   """
   Update existing agent metadata
@@ -534,15 +616,10 @@ type Mutation {
   syncAgentToLangfuse(id: ID!): SyncResponse!
 }
 
-type RegisterAgentResponse {
-  agent: Agent!
-  langfuseSyncStatus: SyncStatus!
-}
-
-enum SyncStatus {
-  SUCCESS
-  FAILED
-  SKIPPED
+type DiscoveryResponse {
+  success: Boolean!
+  message: String!
+  discoveredAgents: Int!
 }
 
 type DeleteAgentResponse {
@@ -579,14 +656,6 @@ type Handler struct {
 
 func NewHandler(service Service) *Handler {
     return &Handler{service: service}
-}
-
-// RegisterAgent handles agent registration requests
-func (h *Handler) RegisterAgent(ctx context.Context, input model.RegisterAgentInput) (*model.RegisterAgentResponse, error) {
-    // 1. Extract user context (project, user ID) from JWT
-    // 2. Call service layer
-    // 3. Transform service response to GraphQL model
-    // 4. Return response
 }
 
 // GetAgent retrieves agent by ID
@@ -635,7 +704,349 @@ func (h *Handler) GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*model.Ca
 }
 ```
 
-### 6.2 Service Layer (`service.go`)
+### 6.2 Kubernetes Watcher (`watcher.go`)
+
+**Responsibility**: Event-driven discovery of agent deployments via Kubernetes Watch API
+
+```go
+package agent_registry
+
+import (
+    "context"
+    "github.com/sirupsen/logrus"
+    corev1 "k8s.io/api/core/v1"
+    appsv1 "k8s.io/api/apps/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/apimachinery/pkg/watch"
+    "k8s.io/client-go/kubernetes"
+)
+
+const (
+    AgentLabelKey          = "agentcert.io/agent"
+    AgentMetadataLabelKey  = "agentcert.io/agent-metadata"
+    ProjectIDAnnotationKey = "agentcert.io/project-id"
+)
+
+type AgentWatcher struct {
+    k8sClient      kubernetes.Interface
+    service        Service
+    metadataExtractor MetadataExtractor
+    logger         *logrus.Logger
+    stopChan       chan struct{}
+}
+
+func NewAgentWatcher(k8sClient kubernetes.Interface, service Service, logger *logrus.Logger) *AgentWatcher {
+    return &AgentWatcher{
+        k8sClient:         k8sClient,
+        service:           service,
+        metadataExtractor: NewMetadataExtractor(),
+        logger:            logger,
+        stopChan:          make(chan struct{}),
+    }
+}
+
+// Start begins watching Kubernetes resources
+func (w *AgentWatcher) Start(ctx context.Context, namespaces []string) error {
+    w.logger.Info("Starting Agent Watcher for Kubernetes resources")
+    
+    // Watch ConfigMaps with agent metadata
+    go w.watchConfigMaps(ctx, namespaces)
+    
+    // Watch Deployments with agent label
+    go w.watchDeployments(ctx, namespaces)
+    
+    // Watch Services for endpoint discovery
+    go w.watchServices(ctx, namespaces)
+    
+    <-w.stopChan
+    w.logger.Info("Agent Watcher stopped")
+    return nil
+}
+
+// Stop gracefully stops the watcher
+func (w *AgentWatcher) Stop() {
+    close(w.stopChan)
+}
+
+// watchConfigMaps watches ConfigMaps with agent metadata
+func (w *AgentWatcher) watchConfigMaps(ctx context.Context, namespaces []string) {
+    for _, namespace := range namespaces {
+        go func(ns string) {
+            labelSelector := AgentMetadataLabelKey + "=true"
+            
+            for {
+                select {
+                case <-w.stopChan:
+                    return
+                case <-ctx.Done():
+                    return
+                default:
+                    watcher, err := w.k8sClient.CoreV1().ConfigMaps(ns).Watch(ctx, metav1.ListOptions{
+                        LabelSelector: labelSelector,
+                    })
+                    if err != nil {
+                        w.logger.Errorf("Failed to watch ConfigMaps in namespace %s: %v", ns, err)
+                        time.Sleep(5 * time.Second)
+                        continue
+                    }
+                    
+                    w.handleConfigMapEvents(ctx, watcher, ns)
+                }
+            }
+        }(namespace)
+    }
+}
+
+// handleConfigMapEvents processes ConfigMap watch events
+func (w *AgentWatcher) handleConfigMapEvents(ctx context.Context, watcher watch.Interface, namespace string) {
+    defer watcher.Stop()
+    
+    for event := range watcher.ResultChan() {
+        configMap, ok := event.Object.(*corev1.ConfigMap)
+        if !ok {
+            continue
+        }
+        
+        switch event.Type {
+        case watch.Added:
+            w.handleAgentDiscovery(ctx, configMap, namespace)
+        case watch.Modified:
+            w.handleAgentUpdate(ctx, configMap, namespace)
+        case watch.Deleted:
+            w.handleAgentDeletion(ctx, configMap, namespace)
+        }
+    }
+}
+
+// handleAgentDiscovery processes new agent discovery
+func (w *AgentWatcher) handleAgentDiscovery(ctx context.Context, configMap *corev1.ConfigMap, namespace string) {
+    w.logger.Infof("Discovered new agent ConfigMap: %s/%s", namespace, configMap.Name)
+    
+    // Extract metadata from ConfigMap
+    agentMetadata, err := w.metadataExtractor.ExtractFromConfigMap(configMap)
+    if err != nil {
+        w.logger.Errorf("Failed to extract metadata from ConfigMap %s/%s: %v", namespace, configMap.Name, err)
+        return
+    }
+    
+    // Validate metadata
+    if err := w.service.ValidateAgentMetadata(ctx, agentMetadata); err != nil {
+        w.logger.Warnf("Invalid agent metadata in ConfigMap %s/%s: %v", namespace, configMap.Name, err)
+        return
+    }
+    
+    // Check if agent already exists (idempotency)
+    existingAgent, _ := w.service.GetAgentByResourceUID(ctx, string(configMap.UID))
+    if existingAgent != nil {
+        w.logger.Infof("Agent already registered with UID %s, skipping", configMap.UID)
+        return
+    }
+    
+    // Auto-discover endpoint from Service
+    endpoint, err := w.discoverAgentEndpoint(ctx, agentMetadata.Name, namespace)
+    if err != nil {
+        w.logger.Warnf("Failed to discover endpoint for agent %s: %v", agentMetadata.Name, err)
+    }
+    
+    // Register agent in service layer
+    agent := &Agent{
+        AgentID:   generateUUID(),
+        ProjectID: agentMetadata.ProjectID,
+        Name:      agentMetadata.Name,
+        Version:   agentMetadata.Version,
+        Vendor:    agentMetadata.Vendor,
+        Category:  agentMetadata.Category,
+        Capabilities: agentMetadata.Capabilities,
+        HelmRelease: agentMetadata.HelmRelease,
+        KubernetesResources: &KubernetesResourceInfo{
+            ConfigMapName: configMap.Name,
+            ResourceUID:   string(configMap.UID),
+            Labels:        configMap.Labels,
+        },
+        Endpoint: endpoint,
+        Status:   StatusDiscovered,
+        AuditInfo: AuditInfo{
+            DiscoveredAt: time.Now(),
+        },
+    }
+    
+    if err := w.service.RegisterAgentFromWatcher(ctx, agent); err != nil {
+        w.logger.Errorf("Failed to register agent %s: %v", agentMetadata.Name, err)
+        return
+    }
+    
+    w.logger.Infof("Successfully registered agent: %s (ID: %s)", agent.Name, agent.AgentID)
+    
+    // Trigger health check
+    go func() {
+        if _, err := w.service.ValidateAgentHealth(context.Background(), agent.AgentID); err != nil {
+            w.logger.Warnf("Initial health check failed for agent %s: %v", agent.AgentID, err)
+        }
+    }()
+}
+
+// handleAgentUpdate processes agent metadata updates
+func (w *AgentWatcher) handleAgentUpdate(ctx context.Context, configMap *corev1.ConfigMap, namespace string) {
+    w.logger.Infof("Detected agent ConfigMap update: %s/%s", namespace, configMap.Name)
+    
+    // Extract updated metadata
+    agentMetadata, err := w.metadataExtractor.ExtractFromConfigMap(configMap)
+    if err != nil {
+        w.logger.Errorf("Failed to extract updated metadata: %v", err)
+        return
+    }
+    
+    // Find existing agent by resource UID
+    existingAgent, err := w.service.GetAgentByResourceUID(ctx, string(configMap.UID))
+    if err != nil {
+        w.logger.Warnf("Agent not found for ConfigMap UID %s, creating new registration", configMap.UID)
+        w.handleAgentDiscovery(ctx, configMap, namespace)
+        return
+    }
+    
+    // Update agent metadata
+    updateReq := &UpdateAgentRequest{
+        Version:      agentMetadata.Version,
+        Description:  agentMetadata.Description,
+        Category:     agentMetadata.Category,
+        Capabilities: agentMetadata.Capabilities,
+    }
+    
+    if _, err := w.service.UpdateAgent(ctx, existingAgent.AgentID, updateReq); err != nil {
+        w.logger.Errorf("Failed to update agent %s: %v", existingAgent.AgentID, err)
+    } else {
+        w.logger.Infof("Successfully updated agent: %s", existingAgent.Name)
+    }
+}
+
+// handleAgentDeletion marks agent as inactive when ConfigMap is deleted
+func (w *AgentWatcher) handleAgentDeletion(ctx context.Context, configMap *corev1.ConfigMap, namespace string) {
+    w.logger.Infof("Detected agent ConfigMap deletion: %s/%s", namespace, configMap.Name)
+    
+    // Find agent by resource UID
+    agent, err := w.service.GetAgentByResourceUID(ctx, string(configMap.UID))
+    if err != nil {
+        w.logger.Warnf("Agent not found for deleted ConfigMap UID %s", configMap.UID)
+        return
+    }
+    
+    // Soft delete - mark as inactive
+    if err := w.service.DeleteAgent(ctx, agent.AgentID, false); err != nil {
+        w.logger.Errorf("Failed to mark agent %s as inactive: %v", agent.AgentID, err)
+    } else {
+        w.logger.Infof("Marked agent as inactive: %s", agent.Name)
+    }
+}
+
+// watchDeployments watches Deployments to associate with agents
+func (w *AgentWatcher) watchDeployments(ctx context.Context, namespaces []string) {
+    // Similar implementation for watching Deployments
+    // Links Deployment info to registered agents
+}
+
+// watchServices watches Services for endpoint discovery
+func (w *AgentWatcher) watchServices(ctx context.Context, namespaces []string) {
+    // Similar implementation for watching Services
+    // Updates agent endpoints when Services are created/updated
+}
+
+// discoverAgentEndpoint auto-discovers endpoint from Kubernetes Service
+func (w *AgentWatcher) discoverAgentEndpoint(ctx context.Context, agentName, namespace string) (*AgentEndpoint, error) {
+    service, err := w.k8sClient.CoreV1().Services(namespace).Get(ctx, agentName, metav1.GetOptions{})
+    if err != nil {
+        return nil, fmt.Errorf("service not found: %w", err)
+    }
+    
+    port := int32(8080)
+    if len(service.Spec.Ports) > 0 {
+        port = service.Spec.Ports[0].Port
+    }
+    
+    serviceURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", agentName, namespace, port)
+    
+    return &AgentEndpoint{
+        DiscoveryType:  "AUTO",
+        Type:           "REST",
+        URL:            serviceURL,
+        HealthPath:     "/health",
+        ReadyPath:      "/ready",
+        Namespace:      namespace,
+        LastDiscovered: time.Now(),
+    }, nil
+}
+```
+
+### 6.3 Metadata Extractor (`metadata_extractor.go`)
+
+**Responsibility**: Extract and parse agent metadata from Kubernetes resources
+
+```go
+package agent_registry
+
+import (
+    "encoding/json"
+    "fmt"
+    corev1 "k8s.io/api/core/v1"
+    "gopkg.in/yaml.v3"
+)
+
+type MetadataExtractor interface {
+    ExtractFromConfigMap(cm *corev1.ConfigMap) (*AgentMetadata, error)
+}
+
+type metadataExtractorImpl struct{}
+
+func NewMetadataExtractor() MetadataExtractor {
+    return &metadataExtractorImpl{}
+}
+
+// ExtractFromConfigMap extracts agent metadata from ConfigMap data
+func (e *metadataExtractorImpl) ExtractFromConfigMap(cm *corev1.ConfigMap) (*AgentMetadata, error) {
+    // Look for metadata in ConfigMap data with key "agent-metadata.yaml" or "agent-metadata.json"
+    var metadataStr string
+    var format string
+    
+    if data, ok := cm.Data["agent-metadata.yaml"]; ok {
+        metadataStr = data
+        format = "yaml"
+    } else if data, ok := cm.Data["agent-metadata.json"]; ok {
+        metadataStr = data
+        format = "json"
+    } else {
+        return nil, fmt.Errorf("no agent metadata found in ConfigMap")
+    }
+    
+    // Parse metadata
+    var metadata AgentMetadata
+    var err error
+    
+    if format == "yaml" {
+        err = yaml.Unmarshal([]byte(metadataStr), &metadata)
+    } else {
+        err = json.Unmarshal([]byte(metadataStr), &metadata)
+    }
+    
+    if err != nil {
+        return nil, fmt.Errorf("failed to parse agent metadata: %w", err)
+    }
+    
+    return &metadata, nil
+}
+
+type AgentMetadata struct {
+    Name            string            `json:"name" yaml:"name"`
+    Version         string            `json:"version" yaml:"version"`
+    ProjectID       string            `json:"projectId" yaml:"projectId"`
+    Capabilities    []string          `json:"capabilities" yaml:"capabilities"`
+    LangfuseConfig  *LangfuseConfig   `json:"langfuseConfig" yaml:"langfuseConfig"`
+    Vendor          string            `json:"vendor,omitempty" yaml:"vendor,omitempty"`
+    Description     string            `json:"description,omitempty" yaml:"description,omitempty"`
+    Category        string            `json:"category,omitempty" yaml:"category,omitempty"`
+    HelmRelease     *HelmReleaseInfo  `json:"helmRelease,omitempty" yaml:"helmRelease,omitempty"`
+}
+```
+
+### 6.4 Service Layer (`service.go`)
 
 **Responsibility**: Core business logic, orchestration, and validation
 
@@ -648,7 +1059,7 @@ import (
 )
 
 type Service interface {
-    RegisterAgent(ctx context.Context, req *RegisterAgentRequest) (*Agent, error)
+    RegisterAgentFromWatcher(ctx context.Context, agent *Agent) error
     GetAgent(ctx context.Context, id string) (*Agent, error)
     ListAgents(ctx context.Context, filter *AgentFilter, pagination *Pagination) (*AgentListResult, error)
     UpdateAgent(ctx context.Context, id string, req *UpdateAgentRequest) (*Agent, error)
@@ -676,57 +1087,40 @@ func NewService(operator Operator, validator Validator, langfuseClient LangfuseC
     }
 }
 
-// RegisterAgent registers a new agent
-func (s *serviceImpl) RegisterAgent(ctx context.Context, req *RegisterAgentRequest) (*Agent, error) {
-    // 1. Validate input (name uniqueness, image format, capabilities)
-    if err := s.validator.ValidateRegistration(req); err != nil {
-        return nil, err
+// RegisterAgentFromWatcher registers agent discovered by Kubernetes Watcher
+func (s *serviceImpl) RegisterAgentFromWatcher(ctx context.Context, agent *Agent) error {
+    // 1. Check for duplicate by resourceUID
+    existing, _ := s.operator.GetAgentByResourceUID(ctx, agent.KubernetesResources.ResourceUID)
+    if existing != nil {
+        s.logger.Warnf("Agent with resourceUID %s already exists, skipping", agent.KubernetesResources.ResourceUID)
+        return nil
     }
     
-    // 2. Auto-discover endpoint if not provided
-    endpoint := req.Endpoint
-    if endpoint == nil {
-        discoveredEndpoint, err := s.discoverAgentEndpoint(ctx, req.Name, req.Namespace)
-        if err != nil {
-            s.logger.Warnf("Failed to auto-discover endpoint: %v", err)
-            // Continue without endpoint - will be discovered during health check
-        } else {
-            endpoint = discoveredEndpoint
-        }
+    // 2. Validate agent metadata
+    if err := s.validator.ValidateMetadata(agent); err != nil {
+        return err
     }
     
-    // 3. Create agent entity with REGISTERED status
-    agent := &Agent{
-        AgentID:    generateUUID(),
-        ProjectID:  req.ProjectID,
-        Name:       req.Name,
-        Version:    req.Version,
-        Endpoint:   endpoint,
-        Status:     StatusRegistered,
-        CreatedAt:  time.Now(),
-        // ... populate other fields
-    }
-    
-    // 4. Persist to MongoDB
+    // 3. Persist to MongoDB
     if err := s.operator.CreateAgent(ctx, agent); err != nil {
-        return nil, err
+        return err
     }
     
-    // 5. Async sync to Langfuse (non-blocking)
+    // 4. Async sync to Langfuse (non-blocking)
     go func() {
         if err := s.SyncToLangfuse(context.Background(), agent); err != nil {
             s.logger.Errorf("Failed to sync agent to Langfuse: %v", err)
         }
     }()
     
-    // 6. Trigger health validation (async)
+    // 5. Trigger health validation (async)
     go func() {
         if _, err := s.ValidateAgentHealth(context.Background(), agent.AgentID); err != nil {
             s.logger.Warnf("Initial health check failed: %v", err)
         }
     }()
     
-    return agent, nil
+    return nil
 }
 
 // discoverAgentEndpoint auto-discovers agent endpoint from Kubernetes Service
@@ -795,8 +1189,9 @@ func (s *serviceImpl) SyncToLangfuse(ctx context.Context, agent *Agent) error {
         Metadata: map[string]interface{}{
             "version":      agent.Version,
             "vendor":       agent.Vendor,
+            "category":     agent.Category,
             "capabilities": agent.Capabilities,
-            "containerImage": agent.ContainerImage.FullImagePath(),
+            "helmRelease":  agent.HelmRelease,
             "status":       agent.Status,
         },
     }
@@ -814,7 +1209,7 @@ func (s *serviceImpl) SyncToLangfuse(ctx context.Context, agent *Agent) error {
 // Additional methods...
 ```
 
-### 6.3 Operator Layer (`operator.go`)
+### 6.5 Operator Layer (`operator.go`)
 
 **Responsibility**: MongoDB data access operations
 
@@ -954,7 +1349,7 @@ func (o *operatorImpl) DeleteAgent(ctx context.Context, id string) error {
 }
 ```
 
-### 6.4 Validator Layer (`validator.go`)
+### 6.6 Validator Layer (`validator.go`)
 
 **Responsibility**: Input validation and business rule enforcement
 
@@ -971,7 +1366,7 @@ type Validator interface {
     ValidateRegistration(req *RegisterAgentRequest) error
     ValidateUpdate(req *UpdateAgentRequest) error
     ValidateCapabilities(capabilities []string) error
-    ValidateContainerImage(image *ContainerImage) error
+    ValidateMetadata(agent *Agent) error
 }
 
 type validatorImpl struct {
@@ -1012,11 +1407,6 @@ func (v *validatorImpl) ValidateRegistration(req *RegisterAgentRequest) error {
         return err
     }
     
-    // Container image validation
-    if err := v.ValidateContainerImage(req.ContainerImage); err != nil {
-        return err
-    }
-    
     return nil
 }
 
@@ -1035,20 +1425,76 @@ func (v *validatorImpl) ValidateCapabilities(capabilities []string) error {
     return nil
 }
 
-// ValidateContainerImage validates image format
-func (v *validatorImpl) ValidateContainerImage(image *ContainerImage) error {
-    if image.Registry == "" || image.Repository == "" || image.Tag == "" {
-        return fmt.Errorf("container image must have registry, repository, and tag")
+// ValidateUpdate validates agent update request
+func (v *validatorImpl) ValidateUpdate(req *UpdateAgentRequest) error {
+    // Version validation if provided
+    if req.Version != nil && !isValidSemver(*req.Version) {
+        return fmt.Errorf("version must follow semantic versioning (e.g., 1.0.0)")
     }
     
-    // Validate registry format (e.g., docker.io, gcr.io, quay.io)
-    if !isValidRegistry(image.Registry) {
-        return fmt.Errorf("invalid registry format: %s", image.Registry)
+    // Capabilities validation if provided
+    if req.Capabilities != nil {
+        if err := v.ValidateCapabilities(req.Capabilities); err != nil {
+            return err
+        }
     }
     
-    // Validate tag format
-    if !isValidTag(image.Tag) {
-        return fmt.Errorf("invalid tag format: %s", image.Tag)
+    // Endpoint validation if provided
+    if req.Endpoint != nil && req.Endpoint.URL != "" {
+        if !strings.HasPrefix(req.Endpoint.URL, "http://") && !strings.HasPrefix(req.Endpoint.URL, "https://") {
+            return fmt.Errorf("endpoint URL must start with http:// or https://")
+        }
+    }
+    
+    return nil
+}
+
+// ValidateMetadata validates agent metadata for required fields
+func (v *validatorImpl) ValidateMetadata(agent *Agent) error {
+    // Required fields validation
+    if agent.Name == "" {
+        return fmt.Errorf("agent name is required")
+    }
+    if agent.Version == "" {
+        return fmt.Errorf("agent version is required")
+    }
+    if agent.ProjectID == "" {
+        return fmt.Errorf("projectId is required")
+    }
+    if len(agent.Capabilities) == 0 {
+        return fmt.Errorf("at least one capability is required")
+    }
+    
+    // Validate langfuseConfig is present and has required fields
+    if agent.LangfuseConfig == nil {
+        return fmt.Errorf("langfuseConfig is required")
+    }
+    if agent.LangfuseConfig.ProjectID == "" {
+        return fmt.Errorf("langfuseConfig.projectId is required")
+    }
+    if agent.LangfuseConfig.SyncEnabled == nil {
+        return fmt.Errorf("langfuseConfig.syncEnabled is required")
+    }
+    
+    // Validate name format
+    if !isValidName(agent.Name) {
+        return fmt.Errorf("agent name must be lowercase alphanumeric with hyphens, max 63 characters")
+    }
+    
+    // Validate version format
+    if !isValidSemver(agent.Version) {
+        return fmt.Errorf("version must follow semantic versioning (e.g., 1.0.0)")
+    }
+    
+    // Validate capabilities against taxonomy
+    if err := v.ValidateCapabilities(agent.Capabilities); err != nil {
+        return err
+    }
+    
+    // Validate projectId exists (optional check if operator is available)
+    if v.operator != nil {
+        // Check if project exists in the system
+        // This is implementation-specific and may require project service integration
     }
     
     return nil
@@ -1094,7 +1540,7 @@ func loadCapabilitiesTaxonomy() map[string]bool {
 }
 ```
 
-### 6.5 Langfuse Client (`langfuse_client.go`)
+### 6.7 Langfuse Client (`langfuse_client.go`)
 
 **Responsibility**: Langfuse API integration with retry logic
 
@@ -1201,7 +1647,7 @@ func (c *langfuseClientImpl) DeleteUser(ctx context.Context, projectID, userID s
 }
 ```
 
-### 6.6 Health Check Scheduler (`health_scheduler.go`)
+### 6.8 Health Check Scheduler (`health_scheduler.go`)
 
 **Responsibility**: Periodic health check execution for all active agents
 
@@ -1304,57 +1750,106 @@ func (s *HealthCheckScheduler) runHealthChecks(ctx context.Context) {
 
 ## 7. API Workflows
 
-### 7.1 Agent Registration Flow
+### 7.1 Helm-Based Agent Onboarding Flow
 
 ```mermaid
 sequenceDiagram
+    participant User as User
     participant UI as Web UI
-    participant GQL as GraphQL Server
-    participant Handler as Agent Registry Handler
+    participant Helm as Helm CLI
+    participant K8s as Kubernetes API
+    participant Watcher as Agent Watcher<br/>(Background Process)
     participant Service as Agent Registry Service
     participant Validator as Validator
     participant Operator as MongoDB Operator
-    participant LF as Langfuse Client
     participant DB as MongoDB
+    participant LF as Langfuse Client
     participant Langfuse as Langfuse Platform
 
-    UI->>GQL: registerAgent(input)
-    GQL->>Handler: RegisterAgent(ctx, input)
-    Handler->>Service: RegisterAgent(ctx, request)
+    User->>UI: Navigate to Agent Onboarding
+    UI->>UI: Display Helm install instructions<br/>& metadata template
+    UI-->>User: Show: helm install <release> <chart>
     
-    Service->>Validator: ValidateRegistration(request)
-    Validator->>Operator: GetAgentByName(projectID, name)
-    Operator->>DB: FindOne({projectId, name})
-    DB-->>Operator: null (not found)
-    Operator-->>Validator: nil (unique)
+    User->>Helm: helm install my-agent ./agent-chart
+    Helm->>K8s: Create ConfigMap (agent metadata)
+    Helm->>K8s: Create Deployment (agent workload)
+    Helm->>K8s: Create Service (agent endpoint)
+    K8s-->>Helm: Resources created
+    
+    Note over K8s,Watcher: Kubernetes emits ADDED events
+    
+    K8s->>Watcher: Watch event: ConfigMap ADDED
+    Watcher->>Watcher: Extract metadata from ConfigMap
+    Watcher->>Service: ValidateAgentMetadata(metadata)
+    Service->>Validator: ValidateRegistration(metadata)
     Validator-->>Service: Valid
     
-    Service->>Service: Create Agent Entity (Status=REGISTERED)
-    Service->>Operator: CreateAgent(ctx, agent)
-    Operator->>DB: InsertOne(agent)
+    Watcher->>K8s: Get Service (for endpoint discovery)
+    K8s-->>Watcher: Service details
+    Watcher->>Watcher: Construct endpoint URL
+    
+    Watcher->>Service: RegisterAgentFromWatcher(agent)
+    Service->>Operator: CreateAgent(agent)
+    Operator->>DB: InsertOne(agent) - Status: DISCOVERED
     DB-->>Operator: Success
-    Operator-->>Service: agent
     
     par Async Langfuse Sync
-        Service->>LF: CreateOrUpdateUser(projectID, payload)
+        Service->>LF: CreateOrUpdateUser(payload)
         LF->>Langfuse: POST /api/public/users
         Langfuse-->>LF: 200 OK
-        LF-->>Service: Success
-        Service->>Operator: UpdateAgent (lastSyncedToLangfuse)
     end
     
     par Async Health Check
-        Service->>Service: ValidateAgentHealth(agentID)
-        Service->>Service: HTTP GET /health
-        Service->>Operator: UpdateAgent (status=ACTIVE)
+        Service->>K8s: HTTP GET {endpoint}/health
+        K8s-->>Service: 200 OK
+        Service->>Operator: UpdateAgent(status=ACTIVE)
+        Operator->>DB: Update status
     end
     
-    Service-->>Handler: agent
-    Handler-->>GQL: RegisterAgentResponse
-    GQL-->>UI: {agent, syncStatus}
+    Service-->>Watcher: Agent registered
+    Watcher->>Watcher: Log: Agent {name} registered
+    
+    User->>UI: Refresh agents list
+    UI->>Service: listAgents(projectId)
+    Service->>Operator: ListAgents(filter)
+    Operator->>DB: Find(projectId)
+    DB-->>Operator: agents[]
+    Operator-->>Service: agents
+    Service-->>UI: Display registered agents
 ```
 
-### 7.2 Capability-Based Query Flow
+### 7.2 Agent Update via Helm Upgrade Flow
+
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant Helm as Helm CLI
+    participant K8s as Kubernetes API
+    participant Watcher as Agent Watcher
+    participant Service as Agent Registry Service
+    participant Operator as MongoDB Operator
+    participant DB as MongoDB
+
+    User->>Helm: helm upgrade my-agent ./agent-chart
+    Helm->>K8s: Update ConfigMap (new metadata)
+    K8s-->>Helm: ConfigMap updated
+    
+    K8s->>Watcher: Watch event: ConfigMap MODIFIED
+    Watcher->>Watcher: Extract updated metadata
+    Watcher->>Operator: GetAgentByResourceUID(configMap.UID)
+    Operator->>DB: FindOne({resourceUID})
+    DB-->>Operator: existingAgent
+    
+    Watcher->>Service: UpdateAgent(agentId, updateRequest)
+    Service->>Operator: UpdateAgent(agent)
+    Operator->>DB: UpdateOne({agentId}, newMetadata)
+    DB-->>Operator: Success
+    
+    Service-->>Watcher: Agent updated
+    Watcher->>Watcher: Log: Agent {name} updated
+```
+
+### 7.3 Capability-Based Query Flow
 
 ```mermaid
 sequenceDiagram
@@ -1788,47 +2283,18 @@ require (
 
 ### 14.1 Sample API Calls
 
-**Register Agent**:
+**Note**: Onboarding instructions (Helm commands, metadata templates, example ConfigMaps) are hardcoded in the Web UI for better performance and user experience. No backend API call is needed for static onboarding content.
+
+**Manually Trigger Agent Discovery** (Optional):
 ```graphql
-mutation RegisterAgent {
-  registerAgent(input: {
+mutation TriggerDiscovery {
+  triggerAgentDiscovery(
     projectId: "proj-123"
-    name: "my-chaos-agent"
-    version: "1.0.0"
-    vendor: "MyCompany"
-    description: "AI agent for Kubernetes fault remediation"
-    namespace: "default"  # Kubernetes namespace for auto-discovery
-    capabilities: [
-      "pod-crash-remediation",
-      "network-latency-handling",
-      "disk-pressure-remediation"
-    ]
-    containerImage: {
-      registry: "docker.io"
-      repository: "mycompany/chaos-agent"
-      tag: "v1.0.0"
-    }
-    # endpoint is optional - will be auto-discovered from Kubernetes Service
-    # endpoint: {
-    #   discoveryType: MANUAL
-    #   type: REST
-    #   url: "http://my-chaos-agent.default.svc.cluster.local:8080"
-    #   healthPath: "/health"
-    #   readyPath: "/ready"
-    # }
-    langfuseConfig: {
-      projectId: "agentcert-prod"
-      syncEnabled: true
-    }
-  }) {
-    agent {
-      id
-      agentId
-      name
-      status
-      createdAt
-    }
-    langfuseSyncStatus
+    namespace: "default"
+  ) {
+    success
+    message
+    discoveredAgents
   }
 }
 ```
@@ -1853,8 +2319,14 @@ query ListAgents {
       version
       capabilities
       status
-      containerImage {
-        fullImagePath
+      helmRelease {
+        releaseName
+        namespace
+        chartName
+      }
+      kubernetesResources {
+        deploymentName
+        serviceName
       }
     }
     totalCount
@@ -1879,7 +2351,126 @@ query GetAgentsByCapabilities {
 }
 ```
 
-### 14.2 Capability Taxonomy (Initial Set)
+### 14.2 Agent Helm Chart Structure
+
+**Required Helm Chart Structure for Agent Onboarding**:
+
+```yaml
+# agent-chart/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.agent.name }}-metadata
+  namespace: {{ .Release.Namespace }}
+  labels:
+    agentcert.io/agent-metadata: "true"
+    agentcert.io/agent: "true"
+data:
+  agent-metadata.yaml: |
+    name: {{ .Values.agent.name }}
+    version: {{ .Values.agent.version }}
+    projectId: {{ .Values.agent.projectId }}
+    capabilities:
+    {{- range .Values.agent.capabilities }}
+      - {{ . }}
+    {{- end }}
+    langfuseConfig:
+      projectId: {{ .Values.agent.langfuse.projectId }}
+      syncEnabled: {{ .Values.agent.langfuse.syncEnabled }}
+    vendor: {{ .Values.agent.vendor }}
+    description: {{ .Values.agent.description }}
+    category: {{ .Values.agent.category }}
+    helmRelease:
+      releaseName: {{ .Release.Name }}
+      namespace: {{ .Release.Namespace }}
+      chartName: {{ .Chart.Name }}
+      chartVersion: {{ .Chart.Version }}
+
+---
+# agent-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.agent.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    agentcert.io/agent: "true"
+    app: {{ .Values.agent.name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.agent.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.agent.name }}
+        agentcert.io/agent: "true"
+    spec:
+      containers:
+      - name: agent
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        ports:
+        - containerPort: 8080
+          name: http
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+---
+# agent-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.agent.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    agentcert.io/agent: "true"
+spec:
+  selector:
+    app: {{ .Values.agent.name }}
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  type: ClusterIP
+
+---
+# agent-chart/values.yaml
+agent:
+  name: my-chaos-agent
+  version: "1.0.0"
+  projectId: "proj-123"
+  capabilities:
+    - pod-crash-remediation
+    - network-latency-handling
+    - disk-pressure-remediation
+  langfuse:
+    projectId: "agentcert-prod"
+    syncEnabled: true
+  vendor: "MyCompany"
+  description: "AI agent for Kubernetes fault remediation"
+  category: "fault-remediation"
+
+image:
+  repository: docker.io/mycompany/chaos-agent
+  tag: "v1.0.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+```
+
+### 14.3 Capability Taxonomy (Initial Set)
 
 | Capability ID | Display Name | Category | Description |
 |--------------|--------------|----------|-------------|
