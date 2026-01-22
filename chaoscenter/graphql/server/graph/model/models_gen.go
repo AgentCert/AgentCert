@@ -53,6 +53,64 @@ type ActionPayload struct {
 	Username     *string `json:"username,omitempty"`
 }
 
+type Agent struct {
+	AgentID        string          `json:"agentID"`
+	ProjectID      string          `json:"projectID"`
+	Name           string          `json:"name"`
+	Version        string          `json:"version"`
+	Vendor         string          `json:"vendor"`
+	Capabilities   []string        `json:"capabilities"`
+	ContainerImage *ContainerImage `json:"containerImage"`
+	Namespace      string          `json:"namespace"`
+	Endpoint       *AgentEndpoint  `json:"endpoint,omitempty"`
+	LangfuseConfig *LangfuseConfig `json:"langfuseConfig,omitempty"`
+	Status         AgentStatus     `json:"status"`
+	Metadata       *AgentMetadata  `json:"metadata,omitempty"`
+	AuditInfo      *AuditInfo      `json:"auditInfo"`
+}
+
+type AgentEndpoint struct {
+	URL           string                `json:"url"`
+	Type          EndpointType          `json:"type"`
+	DiscoveryType EndpointDiscoveryType `json:"discoveryType"`
+	HealthPath    string                `json:"healthPath"`
+	ReadyPath     string                `json:"readyPath"`
+}
+
+type AgentEndpointInput struct {
+	URL           string                `json:"url"`
+	Type          EndpointType          `json:"type"`
+	DiscoveryType EndpointDiscoveryType `json:"discoveryType"`
+	HealthPath    *string               `json:"healthPath,omitempty"`
+	ReadyPath     *string               `json:"readyPath,omitempty"`
+}
+
+type AgentListResponse struct {
+	Agents      []*Agent `json:"agents"`
+	TotalCount  int      `json:"totalCount"`
+	CurrentPage int      `json:"currentPage"`
+	TotalPages  int      `json:"totalPages"`
+	HasNextPage bool     `json:"hasNextPage"`
+}
+
+type AgentMetadata struct {
+	Labels      []*KeyValuePair `json:"labels,omitempty"`
+	Annotations []*KeyValuePair `json:"annotations,omitempty"`
+}
+
+type AgentMetadataInput struct {
+	Labels      []*KeyValuePairInput `json:"labels,omitempty"`
+	Annotations []*KeyValuePairInput `json:"annotations,omitempty"`
+}
+
+type AgentStatusResponse struct {
+	AgentID              string      `json:"agentID"`
+	Status               AgentStatus `json:"status"`
+	Healthy              bool        `json:"healthy"`
+	LastCheckedAt        *string     `json:"lastCheckedAt,omitempty"`
+	LastSyncedToLangfuse *string     `json:"lastSyncedToLangfuse,omitempty"`
+}
+
 type Annotation struct {
 	Categories       string `json:"categories"`
 	Vendor           string `json:"vendor"`
@@ -60,6 +118,14 @@ type Annotation struct {
 	Repository       string `json:"repository"`
 	Support          string `json:"support"`
 	ChartDescription string `json:"chartDescription"`
+}
+
+type AuditInfo struct {
+	CreatedAt       string  `json:"createdAt"`
+	CreatedBy       string  `json:"createdBy"`
+	UpdatedAt       string  `json:"updatedAt"`
+	UpdatedBy       string  `json:"updatedBy"`
+	LastHealthCheck *string `json:"lastHealthCheck,omitempty"`
 }
 
 // Defines the input for CMD probe properties
@@ -86,6 +152,13 @@ type CMDProbeRequest struct {
 	Comparator *ComparatorInput `json:"comparator"`
 	// Source of the Probe
 	Source *string `json:"source,omitempty"`
+}
+
+type CapabilityDefinition struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
 }
 
 // Defines the details for a chaos experiment
@@ -338,6 +411,18 @@ type ConfirmInfraRegistrationResponse struct {
 	InfraID          *string `json:"infraID,omitempty"`
 }
 
+type ContainerImage struct {
+	Registry   string `json:"registry"`
+	Repository string `json:"repository"`
+	Tag        string `json:"tag"`
+}
+
+type ContainerImageInput struct {
+	Registry   string `json:"registry"`
+	Repository string `json:"repository"`
+	Tag        string `json:"tag"`
+}
+
 // Defines the details required for creating a chaos hub
 type CreateChaosHubRequest struct {
 	// Name of the chaos hub
@@ -395,6 +480,11 @@ type DateRange struct {
 	StartDate string `json:"startDate"`
 	// End date
 	EndDate *string `json:"endDate,omitempty"`
+}
+
+type DeleteAgentResponse struct {
+	Success bool    `json:"success"`
+	Message *string `json:"message,omitempty"`
 }
 
 type Environment struct {
@@ -869,6 +959,13 @@ type HTTPProbeRequest struct {
 	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
+type HealthCheckResult struct {
+	Healthy      bool   `json:"healthy"`
+	Message      string `json:"message"`
+	ResponseTime int    `json:"responseTime"`
+	CheckedAt    string `json:"checkedAt"`
+}
+
 // Defines details for image registry
 type ImageRegistry struct {
 	// Bool value indicating if the image registry is default or not; by default workflow uses LitmusChaos registry
@@ -1153,6 +1250,16 @@ type K8SProbeRequest struct {
 	Operation string `json:"operation"`
 }
 
+type KeyValuePair struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type KeyValuePairInput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 type KubeGVRRequest struct {
 	Group    string `json:"group"`
 	Version  string `json:"version"`
@@ -1383,9 +1490,27 @@ type KubernetesHTTPProbeRequest struct {
 	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
+type LangfuseConfig struct {
+	ProjectID    string  `json:"projectId"`
+	SyncEnabled  bool    `json:"syncEnabled"`
+	LastSyncedAt *string `json:"lastSyncedAt,omitempty"`
+}
+
+type LangfuseConfigInput struct {
+	ProjectID   string `json:"projectId"`
+	SyncEnabled bool   `json:"syncEnabled"`
+}
+
 type Link struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
+}
+
+type ListAgentsFilter struct {
+	ProjectID    *string      `json:"projectId,omitempty"`
+	Status       *AgentStatus `json:"status,omitempty"`
+	Capabilities []string     `json:"capabilities,omitempty"`
+	SearchTerm   *string      `json:"searchTerm,omitempty"`
 }
 
 type ListChaosHubRequest struct {
@@ -1644,6 +1769,11 @@ type Pagination struct {
 	Limit int `json:"limit"`
 }
 
+type PaginationInput struct {
+	Page  int `json:"page"`
+	Limit int `json:"limit"`
+}
+
 // Response received for querying pod logs
 type PodLog struct {
 	// ID of the cluster
@@ -1841,6 +1971,24 @@ func (this RecentExperimentRun) GetCreatedAt() *string      { return &this.Creat
 func (this RecentExperimentRun) GetUpdatedBy() *UserDetails { return this.UpdatedBy }
 func (this RecentExperimentRun) GetCreatedBy() *UserDetails { return this.CreatedBy }
 
+type RegisterAgentInput struct {
+	ProjectID      string               `json:"projectId"`
+	Name           string               `json:"name"`
+	Version        string               `json:"version"`
+	Vendor         string               `json:"vendor"`
+	Capabilities   []string             `json:"capabilities"`
+	ContainerImage *ContainerImageInput `json:"containerImage"`
+	Namespace      string               `json:"namespace"`
+	Endpoint       *AgentEndpointInput  `json:"endpoint,omitempty"`
+	LangfuseConfig *LangfuseConfigInput `json:"langfuseConfig,omitempty"`
+	Metadata       *AgentMetadataInput  `json:"metadata,omitempty"`
+}
+
+type RegisterAgentResponse struct {
+	Agent              *Agent             `json:"agent"`
+	LangfuseSyncStatus LangfuseSyncStatus `json:"langfuseSyncStatus"`
+}
+
 // Defines the details for the new infra being connected
 type RegisterInfraRequest struct {
 	// Name of the infra
@@ -1966,12 +2114,29 @@ type StopExperimentRunsRequest struct {
 type Subscription struct {
 }
 
+type SyncResponse struct {
+	Success  bool    `json:"success"`
+	SyncedAt *string `json:"syncedAt,omitempty"`
+	Message  *string `json:"message,omitempty"`
+}
+
 type Toleration struct {
 	TolerationSeconds *int    `json:"tolerationSeconds,omitempty"`
 	Key               *string `json:"key,omitempty"`
 	Operator          *string `json:"operator,omitempty"`
 	Effect            *string `json:"effect,omitempty"`
 	Value             *string `json:"value,omitempty"`
+}
+
+type UpdateAgentInput struct {
+	Name           *string              `json:"name,omitempty"`
+	Version        *string              `json:"version,omitempty"`
+	Vendor         *string              `json:"vendor,omitempty"`
+	Capabilities   []string             `json:"capabilities,omitempty"`
+	ContainerImage *ContainerImageInput `json:"containerImage,omitempty"`
+	Endpoint       *AgentEndpointInput  `json:"endpoint,omitempty"`
+	LangfuseConfig *LangfuseConfigInput `json:"langfuseConfig,omitempty"`
+	Metadata       *AgentMetadataInput  `json:"metadata,omitempty"`
 }
 
 type UpdateChaosHubRequest struct {
@@ -2041,6 +2206,53 @@ type Workload struct {
 	Namespace string `json:"namespace"`
 }
 
+type AgentStatus string
+
+const (
+	AgentStatusRegistered AgentStatus = "REGISTERED"
+	AgentStatusValidating AgentStatus = "VALIDATING"
+	AgentStatusActive     AgentStatus = "ACTIVE"
+	AgentStatusInactive   AgentStatus = "INACTIVE"
+	AgentStatusDeleted    AgentStatus = "DELETED"
+)
+
+var AllAgentStatus = []AgentStatus{
+	AgentStatusRegistered,
+	AgentStatusValidating,
+	AgentStatusActive,
+	AgentStatusInactive,
+	AgentStatusDeleted,
+}
+
+func (e AgentStatus) IsValid() bool {
+	switch e {
+	case AgentStatusRegistered, AgentStatusValidating, AgentStatusActive, AgentStatusInactive, AgentStatusDeleted:
+		return true
+	}
+	return false
+}
+
+func (e AgentStatus) String() string {
+	return string(e)
+}
+
+func (e *AgentStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AgentStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AgentStatus", str)
+	}
+	return nil
+}
+
+func (e AgentStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
 type AuthType string
 
 const (
@@ -2083,6 +2295,88 @@ func (e *AuthType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e AuthType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type EndpointDiscoveryType string
+
+const (
+	EndpointDiscoveryTypeAuto   EndpointDiscoveryType = "AUTO"
+	EndpointDiscoveryTypeManual EndpointDiscoveryType = "MANUAL"
+)
+
+var AllEndpointDiscoveryType = []EndpointDiscoveryType{
+	EndpointDiscoveryTypeAuto,
+	EndpointDiscoveryTypeManual,
+}
+
+func (e EndpointDiscoveryType) IsValid() bool {
+	switch e {
+	case EndpointDiscoveryTypeAuto, EndpointDiscoveryTypeManual:
+		return true
+	}
+	return false
+}
+
+func (e EndpointDiscoveryType) String() string {
+	return string(e)
+}
+
+func (e *EndpointDiscoveryType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EndpointDiscoveryType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EndpointDiscoveryType", str)
+	}
+	return nil
+}
+
+func (e EndpointDiscoveryType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type EndpointType string
+
+const (
+	EndpointTypeRest EndpointType = "REST"
+	EndpointTypeGrpc EndpointType = "GRPC"
+)
+
+var AllEndpointType = []EndpointType{
+	EndpointTypeRest,
+	EndpointTypeGrpc,
+}
+
+func (e EndpointType) IsValid() bool {
+	switch e {
+	case EndpointTypeRest, EndpointTypeGrpc:
+		return true
+	}
+	return false
+}
+
+func (e EndpointType) String() string {
+	return string(e)
+}
+
+func (e *EndpointType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EndpointType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EndpointType", str)
+	}
+	return nil
+}
+
+func (e EndpointType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
@@ -2563,6 +2857,49 @@ func (e *Invitation) UnmarshalGQL(v interface{}) error {
 }
 
 func (e Invitation) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type LangfuseSyncStatus string
+
+const (
+	LangfuseSyncStatusSuccess LangfuseSyncStatus = "SUCCESS"
+	LangfuseSyncStatusFailed  LangfuseSyncStatus = "FAILED"
+	LangfuseSyncStatusSkipped LangfuseSyncStatus = "SKIPPED"
+)
+
+var AllLangfuseSyncStatus = []LangfuseSyncStatus{
+	LangfuseSyncStatusSuccess,
+	LangfuseSyncStatusFailed,
+	LangfuseSyncStatusSkipped,
+}
+
+func (e LangfuseSyncStatus) IsValid() bool {
+	switch e {
+	case LangfuseSyncStatusSuccess, LangfuseSyncStatusFailed, LangfuseSyncStatusSkipped:
+		return true
+	}
+	return false
+}
+
+func (e LangfuseSyncStatus) String() string {
+	return string(e)
+}
+
+func (e *LangfuseSyncStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LangfuseSyncStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LangfuseSyncStatus", str)
+	}
+	return nil
+}
+
+func (e LangfuseSyncStatus) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

@@ -24,6 +24,7 @@ export interface StringsMap {
   'account': unknown
   'accountURL': unknown
   'actionItems': unknown
+  'actions': unknown
   'active': unknown
   'activeMembers': unknown
   'actualResilienceScore': unknown
@@ -46,6 +47,7 @@ export interface StringsMap {
   'addtoHubLoading': unknown
   'advanced': unknown
   'advancedOptions': unknown
+  'agentOnboarding': unknown
   'all': unknown
   'allChaosEnabled': unknown
   'allExecutions': unknown
@@ -61,6 +63,7 @@ export interface StringsMap {
   'appNameSpace': unknown
   'apply': unknown
   'applyChanges': unknown
+  'appsOnboarding': unknown
   'at': unknown
   'atAGlance': unknown
   'attempt': unknown
@@ -281,7 +284,10 @@ export interface StringsMap {
   'endTime': unknown
   'endedAt': unknown
   'endpoint': unknown
+  'enterApiUrl': unknown
+  'enterCloudManagedUrl': unknown
   'enterCustomCron': unknown
+  'enterFaasUrl': unknown
   'enterHubAccountURL': unknown
   'enterHubName': unknown
   'enterHubRepositoryBranch': unknown
@@ -519,6 +525,8 @@ export interface StringsMap {
   'navigationCheckText': unknown
   'navigationCheckTitle': unknown
   'needAttention': unknown
+  'newAgent': unknown
+  'newApplication': unknown
   'newChaosExperiment': unknown
   'newChaosHub': unknown
   'newChaosInfrastructure': unknown
@@ -606,6 +614,25 @@ export interface StringsMap {
   'on': unknown
   'onThe': unknown
   'onThisPage': unknown
+  'onboard': unknown
+  'onboardAppUsingCloudManaged': unknown
+  'onboardAppUsingCloudManagedDesc': unknown
+  'onboardAppUsingDockerImage': unknown
+  'onboardAppUsingDockerImageDesc': unknown
+  'onboardAppUsingHelmChart': unknown
+  'onboardAppUsingHelmChartDesc': unknown
+  'onboardAppUsingKubernetesManifest': unknown
+  'onboardAppUsingKubernetesManifestDesc': unknown
+  'onboardUsingAPIs': unknown
+  'onboardUsingAPIsDesc': unknown
+  'onboardUsingFaaS': unknown
+  'onboardUsingFaaSDesc': unknown
+  'onboardUsingHelmChart': unknown
+  'onboardUsingHelmChartDesc': unknown
+  'onboardYourAgent': unknown
+  'onboardYourApp': unknown
+  'onboardedAgents': unknown
+  'onboardedApplications': unknown
   'openInNewTab': unknown
   'operation': unknown
   'operator': unknown
@@ -639,6 +666,7 @@ export interface StringsMap {
   'pleaseComplete': unknown
   'pleaseSelectLeastOneExperiment': unknown
   'pleaseSpecifyYAMLValues': unknown
+  'pleaseUploadFile': unknown
   'points': unknown
   'pollingInterval': unknown
   'preProd': unknown
@@ -971,6 +999,7 @@ export interface StringsMap {
   'updatedBy': unknown
   'upgradeChaosInfrastructure': unknown
   'upgradeManifestDownloadedSuccessfully': unknown
+  'upload': unknown
   'uploadYAMLButton': unknown
   'uploadYAMLDescription': unknown
   'uploadYAMLDescriptionBuilder': unknown
@@ -978,6 +1007,8 @@ export interface StringsMap {
   'uploadYAMLTitle': unknown
   'uploadYAMLTitleBuilder': unknown
   'uploadYaml': unknown
+  'uploadedFileName': unknown
+  'uploadedSuccessfully': unknown
   'url': unknown
   'useIntegerValue': unknown
   'useThisTemplate': unknown

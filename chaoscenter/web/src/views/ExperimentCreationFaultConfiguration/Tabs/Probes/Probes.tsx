@@ -27,7 +27,7 @@ const getTableColumns = (
       Header: 'Probes',
       accessor: (probe: ProbeObj) => (
         <Layout.Horizontal>
-          <Icon name="chaos-litmuschaos" size={20} margin={{ top: 'small', right: 'medium' }} />
+          <Icon name="main-search" size={20} margin={{ top: 'small', right: 'medium' }} />
           <Layout.Vertical>
             <Text lineClamp={1} font={{ variation: FontVariation.H6, weight: 'bold' }} color={Color.PRIMARY_7}>
               {probe.name}
