@@ -339,7 +339,7 @@ func (m *MongoClient) initAllCollection() {
 				{Key: "name", Value: 1},
 			},
 			Options: options.Index().SetUnique(true).SetPartialFilterExpression(bson.D{{
-				Key: "status", Value: bson.D{{Key: "$ne", Value: "DEREGISTERED"}},
+				Key: "status", Value: "REGISTERED",
 			}}),
 		},
 		{
