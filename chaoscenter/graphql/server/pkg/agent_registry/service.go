@@ -169,14 +169,22 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 	// Generate UUID for agentId
 	agentID := uuid.New().String()
 	
-	// Determine endpoint (auto-discover if not provided)
+	// Determine endpoint (use default if not provided and auto-discovery fails)
 	endpoint := input.Endpoint
 	if endpoint == nil {
 		discoveredEndpoint, err := s.discoverAgentEndpoint(ctx, input.Name, input.Namespace)
 		if err != nil {
-			return nil, fmt.Errorf("endpoint not provided and auto-discovery failed: %w", err)
+			// Use a default local endpoint when auto-discovery fails
+			endpoint = &AgentEndpoint{
+				URL:           fmt.Sprintf("http://%s.%s.svc.cluster.local:8080", input.Name, input.Namespace),
+				Type:          EndpointTypeREST,
+				DiscoveryType: EndpointDiscoveryManual,
+				HealthPath:    "/health",
+				ReadyPath:     "/ready",
+			}
+		} else {
+			endpoint = discoveredEndpoint
 		}
-		endpoint = discoveredEndpoint
 	}
 	
 	// Get current timestamp

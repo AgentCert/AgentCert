@@ -212,6 +212,7 @@ export interface StringsMap {
   'defaultValueText': unknown
   'degelateNotActive': unknown
   'delete': unknown
+  'deleteAgent': unknown
   'deleteApiTokenDescription': unknown
   'deleteChaosInfrastructure': unknown
   'deleteExperiment': unknown

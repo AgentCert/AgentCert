@@ -11,10 +11,14 @@ func MapSyncResponseToModel(resp *SyncResponse) *model.SyncResponse {
 	if resp == nil {
 		return nil
 	}
+	message := ""
+	if resp.Message != nil {
+		message = *resp.Message
+	}
 	return &model.SyncResponse{
 		Success:  resp.Success,
 		SyncedAt: resp.SyncedAt,
-		Message:  resp.Message,
+		Message:  message,
 	}
 }
 
@@ -66,8 +70,8 @@ func MapRegisterAgentInputToRequest(input model.RegisterAgentInput) (*RegisterAg
 		
 		req.Endpoint = &AgentEndpoint{
 			URL:           input.Endpoint.URL,
-			Type:          EndpointType(input.Endpoint.Type),
-			DiscoveryType: EndpointDiscoveryType(input.Endpoint.DiscoveryType),
+			Type:          EndpointType(input.Endpoint.EndpointType),
+			DiscoveryType: EndpointDiscoveryManual,
 			HealthPath:    healthPath,
 			ReadyPath:     readyPath,
 		}
@@ -75,9 +79,13 @@ func MapRegisterAgentInputToRequest(input model.RegisterAgentInput) (*RegisterAg
 
 	// Map LangfuseConfig
 	if input.LangfuseConfig != nil {
+		syncEnabled := true
+		if input.LangfuseConfig.SyncEnabled != nil {
+			syncEnabled = *input.LangfuseConfig.SyncEnabled
+		}
 		req.LangfuseConfig = &LangfuseConfig{
 			ProjectID:   input.LangfuseConfig.ProjectID,
-			SyncEnabled: input.LangfuseConfig.SyncEnabled,
+			SyncEnabled: syncEnabled,
 		}
 	}
 
@@ -141,8 +149,8 @@ func MapUpdateAgentInputToRequest(input model.UpdateAgentInput) (*UpdateAgentReq
 		
 		req.Endpoint = &AgentEndpoint{
 			URL:           input.Endpoint.URL,
-			Type:          EndpointType(input.Endpoint.Type),
-			DiscoveryType: EndpointDiscoveryType(input.Endpoint.DiscoveryType),
+			Type:          EndpointType(input.Endpoint.EndpointType),
+			DiscoveryType: EndpointDiscoveryManual,
 			HealthPath:    healthPath,
 			ReadyPath:     readyPath,
 		}
@@ -150,9 +158,13 @@ func MapUpdateAgentInputToRequest(input model.UpdateAgentInput) (*UpdateAgentReq
 
 	// Map LangfuseConfig
 	if input.LangfuseConfig != nil {
+		syncEnabled := true
+		if input.LangfuseConfig.SyncEnabled != nil {
+			syncEnabled = *input.LangfuseConfig.SyncEnabled
+		}
 		req.LangfuseConfig = &LangfuseConfig{
 			ProjectID:   input.LangfuseConfig.ProjectID,
-			SyncEnabled: input.LangfuseConfig.SyncEnabled,
+			SyncEnabled: syncEnabled,
 		}
 	}
 
@@ -246,7 +258,7 @@ func MapAgentToModel(agent *Agent) *model.Agent {
 	if agent.Endpoint != nil {
 		gqlAgent.Endpoint = &model.AgentEndpoint{
 			URL:           agent.Endpoint.URL,
-			Type:          model.EndpointType(agent.Endpoint.Type),
+			EndpointType:  model.EndpointType(agent.Endpoint.Type),
 			DiscoveryType: model.EndpointDiscoveryType(agent.Endpoint.DiscoveryType),
 			HealthPath:    agent.Endpoint.HealthPath,
 			ReadyPath:     agent.Endpoint.ReadyPath,
@@ -332,13 +344,10 @@ func MapAgentListResponseToModel(response *AgentListResponse) *model.AgentListRe
 
 // MapDeleteAgentResponseToModel converts service response to GraphQL model.
 func MapDeleteAgentResponseToModel(response *DeleteAgentResponse) *model.DeleteAgentResponse {
-	result := &model.DeleteAgentResponse{
+	return &model.DeleteAgentResponse{
 		Success: response.Success,
+		Message: response.Message,
 	}
-	if response.Message != "" {
-		result.Message = &response.Message
-	}
-	return result
 }
 
 // MapHealthCheckResultToModel converts service result to GraphQL model.

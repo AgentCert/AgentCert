@@ -1,86 +1,105 @@
 import { gql, useQuery, QueryHookOptions } from '@apollo/client';
 
 export const LIST_AGENTS = gql`
-  query listAgents($projectID: ID!, $request: ListAgentsRequest) {
-    listAgents(projectID: $projectID, request: $request) {
-      totalAgents
+  query listAgents($pagination: PaginationInput!, $filter: ListAgentsFilter) {
+    listAgents(pagination: $pagination, filter: $filter) {
+      totalCount
+      totalPages
+      currentPage
+      hasNextPage
       agents {
         agentID
+        projectID
         name
         description
-        namespace
-        clusterName
-        capabilities
-        status
+        tags
         version
-        helmReleaseName
-        helmChartVersion
-        isRemoved
+        vendor
+        capabilities
+        namespace
+        status
+        containerImage {
+          registry
+          repository
+          tag
+        }
+        endpoint {
+          url
+          discoveryType
+          endpointType
+          healthPath
+          readyPath
+        }
         auditInfo {
           createdAt
-          createdBy {
-            userID
-            username
-          }
+          createdBy
           updatedAt
-          updatedBy {
-            userID
-            username
-          }
+          updatedBy
         }
       }
     }
   }
 `;
 
+export interface ContainerImage {
+  registry: string;
+  repository: string;
+  tag: string;
+}
+
+export interface AgentEndpoint {
+  url: string;
+  discoveryType: string;
+  endpointType: string;
+  healthPath: string;
+  readyPath: string;
+}
+
 export interface ListedAgent {
   agentID: string;
+  projectID: string;
   name: string;
   description?: string;
-  namespace: string;
-  clusterName?: string;
+  tags?: string[];
+  version: string;
+  vendor: string;
   capabilities: string[];
+  namespace: string;
   status: string;
-  version?: string;
-  helmReleaseName?: string;
-  helmChartVersion?: string;
-  isRemoved?: boolean;
+  containerImage: ContainerImage;
+  endpoint: AgentEndpoint;
   auditInfo?: {
-    createdAt?: string;
-    createdBy?: {
-      userID: string;
-      username: string;
-    };
-    updatedAt?: string;
-    updatedBy?: {
-      userID: string;
-      username: string;
-    };
+    createdAt: string;
+    createdBy: string;
+    updatedAt: string;
+    updatedBy: string;
   };
 }
 
 export interface AgentListResponse {
-  totalAgents: number;
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  hasNextPage: boolean;
   agents: ListedAgent[];
 }
 
-export interface ListAgentsPagination {
-  page?: number;
-  limit?: number;
-}
-
 export interface ListAgentsFilter {
-  agentName?: string;
+  projectID?: string;
   status?: string;
-  namespace?: string;
+  capabilities?: string[];
+  searchTerm?: string;
+  tags?: string[];
 }
 
-export interface ListAgentsRequest {
-  projectID: string;
-  request?: {
-    pagination?: ListAgentsPagination;
-    filter?: ListAgentsFilter;
-  };
+export interface ListAgentsPagination {
+  page: number;
+  limit: number;
+}
+
+export interface ListAgentsVariables {
+  pagination: ListAgentsPagination;
+  filter?: ListAgentsFilter;
 }
 
 export interface ListAgentsQueryResponse {
@@ -88,9 +107,9 @@ export interface ListAgentsQueryResponse {
 }
 
 export function useListAgents(
-  options?: QueryHookOptions<ListAgentsQueryResponse, ListAgentsRequest>
+  options?: QueryHookOptions<ListAgentsQueryResponse, ListAgentsVariables>
 ): { data: ListAgentsQueryResponse | undefined; loading: boolean; error: Error | undefined; refetch: () => void } {
-  const { data, loading, error, refetch } = useQuery<ListAgentsQueryResponse, ListAgentsRequest>(
+  const { data, loading, error, refetch } = useQuery<ListAgentsQueryResponse, ListAgentsVariables>(
     LIST_AGENTS,
     {
       ...options,

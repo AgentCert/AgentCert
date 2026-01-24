@@ -124,6 +124,7 @@ chaoshubs: ChaosHubs
 agentOnboarding: Agent Onboarding
 newAgent: New Agent
 onboardedAgents: List of Onboarded Agents
+deleteAgent: Delete Agent
 onboardedApplications: List of Onboarded Applications
 actions: Actions
 appsOnboarding: Apps Onboarding

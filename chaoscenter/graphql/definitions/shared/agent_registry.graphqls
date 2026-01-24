@@ -468,6 +468,61 @@ type DeleteAgentResponse {
 }
 
 """
+DeployAgentWithHelmRequest contains information to deploy an agent using Helm.
+"""
+input DeployAgentWithHelmRequest {
+  """Unique name for the agent within the project"""
+  name: String!
+  
+  """Optional description of the agent"""
+  description: String
+  
+  """Kubernetes namespace for deployment"""
+  namespace: String!
+  
+  """Cluster name for deployment"""
+  clusterName: String
+  
+  """List of capabilities this agent supports"""
+  capabilities: [String!]!
+  
+  """Semantic version of the agent"""
+  version: String
+  
+  """Helm release name"""
+  helmReleaseName: String!
+  
+  """Helm chart version"""
+  helmChartVersion: String!
+  
+  """YAML content for Helm values"""
+  valuesYaml: String
+  
+  """Kubeconfig for cluster access (optional)"""
+  kubeconfig: String
+}
+
+"""
+DeployAgentWithHelmResponse returned after successful Helm deployment.
+"""
+type DeployAgentWithHelmResponse {
+  """Unique identifier for the deployed agent"""
+  agentID: ID!
+  
+  """Name of the deployed agent"""
+  name: String!
+  
+  """Current status of the agent"""
+  status: AgentStatus!
+  
+  """Helm release name used"""
+  helmReleaseName: String
+  
+  """Helm chart version used"""
+  helmChartVersion: String
+}
+
+"""
 SyncResponse returned from Langfuse sync operations.
 """
 type SyncResponse {
@@ -525,6 +580,12 @@ extend type Query {
 extend type Mutation {
   """Register a new agent in the system"""
   registerAgent(input: RegisterAgentInput!): RegisterAgentResponse!
+  
+  """Deploy an agent using Helm chart"""
+  deployAgentWithHelm(
+    projectID: ID!
+    request: DeployAgentWithHelmRequest!
+  ): DeployAgentWithHelmResponse!
   
   """Update an existing agent's information"""
   updateAgent(
