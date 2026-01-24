@@ -208,6 +208,40 @@ func (v *validatorImpl) validateVersion(version string) error {
 // This function can be extended to load from configuration in the future.
 func loadCapabilitiesTaxonomy() map[string]bool {
 	capabilities := []string{
+		// Pod Chaos capabilities
+		"pod-delete",
+		"pod-cpu-hog",
+		"pod-memory-hog",
+		"pod-io-stress",
+		"pod-network-latency",
+		"pod-network-loss",
+		"pod-network-duplication",
+		"pod-network-corruption",
+		"pod-dns-error",
+		"pod-dns-spoof",
+		// Node Chaos capabilities
+		"node-drain",
+		"node-cpu-hog",
+		"node-memory-hog",
+		"node-io-stress",
+		"node-taint",
+		"node-restart",
+		// Network Chaos capabilities
+		"network-latency",
+		"network-loss",
+		"network-duplication",
+		"network-corruption",
+		"network-partition",
+		// Resource Chaos capabilities
+		"disk-fill",
+		"disk-io-stress",
+		"cpu-stress",
+		"memory-stress",
+		// Container Chaos capabilities
+		"container-kill",
+		"container-network-latency",
+		"container-network-loss",
+		// Remediation capabilities
 		"pod-crash-remediation",
 		"pod-delete-remediation",
 		"node-drain-remediation",

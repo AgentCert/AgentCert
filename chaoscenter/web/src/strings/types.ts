@@ -80,6 +80,7 @@ export interface StringsMap {
   'cancel': unknown
   'cannotPushToDefault': unknown
   'cannotReRun': unknown
+  'capabilities': unknown
   'changePassword': unknown
   'chaos': unknown
   'chaosComponentInstallation': unknown

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput } from '@harnessio/uicore';
 import { Color, FontVariation } from '@harnessio/design-system';
 import { useLocation, useHistory } from 'react-router-dom';
@@ -7,6 +7,8 @@ import cx from 'classnames';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
 import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
+import { useListAgents, ListedAgent } from '@api/core';
+import { useAppStore } from '@context';
 import css from './AgentOnboarding.module.scss';
 
 export enum OnboardingMethod {
@@ -26,20 +28,15 @@ interface UploadedFile {
   method: OnboardingMethod;
 }
 
-interface Agent {
+// Display format for agents table
+interface AgentDisplay {
   id: string;
   name: string;
-  method: string;
+  namespace: string;
+  capabilities: string;
   status: string;
   createdAt: string;
 }
-
-// Mock data for agents table
-const mockAgents: Agent[] = [
-  { id: '1', name: 'Production Agent', method: 'Helm Chart', status: 'Active', createdAt: '2026-01-15' },
-  { id: '2', name: 'Staging Agent', method: 'APIs', status: 'Active', createdAt: '2026-01-10' },
-  { id: '3', name: 'Dev Agent', method: 'FaaS', status: 'Inactive', createdAt: '2026-01-05' }
-];
 
 export default function AgentOnboardingView(): React.ReactElement {
   const { getString } = useStrings();
@@ -54,7 +51,35 @@ export default function AgentOnboardingView(): React.ReactElement {
   const [apiUrl, setApiUrl] = useState<string>('');
   const [faasUrl, setFaasUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [agents, setAgents] = useState<Agent[]>(mockAgents);
+  
+  // Get projectID from app store
+  const { projectID } = useAppStore();
+
+  // Fetch agents from API
+  const { data: agentsData, loading: agentsLoading } = useListAgents({
+    variables: {
+      projectID: projectID || '',
+      request: {
+        pagination: { page: 0, limit: 50 }
+      }
+    },
+    skip: !projectID
+  });
+
+  // Transform API data to display format
+  const agents = useMemo<AgentDisplay[]>(() => {
+    if (!agentsData?.listAgents?.agents) return [];
+    return agentsData.listAgents.agents.map((agent: ListedAgent) => ({
+      id: agent.agentID,
+      name: agent.name,
+      namespace: agent.namespace || 'default',
+      capabilities: agent.capabilities?.join(', ') || '',
+      status: agent.status || 'Unknown',
+      createdAt: agent.auditInfo?.createdAt 
+        ? new Date(parseInt(agent.auditInfo.createdAt)).toLocaleDateString()
+        : 'N/A'
+    }));
+  }, [agentsData]);
 
   useDocumentTitle(getString('agentOnboarding'));
 
@@ -193,41 +218,49 @@ export default function AgentOnboardingView(): React.ReactElement {
     history.push({ search: '' });
   };
 
-  const handleEditAgent = (agent: Agent): void => {
+  const handleEditAgent = (agent: AgentDisplay): void => {
     showSuccess(`Editing agent: ${agent.name}`);
   };
 
-  const handleDeleteAgent = (agent: Agent): void => {
-    setAgents(prev => prev.filter(a => a.id !== agent.id));
-    showSuccess(`Deleted agent: ${agent.name}`);
+  const handleDeleteAgent = (agent: AgentDisplay): void => {
+    showSuccess(`Delete agent: ${agent.name} - Feature coming soon`);
   };
 
-  const columns: Column<Agent>[] = [
+  const columns: Column<AgentDisplay>[] = [
     {
       Header: getString('name'),
       accessor: 'name',
-      Cell: ({ value }: CellProps<Agent>) => (
+      Cell: ({ value }: CellProps<AgentDisplay>) => (
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_900}>
           {value}
         </Text>
       )
     },
     {
-      Header: getString('method'),
-      accessor: 'method',
-      Cell: ({ value }: CellProps<Agent>) => (
+      Header: getString('namespace'),
+      accessor: 'namespace',
+      Cell: ({ value }: CellProps<AgentDisplay>) => (
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
           {value}
         </Text>
       )
     },
     {
+      Header: getString('capabilities'),
+      accessor: 'capabilities',
+      Cell: ({ value }: CellProps<AgentDisplay>) => (
+        <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
+          {value || 'None'}
+        </Text>
+      )
+    },
+    {
       Header: getString('status'),
       accessor: 'status',
-      Cell: ({ value }: CellProps<Agent>) => (
+      Cell: ({ value }: CellProps<AgentDisplay>) => (
         <Text 
           font={{ variation: FontVariation.BODY }} 
-          color={value === 'Active' ? Color.GREEN_700 : Color.GREY_500}
+          color={value === 'REGISTERED' || value === 'Active' ? Color.GREEN_700 : Color.GREY_500}
         >
           {value}
         </Text>
@@ -236,7 +269,7 @@ export default function AgentOnboardingView(): React.ReactElement {
     {
       Header: getString('createdAt'),
       accessor: 'createdAt',
-      Cell: ({ value }: CellProps<Agent>) => (
+      Cell: ({ value }: CellProps<AgentDisplay>) => (
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
           {value}
         </Text>
@@ -245,7 +278,7 @@ export default function AgentOnboardingView(): React.ReactElement {
     {
       Header: getString('actions'),
       id: 'actions',
-      Cell: ({ row }: CellProps<Agent>) => (
+      Cell: ({ row }: CellProps<AgentDisplay>) => (
         <Layout.Horizontal spacing="medium">
           <Text
             className={css.actionLink}
@@ -290,7 +323,13 @@ export default function AgentOnboardingView(): React.ReactElement {
               />
             </Container>
 
-            {agents.length > 0 && (
+            {agentsLoading ? (
+              <Container className={css.tableContainer}>
+                <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_600}>
+                  Loading agents...
+                </Text>
+              </Container>
+            ) : agents.length > 0 ? (
               <Container className={css.tableContainer}>
                 <Text
                   font={{ variation: FontVariation.H5 }}
@@ -299,11 +338,17 @@ export default function AgentOnboardingView(): React.ReactElement {
                 >
                   {getString('onboardedAgents')}
                 </Text>
-                <TableV2<Agent>
+                <TableV2<AgentDisplay>
                   columns={columns}
                   data={agents}
                   className={css.agentsTable}
                 />
+              </Container>
+            ) : (
+              <Container className={css.tableContainer}>
+                <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_600}>
+                  No agents registered yet. Click &quot;New Agent&quot; to get started.
+                </Text>
               </Container>
             )}
           </Layout.Vertical>
