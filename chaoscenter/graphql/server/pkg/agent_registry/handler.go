@@ -73,15 +73,15 @@ func (h *Handler) RegisterAgent(ctx context.Context, input model.RegisterAgentIn
 	}
 
 	// Attempt Langfuse sync (non-blocking, best effort)
-	syncStatus := model.LangfuseSyncStatusSkipped
+	syncStatus := model.SyncStatusSkipped
 	
 	if agent.LangfuseConfig != nil && agent.LangfuseConfig.SyncEnabled {
 		syncErr := h.service.SyncToLangfuse(ctx, agent)
 		if syncErr != nil {
 			logrus.WithFields(logFields).WithError(syncErr).Warn("langfuse sync failed")
-			syncStatus = model.LangfuseSyncStatusFailed
+			syncStatus = model.SyncStatusFailed
 		} else {
-			syncStatus = model.LangfuseSyncStatusSuccess
+			syncStatus = model.SyncStatusSuccess
 		}
 	}
 
@@ -506,8 +506,7 @@ func (h *Handler) SyncAgentToLangfuse(ctx context.Context, id string) (*model.Sy
 
 	if err != nil {
 		logrus.WithFields(logFields).WithError(err).Warn("failed to sync agent to Langfuse")
-		errMsg := err.Error()
-		response.Message = &errMsg
+		response.Message = err.Error()
 	} else {
 		// Add sync timestamp if successful
 		if agent.LangfuseConfig != nil && agent.LangfuseConfig.LastSyncedAt != nil {
@@ -518,8 +517,7 @@ func (h *Handler) SyncAgentToLangfuse(ctx context.Context, id string) (*model.Sy
 			now := strconv.FormatInt(time.Now().Unix(), 10)
 			response.SyncedAt = &now
 		}
-		successMsg := "agent synced to Langfuse successfully"
-		response.Message = &successMsg
+		response.Message = "agent synced to Langfuse successfully"
 		logrus.WithFields(logFields).Info("agent synced to Langfuse successfully")
 	}
 
