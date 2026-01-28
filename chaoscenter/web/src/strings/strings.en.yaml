@@ -87,6 +87,7 @@ chaosController: Chaos Controller
 chaosEnableFailed: Failed to register the chaos enablement job, please contact support
 chaosEngineName: ChaosEngine Name
 chaosEngineResult: Chaos Engine Result
+capabilities: Capabilities
 chaosExperiment: Chaos Experiment
 chaosExperiments: Chaos Experiments
 chaosFaults: Chaos Faults
@@ -123,6 +124,7 @@ chaoshubs: ChaosHubs
 agentOnboarding: Agent Onboarding
 newAgent: New Agent
 onboardedAgents: List of Onboarded Agents
+deleteAgent: Delete Agent
 onboardedApplications: List of Onboarded Applications
 actions: Actions
 appsOnboarding: Apps Onboarding
@@ -584,7 +586,7 @@ leaveProjectDescription: Are you sure you want to leave the project?
 leaveThisPage: Leave this Page
 letsGetStarted: Let`s get started
 litmus: AgentCert
-litmusChaos: AgentCert
+litmusChaos: Litmus Chaos
 litmuschaos: agentcert
 loading: Loading, please wait...
 local: Locally in AgentCert

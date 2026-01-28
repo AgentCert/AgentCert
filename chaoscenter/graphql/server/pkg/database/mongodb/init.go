@@ -85,16 +85,20 @@ func MongoConnection() (*mongo.Client, error) {
 		dbPassword = utils.Config.DbPassword
 	)
 
-	if dbServer == "" || dbUser == "" || dbPassword == "" {
-		return nil, errors.New("DB configuration failed")
+	if dbServer == "" {
+		return nil, errors.New("DB_SERVER configuration is required")
 	}
 
-	credential := options.Credential{
-		Username: dbUser,
-		Password: dbPassword,
+	clientOptions := options.Client().ApplyURI(dbServer)
+	
+	// Only set auth if credentials are provided
+	if dbUser != "" && dbPassword != "" {
+		credential := options.Credential{
+			Username: dbUser,
+			Password: dbPassword,
+		}
+		clientOptions = clientOptions.SetAuth(credential)
 	}
-
-	clientOptions := options.Client().ApplyURI(dbServer).SetAuth(credential)
 
 	client, err := mongo.Connect(backgroundContext, clientOptions)
 	if err != nil {
@@ -339,7 +343,7 @@ func (m *MongoClient) initAllCollection() {
 				{Key: "name", Value: 1},
 			},
 			Options: options.Index().SetUnique(true).SetPartialFilterExpression(bson.D{{
-				Key: "status", Value: bson.D{{Key: "$ne", Value: "DEREGISTERED"}},
+				Key: "status", Value: "REGISTERED",
 			}}),
 		},
 		{

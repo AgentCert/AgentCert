@@ -8,8 +8,8 @@ type Configuration struct {
 	Version                     string   `required:"true"`
 	InfraDeployments            string   `required:"true" split_words:"true"`
 	DbServer                    string   `required:"true" split_words:"true"`
-	DbUser                      string   `required:"true" split_words:"true"`
-	DbPassword                  string   `required:"true" split_words:"true"`
+	DbUser                      string   `split_words:"true"`
+	DbPassword                  string   `split_words:"true"`
 	SubscriberImage             string   `required:"true" split_words:"true"`
 	EventTrackerImage           string   `required:"true" split_words:"true"`
 	ArgoWorkflowControllerImage string   `required:"true" split_words:"true"`
