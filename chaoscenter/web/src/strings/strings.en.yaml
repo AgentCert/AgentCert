@@ -121,13 +121,13 @@ chaosResults: Chaos Results
 chaosStudio: Chaos Studio
 chaoshubDisconnectedWillSync: ChaosHub is disconnected, will attempt to sync
 chaoshubs: ChaosHubs
-agentOnboarding: Agent Onboarding
+agentOnboarding: Agents
 newAgent: New Agent
 onboardedAgents: List of Onboarded Agents
 deleteAgent: Delete Agent
 onboardedApplications: List of Onboarded Applications
 actions: Actions
-appsOnboarding: Apps Onboarding
+appsOnboarding: Applications
 newApplication: New Application
 onboardYourApp: Onboard Your Application
 onboardAppUsingKubernetesManifest: Onboard app using Kubernetes Manifest
