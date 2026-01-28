@@ -154,6 +154,15 @@ func main() {
 	router.GET("/icon/:projectId/:hubName/:chartName/:iconName", handler2.ChaosHubIconHandler())
 	router.GET("/icon/default/:hubName/:chartName/:iconName", handler2.DefaultChaosHubIconHandler())
 
+	// Helm chart routers
+	router.POST("/api/helm/install", handlers.HelmChartUploadHandler(mongodb.MgoClient))
+	router.DELETE("/api/helm/uninstall", handlers.HelmChartUninstallHandler(mongodb.MgoClient))
+	router.GET("/api/helm/releases", handlers.HelmChartListHandler(mongodb.MgoClient))
+
+	// Port-forward routers
+	router.POST("/api/port-forward/start", handlers.PortForwardHandler(mongodb.MgoClient))
+	router.POST("/api/port-forward/stop", handlers.StopPortForwardHandler(mongodb.MgoClient))
+
 	//general routers
 	router.GET("/status", handlers.StatusHandler())
 	router.GET("/readiness", handlers.ReadinessHandler())
