@@ -5,7 +5,7 @@ Provides async/sync MongoDB client with Atlas Vector Search support.
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -172,69 +172,26 @@ class MongoDBClient:
 
     def initialize_collections(self) -> Dict[str, bool]:
         """
-        Initialize all collections with proper indexes.
-
+        Initialize metrics collection with proper indexes.
+        All data (quantitative and qualitative) is stored in a single collection
+        as nested documents for each agent run.
         Returns:
-            Dict mapping collection names to success status.
+            Dict mapping collection name to success status.
         """
         results = {}
 
-        # Initialize quantitative collection
-        results["quantitative"] = self._init_quantitative_collection()
+        # Create collection if it doesn't exist
+        existing_collections = self.sync_db.list_collection_names()
+        if self.config.metrics_collection not in existing_collections:
+            self.sync_db.create_collection(self.config.metrics_collection)
 
-        # Initialize qualitative collection
-        results["qualitative"] = self._init_qualitative_collection()
+            # Initialize combined metrics collection (single source of truth)
+            results["metrics"] = self._init_metrics_collection()
 
-        # Initialize combined metrics collection
-        results["metrics"] = self._init_metrics_collection()
+        else:
+            logger.info("Metrics collection already exists, skipping initialization.")
 
         return results
-
-    def _init_quantitative_collection(self) -> bool:
-        """Initialize LLMQuantitativeExtraction collection with indexes."""
-        try:
-            collection = self.sync_db[self.config.quantitative_collection]
-
-            # Create indexes
-            collection.create_index(
-                [("session_id", ASCENDING)], unique=True, sparse=True
-            )
-            collection.create_index([("extraction_timestamp", DESCENDING)])
-            collection.create_index(
-                [("namespace", ASCENDING), ("deployment_name", ASCENDING)]
-            )
-            collection.create_index([("detection_accuracy", ASCENDING)])
-            collection.create_index([("submission_status", ASCENDING)])
-            collection.create_index([("fault_target_service", ASCENDING)])
-
-            logger.info(
-                f"Initialized collection: {self.config.quantitative_collection}"
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Failed to initialize quantitative collection: {e}")
-            return False
-
-    def _init_qualitative_collection(self) -> bool:
-        """Initialize LLMQualitativeExtraction collection with indexes."""
-        try:
-            collection = self.sync_db[self.config.qualitative_collection]
-
-            # Create indexes
-            collection.create_index(
-                [("session_id", ASCENDING)], unique=True, sparse=True
-            )
-            collection.create_index([("extraction_timestamp", DESCENDING)])
-            collection.create_index([("rai_check_status", ASCENDING)])
-            collection.create_index([("security_compliance_status", ASCENDING)])
-            collection.create_index([("reasoning_score", DESCENDING)])
-            collection.create_index([("trajectory_efficiency_score", DESCENDING)])
-
-            logger.info(f"Initialized collection: {self.config.qualitative_collection}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to initialize qualitative collection: {e}")
-            return False
 
     def _init_metrics_collection(self) -> bool:
         """Initialize combined metrics collection with indexes."""
@@ -245,12 +202,18 @@ class MongoDBClient:
             collection.create_index(
                 [("session_id", ASCENDING)], unique=True, sparse=True
             )
-            collection.create_index([("extraction_timestamp", DESCENDING)])
             collection.create_index(
-                [("namespace", ASCENDING), ("deployment_name", ASCENDING)]
+                [
+                    ("quantitative.namespace", ASCENDING),
+                    ("quantitative.deployment_name", ASCENDING),
+                ]
             )
-            collection.create_index([("quantitative.detection_accuracy", ASCENDING)])
+            collection.create_index([("quantitative.fault_type", ASCENDING)])
             collection.create_index([("qualitative.reasoning_score", DESCENDING)])
+            collection.create_index([("qualitative.rai_check_status", ASCENDING)])
+            collection.create_index(
+                [("qualitative.acceptance_criteria_met", ASCENDING)]
+            )
 
             logger.info(f"Initialized collection: {self.config.metrics_collection}")
             return True
@@ -331,7 +294,7 @@ class MongoDBClient:
             doc = dict(data)
 
         # Add metadata
-        doc["extraction_timestamp"] = datetime.utcnow()
+        doc["extraction_timestamp"] = datetime.now(timezone.utc)
 
         # Add embedding if provided
         if embedding:
@@ -707,14 +670,23 @@ def initialize_mongodb() -> Dict[str, bool]:
 
 
 if __name__ == "__main__":
-    # Test MongoDB connection and initialization
+    # Test MongoDB connection, initialization, insert, and delete
     print("Testing MongoDB connection...")
 
-    client = MongoDBClient()
+    from utils.load_config import ConfigLoader
 
-    if client.health_check():
+    mongo_config = MongoDBConfig(ConfigLoader.load_config())
+    client = MongoDBClient(mongo_config)
+
+    try:
+        if not client.health_check():
+            print("❌ MongoDB connection failed")
+            print("Make sure MongoDB is running and MONGODB_CONNECTION_STRING is set")
+            exit(1)
+
         print("✅ MongoDB connection successful")
 
+        # Initialize collections
         print("\nInitializing collections...")
         results = client.initialize_collections()
 
@@ -722,12 +694,107 @@ if __name__ == "__main__":
             status = "✅" if success else "❌"
             print(f"  {status} {collection}")
 
-        print("\nMetrics summary:")
+        # Create sample metrics data
+        print("\n📝 Creating sample metrics document...")
+
+        session_id = (
+            f"test_session_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        )
+
+        quantitative_data = {
+            "namespace": "production",
+            "deployment_name": "api-gateway-v1",
+            "detection_accuracy": "HIGH",
+            "fault_target_service": "payment-service",
+            "submission_status": "SUCCESS",
+            "chaos_experiment_name": "pod-delete-test",
+            "hypothesis_validation": "VALIDATED",
+        }
+
+        qualitative_data = {
+            "rai_check_status": "PASS",
+            "security_compliance_status": "COMPLIANT",
+            "reasoning_score": 0.92,
+            "trajectory_efficiency_score": 0.87,
+            "observability_score": 0.89,
+            "error_handling_quality": "EXCELLENT",
+        }
+
+        metadata = {
+            "agent_version": "1.0.0",
+            "environment": "test",
+            "test_duration_seconds": 45,
+            "operator": "test_script",
+        }
+
+        # Insert the metrics document
+        doc_id = client.insert_metrics(
+            quantitative=quantitative_data,
+            qualitative=qualitative_data,
+            session_id=session_id,
+            metadata=metadata,
+        )
+
+        print(f"✅ Inserted metrics document with ID: {doc_id}")
+        print(f"   Session ID: {session_id}")
+
+        # Verify the document was inserted
+        print("\n🔍 Verifying document insertion...")
+        collection = client.sync_db[client.config.metrics_collection]
+        inserted_doc = collection.find_one({"session_id": session_id})
+
+        if inserted_doc:
+            print(f"✅ Document found in database")
+            print(
+                f"   Quantitative metrics: {list(inserted_doc['quantitative'].keys())}"
+            )
+            print(f"   Qualitative metrics: {list(inserted_doc['qualitative'].keys())}")
+            print(f"   Metadata: {inserted_doc.get('metadata', {})}")
+        else:
+            print("❌ Document not found after insertion")
+
+        # Get metrics summary
+        print("\n📊 Metrics summary:")
         summary = client.get_metrics_summary()
         for key, value in summary.items():
-            print(f"  {key}: {value}")
-    else:
-        print("❌ MongoDB connection failed")
-        print("Make sure MongoDB is running and MONGODB_CONNECTION_STRING is set")
+            if key != "collections":
+                print(f"   {key}: {value}")
 
-    client.close()
+        # Delete the test document
+        print(f"\n🗑️  Deleting test document (session_id: {session_id})...")
+        delete_result = collection.delete_one({"session_id": session_id})
+
+        if delete_result.deleted_count > 0:
+            print(
+                f"✅ Document deleted successfully (deleted {delete_result.deleted_count} document)"
+            )
+        else:
+            print("❌ Document deletion failed - no documents matched")
+
+        # Verify deletion
+        print("\n🔍 Verifying document deletion...")
+        deleted_doc = collection.find_one({"session_id": session_id})
+
+        if deleted_doc is None:
+            print("✅ Document successfully removed from database")
+        else:
+            print("❌ Document still exists in database")
+
+        # Final summary
+        print("\n📊 Final metrics summary:")
+        final_summary = client.get_metrics_summary()
+        for key, value in final_summary.items():
+            if key != "collections":
+                print(f"   {key}: {value}")
+
+        print("\n✅ Test completed successfully!")
+
+    except Exception as e:
+        print(f"\n❌ Error during test: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+    finally:
+        client.close()
+        print("\n🔌 MongoDB connection closed")

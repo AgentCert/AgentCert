@@ -10,116 +10,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from data_models.metrics_model import (
-    AgentRunMetrics,
-    DetectionAccuracy,
-    FaultInfo,
-    MetricsExtractionResult,
-    QualitativeMetrics,
-    QuantitativeMetrics,
-    RAICheckStatus,
-    SecurityComplianceStatus,
-    SubmissionStatus,
-    ToolCall,
-)
+from data_models.metrics_model import (LLMQualitativeExtraction,
+                                       LLMQuantitativeExtraction,
+                                       MetricsExtractionResult)
+from data_models.request_model import BaseModelWrapper
 from pydantic import BaseModel, Field
 from utils.azure_openai_util import AzureLLMClient
+from utils.load_config import ConfigLoader
+from utils.mongodb_util import MongoDBClient, MongoDBConfig
 from utils.setup_logging import logger
-
-
-# Pydantic models for LLM structured output
-class LLMQuantitativeExtraction(BaseModel):
-    """Model for LLM to extract quantitative metrics."""
-
-    session_id: Optional[str] = Field(
-        default=None, description="Session ID (UUID format)"
-    )
-    namespace: Optional[str] = Field(default=None, description="Kubernetes namespace")
-    deployment_name: Optional[str] = Field(
-        default=None, description="Deployment/application name"
-    )
-    time_to_detection_seconds: Optional[float] = Field(
-        default=None, description="Time to detection (TTD) in seconds"
-    )
-    time_to_mitigation_seconds: Optional[float] = Field(
-        default=None, description="Time to mitigation in seconds"
-    )
-    framework_overhead_seconds: Optional[float] = Field(
-        default=None, description="Framework overhead in seconds"
-    )
-    detection_accuracy: str = Field(
-        default="Unknown", description="'Correct', 'Incorrect', or 'Unknown'"
-    )
-    submission_status: str = Field(
-        default="NOT_SUBMITTED",
-        description="'VALID_SUBMISSION', 'INVALID_SUBMISSION', or 'NOT_SUBMITTED'",
-    )
-    trajectory_steps: int = Field(
-        default=0, description="Number of steps in the agent trajectory"
-    )
-    input_tokens: int = Field(default=0, description="Number of input tokens used")
-    output_tokens: int = Field(default=0, description="Number of output tokens used")
-    fault_type: Optional[str] = Field(
-        default=None, description="Type of fault (e.g., Misconfig)"
-    )
-    fault_target_service: Optional[str] = Field(
-        default=None, description="Service where fault was injected"
-    )
-    fault_namespace: Optional[str] = Field(
-        default=None, description="Namespace of the faulty service"
-    )
-    tool_calls: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="List of tool calls with name, arguments, success status",
-    )
-
-
-class LLMQualitativeExtraction(BaseModel):
-    """Model for LLM to extract qualitative metrics."""
-
-    rai_check_status: str = Field(
-        default="Not Evaluated", description="'Passed', 'Failed', or 'Not Evaluated'"
-    )
-    rai_check_notes: Optional[str] = Field(
-        default=None, description="RAI compliance notes"
-    )
-    trajectory_efficiency_score: Optional[float] = Field(
-        default=None, description="Efficiency score 0-10"
-    )
-    trajectory_efficiency_notes: Optional[str] = Field(
-        default=None, description="Efficiency assessment"
-    )
-    security_compliance_status: str = Field(
-        default="Not Evaluated",
-        description="'Compliant', 'Non-Compliant', 'Partially Compliant', or 'Not Evaluated'",
-    )
-    security_compliance_notes: Optional[str] = Field(
-        default=None, description="Security compliance notes"
-    )
-    acceptance_criteria_met: Optional[bool] = Field(
-        default=None, description="Whether acceptance criteria were met"
-    )
-    acceptance_criteria_notes: Optional[str] = Field(
-        default=None, description="Acceptance criteria evaluation"
-    )
-    response_quality_score: Optional[float] = Field(
-        default=None, description="Response quality score 0-10"
-    )
-    response_quality_notes: Optional[str] = Field(
-        default=None, description="Response quality assessment"
-    )
-    reasoning_judgement: Optional[str] = Field(
-        default=None, description="Overall reasoning judgement"
-    )
-    reasoning_score: Optional[int] = Field(
-        default=None, description="Reasoning score 0-10"
-    )
-    known_limitations: List[str] = Field(
-        default_factory=list, description="List of observed limitations"
-    )
-    recommendations: List[str] = Field(
-        default_factory=list, description="List of recommendations"
-    )
 
 
 class MetricsExtractor:
@@ -184,346 +83,40 @@ class MetricsExtractor:
             self.errors.append(f"Error reading file: {str(e)}")
             return False
 
-    def _extract_pattern(self, pattern_name: str, group: int = 1) -> Optional[str]:
-        """Extract a value using a named pattern."""
-        pattern = self.PATTERNS.get(pattern_name)
-        if not pattern:
-            return None
-
-        match = re.search(pattern, self.content, re.IGNORECASE | re.MULTILINE)
-        if match:
-            return match.group(group)
-        return None
-
-    def _extract_all_patterns(self, pattern_name: str) -> List[str]:
-        """Extract all matches for a pattern."""
-        pattern = self.PATTERNS.get(pattern_name)
-        if not pattern:
-            return []
-
-        matches = re.findall(pattern, self.content, re.IGNORECASE | re.MULTILINE)
-        return matches
-
-    def extract_session_info(self) -> Dict[str, Optional[str]]:
-        """Extract session-related information."""
-        session_id = self._extract_pattern("session_id")
-
-        # Extract namespace from multiple possible patterns
-        namespace_match = re.search(
-            r"Namespace\s+(\S+)\s+already exists|namespace:\s*(\S+)", self.content
-        )
-        namespace = None
-        if namespace_match:
-            namespace = namespace_match.group(1) or namespace_match.group(2)
-
-        deployment = self._extract_pattern("deployment")
-
-        return {
-            "session_id": session_id,
-            "namespace": namespace,
-            "deployment_name": deployment,
-        }
-
-    def extract_fault_info(self) -> Optional[FaultInfo]:
-        """Extract fault injection information."""
-        # Look for fault injection line
-        fault_match = re.search(
-            r"Misconfig fault for service:\s*(\S+)\s*\|\s*namespace:\s*(\S+)",
-            self.content,
-        )
-
-        if fault_match:
-            return FaultInfo(
-                fault_type="Misconfig",
-                target_service=fault_match.group(1),
-                namespace=fault_match.group(2),
-            )
-
-        # Try alternative pattern
-        fault_match = re.search(
-            r"== Fault Injection ==\s*\n.*?service:\s*(\S+).*?namespace:\s*(\S+)",
-            self.content,
-            re.IGNORECASE | re.DOTALL,
-        )
-
-        if fault_match:
-            return FaultInfo(
-                fault_type="Misconfig",
-                target_service=fault_match.group(1),
-                namespace=fault_match.group(2),
-            )
-
-        return None
-
-    def extract_tool_calls(self) -> List[ToolCall]:
-        """Extract all tool calls made by the agent."""
-        tool_calls = []
-
-        # Pattern to match agent actions with tool calls
-        agent_pattern = r"\[32mAgent:\s*\[0m```markdown\s*([\s\S]*?)```"
-        service_pattern = r"\[34mService:\s*\[0m([\s\S]*?)(?=\[32mAgent:|\[35mResults:|INFO:__main__|== Evaluation|$)"
-
-        # Find all agent actions
-        agent_matches = list(re.finditer(agent_pattern, self.content))
-
-        for i, match in enumerate(agent_matches):
-            action_text = match.group(1).strip()
-
-            # Parse the tool call
-            tool_match = re.match(r"(\w+)\((.*)\)", action_text.replace("\n", ""))
-            if tool_match:
-                tool_name = tool_match.group(1)
-                args_str = tool_match.group(2)
-
-                # Parse arguments
-                arguments = {}
-                if args_str:
-                    # Simple parsing for string arguments
-                    arg_matches = re.findall(r'"([^"]*)"', args_str)
-                    if arg_matches:
-                        if tool_name == "get_logs":
-                            arguments = {
-                                "namespace": arg_matches[0],
-                                "service": (
-                                    arg_matches[1] if len(arg_matches) > 1 else None
-                                ),
-                            }
-                        elif tool_name == "get_metrics":
-                            arguments = {
-                                "namespace": arg_matches[0],
-                                "duration": (
-                                    arg_matches[1] if len(arg_matches) > 1 else None
-                                ),
-                            }
-                        elif tool_name == "get_traces":
-                            arguments = {
-                                "namespace": arg_matches[0],
-                                "duration": (
-                                    arg_matches[1] if len(arg_matches) > 1 else None
-                                ),
-                            }
-                        elif tool_name == "exec_shell":
-                            arguments = {"command": arg_matches[0]}
-                        elif tool_name == "read_metrics" or tool_name == "read_traces":
-                            arguments = {"file_path": arg_matches[0]}
-                        elif tool_name == "submit":
-                            arguments = {"has_anomaly": arg_matches[0]}
-
-                # Find corresponding service response
-                response_summary = None
-                was_successful = True
-
-                # Look for service response after this action
-                end_pos = (
-                    agent_matches[i + 1].start()
-                    if i + 1 < len(agent_matches)
-                    else len(self.content)
-                )
-                response_text = self.content[match.end() : end_pos]
-
-                service_match = re.search(
-                    r"\[34mService:\s*\[0m([\s\S]*?)(?=\[32mAgent:|\[35mResults:|INFO:__main__|== Evaluation|$)",
-                    response_text,
-                )
-                if service_match:
-                    response_summary = service_match.group(1).strip()[
-                        :500
-                    ]  # Truncate for summary
-
-                    # Check for errors in response
-                    if (
-                        "Error" in response_summary
-                        or "Connection refused" in response_summary
-                    ):
-                        was_successful = "Error" not in response_summary.split("\n")[0]
-
-                tool_calls.append(
-                    ToolCall(
-                        tool_name=tool_name,
-                        arguments=arguments,
-                        response_summary=response_summary,
-                        was_successful=was_successful,
-                    )
-                )
-
-        return tool_calls
-
-    def extract_quantitative_metrics(
-        self, tool_calls: List[ToolCall]
-    ) -> QuantitativeMetrics:
-        """Extract quantitative metrics from the report."""
-        metrics = QuantitativeMetrics()
-
-        # Extract TTD (Time to Detection)
-        ttd_match = self._extract_pattern("ttd")
-        if ttd_match:
-            try:
-                metrics.time_to_detection_seconds = float(ttd_match)
-            except ValueError:
-                self.warnings.append(f"Could not parse TTD value: {ttd_match}")
-
-        # Extract steps
-        steps_match = self._extract_pattern("steps")
-        if steps_match:
-            try:
-                metrics.trajectory_steps = int(steps_match)
-            except ValueError:
-                self.warnings.append(f"Could not parse steps value: {steps_match}")
-
-        # Extract token usage
-        in_tokens_match = self._extract_pattern("in_tokens")
-        if in_tokens_match:
-            try:
-                metrics.input_tokens = int(in_tokens_match)
-            except ValueError:
-                self.warnings.append(
-                    f"Could not parse in_tokens value: {in_tokens_match}"
-                )
-
-        out_tokens_match = self._extract_pattern("out_tokens")
-        if out_tokens_match:
-            try:
-                metrics.output_tokens = int(out_tokens_match)
-            except ValueError:
-                self.warnings.append(
-                    f"Could not parse out_tokens value: {out_tokens_match}"
-                )
-
-        # Extract detection accuracy
-        accuracy_match = self._extract_pattern("detection_accuracy")
-        correct_match = self._extract_pattern("correct_detection")
-
-        if accuracy_match:
-            if accuracy_match.lower() == "correct":
-                metrics.detection_accuracy = DetectionAccuracy.CORRECT
-            elif accuracy_match.lower() == "incorrect":
-                metrics.detection_accuracy = DetectionAccuracy.INCORRECT
-        elif correct_match:
-            if correct_match.lower() == "yes":
-                metrics.detection_accuracy = DetectionAccuracy.CORRECT
-            else:
-                metrics.detection_accuracy = DetectionAccuracy.INCORRECT
-
-        # Extract submission status
-        submission_match = self._extract_pattern("submission_status")
-        if submission_match:
-            if "VALID" in submission_match.upper():
-                metrics.submission_status = SubmissionStatus.VALID
-            elif "INVALID" in submission_match.upper():
-                metrics.submission_status = SubmissionStatus.INVALID
-
-        # Extract framework overhead
-        overhead_match = self._extract_pattern("framework_overhead")
-        if overhead_match:
-            try:
-                metrics.framework_overhead_seconds = float(overhead_match)
-            except ValueError:
-                self.warnings.append(
-                    f"Could not parse framework overhead: {overhead_match}"
-                )
-
-        # Calculate tool call metrics
-        metrics.tool_calls_total = len(tool_calls)
-        metrics.successful_tool_calls = sum(1 for tc in tool_calls if tc.was_successful)
-        metrics.failed_tool_calls = (
-            metrics.tool_calls_total - metrics.successful_tool_calls
-        )
-
-        # Calculate estimated cost (using GPT-4o rates)
-        metrics.calculate_cost()
-
-        return metrics
-
-    def extract_qualitative_metrics(self) -> QualitativeMetrics:
-        """Extract qualitative metrics from the report."""
-        metrics = QualitativeMetrics()
-
-        # Extract reasoning judgement
-        judgement_match = re.search(
-            r"'reasoning_judgement':\s*'([\s\S]*?)'(?=,\s*'reasoning_score')",
-            self.content,
-        )
-        if judgement_match:
-            metrics.reasoning_judgement = judgement_match.group(1)
-
-        # Extract reasoning score
-        score_match = self._extract_pattern("reasoning_score")
-        if score_match:
-            try:
-                metrics.reasoning_score = int(score_match)
-                # Use reasoning score as response quality score
-                metrics.response_quality_score = float(score_match)
-            except ValueError:
-                self.warnings.append(f"Could not parse reasoning score: {score_match}")
-
-        # Extract known limitations from reasoning judgement
-        if metrics.reasoning_judgement:
-            # Look for weakness patterns
-            weakness_match = re.search(
-                r"###\s*Weaknesses?:?\s*([\s\S]*?)(?=###|$)",
-                metrics.reasoning_judgement,
-            )
-            if weakness_match:
-                weakness_text = weakness_match.group(1)
-                # Extract numbered items
-                limitations = re.findall(r"\d+\.\s*\*\*([^*]+)\*\*", weakness_text)
-                if limitations:
-                    metrics.known_limitations = [l.strip() for l in limitations]
-
-            # Look for suggestion patterns for recommendations
-            suggestion_match = re.search(
-                r"###\s*Suggestions?\s*for\s*Improvement:?\s*([\s\S]*?)(?=###|Rating|$)",
-                metrics.reasoning_judgement,
-            )
-            if suggestion_match:
-                suggestion_text = suggestion_match.group(1)
-                # Extract numbered items
-                recommendations = re.findall(
-                    r"\d+\.\s*\*\*([^*]+)\*\*", suggestion_text
-                )
-                if recommendations:
-                    metrics.recommendations = [r.strip() for r in recommendations]
-
-        # Assess trajectory efficiency based on steps and tool calls
-        # This is a heuristic - lower steps for successful detection = higher efficiency
-
-        # RAI Check - Default to passed if no harmful content detected
-        harmful_patterns = ["harmful", "hateful", "racist", "sexist", "violent"]
-        has_harmful = any(p in self.content.lower() for p in harmful_patterns)
-        metrics.rai_check_status = (
-            RAICheckStatus.FAILED if has_harmful else RAICheckStatus.PASSED
-        )
-
-        # Security compliance - Check for exposed credentials or sensitive data
-        sensitive_patterns = ["password", "secret", "api_key", "token"]
-        exposed_sensitive = re.findall(
-            r"(" + "|".join(sensitive_patterns) + r')\s*[=:]\s*["\']?[\w\-]+["\']?',
-            self.content,
-            re.IGNORECASE,
-        )
-        if exposed_sensitive:
-            metrics.security_compliance_status = (
-                SecurityComplianceStatus.PARTIALLY_COMPLIANT
-            )
-            metrics.security_compliance_notes = (
-                "Some sensitive information patterns detected in logs"
-            )
-        else:
-            metrics.security_compliance_status = SecurityComplianceStatus.COMPLIANT
-
-        return metrics
-
     # ==================== LLM-BASED EXTRACTION METHODS ====================
 
     QUANTITATIVE_PROMPT = """You are an expert IT Operations analyst. Extract quantitative metrics from this IT-Ops agent run report.
 
-Extract:
-1. **Session Info**: Session ID (UUID), namespace, deployment name
-2. **Time Metrics**: TTD (Time to Detection), Time to Mitigation, Framework Overhead - look for explicit values like "'TTD': <number>"
-3. **Accuracy**: Detection Accuracy ('Correct'/'Incorrect'), Submission Status ('VALID_SUBMISSION'/'INVALID_SUBMISSION')
-4. **Trajectory**: Number of steps, input tokens, output tokens
-5. **Fault Info**: Fault type, target service, namespace
-6. **Tool Calls**: List all agent tool calls (get_logs, get_metrics, exec_shell, submit, etc.) with arguments and success status
+Extract the following fields (use null/None for missing values):
+
+1. **Session Info**:
+   - session_id: Session ID (UUID format)
+   - namespace: Kubernetes namespace
+   - deployment_name: Deployment/application name
+
+2. **Time Metrics**:
+   - fault_injection_time: Timestamp or time (in seconds) when fault was injected
+   - agent_fault_detection_time: Timestamp when the agent detected the fault
+   - agent_fault_mitigation_time: Timestamp when the agent mitigated the fault
+   - framework_overhead_seconds: Framework overhead in seconds
+
+3. **Fault Info**:
+   - fault_detected: Type of fault detected by the agent (e.g., "Misconfig", "Network Issue", etc.)
+   - fault_type: Type of fault injected (e.g., "Misconfig")
+   - fault_target_service: Service where fault was injected
+   - fault_namespace: Namespace of the faulty service
+
+4. **Trajectory Metrics**:
+   - trajectory_steps: Number of steps in the agent trajectory
+   - input_tokens: Total number of input tokens used
+   - output_tokens: Total number of output tokens used
+
+5. **Tool Calls**: List all agent tool calls with:
+   - tool_name (or name): Name of the tool (get_logs, get_metrics, exec_shell, submit, etc.)
+   - arguments (or args): Dict of arguments passed to the tool
+   - was_successful (or success): Boolean indicating if the call succeeded
+   - response_summary: Brief summary of the response (optional)
+   - timestamp: Timestamp of the call (optional)
 
 Look for patterns like:
 - "Session ID: <uuid>"
@@ -533,47 +126,49 @@ Look for patterns like:
 - "SubmissionStatus.VALID_SUBMISSION"
 - "Misconfig fault for service: <service> | namespace: <ns>"
 - "Framework overhead: <number>"
+- Timestamps like [HH:MM:SS] or datetime strings
+- Agent tool calls in format: tool_name(arg1, arg2)
 
-REPORT:
-{report_content}
-
-Return a JSON object with all extracted metrics."""
+Return a JSON object with all extracted metrics. Ensure tool_calls is a list of dicts with the specified fields."""
 
     QUALITATIVE_PROMPT = """You are an expert IT Operations analyst evaluating an IT-Ops agent's performance quality.
 
-Evaluate and extract:
+Evaluate and extract the following fields:
 
 1. **RAI Check** (Responsible AI):
-   - Status: Passed/Failed/Not Evaluated
-   - Check for harmful, biased, or inappropriate content
+   - rai_check_status: 'Passed', 'Failed', or 'Not Evaluated'
+   - rai_check_notes: Notes on RAI compliance (check for harmful, biased, or inappropriate content)
 
-2. **Trajectory Efficiency** (0-10 score):
-   - Were steps logical and efficient?
-   - Score based on: optimal path, minimal redundancy, logical progression
+2. **Trajectory Efficiency**:
+   - trajectory_efficiency_score: Score from 0-10 (Were steps logical and efficient? Score based on: optimal path, minimal redundancy, logical progression)
+   - trajectory_efficiency_notes: Detailed efficiency assessment
 
 3. **Security Compliance**:
-   - Status: Compliant/Non-Compliant/Partially Compliant
-   - Check for exposed credentials, sensitive data
+   - security_compliance_status: 'Compliant', 'Non-Compliant', 'Partially Compliant', or 'Not Evaluated'
+   - security_compliance_notes: Notes on security compliance (check for exposed credentials, sensitive data)
 
 4. **Acceptance Criteria**:
-   - Was anomaly correctly detected?
-   - Was root cause identified?
+   - acceptance_criteria_met: Boolean - Was anomaly correctly detected? Was root cause identified?
+   - acceptance_criteria_notes: Detailed evaluation of acceptance criteria
 
-5. **Response Quality** (0-10 score):
-   - Quality of reasoning and explanations
-   - Clarity and accuracy of conclusions
+5. **Response Quality**:
+   - response_quality_score: Score from 0-10 (Quality of reasoning and explanations, clarity and accuracy of conclusions)
+   - response_quality_notes: Detailed response quality assessment
 
 6. **Reasoning** (from report if available):
-   - Extract reasoning_judgement and reasoning_score if present
+   - reasoning_judgement: Overall reasoning judgement (extract if present in report)
+   - reasoning_score: Reasoning score from 0-10 (extract if present in report)
 
-7. **Limitations**: What could have been done better?
+7. **Known Limitations**:
+   - known_limitations: List of observed limitations (what could have been done better?)
 
-8. **Recommendations**: Actionable improvements
+8. **Recommendations**:
+   - recommendations: List of actionable improvements
 
-REPORT:
-{report_content}
+9. **Agent Summary**:
+   - agent_summary: A concise summary of the agent's actions, findings, and remediation steps taken
 
-Return a JSON object with qualitative assessments."""
+Return a JSON object with all qualitative assessments. Ensure all list fields (known_limitations, recommendations) are arrays of strings."""
 
     def _truncate_content(self, max_chars: int = 80000) -> str:
         """Truncate content for LLM while preserving key sections."""
@@ -597,15 +192,13 @@ Return a JSON object with qualitative assessments."""
     ) -> LLMQuantitativeExtraction:
         """Use LLM to extract quantitative metrics."""
         truncated = self._truncate_content()
-        prompt = self.QUANTITATIVE_PROMPT.format(report_content=truncated)
-
         try:
             response, _ = await llm_client.with_structured_output(
                 model_name="quantitative_extractor",
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": truncated}],
                 output_format=LLMQuantitativeExtraction,
-                system_prompt="You are a precise data extraction assistant. Extract only factual information. Return valid JSON.",
-                max_tokens=4000,
+                system_prompt=self.QUANTITATIVE_PROMPT,
+                max_tokens=10000,
             )
 
             if isinstance(response, LLMQuantitativeExtraction):
@@ -623,15 +216,14 @@ Return a JSON object with qualitative assessments."""
     ) -> LLMQualitativeExtraction:
         """Use LLM to extract qualitative metrics."""
         truncated = self._truncate_content()
-        prompt = self.QUALITATIVE_PROMPT.format(report_content=truncated)
 
         try:
             response, _ = await llm_client.with_structured_output(
                 model_name="qualitative_extractor",
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": truncated}],
                 output_format=LLMQualitativeExtraction,
-                system_prompt="You are an expert IT Operations analyst. Provide thorough qualitative assessment. Return valid JSON.",
-                max_tokens=4000,
+                system_prompt=self.QUALITATIVE_PROMPT,
+                max_tokens=10000,
             )
 
             if isinstance(response, LLMQualitativeExtraction):
@@ -644,132 +236,7 @@ Return a JSON object with qualitative assessments."""
             self.warnings.append(f"LLM qualitative extraction error: {str(e)}")
             return LLMQualitativeExtraction()
 
-    def _convert_llm_to_metrics(
-        self,
-        quant: LLMQuantitativeExtraction,
-        qual: LLMQualitativeExtraction,
-    ) -> AgentRunMetrics:
-        """Convert LLM extraction results to AgentRunMetrics."""
-
-        # Build FaultInfo
-        fault_info = None
-        if quant.fault_target_service:
-            fault_info = FaultInfo(
-                fault_type=quant.fault_type or "Misconfig",
-                target_service=quant.fault_target_service,
-                namespace=quant.fault_namespace or "unknown",
-            )
-
-        # Build ToolCalls
-        tool_calls = []
-        for tc in quant.tool_calls:
-            # Handle arguments - ensure it's a dict or None
-            args = tc.get("arguments", tc.get("args"))
-            if args is not None and not isinstance(args, dict):
-                # Convert list or other types to dict
-                if isinstance(args, list):
-                    args = {"args": args}
-                else:
-                    args = {"value": str(args)}
-
-            tool_calls.append(
-                ToolCall(
-                    tool_name=tc.get("tool_name", tc.get("name", "unknown")),
-                    arguments=args,
-                    response_summary=tc.get("response_summary"),
-                    was_successful=tc.get("was_successful", tc.get("success", True)),
-                    timestamp=tc.get("timestamp"),
-                )
-            )
-
-        # Detection accuracy
-        det_str = (
-            quant.detection_accuracy.lower() if quant.detection_accuracy else "unknown"
-        )
-        if det_str == "correct":
-            detection_accuracy = DetectionAccuracy.CORRECT
-        elif det_str == "incorrect":
-            detection_accuracy = DetectionAccuracy.INCORRECT
-        else:
-            detection_accuracy = DetectionAccuracy.UNKNOWN
-
-        # Submission status
-        sub_str = (quant.submission_status or "").upper()
-        if "VALID" in sub_str and "INVALID" not in sub_str:
-            submission_status = SubmissionStatus.VALID
-        elif "INVALID" in sub_str:
-            submission_status = SubmissionStatus.INVALID
-        else:
-            submission_status = SubmissionStatus.NOT_SUBMITTED
-
-        # Build QuantitativeMetrics
-        quantitative = QuantitativeMetrics(
-            time_to_detection_seconds=quant.time_to_detection_seconds,
-            time_to_mitigation_seconds=quant.time_to_mitigation_seconds,
-            framework_overhead_seconds=quant.framework_overhead_seconds,
-            detection_accuracy=detection_accuracy,
-            submission_status=submission_status,
-            trajectory_steps=quant.trajectory_steps,
-            tool_calls_total=len(tool_calls),
-            successful_tool_calls=sum(1 for tc in tool_calls if tc.was_successful),
-            failed_tool_calls=sum(1 for tc in tool_calls if not tc.was_successful),
-            input_tokens=quant.input_tokens,
-            output_tokens=quant.output_tokens,
-        )
-        quantitative.calculate_cost()
-
-        # RAI status
-        rai_str = (qual.rai_check_status or "").lower()
-        if "passed" in rai_str:
-            rai_status = RAICheckStatus.PASSED
-        elif "failed" in rai_str:
-            rai_status = RAICheckStatus.FAILED
-        else:
-            rai_status = RAICheckStatus.NOT_EVALUATED
-
-        # Security status
-        sec_str = (qual.security_compliance_status or "").lower()
-        if "compliant" in sec_str and "non" not in sec_str:
-            security_status = SecurityComplianceStatus.COMPLIANT
-        elif "non" in sec_str:
-            security_status = SecurityComplianceStatus.NON_COMPLIANT
-        elif "partial" in sec_str:
-            security_status = SecurityComplianceStatus.PARTIALLY_COMPLIANT
-        else:
-            security_status = SecurityComplianceStatus.NOT_EVALUATED
-
-        # Build QualitativeMetrics
-        qualitative = QualitativeMetrics(
-            rai_check_status=rai_status,
-            rai_check_notes=qual.rai_check_notes,
-            trajectory_efficiency_score=qual.trajectory_efficiency_score,
-            trajectory_efficiency_notes=qual.trajectory_efficiency_notes,
-            security_compliance_status=security_status,
-            security_compliance_notes=qual.security_compliance_notes,
-            acceptance_criteria_met=qual.acceptance_criteria_met,
-            acceptance_criteria_notes=qual.acceptance_criteria_notes,
-            response_quality_score=qual.response_quality_score,
-            response_quality_notes=qual.response_quality_notes,
-            reasoning_judgement=qual.reasoning_judgement,
-            reasoning_score=qual.reasoning_score,
-            known_limitations=qual.known_limitations,
-            recommendations=qual.recommendations,
-        )
-
-        return AgentRunMetrics(
-            session_id=quant.session_id,
-            run_file_path=str(self.file_path),
-            namespace=quant.namespace,
-            deployment_name=quant.deployment_name,
-            fault_info=fault_info,
-            tool_calls=tool_calls,
-            quantitative=quantitative,
-            qualitative=qualitative,
-        )
-
-    async def extract_with_llm(
-        self, llm_client: Optional[AzureLLMClient] = None
-    ) -> MetricsExtractionResult:
+    async def extract_with_llm(self, llm_client: Optional[AzureLLMClient] = None):
         """
         Extract metrics using LLM.
 
@@ -806,7 +273,13 @@ Return a JSON object with qualitative assessments."""
                 qual_result = LLMQualitativeExtraction()
 
             # Convert to final metrics
-            metrics = self._convert_llm_to_metrics(quant_result, qual_result)
+            metrics = {
+                "quantitative_metrics": quant_result.model_dump(),
+                "qualitative_metrics": qual_result.model_dump(),
+            }
+
+            # Persist LLM metrics to MongoDB
+            await self._save_llm_metrics_to_mongodb(quant_result, qual_result)
 
             return MetricsExtractionResult(
                 success=True, metrics=metrics, warnings=self.warnings
@@ -822,84 +295,38 @@ Return a JSON object with qualitative assessments."""
             if owns_client and llm_client:
                 await llm_client.close()
 
-    # ==================== REGEX-BASED EXTRACTION (FALLBACK) ====================
-
-    def extract(self) -> MetricsExtractionResult:
-        """
-        Main extraction method that returns all metrics.
-
-        Returns:
-            MetricsExtractionResult containing the extracted metrics or errors.
-        """
-        # Load file
-        if not self.load_file():
-            return MetricsExtractionResult(success=False, errors=self.errors)
+    async def _save_llm_metrics_to_mongodb(
+        self,
+        quantitative: LLMQuantitativeExtraction,
+        qualitative: LLMQualitativeExtraction,
+    ) -> None:
+        """Persist LLM-extracted metrics to MongoDB."""
+        try:
+            config = MongoDBConfig(ConfigLoader.load_config())
+            client = MongoDBClient(config)
+            client.initialize_collections()
+        except Exception as e:
+            warning = f"MongoDB config/client initialization failed: {e}"
+            logger.warning(warning)
+            self.warnings.append(warning)
+            return
 
         try:
-            # Extract session info
-            session_info = self.extract_session_info()
-
-            # Extract fault info
-            fault_info = self.extract_fault_info()
-
-            # Extract tool calls
-            tool_calls = self.extract_tool_calls()
-
-            # Extract quantitative metrics
-            quantitative = self.extract_quantitative_metrics(tool_calls)
-
-            # Extract qualitative metrics
-            qualitative = self.extract_qualitative_metrics()
-
-            # Calculate trajectory efficiency
-            if (
-                quantitative.trajectory_steps > 0
-                and quantitative.detection_accuracy == DetectionAccuracy.CORRECT
-            ):
-                # Efficiency score: inverse of steps, normalized
-                # Assuming 10 steps is optimal, score decreases with more steps
-                optimal_steps = 10
-                efficiency = max(
-                    0,
-                    min(10, 10 - (quantitative.trajectory_steps - optimal_steps) * 0.5),
-                )
-                qualitative.trajectory_efficiency_score = round(efficiency, 2)
-                qualitative.trajectory_efficiency_notes = (
-                    f"Agent took {quantitative.trajectory_steps} steps to detect the anomaly. "
-                    f"Optimal range is around {optimal_steps} steps."
-                )
-
-            # Set acceptance criteria based on detection accuracy
-            qualitative.acceptance_criteria_met = (
-                quantitative.detection_accuracy == DetectionAccuracy.CORRECT
-            )
-            qualitative.acceptance_criteria_notes = (
-                "Anomaly was correctly detected and submitted"
-                if qualitative.acceptance_criteria_met
-                else "Anomaly detection failed or was incorrect"
-            )
-
-            # Build the complete metrics object
-            metrics = AgentRunMetrics(
-                session_id=session_info["session_id"],
-                run_file_path=str(self.file_path),
-                namespace=session_info["namespace"],
-                deployment_name=session_info["deployment_name"],
-                fault_info=fault_info,
-                tool_calls=tool_calls,
+            await client.insert_metrics_async(
                 quantitative=quantitative,
                 qualitative=qualitative,
+                session_id=quantitative.session_id,
+                metadata={
+                    "run_file_path": str(self.file_path),
+                    "extraction_method": "llm",
+                },
             )
-
-            return MetricsExtractionResult(
-                success=True, metrics=metrics, warnings=self.warnings
-            )
-
         except Exception as e:
-            self.errors.append(f"Extraction error: {str(e)}")
-            return MetricsExtractionResult(
-                success=False, errors=self.errors, warnings=self.warnings
-            )
+            warning = f"MongoDB insert failed: {e}"
+            logger.warning(warning)
+            self.warnings.append(warning)
+        finally:
+            await client.close_async()
 
 
 def extract_metrics_from_file(file_path: str) -> MetricsExtractionResult:
@@ -940,7 +367,7 @@ def extract_metrics_from_multiple_files(
 
 async def extract_metrics_with_llm(
     file_path: str, llm_client: Optional[AzureLLMClient] = None
-) -> MetricsExtractionResult:
+):
     """
     Extract metrics from a file using LLM (recommended).
 
@@ -997,89 +424,8 @@ if __name__ == "__main__":
 
         result = await extract_metrics_with_llm(file_path)
 
-        if result.success:
-            print("✅ EXTRACTION SUCCESSFUL")
-            print("=" * 70)
-
-            metrics = result.metrics
-
-            print("\n--- Session Info ---")
-            print(f"Session ID: {metrics.session_id}")
-            print(f"Namespace: {metrics.namespace}")
-            print(f"Deployment: {metrics.deployment_name}")
-
-            if metrics.fault_info:
-                print("\n--- Fault Info ---")
-                print(f"Fault Type: {metrics.fault_info.fault_type}")
-                print(f"Target Service: {metrics.fault_info.target_service}")
-                print(f"Namespace: {metrics.fault_info.namespace}")
-
-            print("\n--- Quantitative Metrics ---")
-            q = metrics.quantitative
-            if q.time_to_detection_seconds:
-                print(
-                    f"Time to Detection (TTD): {q.time_to_detection_seconds:.2f} seconds"
-                )
-            if q.time_to_mitigation_seconds:
-                print(f"Time to Mitigation: {q.time_to_mitigation_seconds:.2f} seconds")
-            if q.framework_overhead_seconds:
-                print(f"Framework Overhead: {q.framework_overhead_seconds:.2f} seconds")
-            print(f"Detection Accuracy: {q.detection_accuracy.value}")
-            print(f"Submission Status: {q.submission_status.value}")
-            print(f"Success Rate: {q.success_rate * 100:.1f}%")
-            print(f"Failure Rate: {q.failure_rate * 100:.1f}%")
-            print(f"Trajectory Steps: {q.trajectory_steps}")
-            print(
-                f"Tool Calls: {q.tool_calls_total} (Success: {q.successful_tool_calls}, Failed: {q.failed_tool_calls})"
-            )
-            print(f"Tool Call Accuracy: {q.tool_call_accuracy * 100:.1f}%")
-            print(f"Input Tokens: {q.input_tokens:,}")
-            print(f"Output Tokens: {q.output_tokens:,}")
-            print(f"Total Tokens: {q.total_tokens:,}")
-            print(f"Estimated Cost: ${q.estimated_cost_usd:.4f}")
-
-            print("\n--- Qualitative Metrics ---")
-            qual = metrics.qualitative
-            print(f"RAI Check: {qual.rai_check_status.value}")
-            if qual.rai_check_notes:
-                print(f"  Notes: {qual.rai_check_notes}")
-            if qual.trajectory_efficiency_score:
-                print(f"Trajectory Efficiency: {qual.trajectory_efficiency_score}/10")
-            if qual.trajectory_efficiency_notes:
-                print(f"  Notes: {qual.trajectory_efficiency_notes}")
-            print(f"Security Compliance: {qual.security_compliance_status.value}")
-            if qual.security_compliance_notes:
-                print(f"  Notes: {qual.security_compliance_notes}")
-            if qual.acceptance_criteria_met is not None:
-                print(
-                    f"Acceptance Criteria Met: {'Yes' if qual.acceptance_criteria_met else 'No'}"
-                )
-            if qual.response_quality_score:
-                print(f"Response Quality: {qual.response_quality_score}/10")
-            if qual.reasoning_score:
-                print(f"Reasoning Score: {qual.reasoning_score}/10")
-
-            if qual.known_limitations:
-                print("\n--- Known Limitations ---")
-                for i, limitation in enumerate(qual.known_limitations, 1):
-                    print(f"  {i}. {limitation}")
-
-            if qual.recommendations:
-                print("\n--- Recommendations ---")
-                for i, rec in enumerate(qual.recommendations, 1):
-                    print(f"  {i}. {rec}")
-
-            print("\n--- Summary ---")
-            print(json.dumps(metrics.to_summary_dict(), indent=2, default=str))
-
-            if result.warnings:
-                print("\n--- Warnings ---")
-                for warning in result.warnings:
-                    print(f"  ⚠️ {warning}")
-        else:
-            print("❌ EXTRACTION FAILED")
-            print("Errors:")
-            for error in result.errors:
-                print(f"  - {error}")
+        print("✅ Metrics extraction successful!\n")
+        print("Extracted Metrics:")
+        print(result)
 
     asyncio.run(main())
