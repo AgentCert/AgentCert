@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput } from '@harnessio/uicore';
+import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput, DropDown, SelectOption } from '@harnessio/uicore';
 import { Color, FontVariation } from '@harnessio/design-system';
 import { useLocation, useHistory } from 'react-router-dom';
 import type { Column, CellProps } from 'react-table';
@@ -7,6 +7,9 @@ import cx from 'classnames';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
 import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
+import { getScope } from '@utils';
+import { listEnvironment } from '@api/core/environments';
+import type { Environment } from '@api/entities';
 import css from './AppsOnboarding.module.scss';
 
 export enum OnboardingMethod {
@@ -52,8 +55,38 @@ export default function AppsOnboardingView(): React.ReactElement {
   const [selectedMethod, setSelectedMethod] = useState<OnboardingMethod | null>(null);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [cloudManagedUrl, setCloudManagedUrl] = useState<string>('');
+  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [applications, setApplications] = useState<Application[]>(mockApplications);
+  const scope = getScope();
+
+  // Fetch environments list
+  const { data: environmentsData, loading: environmentsLoading, error: environmentsError } = listEnvironment({
+    projectID: scope.projectID,
+    environmentIDs: [],
+    pagination: { page: 0, limit: 100 },
+    options: {
+      fetchPolicy: 'cache-and-network'
+    }
+  });
+
+  const environments: Environment[] = environmentsData?.listEnvironments?.environments || [];
+  const environmentOptions: SelectOption[] = environments.map(env => ({
+    label: env.name,
+    value: env.environmentID
+  }));
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('Environments Debug:', {
+      projectID: scope.projectID,
+      loading: environmentsLoading,
+      error: environmentsError,
+      data: environmentsData,
+      environments: environments.length,
+      options: environmentOptions.length
+    });
+  }, [environmentsData, environmentsLoading, environmentsError]);
 
   useDocumentTitle(getString('appsOnboarding'));
 
@@ -90,7 +123,10 @@ export default function AppsOnboardingView(): React.ReactElement {
 
   const handleOnboard = (): void => {
     if (selectedMethod && uploadedFile) {
-      showSuccess(`You have selected: ${getMethodLabel(selectedMethod)} with file: ${uploadedFile.name}`);
+      const environmentInfo = selectedMethod === OnboardingMethod.HELM_CHART && selectedEnvironment 
+        ? ` in environment: ${environments.find(env => env.environmentID === selectedEnvironment)?.name || selectedEnvironment}`
+        : '';
+      showSuccess(`You have selected: ${getMethodLabel(selectedMethod)} with file: ${uploadedFile.name}${environmentInfo}`);
     }
   };
 
@@ -126,7 +162,7 @@ export default function AppsOnboardingView(): React.ReactElement {
     
     switch (selectedMethod) {
       case OnboardingMethod.HELM_CHART:
-        return !uploadedFile || uploadedFile.method !== selectedMethod;
+        return !uploadedFile || uploadedFile.method !== selectedMethod || !selectedEnvironment;
       case OnboardingMethod.CLOUD_MANAGED:
         return !cloudManagedUrl.trim() || !uploadedFile || uploadedFile.method !== selectedMethod;
       default:
@@ -328,27 +364,62 @@ export default function AppsOnboardingView(): React.ReactElement {
                     </div>
                   </label>
                   {selectedMethod === option.value && (
-                    <div className={css.inputSection}>
-                      <TextInput
-                        placeholder={getTextboxPlaceholder(option.value)}
-                        value={getTextboxValue(option.value)}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextboxChange(option.value, e.target.value)}
-                        disabled={option.value === OnboardingMethod.HELM_CHART}
-                        className={css.urlTextbox}
-                      />
-                      <Button
-                        variation={ButtonVariation.SECONDARY}
-                        text={getString('upload')}
-                        icon="upload"
-                        onClick={handleUploadClick}
-                        className={css.uploadButton}
-                      />
-                      {uploadedFile && uploadedFile.method === option.value && (
-                        <Text font={{ variation: FontVariation.SMALL }} color={Color.GREEN_700} className={css.uploadedFileName}>
-                          ✓
-                        </Text>
+                    <Layout.Vertical spacing="medium" className={css.inputSection}>
+                      {/* First row: Upload filename and button */}
+                      <Layout.Horizontal spacing="medium" style={{ alignItems: 'center', justifyContent: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <TextInput
+                            placeholder={getTextboxPlaceholder(option.value)}
+                            value={getTextboxValue(option.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextboxChange(option.value, e.target.value)}
+                            disabled={option.value === OnboardingMethod.HELM_CHART}
+                            className={css.urlTextbox}
+                          />
+                        </div>
+                        <Button
+                          variation={ButtonVariation.SECONDARY}
+                          text={getString('upload')}
+                          icon="upload"
+                          onClick={handleUploadClick}
+                          className={css.uploadButton}
+                        />
+                        {uploadedFile && uploadedFile.method === option.value && (
+                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREEN_700} className={css.uploadedFileName}>
+                            ✓
+                          </Text>
+                        )}
+                      </Layout.Horizontal>
+                      
+                      {/* Second row: Environment dropdown (only for Helm Chart) */}
+                      {option.value === OnboardingMethod.HELM_CHART && (
+                        <div style={{ alignSelf: 'flex-start', width: '100%', maxWidth: '400px' }}>
+                          <Text font={{ variation: FontVariation.FORM_LABEL }} color={Color.GREY_800} style={{ marginBottom: '8px' }}>
+                            Select Environment
+                          </Text>
+                          {environmentsLoading ? (
+                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600}>
+                              Loading environments...
+                            </Text>
+                          ) : environmentsError ? (
+                            <Text font={{ variation: FontVariation.SMALL }} color={Color.RED_600}>
+                              Error loading environments
+                            </Text>
+                          ) : environments.length === 0 ? (
+                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600}>
+                              No environments found
+                            </Text>
+                          ) : (
+                            <DropDown
+                              value={selectedEnvironment}
+                              items={environmentOptions}
+                              onChange={(selectedOption: SelectOption) => setSelectedEnvironment(selectedOption.value as string)}
+                              placeholder="Choose an environment"
+                              disabled={environmentsLoading}
+                            />
+                          )}
+                        </div>
                       )}
-                    </div>
+                    </Layout.Vertical>
                   )}
                 </div>
               ))}
