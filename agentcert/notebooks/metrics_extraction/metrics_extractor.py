@@ -10,9 +10,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from data_models.metrics_model import (LLMQualitativeExtraction,
-                                       LLMQuantitativeExtraction,
-                                       MetricsExtractionResult)
+from data_models.metrics_model import (
+    LLMQualitativeExtraction,
+    LLMQuantitativeExtraction,
+    MetricsExtractionResult,
+)
 from data_models.request_model import BaseModelWrapper
 from pydantic import BaseModel, Field
 from utils.azure_openai_util import AzureLLMClient
@@ -170,71 +172,248 @@ Evaluate and extract the following fields:
 
 Return a JSON object with all qualitative assessments. Ensure all list fields (known_limitations, recommendations) are arrays of strings."""
 
-    def _truncate_content(self, max_chars: int = 80000) -> str:
-        """Truncate content for LLM while preserving key sections."""
-        if len(self.content) <= max_chars:
-            return self.content
+    def _iter_content_chunks(self, chunk_size: int = 80000) -> List[str]:
+        """Yield content in fixed-size chunks without truncating the file."""
+        if not self.content:
+            return []
 
-        # Preserve beginning (session info) and end (results/evaluation)
-        third = max_chars // 3
-        beginning = self.content[:third]
-        end = self.content[-third:]
-        middle_start = len(self.content) // 2 - third // 2
-        middle = self.content[middle_start : middle_start + third]
+        chunks = [
+            self.content[max(i - 100, 0) : i + chunk_size]
+            for i in range(0, len(self.content), chunk_size)
+        ]
+        if len(chunks) > 1:
+            self.warnings.append(
+                f"Content split into {len(chunks)} chunks of ~{chunk_size} chars"
+            )
+        return chunks
 
-        self.warnings.append(
-            f"Content truncated from {len(self.content)} to ~{max_chars} chars"
+    @staticmethod
+    def _merge_tool_calls(
+        base_calls: List[Dict[str, Any]],
+        new_calls: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Merge tool calls while avoiding obvious duplicates."""
+        merged = list(base_calls)
+        seen = set()
+        for call in merged:
+            try:
+                seen.add(json.dumps(call, sort_keys=True))
+            except TypeError:
+                seen.add(str(call))
+
+        for call in new_calls:
+            try:
+                key = json.dumps(call, sort_keys=True)
+            except TypeError:
+                key = str(call)
+            if key not in seen:
+                merged.append(call)
+                seen.add(key)
+        return merged
+
+    @staticmethod
+    def _merge_text(base: Optional[str], new: Optional[str]) -> Optional[str]:
+        """Merge text fields by appending new content if it differs."""
+        if not new:
+            return base
+        if not base:
+            return new
+        if new in base:
+            return base
+        return f"{base}\n{new}"
+
+    def _merge_quantitative(
+        self,
+        base: LLMQuantitativeExtraction,
+        new: LLMQuantitativeExtraction,
+    ) -> LLMQuantitativeExtraction:
+        """Merge quantitative extraction results, preferring non-default values."""
+        if base is None:
+            return new
+        if new is None:
+            return base
+
+        base.session_id = base.session_id or new.session_id
+        base.namespace = base.namespace or new.namespace
+        base.deployment_name = base.deployment_name or new.deployment_name
+        base.fault_injection_time = (
+            base.fault_injection_time or new.fault_injection_time
         )
-        return f"{beginning}\n\n[... truncated ...]\n\n{middle}\n\n[... truncated ...]\n\n{end}"
+        base.agent_fault_detection_time = (
+            base.agent_fault_detection_time or new.agent_fault_detection_time
+        )
+        base.agent_fault_mitigation_time = (
+            base.agent_fault_mitigation_time or new.agent_fault_mitigation_time
+        )
+        if base.framework_overhead_seconds is None:
+            base.framework_overhead_seconds = new.framework_overhead_seconds
+
+        if base.fault_detected in (None, "", "Unknown"):
+            if new.fault_detected not in (None, "", "Unknown"):
+                base.fault_detected = new.fault_detected
+
+        base.trajectory_steps = max(
+            base.trajectory_steps or 0, new.trajectory_steps or 0
+        )
+        base.input_tokens = max(base.input_tokens or 0, new.input_tokens or 0)
+        base.output_tokens = max(base.output_tokens or 0, new.output_tokens or 0)
+
+        base.fault_type = base.fault_type or new.fault_type
+        base.fault_target_service = (
+            base.fault_target_service or new.fault_target_service
+        )
+        base.fault_namespace = base.fault_namespace or new.fault_namespace
+
+        base.tool_calls = self._merge_tool_calls(base.tool_calls, new.tool_calls)
+        return base
+
+    def _merge_qualitative(
+        self,
+        base: LLMQualitativeExtraction,
+        new: LLMQualitativeExtraction,
+    ) -> LLMQualitativeExtraction:
+        """Merge qualitative extraction results, preferring non-default values."""
+        if base is None:
+            return new
+        if new is None:
+            return base
+
+        if base.rai_check_status in (None, "", "Not Evaluated"):
+            if new.rai_check_status not in (None, "", "Not Evaluated"):
+                base.rai_check_status = new.rai_check_status
+        base.rai_check_notes = self._merge_text(
+            base.rai_check_notes, new.rai_check_notes
+        )
+
+        if base.trajectory_efficiency_score is None:
+            base.trajectory_efficiency_score = new.trajectory_efficiency_score
+        base.trajectory_efficiency_notes = self._merge_text(
+            base.trajectory_efficiency_notes, new.trajectory_efficiency_notes
+        )
+
+        if base.security_compliance_status in (None, "", "Not Evaluated"):
+            if new.security_compliance_status not in (None, "", "Not Evaluated"):
+                base.security_compliance_status = new.security_compliance_status
+        base.security_compliance_notes = self._merge_text(
+            base.security_compliance_notes, new.security_compliance_notes
+        )
+
+        if base.acceptance_criteria_met is None:
+            base.acceptance_criteria_met = new.acceptance_criteria_met
+        elif (
+            base.acceptance_criteria_met is False
+            and new.acceptance_criteria_met is True
+        ):
+            base.acceptance_criteria_met = True
+        base.acceptance_criteria_notes = self._merge_text(
+            base.acceptance_criteria_notes, new.acceptance_criteria_notes
+        )
+
+        if base.response_quality_score is None:
+            base.response_quality_score = new.response_quality_score
+        base.response_quality_notes = self._merge_text(
+            base.response_quality_notes, new.response_quality_notes
+        )
+
+        base.reasoning_judgement = self._merge_text(
+            base.reasoning_judgement, new.reasoning_judgement
+        )
+        if base.reasoning_score is None:
+            base.reasoning_score = new.reasoning_score
+        elif new.reasoning_score is not None:
+            base.reasoning_score = max(base.reasoning_score, new.reasoning_score)
+
+        if new.known_limitations:
+            base.known_limitations = list(
+                dict.fromkeys(base.known_limitations + new.known_limitations)
+            )
+        if new.recommendations:
+            base.recommendations = list(
+                dict.fromkeys(base.recommendations + new.recommendations)
+            )
+
+        base.agent_summary = (
+            self._merge_text(base.agent_summary, new.agent_summary) or ""
+        )
+        return base
 
     async def extract_quantitative_with_llm(
         self, llm_client: AzureLLMClient
     ) -> LLMQuantitativeExtraction:
         """Use LLM to extract quantitative metrics."""
-        truncated = self._truncate_content()
-        try:
-            response, _ = await llm_client.with_structured_output(
-                model_name="quantitative_extractor",
-                messages=[{"role": "user", "content": truncated}],
-                output_format=LLMQuantitativeExtraction,
-                system_prompt=self.QUANTITATIVE_PROMPT,
-                max_tokens=10000,
-            )
+        chunks = self._iter_content_chunks()
+        if not chunks:
+            return LLMQuantitativeExtraction()
 
-            if isinstance(response, LLMQuantitativeExtraction):
-                return response
-            elif isinstance(response, dict):
-                return LLMQuantitativeExtraction.model_validate(response)
-            return LLMQuantitativeExtraction()
-        except Exception as e:
-            logger.error(f"LLM quantitative extraction failed: {e}")
-            self.warnings.append(f"LLM quantitative extraction error: {str(e)}")
-            return LLMQuantitativeExtraction()
+        merged = LLMQuantitativeExtraction()
+        total = len(chunks)
+        for index, chunk in enumerate(chunks, start=1):
+            try:
+                response, _ = await llm_client.with_structured_output(
+                    model_name="quantitative_extractor",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": f"Chunk {index} of {total}:\n{chunk}",
+                        }
+                    ],
+                    output_format=LLMQuantitativeExtraction,
+                    system_prompt=self.QUANTITATIVE_PROMPT,
+                    max_tokens=10000,
+                )
+
+                if isinstance(response, LLMQuantitativeExtraction):
+                    merged = self._merge_quantitative(merged, response)
+                elif isinstance(response, dict):
+                    merged = self._merge_quantitative(
+                        merged, LLMQuantitativeExtraction.model_validate(response)
+                    )
+            except Exception as e:
+                logger.error(f"LLM quantitative extraction failed (chunk {index}): {e}")
+                self.warnings.append(
+                    f"LLM quantitative extraction error (chunk {index}): {str(e)}"
+                )
+
+        return merged
 
     async def extract_qualitative_with_llm(
         self, llm_client: AzureLLMClient
     ) -> LLMQualitativeExtraction:
         """Use LLM to extract qualitative metrics."""
-        truncated = self._truncate_content()
-
-        try:
-            response, _ = await llm_client.with_structured_output(
-                model_name="qualitative_extractor",
-                messages=[{"role": "user", "content": truncated}],
-                output_format=LLMQualitativeExtraction,
-                system_prompt=self.QUALITATIVE_PROMPT,
-                max_tokens=10000,
-            )
-
-            if isinstance(response, LLMQualitativeExtraction):
-                return response
-            elif isinstance(response, dict):
-                return LLMQualitativeExtraction.model_validate(response)
+        chunks = self._iter_content_chunks()
+        if not chunks:
             return LLMQualitativeExtraction()
-        except Exception as e:
-            logger.error(f"LLM qualitative extraction failed: {e}")
-            self.warnings.append(f"LLM qualitative extraction error: {str(e)}")
-            return LLMQualitativeExtraction()
+
+        merged = LLMQualitativeExtraction()
+        total = len(chunks)
+        for index, chunk in enumerate(chunks, start=1):
+            try:
+                response, _ = await llm_client.with_structured_output(
+                    model_name="qualitative_extractor",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": f"Chunk {index} of {total}:\n{chunk}",
+                        }
+                    ],
+                    output_format=LLMQualitativeExtraction,
+                    system_prompt=self.QUALITATIVE_PROMPT,
+                    max_tokens=10000,
+                )
+
+                if isinstance(response, LLMQualitativeExtraction):
+                    merged = self._merge_qualitative(merged, response)
+                elif isinstance(response, dict):
+                    merged = self._merge_qualitative(
+                        merged, LLMQualitativeExtraction.model_validate(response)
+                    )
+            except Exception as e:
+                logger.error(f"LLM qualitative extraction failed (chunk {index}): {e}")
+                self.warnings.append(
+                    f"LLM qualitative extraction error (chunk {index}): {str(e)}"
+                )
+
+        return merged
 
     async def extract_with_llm(self, llm_client: Optional[AzureLLMClient] = None):
         """
@@ -426,6 +605,6 @@ if __name__ == "__main__":
 
         print("✅ Metrics extraction successful!\n")
         print("Extracted Metrics:")
-        print(result)
+        print(result.model_dump_json(indent=2))
 
     asyncio.run(main())
