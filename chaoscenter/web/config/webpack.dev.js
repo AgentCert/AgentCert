@@ -29,7 +29,7 @@ const devConfig = {
   devServer: {
     static: [path.join(process.cwd(), 'src/static')],
     historyApiFallback: true,
-    port: 3000,
+    port: 3001,
     server: {
       type: 'https',
       options: {
@@ -38,6 +38,36 @@ const devConfig = {
       }
     },
     proxy: {
+      '/api/validate-helm': {
+        target: process.env.CHAOS_MANAGER
+          ? process.env.CHAOS_MANAGER
+          : targetLocalHost
+          ? 'http://localhost:8080'
+          : `${baseUrl}`,
+        secure: false,
+        changeOrigin: true,
+        logLevel: 'info'
+      },
+      '/api/cleanup-helm': {
+        target: process.env.CHAOS_MANAGER
+          ? process.env.CHAOS_MANAGER
+          : targetLocalHost
+          ? 'http://localhost:8080'
+          : `${baseUrl}`,
+        secure: false,
+        changeOrigin: true,
+        logLevel: 'info'
+      },
+      '/api/apps': {
+        target: process.env.CHAOS_MANAGER
+          ? process.env.CHAOS_MANAGER
+          : targetLocalHost
+          ? 'http://localhost:8080'
+          : `${baseUrl}`,
+        secure: false,
+        changeOrigin: true,
+        logLevel: 'info'
+      },
       '/api': {
         pathRewrite: { '^/api': '' },
         target: process.env.CHAOS_MANAGER
@@ -54,7 +84,7 @@ const devConfig = {
         target: process.env.CHAOS_MANAGER
           ? process.env.CHAOS_MANAGER
           : targetLocalHost
-          ? 'http://localhost:3030'
+          ? 'http://localhost:3000'
           : `${baseUrl}/auth`,
         secure: false,
         changeOrigin: true,

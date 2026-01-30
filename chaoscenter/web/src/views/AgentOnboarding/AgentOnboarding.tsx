@@ -63,6 +63,15 @@ interface RadioOption {
 interface UploadedFile {
   name: string;
   method: OnboardingMethod;
+  file?: File;
+}
+
+// Validation status enum
+enum ValidationStatus {
+  IDLE = 'idle',
+  VALIDATING = 'validating',
+  SUCCESS = 'success',
+  FAILED = 'failed'
 }
 
 // Display format for agents table
@@ -89,6 +98,14 @@ export default function AgentOnboardingView(): React.ReactElement {
   const [faasUrl, setFaasUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDeploying, setIsDeploying] = useState<boolean>(false);
+  
+  // Validation state
+  const [validationStatus, setValidationStatus] = useState<ValidationStatus>(ValidationStatus.IDLE);
+  const [validationReleaseInfo, setValidationReleaseInfo] = useState<{
+    releaseName: string;
+    namespace: string;
+    chartName: string;
+  } | null>(null);
   
   // Helm form state
   const [helmForm, setHelmForm] = useState<HelmFormState>({
@@ -138,7 +155,10 @@ export default function AgentOnboardingView(): React.ReactElement {
     if (!agentsData?.listAgents?.agents) {
       return [];
     }
-    return agentsData.listAgents.agents.map((agent: ListedAgent) => ({
+    // Filter to only show agents with 'REGISTERED' status (exclude deleted)
+    return agentsData.listAgents.agents
+      .filter((agent: ListedAgent) => agent.status === 'REGISTERED')
+      .map((agent: ListedAgent) => ({
       id: agent.agentID,
       name: agent.name,
       namespace: agent.namespace || 'default',
@@ -214,6 +234,28 @@ export default function AgentOnboardingView(): React.ReactElement {
 
       setIsDeploying(true);
       try {
+        // First, cleanup the validated Helm release (if validation was done)
+        if (validationReleaseInfo?.releaseName) {
+          try {
+            // Call cleanup endpoint to uninstall helm release and delete namespace
+            const cleanupResponse = await fetch('/api/cleanup-helm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                releaseName: validationReleaseInfo.releaseName,
+                namespace: validationReleaseInfo.namespace
+              })
+            });
+            if (!cleanupResponse.ok) {
+              // Cleanup warning: Release might already be deleted
+            }
+          } catch (_cleanupError) {
+            // Cleanup warning - continue with onboarding even if cleanup fails
+            // Continue with onboarding even if cleanup fails
+          }
+        }
+
+        // Now save the agent metadata (deploy mutation will create fresh deployment)
         const result = await deployAgentWithHelm({
           projectID,
           request: {
@@ -228,7 +270,7 @@ export default function AgentOnboardingView(): React.ReactElement {
         });
 
         if (result.data?.deployAgentWithHelm) {
-          showSuccess(`Agent "${helmForm.agentName}" deployed successfully!`);
+          showSuccess(`Agent "${helmForm.agentName}" registered successfully!`);
           // Reset form and go back to list
           setHelmForm({
             agentName: '',
@@ -241,11 +283,13 @@ export default function AgentOnboardingView(): React.ReactElement {
           });
           setUploadedFile(null);
           setSelectedMethod(null);
+          setValidationStatus(ValidationStatus.IDLE);
+          setValidationReleaseInfo(null);
           refetchAgents();
           history.push({ search: '' });
         }
       } catch (error) {
-        showError(`Deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        showError(`Registration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
         setIsDeploying(false);
       }
@@ -255,25 +299,123 @@ export default function AgentOnboardingView(): React.ReactElement {
     }
   };
 
+  // Validate Helm chart by deploying to local Kubernetes cluster
+  const handleValidate = async (): Promise<void> => {
+    if (!uploadedFile?.file || selectedMethod !== OnboardingMethod.HELM_CHART) {
+      showError('Please upload a Helm chart (.tgz) file first');
+      return;
+    }
+
+    setValidationStatus(ValidationStatus.VALIDATING);
+
+    try {
+      // Create FormData to send the helm package to the backend
+      const formData = new FormData();
+      formData.append('helmPackage', uploadedFile.file);
+
+      // Call backend API to validate helm chart
+      const response = await fetch('/api/validate-helm', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setValidationStatus(ValidationStatus.SUCCESS);
+        // Store release info for cleanup during onboard
+        if (result.releaseName) {
+          setValidationReleaseInfo({
+            releaseName: result.releaseName,
+            namespace: result.namespace || 'default',
+            chartName: result.chartName || ''
+          });
+        }
+        showSuccess(getString('validatedSuccessfully'));
+      } else {
+        setValidationStatus(ValidationStatus.FAILED);
+        setValidationReleaseInfo(null);
+        showError(result.message || getString('validationFailed'));
+      }
+    } catch (error) {
+      setValidationStatus(ValidationStatus.FAILED);
+      setValidationReleaseInfo(null);
+      showError(getString('validationFailed'));
+    }
+  };
+
   const handleUploadClick = (): void => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = event.target.files?.[0];
     if (file && selectedMethod) {
-      setUploadedFile({ name: file.name, method: selectedMethod });
+      setUploadedFile({ name: file.name, method: selectedMethod, file: file });
+      // Reset validation when new file is uploaded
+      setValidationStatus(ValidationStatus.IDLE);
+      setValidationReleaseInfo(null);
       
-      // For Helm charts, read the file content
-      if (selectedMethod === OnboardingMethod.HELM_CHART) {
+      // For Helm charts (.tgz), extract values.yaml from the archive
+      if (selectedMethod === OnboardingMethod.HELM_CHART && file.name.endsWith('.tgz')) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+          
+          // Import pako dynamically for decompression
+          const pako = await import('pako');
+          const decompressed = pako.ungzip(uint8Array);
+          
+          // Parse tar file to find values.yaml
+          let yamlFound = '';
+          let offset = 0;
+          while (offset < decompressed.length) {
+            // Read tar header (512 bytes)
+            const header = decompressed.slice(offset, offset + 512);
+            if (header[0] === 0) break; // End of archive
+            
+            // Extract filename from header (first 100 bytes)
+            const nameBytes = header.slice(0, 100);
+            const name = new TextDecoder().decode(nameBytes).replace(/\0/g, '').trim();
+            
+            // Extract file size from header (bytes 124-135, octal)
+            const sizeBytes = header.slice(124, 136);
+            const sizeStr = new TextDecoder().decode(sizeBytes).replace(/\0/g, '').trim();
+            const size = parseInt(sizeStr, 8) || 0;
+            
+            // Check if this is values.yaml
+            if (name.endsWith('values.yaml') || name.endsWith('/values.yaml')) {
+              const content = decompressed.slice(offset + 512, offset + 512 + size);
+              yamlFound = new TextDecoder().decode(content);
+              break;
+            }
+            
+            // Move to next file (512-byte aligned)
+            offset += 512 + Math.ceil(size / 512) * 512;
+          }
+          
+          setHelmForm(prev => ({
+            ...prev,
+            valuesYaml: yamlFound || '# values.yaml not found in the chart',
+            helmReleaseName: prev.helmReleaseName || file.name.replace(/\.tgz$/i, '')
+          }));
+        } catch (_err) {
+          // Failed to extract YAML from tgz
+          setHelmForm(prev => ({
+            ...prev,
+            valuesYaml: '# Failed to extract values.yaml from the chart',
+            helmReleaseName: prev.helmReleaseName || file.name.replace(/\.tgz$/i, '')
+          }));
+        }
+      } else if (selectedMethod === OnboardingMethod.HELM_CHART) {
+        // For regular YAML files, read as text
         const reader = new FileReader();
         reader.onload = (e) => {
           const content = e.target?.result as string;
           setHelmForm(prev => ({
             ...prev,
             valuesYaml: content,
-            // Try to extract release name from filename
-            helmReleaseName: prev.helmReleaseName || file.name.replace(/\.(yaml|yml|tgz)$/i, '')
+            helmReleaseName: prev.helmReleaseName || file.name.replace(/\.(yaml|yml)$/i, '')
           }));
         };
         reader.readAsText(file);
@@ -295,7 +437,7 @@ export default function AgentOnboardingView(): React.ReactElement {
   const getAcceptedFileTypes = (method: OnboardingMethod): string => {
     switch (method) {
       case OnboardingMethod.HELM_CHART:
-        return '.yaml,.yml,.tgz';
+        return '.tgz';
       case OnboardingMethod.APIS:
         return '.yaml,.yml,.json';
       case OnboardingMethod.FAAS:
@@ -310,11 +452,13 @@ export default function AgentOnboardingView(): React.ReactElement {
     
     switch (selectedMethod) {
       case OnboardingMethod.HELM_CHART:
+        // Require validation success before onboarding
         return (
           !helmForm.agentName.trim() ||
           !helmForm.namespace.trim() ||
           !helmForm.helmReleaseName.trim() ||
-          helmForm.capabilities.length === 0
+          helmForm.capabilities.length === 0 ||
+          validationStatus !== ValidationStatus.SUCCESS
         );
       case OnboardingMethod.APIS:
         return !apiUrl.trim() || !uploadedFile || uploadedFile.method !== selectedMethod;
@@ -323,6 +467,13 @@ export default function AgentOnboardingView(): React.ReactElement {
       default:
         return true;
     }
+  };
+
+  const isValidateDisabled = (): boolean => {
+    if (selectedMethod !== OnboardingMethod.HELM_CHART) return true;
+    if (!uploadedFile || uploadedFile.method !== selectedMethod || !uploadedFile.file) return true;
+    if (validationStatus === ValidationStatus.VALIDATING) return true;
+    return false;
   };
 
   const getTextboxValue = (method: OnboardingMethod): string => {
@@ -754,11 +905,24 @@ export default function AgentOnboardingView(): React.ReactElement {
                 text={getString('back')}
                 icon="arrow-left"
                 onClick={handleBack}
-                disabled={isDeploying}
+                disabled={isDeploying || validationStatus === ValidationStatus.VALIDATING}
               />
+              {selectedMethod === OnboardingMethod.HELM_CHART && (
+                <Button
+                  variation={ButtonVariation.SECONDARY}
+                  text={validationStatus === ValidationStatus.VALIDATING ? getString('validating') : getString('validate')}
+                  icon={validationStatus === ValidationStatus.VALIDATING ? undefined : 'tick'}
+                  onClick={handleValidate}
+                  disabled={isValidateDisabled()}
+                  className={cx({
+                    [css.validateSuccess]: validationStatus === ValidationStatus.SUCCESS,
+                    [css.validateFailed]: validationStatus === ValidationStatus.FAILED
+                  })}
+                />
+              )}
               <Button
                 variation={ButtonVariation.PRIMARY}
-                text={isDeploying ? 'Deploying...' : getString('onboard')}
+                text={isDeploying ? 'Registering...' : getString('onboard')}
                 onClick={handleOnboard}
                 disabled={isOnboardDisabled()}
                 loading={isDeploying}
