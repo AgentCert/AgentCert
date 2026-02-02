@@ -22,5 +22,7 @@ litmus-portal/graphql-server/server
 
 **/client_id
 
+*/data/*
+data/*
 # Setup scripts for local development
 setup/
