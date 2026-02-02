@@ -37,7 +37,7 @@ export default function ChaosInfrastructureTypeThumbnail({
     {
       cardName: InfrastructureType.KUBERNETES,
       name: getString('kubernetes'),
-      iconName: 'chaos-litmuschaos' as IconName
+      iconName: 'service-kubernetes' as IconName
     }
   ];
 

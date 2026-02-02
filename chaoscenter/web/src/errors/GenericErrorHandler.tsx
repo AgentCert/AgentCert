@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link, useHistory } from 'react-router-dom';
 import { Layout, Heading, Text, Container } from '@harnessio/uicore';
-import { Icon } from '@harnessio/icons';
 import { useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
+import AgentCertLogo from '@components/AgentCertLogo';
 
 interface ErrorType {
   errorMessage?: string;
@@ -27,7 +27,7 @@ export function GenericErrorHandler({ errorMessage, errStatusCode, allowUserToGo
         ) : (
           <Link to={paths.toRoot()}>{getString('goChaosHome')}</Link>
         )}
-        <Icon name="chaos-litmuschaos" size={200} />
+        <AgentCertLogo size={200} />
       </Layout.Vertical>
     </Container>
   );
