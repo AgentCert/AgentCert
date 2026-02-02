@@ -87,6 +87,7 @@ chaosController: Chaos Controller
 chaosEnableFailed: Failed to register the chaos enablement job, please contact support
 chaosEngineName: ChaosEngine Name
 chaosEngineResult: Chaos Engine Result
+capabilities: Capabilities
 chaosExperiment: Chaos Experiment
 chaosExperiments: Chaos Experiments
 chaosFaults: Chaos Faults
@@ -120,6 +121,38 @@ chaosResults: Chaos Results
 chaosStudio: Chaos Studio
 chaoshubDisconnectedWillSync: ChaosHub is disconnected, will attempt to sync
 chaoshubs: ChaosHubs
+agentOnboarding: Agents
+newAgent: New Agent
+onboardedAgents: List of Onboarded Agents
+deleteAgent: Delete Agent
+onboardedApplications: List of Onboarded Applications
+actions: Actions
+appsOnboarding: Applications
+newApplication: New Application
+onboardYourApp: Onboard Your Application
+onboardAppUsingKubernetesManifest: Onboard app using Kubernetes Manifest
+onboardAppUsingKubernetesManifestDesc: Deploy your application using Kubernetes manifest files
+onboardAppUsingDockerImage: Onboard app using Docker Image
+onboardAppUsingDockerImageDesc: Containerize and deploy your application using Docker images
+onboardAppUsingHelmChart: Onboard app using Helm Chart
+onboardAppUsingHelmChartDesc: Deploy your application using Kubernetes Helm charts for easy installation
+onboardAppUsingCloudManaged: Onboard app using Cloud Managed Services
+onboardAppUsingCloudManagedDesc: Deploy your application using cloud-managed services like AWS, Azure, or GCP
+onboardYourAgent: Onboard Your Agent
+onboardUsingHelmChart: Onboard agent using Helm Chart
+onboardUsingHelmChartDesc: Deploy your agent using Kubernetes Helm charts for easy installation and management
+onboardUsingAPIs: Onboard agent using APIs
+onboardUsingAPIsDesc: Integrate your agent programmatically using our REST APIs
+onboardUsingFaaS: Onboard agent using Function as a Service
+onboardUsingFaaSDesc: Deploy your agent as serverless functions on cloud platforms
+onboard: Onboard
+upload: Upload
+uploadedSuccessfully: File uploaded successfully
+pleaseUploadFile: Please upload the required file to proceed
+uploadedFileName: Uploaded file name
+enterApiUrl: Enter API endpoint URL
+enterCloudManagedUrl: Enter Cloud Managed service URL
+enterFaasUrl: Enter Function as a Service URL
 checkConnection: Check Connection
 checkLogs: Check the Chaos Infrastructure Logs
 checkStatus: Check the status of your Chaos Infrastructure on your cluster
@@ -552,11 +585,11 @@ leaveProject: Leave Project
 leaveProjectDescription: Are you sure you want to leave the project?
 leaveThisPage: Leave this Page
 letsGetStarted: Let`s get started
-litmus: Litmus
-litmusChaos: LitmusChaos
-litmuschaos: litmuschaos
+litmus: AgentCert
+litmusChaos: Litmus Chaos
+litmuschaos: agentcert
 loading: Loading, please wait...
-local: Locally in Litmus
+local: Locally in AgentCert
 logErrorMessage: Unable to fetch logs from log service, please try after some time.
 loginDescription: Login to create, orchestrate, analyze and collaborate your Chaos Experiments.
 loginToContinue: login to continue
@@ -1199,7 +1232,7 @@ weightAdjustDescription: >-
   pre-selected weights for each fault for you. However, you may review and
   modify the weighage. The weights are relative to each other.
 weightAdjustHeader: Adjust the weights of the faults in the Chaos Experiment
-welcomeToLitmus: Welcome to Litmus
+welcomeToLitmus: Welcome to AgentCert
 yamlBuilder:
   enableEditContext: Editor is currently in read-only mode. Do you want to enable edit mode?
   lineNumberLabel: On line number

@@ -53,6 +53,114 @@ type ActionPayload struct {
 	Username     *string `json:"username,omitempty"`
 }
 
+// Agent represents a registered AI agent in the system with its metadata,
+// capabilities, and configuration.
+type Agent struct {
+	// Unique identifier for the agent (UUID format)
+	AgentID string `json:"agentID"`
+	// Project ID that owns this agent
+	ProjectID string `json:"projectID"`
+	// Human-readable name of the agent (must be unique within project)
+	Name string `json:"name"`
+	// Optional description of the agent's purpose and functionality
+	Description *string `json:"description,omitempty"`
+	// Tags for categorization and filtering
+	Tags []string `json:"tags,omitempty"`
+	// Semantic version of the agent (e.g., v1.2.3)
+	Version string `json:"version"`
+	// Vendor or organization that created the agent
+	Vendor string `json:"vendor"`
+	// List of capabilities that this agent supports
+	Capabilities []string `json:"capabilities"`
+	// Container image information for deploying the agent
+	ContainerImage *ContainerImage `json:"containerImage"`
+	// Kubernetes namespace where the agent is deployed
+	Namespace string `json:"namespace"`
+	// Endpoint configuration for communicating with the agent
+	Endpoint *AgentEndpoint `json:"endpoint"`
+	// Langfuse integration configuration for observability
+	LangfuseConfig *LangfuseConfig `json:"langfuseConfig,omitempty"`
+	// Current status of the agent
+	Status AgentStatus `json:"status"`
+	// Additional metadata with labels and annotations
+	Metadata *AgentMetadata `json:"metadata,omitempty"`
+	// Audit information for tracking creation and updates
+	AuditInfo *AuditInfo `json:"auditInfo"`
+}
+
+// AgentEndpoint defines how to communicate with the agent service,
+// including discovery method and health check paths.
+type AgentEndpoint struct {
+	// Base URL of the agent service
+	URL string `json:"url"`
+	// Method used to discover the endpoint
+	DiscoveryType EndpointDiscoveryType `json:"discoveryType"`
+	// Type of endpoint protocol
+	EndpointType EndpointType `json:"endpointType"`
+	// Path for health check endpoint (default: /health)
+	HealthPath string `json:"healthPath"`
+	// Path for readiness check endpoint (default: /ready)
+	ReadyPath string `json:"readyPath"`
+}
+
+// AgentEndpointInput for manually specifying agent endpoint.
+type AgentEndpointInput struct {
+	// Base URL of the agent service
+	URL string `json:"url"`
+	// Type of endpoint protocol
+	EndpointType EndpointType `json:"endpointType"`
+	// Optional custom health check path
+	HealthPath *string `json:"healthPath,omitempty"`
+	// Optional custom readiness check path
+	ReadyPath *string `json:"readyPath,omitempty"`
+}
+
+// AgentListResponse returned from list queries with pagination info.
+type AgentListResponse struct {
+	// List of agents matching the filter
+	Agents []*Agent `json:"agents"`
+	// Total number of agents matching the filter
+	TotalCount int `json:"totalCount"`
+	// Current page number
+	CurrentPage int `json:"currentPage"`
+	// Total number of pages
+	TotalPages int `json:"totalPages"`
+	// Whether there are more pages available
+	HasNextPage bool `json:"hasNextPage"`
+}
+
+// AgentMetadata contains additional labels and annotations for the agent.
+type AgentMetadata struct {
+	// Key-value pairs for labels (stored as JSON string)
+	Labels []*KeyValuePair `json:"labels,omitempty"`
+	// Key-value pairs for annotations (stored as JSON string)
+	Annotations []*KeyValuePair `json:"annotations,omitempty"`
+}
+
+// AgentMetadataInput for providing labels and annotations.
+type AgentMetadataInput struct {
+	// List of label key-value pairs
+	Labels []*KeyValuePairInput `json:"labels,omitempty"`
+	// List of annotation key-value pairs
+	Annotations []*KeyValuePairInput `json:"annotations,omitempty"`
+}
+
+// AgentStatusResponse provides health and sync status for an agent.
+type AgentStatusResponse struct {
+	// Agent ID
+	AgentID string `json:"agentID"`
+	// Current status
+	Status AgentStatus `json:"status"`
+	// Whether the agent is currently healthy
+	Healthy bool `json:"healthy"`
+	// Timestamp of last health check
+	LastCheckedAt *string `json:"lastCheckedAt,omitempty"`
+	// Timestamp of last sync to Langfuse
+	LastSyncedToLangfuse *string `json:"lastSyncedToLangfuse,omitempty"`
+	// Latest health check result
+	HealthCheckResult *HealthCheckResult `json:"healthCheckResult,omitempty"`
+}
+
 type Annotation struct {
 	Categories       string `json:"categories"`
 	Vendor           string `json:"vendor"`
@@ -60,6 +168,20 @@ type Annotation struct {
 	Repository       string `json:"repository"`
 	Support          string `json:"support"`
 	ChartDescription string `json:"chartDescription"`
+}
+
+// AuditInfo tracks creation and modification information for the agent.
+type AuditInfo struct {
+	// Timestamp when the agent was created
+	CreatedAt string `json:"createdAt"`
+	// User ID who created the agent
+	CreatedBy string `json:"createdBy"`
+	// Timestamp when the agent was last updated
+	UpdatedAt string `json:"updatedAt"`
+	// User ID who last updated the agent
+	UpdatedBy string `json:"updatedBy"`
+	// Timestamp of the last health check
+	LastHealthCheck *string `json:"lastHealthCheck,omitempty"`
 }
 
 // Defines the input for CMD probe properties
@@ -86,6 +208,18 @@ type CMDProbeRequest struct {
 	Comparator *ComparatorInput `json:"comparator"`
 	// Source of the Probe
 	Source *string `json:"source,omitempty"`
+}
+
+// CapabilityDefinition describes a capability that agents can support.
+type CapabilityDefinition struct {
+	// Unique capability identifier
+	ID string `json:"id"`
+	// Human-readable capability name
+	Name string `json:"name"`
+	// Description of what this capability does
+	Description string `json:"description"`
+	// Category for grouping capabilities
+	Category string `json:"category"`
 }
 
 // Defines the details for a chaos experiment
@@ -338,6 +472,27 @@ type ConfirmInfraRegistrationResponse struct {
 	InfraID          *string `json:"infraID,omitempty"`
 }
 
+// ContainerImage contains the registry, repository, and tag information
+// for the agent's container image.
+type ContainerImage struct {
+	// Container registry (e.g., docker.io, gcr.io)
+	Registry string `json:"registry"`
+	// Repository path (e.g., chaos/agent)
+	Repository string `json:"repository"`
+	// Image tag (e.g., v1.0.0, latest)
+	Tag string `json:"tag"`
+}
+
+// ContainerImageInput for specifying container image details.
+type ContainerImageInput struct {
+	// Container registry
+	Registry string `json:"registry"`
+	// Repository path
+	Repository string `json:"repository"`
+	// Image tag
+	Tag string `json:"tag"`
+}
+
 // Defines the details required for creating a chaos hub
 type CreateChaosHubRequest struct {
 	// Name of the chaos hub
@@ -395,6 +550,52 @@ type DateRange struct {
 	StartDate string `json:"startDate"`
 	// End date
 	EndDate *string `json:"endDate,omitempty"`
+}
+
+// DeleteAgentResponse returned after agent deletion.
+type DeleteAgentResponse struct {
+	// Whether the deletion was successful
+	Success bool `json:"success"`
+	// Message describing the deletion result
+	Message string `json:"message"`
+}
+
+// DeployAgentWithHelmRequest contains information to deploy an agent using Helm.
+type DeployAgentWithHelmRequest struct {
+	// Unique name for the agent within the project
+	Name string `json:"name"`
+	// Optional description of the agent
+	Description *string `json:"description,omitempty"`
+	// Kubernetes namespace for deployment
+	Namespace string `json:"namespace"`
+	// Cluster name for deployment
+	ClusterName *string `json:"clusterName,omitempty"`
+	// List of capabilities this agent supports
+	Capabilities []string `json:"capabilities"`
+	// Semantic version of the agent
+	Version *string `json:"version,omitempty"`
+	// Helm release name
+	HelmReleaseName string `json:"helmReleaseName"`
+	// Helm chart version
+	HelmChartVersion string `json:"helmChartVersion"`
+	// YAML content for Helm values
+	ValuesYaml *string `json:"valuesYaml,omitempty"`
+	// Kubeconfig for cluster access (optional)
+	Kubeconfig *string `json:"kubeconfig,omitempty"`
+}
+
+// DeployAgentWithHelmResponse returned after successful Helm deployment.
+type DeployAgentWithHelmResponse struct {
+	// Unique identifier for the deployed agent
+	AgentID string `json:"agentID"`
+	// Name of the deployed agent
+	Name string `json:"name"`
+	// Current status of the agent
+	Status AgentStatus `json:"status"`
+	// Helm release name used
+	HelmReleaseName *string `json:"helmReleaseName,omitempty"`
+	// Helm chart version used
+	HelmChartVersion *string `json:"helmChartVersion,omitempty"`
 }
 
 type Environment struct {
@@ -869,6 +1070,18 @@ type HTTPProbeRequest struct {
 	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
+// HealthCheckResult contains detailed information from a health check.
+type HealthCheckResult struct {
+	// Whether the health check passed
+	Healthy bool `json:"healthy"`
+	// Message describing the health check result
+	Message string `json:"message"`
+	// Response time in milliseconds
+	ResponseTime int `json:"responseTime"`
+	// Timestamp when the check was performed
+	CheckedAt string `json:"checkedAt"`
+}
+
 // Defines details for image registry
 type ImageRegistry struct {
 	// Bool value indicating if the image registry is default or not; by default workflow uses LitmusChaos registry
@@ -1153,6 +1366,22 @@ type K8SProbeRequest struct {
 	Operation string `json:"operation"`
 }
 
+// KeyValuePair represents a simple key-value pair for metadata.
+type KeyValuePair struct {
+	// Key identifier
+	Key string `json:"key"`
+	// Value associated with the key
+	Value string `json:"value"`
+}
+
+// KeyValuePairInput for metadata key-value pairs.
+type KeyValuePairInput struct {
+	// Key identifier
+	Key string `json:"key"`
+	// Value associated with the key
+	Value string `json:"value"`
+}
+
 type KubeGVRRequest struct {
 	Group    string `json:"group"`
 	Version  string `json:"version"`
@@ -1383,9 +1612,42 @@ type KubernetesHTTPProbeRequest struct {
 	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
+// LangfuseConfig contains configuration for syncing agent metadata
+// to Langfuse for observability and tracing.
+type LangfuseConfig struct {
+	// Langfuse project ID for this agent
+	ProjectID string `json:"projectId"`
+	// Whether automatic sync to Langfuse is enabled
+	SyncEnabled bool `json:"syncEnabled"`
+	// Timestamp of the last successful sync to Langfuse
+	LastSyncedAt *string `json:"lastSyncedAt,omitempty"`
+}
+
+// LangfuseConfigInput for configuring Langfuse integration.
+type LangfuseConfigInput struct {
+	// Langfuse project ID
+	ProjectID string `json:"projectId"`
+	// Enable automatic sync (default: true)
+	SyncEnabled *bool `json:"syncEnabled,omitempty"`
+}
+
 type Link struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
+}
+
+// ListAgentsFilter for filtering agents in list queries.
+type ListAgentsFilter struct {
+	// Filter by project ID
+	ProjectID *string `json:"projectID,omitempty"`
+	// Filter by status
+	Status *AgentStatus `json:"status,omitempty"`
+	// Filter by capabilities (agents must have ALL specified capabilities)
+	Capabilities []string `json:"capabilities,omitempty"`
+	// Search term to match against name, description, vendor
+	SearchTerm *string `json:"searchTerm,omitempty"`
+	// Filter by tags
+	Tags []string `json:"tags,omitempty"`
 }
 
 type ListChaosHubRequest struct {
@@ -1644,6 +1906,14 @@ type Pagination struct {
 	Limit int `json:"limit"`
 }
 
+// PaginationInput for controlling pagination in list queries.
+type PaginationInput struct {
+	// Page number (1-based)
+	Page int `json:"page"`
+	// Number of items per page
+	Limit int `json:"limit"`
+}
+
 // Response received for querying pod logs
 type PodLog struct {
 	// ID of the cluster
@@ -1841,6 +2111,42 @@ func (this RecentExperimentRun) GetCreatedAt() *string      { return &this.Creat
 func (this RecentExperimentRun) GetUpdatedBy() *UserDetails { return this.UpdatedBy }
 func (this RecentExperimentRun) GetCreatedBy() *UserDetails { return this.CreatedBy }
 
+// RegisterAgentInput contains all required information to register a new agent.
+type RegisterAgentInput struct {
+	// Project ID that will own this agent
+	ProjectID string `json:"projectID"`
+	// Unique name for the agent within the project
+	Name string `json:"name"`
+	// Optional description of the agent
+	Description *string `json:"description,omitempty"`
+	// Optional tags for categorization
+	Tags []string `json:"tags,omitempty"`
+	// Semantic version of the agent
+	Version string `json:"version"`
+	// Vendor or organization name
+	Vendor string `json:"vendor"`
+	// List of capabilities this agent supports
+	Capabilities []string `json:"capabilities"`
+	// Container image information
+	ContainerImage *ContainerImageInput `json:"containerImage"`
+	// Kubernetes namespace for deployment
+	Namespace string `json:"namespace"`
+	// Optional endpoint configuration (auto-discovered if not provided)
+	Endpoint *AgentEndpointInput `json:"endpoint,omitempty"`
+	// Optional Langfuse configuration
+	LangfuseConfig *LangfuseConfigInput `json:"langfuseConfig,omitempty"`
+	// Optional metadata
+	Metadata *AgentMetadataInput `json:"metadata,omitempty"`
+}
+
+// RegisterAgentResponse returned after successful agent registration.
+type RegisterAgentResponse struct {
+	// The registered agent
+	Agent *Agent `json:"agent"`
+	// Status of Langfuse sync operation
+	LangfuseSyncStatus SyncStatus `json:"langfuseSyncStatus"`
+}
+
 // Defines the details for the new infra being connected
 type RegisterInfraRequest struct {
 	// Name of the infra
@@ -1966,12 +2272,51 @@ type StopExperimentRunsRequest struct {
 type Subscription struct {
 }
 
+// SyncResponse returned from Langfuse sync operations.
+type SyncResponse struct {
+	// Whether the sync was successful
+	Success bool `json:"success"`
+	// Timestamp when sync occurred
+	SyncedAt *string `json:"syncedAt,omitempty"`
+	// Message describing the sync result
+	Message string `json:"message"`
+}
+
 type Toleration struct {
 	TolerationSeconds *int    `json:"tolerationSeconds,omitempty"`
 	Key               *string `json:"key,omitempty"`
 	Operator          *string `json:"operator,omitempty"`
 	Effect            *string `json:"effect,omitempty"`
 	Value             *string `json:"value,omitempty"`
+}
+
+// UpdateAgentInput contains fields that can be updated for an existing agent.
+// All fields are optional - only provided fields will be updated.
+type UpdateAgentInput struct {
+	// Update agent name
+	Name *string `json:"name,omitempty"`
+	// Update description
+	Description *string `json:"description,omitempty"`
+	// Update tags
+	Tags []string `json:"tags,omitempty"`
+	// Update version
+	Version *string `json:"version,omitempty"`
+	// Update vendor
+	Vendor *string `json:"vendor,omitempty"`
+	// Update capabilities
+	Capabilities []string `json:"capabilities,omitempty"`
+	// Update container image
+	ContainerImage *ContainerImageInput `json:"containerImage,omitempty"`
+	// Update namespace
+	Namespace *string `json:"namespace,omitempty"`
+	// Update endpoint
+	Endpoint *AgentEndpointInput `json:"endpoint,omitempty"`
+	// Update Langfuse configuration
+	LangfuseConfig *LangfuseConfigInput `json:"langfuseConfig,omitempty"`
+	// Update status
+	Status *AgentStatus `json:"status,omitempty"`
+	// Update metadata
+	Metadata *AgentMetadataInput `json:"metadata,omitempty"`
 }
 
 type UpdateChaosHubRequest struct {
@@ -2041,6 +2386,59 @@ type Workload struct {
 	Namespace string `json:"namespace"`
 }
 
+// AgentStatus represents the current state of the agent in its lifecycle.
+type AgentStatus string
+
+const (
+	// Agent is registered but not yet validated
+	AgentStatusRegistered AgentStatus = "REGISTERED"
+	// Agent health check is in progress
+	AgentStatusValidating AgentStatus = "VALIDATING"
+	// Agent is active and healthy
+	AgentStatusActive AgentStatus = "ACTIVE"
+	// Agent is inactive or unhealthy
+	AgentStatusInactive AgentStatus = "INACTIVE"
+	// Agent has been deleted (soft delete)
+	AgentStatusDeleted AgentStatus = "DELETED"
+)
+
+var AllAgentStatus = []AgentStatus{
+	AgentStatusRegistered,
+	AgentStatusValidating,
+	AgentStatusActive,
+	AgentStatusInactive,
+	AgentStatusDeleted,
+}
+
+func (e AgentStatus) IsValid() bool {
+	switch e {
+	case AgentStatusRegistered, AgentStatusValidating, AgentStatusActive, AgentStatusInactive, AgentStatusDeleted:
+		return true
+	}
+	return false
+}
+
+func (e AgentStatus) String() string {
+	return string(e)
+}
+
+func (e *AgentStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AgentStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AgentStatus", str)
+	}
+	return nil
+}
+
+func (e AgentStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
 type AuthType string
 
 const (
@@ -2083,6 +2481,94 @@ func (e *AuthType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e AuthType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// EndpointDiscoveryType indicates how the agent endpoint was determined.
+type EndpointDiscoveryType string
+
+const (
+	// Endpoint was automatically discovered from Kubernetes Service
+	EndpointDiscoveryTypeAuto EndpointDiscoveryType = "AUTO"
+	// Endpoint was manually provided during registration
+	EndpointDiscoveryTypeManual EndpointDiscoveryType = "MANUAL"
+)
+
+var AllEndpointDiscoveryType = []EndpointDiscoveryType{
+	EndpointDiscoveryTypeAuto,
+	EndpointDiscoveryTypeManual,
+}
+
+func (e EndpointDiscoveryType) IsValid() bool {
+	switch e {
+	case EndpointDiscoveryTypeAuto, EndpointDiscoveryTypeManual:
+		return true
+	}
+	return false
+}
+
+func (e EndpointDiscoveryType) String() string {
+	return string(e)
+}
+
+func (e *EndpointDiscoveryType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EndpointDiscoveryType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EndpointDiscoveryType", str)
+	}
+	return nil
+}
+
+func (e EndpointDiscoveryType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// EndpointType indicates the protocol used by the agent endpoint.
+type EndpointType string
+
+const (
+	// RESTful HTTP/HTTPS endpoint
+	EndpointTypeRest EndpointType = "REST"
+	// gRPC endpoint
+	EndpointTypeGrpc EndpointType = "GRPC"
+)
+
+var AllEndpointType = []EndpointType{
+	EndpointTypeRest,
+	EndpointTypeGrpc,
+}
+
+func (e EndpointType) IsValid() bool {
+	switch e {
+	case EndpointTypeRest, EndpointTypeGrpc:
+		return true
+	}
+	return false
+}
+
+func (e EndpointType) String() string {
+	return string(e)
+}
+
+func (e *EndpointType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EndpointType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EndpointType", str)
+	}
+	return nil
+}
+
+func (e EndpointType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
@@ -2839,6 +3325,53 @@ func (e *ScheduleType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e ScheduleType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// SyncStatus indicates the result of a Langfuse sync operation.
+type SyncStatus string
+
+const (
+	// Sync completed successfully
+	SyncStatusSuccess SyncStatus = "SUCCESS"
+	// Sync failed
+	SyncStatusFailed SyncStatus = "FAILED"
+	// Sync was skipped (e.g., sync disabled)
+	SyncStatusSkipped SyncStatus = "SKIPPED"
+)
+
+var AllSyncStatus = []SyncStatus{
+	SyncStatusSuccess,
+	SyncStatusFailed,
+	SyncStatusSkipped,
+}
+
+func (e SyncStatus) IsValid() bool {
+	switch e {
+	case SyncStatusSuccess, SyncStatusFailed, SyncStatusSkipped:
+		return true
+	}
+	return false
+}
+
+func (e SyncStatus) String() string {
+	return string(e)
+}
+
+func (e *SyncStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = SyncStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid SyncStatus", str)
+	}
+	return nil
+}
+
+func (e SyncStatus) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

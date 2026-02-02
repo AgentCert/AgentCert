@@ -9,6 +9,7 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/generated"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/handler"
 	chaos_experiment_run2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment_run"
@@ -45,6 +46,7 @@ type Resolver struct {
 	chaosExperimentRunHandler  runHandler.ChaosExperimentRunHandler
 	environmentService         envHandler.EnvironmentHandler
 	probeService               probe.Service
+	agentRegistryService       agent_registry.Service
 }
 
 func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
@@ -67,6 +69,12 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	gitOpsService := gitops3.NewGitOpsService(gitopsOperator, chaosExperimentService, *chaosExperimentOperator)
 	imageRegistryService := image_registry.NewImageRegistryService(imageRegistryOperator)
 	environmentService := envHandler.NewEnvironmentService(EnvironmentOperator)
+	
+	// Initialize Agent Registry dependencies
+	agentRegistryOperator := agent_registry.NewOperator(mongodbOperator.(*mongodb.MongoOperations).MongoClient.Database)
+	agentRegistryValidator := agent_registry.NewValidator(agentRegistryOperator)
+	langfuseClient := agent_registry.NewLangfuseClient("", "") // Empty config for now
+	agentRegistryService := agent_registry.NewService(agentRegistryOperator, agentRegistryValidator, langfuseClient, nil)
 
 	//handler
 	chaosExperimentHandler := handler.NewChaosExperimentHandler(chaosExperimentService, chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
@@ -84,6 +92,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 			chaosExperimentHandler:     *chaosExperimentHandler,
 			chaosExperimentRunHandler:  *choasExperimentRunHandler,
 			probeService:               probeService,
+			agentRegistryService:       agentRegistryService,
 		}}
 
 	config.Directives.Authorized = func(ctx context.Context, obj interface{}, next graphql.Resolver) (interface{}, error) {

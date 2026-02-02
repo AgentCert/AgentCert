@@ -29,7 +29,7 @@ const devConfig = {
   devServer: {
     static: [path.join(process.cwd(), 'src/static')],
     historyApiFallback: true,
-    port: 8185,
+    port: 3000,
     server: {
       type: 'https',
       options: {
@@ -54,7 +54,7 @@ const devConfig = {
         target: process.env.CHAOS_MANAGER
           ? process.env.CHAOS_MANAGER
           : targetLocalHost
-          ? 'http://localhost:3000'
+          ? 'http://localhost:3030'
           : `${baseUrl}/auth`,
         secure: false,
         changeOrigin: true,

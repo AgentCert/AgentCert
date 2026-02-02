@@ -1,0 +1,279 @@
+.container {
+  padding: var(--spacing-xlarge);
+  max-width: 900px;
+}
+
+.heading {
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.radioGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.radioRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.radioCard {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-medium) var(--spacing-large);
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--white);
+  flex: 1;
+
+  &:hover {
+    border-color: var(--primary-7);
+    background: var(--primary-1);
+  }
+
+  &.selected {
+    border-color: var(--primary-7);
+    background: var(--primary-1);
+  }
+}
+
+.radioInput {
+  margin-right: var(--spacing-medium);
+  accent-color: var(--primary-7);
+  width: 18px;
+  height: 18px;
+}
+
+.radioContent {
+  display: flex;
+  flex-direction: column;
+}
+
+.radioTitle {
+  font-weight: 600;
+  color: var(--grey-900);
+}
+
+.radioDescription {
+  font-size: 12px;
+  color: var(--grey-500);
+  margin-top: 4px;
+}
+
+.inputSection {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-width: 500px;
+}
+
+.urlTextbox {
+  flex: 1;
+  min-width: 400px;
+  
+  input {
+    width: 100%;
+  }
+
+  &:disabled {
+    background-color: var(--grey-100);
+    cursor: not-allowed;
+  }
+}
+
+.uploadSection {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-width: 200px;
+}
+
+.uploadButton {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.uploadedFileName {
+  flex-shrink: 0;
+}
+
+.buttonContainer {
+  margin-top: var(--spacing-xlarge);
+  display: flex;
+  gap: var(--spacing-medium);
+}
+
+.newAgentButtonContainer {
+  margin-top: var(--spacing-large);
+  margin-bottom: var(--spacing-large);
+}
+
+.tableContainer {
+  margin-top: var(--spacing-xlarge);
+  width: 100%;
+}
+
+.tableHeading {
+  margin-bottom: var(--spacing-large);
+  font-weight: 600;
+}
+
+.agentsTable {
+  width: 100%;
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+  overflow: hidden;
+
+  :global {
+    .TableV2--header {
+      background-color: var(--grey-100);
+      border-bottom: 2px solid var(--grey-300);
+    }
+
+    .TableV2--header [role="columnheader"] {
+      font-weight: 600;
+      color: var(--grey-900);
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      padding: var(--spacing-medium) var(--spacing-large);
+    }
+
+    .TableV2--row {
+      border-bottom: 1px solid var(--grey-200);
+
+      &:hover {
+        background-color: var(--grey-50);
+      }
+    }
+
+    .TableV2--cell {
+      padding: var(--spacing-medium) var(--spacing-large);
+    }
+  }
+}
+
+.actionLink {
+  cursor: pointer;
+  font-weight: 500;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// Helm Form Styles
+.helmFormSection {
+  width: 100%;
+  margin-top: var(--spacing-medium);
+  padding: var(--spacing-large);
+  background: var(--grey-50);
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+}
+
+.helmForm {
+  width: 100%;
+}
+
+.formRow {
+  display: flex;
+  gap: var(--spacing-large);
+  width: 100%;
+}
+
+.formField {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xsmall);
+}
+
+.fieldLabel {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.formInput {
+  width: 100%;
+  
+  input {
+    width: 100%;
+  }
+}
+
+.capabilitiesGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-small);
+  padding: var(--spacing-medium);
+  background: var(--white);
+  border: 1px solid var(--grey-200);
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.capabilityCheckbox {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xsmall);
+  cursor: pointer;
+  padding: var(--spacing-xsmall);
+  border-radius: 4px;
+  
+  &:hover {
+    background: var(--grey-100);
+  }
+  
+  input[type="checkbox"] {
+    accent-color: var(--primary-7);
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.uploadRow {
+  margin-bottom: var(--spacing-small);
+}
+
+.yamlTextarea {
+  width: 100%;
+  min-height: 120px;
+  padding: var(--spacing-medium);
+  font-family: monospace;
+  font-size: 12px;
+  border: 1px solid var(--grey-200);
+  border-radius: 4px;
+  resize: vertical;
+  background: var(--white);
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary-7);
+  }
+  
+  &::placeholder {
+    color: var(--grey-400);
+  }
+}
+
+.editModalContent {
+  min-width: 500px;
+  padding: var(--spacing-medium);
+}
+
+.editDialog {
+  width: 600px;
+  max-width: 90vw;
+}
+
+.deleteConfirmText {
+  color: var(--grey-700);
+  margin-bottom: var(--spacing-medium);
+}
