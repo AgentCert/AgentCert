@@ -15,8 +15,6 @@ from data_models.metrics_model import (
     LLMQuantitativeExtraction,
     MetricsExtractionResult,
 )
-from data_models.request_model import BaseModelWrapper
-from pydantic import BaseModel, Field
 from utils.azure_openai_util import AzureLLMClient
 from utils.load_config import ConfigLoader
 from utils.mongodb_util import MongoDBClient, MongoDBConfig
