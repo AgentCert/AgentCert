@@ -819,7 +819,7 @@ export default function AgentOnboardingView(): React.ReactElement {
                         
                         <div className={css.formField}>
                           <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
-                            Capabilities * (Select one or more)
+                            Domains * (Select one or more)
                           </Text>
                           <div className={css.capabilitiesGrid}>
                             {AVAILABLE_CAPABILITIES.map(cap => (
@@ -854,6 +854,13 @@ export default function AgentOnboardingView(): React.ReactElement {
                               text={uploadedFile?.method === OnboardingMethod.HELM_CHART ? uploadedFile.name : getString('upload')}
                               icon="upload"
                               onClick={handleUploadClick}
+                              className={css.uploadButton}
+                            />
+                            <Button
+                              variation={ButtonVariation.SECONDARY}
+                              text="Validate"
+                              icon="tick"
+                              onClick={() => showSuccess('Validation successful')}
                               className={css.uploadButton}
                             />
                             {uploadedFile?.method === OnboardingMethod.HELM_CHART && (
@@ -979,7 +986,7 @@ export default function AgentOnboardingView(): React.ReactElement {
             </div>
             <div className={css.formField}>
               <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
-                Capabilities (Select one or more)
+                Domains (Select one or more)
               </Text>
               <div className={css.capabilitiesGrid}>
                 {AVAILABLE_CAPABILITIES.map(cap => (
