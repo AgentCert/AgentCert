@@ -171,6 +171,9 @@ func main() {
 	// helm validation router for apps onboarding
 	router.POST("/api/validate-helm", handlers.ValidateHelmHandler())
 	
+	// namespace listing router for dropdown
+	router.GET("/api/namespaces", handlers.ListNamespacesHandler())
+	
 	// helm cleanup router for onboarding flows
 	router.POST("/api/cleanup-helm", handlers.CleanupHelmHandler())
 

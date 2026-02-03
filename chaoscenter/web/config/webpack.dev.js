@@ -58,6 +58,16 @@ const devConfig = {
         changeOrigin: true,
         logLevel: 'info'
       },
+      '/api/namespaces': {
+        target: process.env.CHAOS_MANAGER
+          ? process.env.CHAOS_MANAGER
+          : targetLocalHost
+          ? 'http://localhost:8080'
+          : `${baseUrl}`,
+        secure: false,
+        changeOrigin: true,
+        logLevel: 'info'
+      },
       '/api/apps': {
         target: process.env.CHAOS_MANAGER
           ? process.env.CHAOS_MANAGER

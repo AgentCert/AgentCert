@@ -48,6 +48,13 @@ func ValidateHelmHandler() gin.HandlerFunc {
 		environmentId := c.Request.FormValue("environmentId")
 		log.Infof("Validating helm chart for environment: %s", environmentId)
 
+		// Get namespace from form (default to "default" if not provided)
+		namespace := c.Request.FormValue("namespace")
+		if namespace == "" {
+			namespace = "default"
+		}
+		log.Infof("Using namespace: %s", namespace)
+
 		// Create a temporary directory to store the helm package
 		tempDir, err := os.MkdirTemp("", "helm-validation-*")
 		if err != nil {
@@ -100,7 +107,6 @@ func ValidateHelmHandler() gin.HandlerFunc {
 
 		// Generate a unique release name for validation
 		releaseName := fmt.Sprintf("validate-%s-%d", chartName, time.Now().Unix())
-		namespace := "default"
 
 		// Check if kubectl is available and connected to a cluster
 		if err := checkKubernetesConnection(); err != nil {
@@ -320,6 +326,16 @@ func checkDeploymentHealth(ctx context.Context, releaseName, namespace string) (
 	// Wait a bit for resources to be created
 	time.Sleep(5 * time.Second)
 	
+	// Get deployments created by this helm release using kubectl
+	// The deployment names are needed to find the pods
+	deplCmd := exec.CommandContext(ctx, "kubectl", "get", "deployments", "-n", namespace, "-o", "jsonpath={.items[*].metadata.name}")
+	deplOutput, err := deplCmd.CombinedOutput()
+	if err != nil {
+		log.Warnf("Failed to get deployments: %v, output: %s", err, string(deplOutput))
+	}
+	deploymentNames := strings.Fields(strings.TrimSpace(string(deplOutput)))
+	log.Infof("Found deployments in namespace %s: %v", namespace, deploymentNames)
+	
 	// Poll for pods to be running
 	maxAttempts := 18 // 18 * 10s = 3 minutes
 	for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -329,7 +345,7 @@ func checkDeploymentHealth(ctx context.Context, releaseName, namespace string) (
 		default:
 		}
 
-		// Get all pods in the namespace (helm charts may use different labels)
+		// Get all pods in the namespace
 		cmd := exec.CommandContext(ctx, "kubectl", "get", "pods",
 			"-n", namespace,
 			"-o", "wide",
@@ -344,21 +360,59 @@ func checkDeploymentHealth(ctx context.Context, releaseName, namespace string) (
 		podsStr := string(podsOutput)
 		log.Infof("Attempt %d: Pod status:\n%s", attempt+1, podsStr)
 
-		// Check for fatal errors
-		if strings.Contains(podsStr, "CrashLoopBackOff") ||
-			strings.Contains(podsStr, "ImagePullBackOff") || 
-			strings.Contains(podsStr, "ErrImagePull") ||
-			strings.Contains(podsStr, "Error") {
-			return false, fmt.Sprintf("Pods have errors:\n%s", podsStr)
+		// Filter pods that belong to this helm release
+		lines := strings.Split(podsStr, "\n")
+		relevantPods := []string{}
+		for _, line := range lines {
+			// Skip header line and empty lines
+			if strings.HasPrefix(line, "NAME") || strings.TrimSpace(line) == "" {
+				continue
+			}
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				podName := fields[0]
+				// Check if pod name matches any deployment from the helm release
+				for _, deployName := range deploymentNames {
+					if strings.HasPrefix(podName, deployName) {
+						relevantPods = append(relevantPods, line)
+						break
+					}
+				}
+			}
+		}
+
+		// If we found pods matching the release deployments, only check those
+		var podsToCheck string
+		if len(relevantPods) > 0 {
+			podsToCheck = strings.Join(relevantPods, "\n")
+			log.Infof("Attempt %d: Found %d pods matching helm deployments", attempt+1, len(relevantPods))
+		} else if len(deploymentNames) == 0 {
+			// If we couldn't get deployment names, be more lenient - just wait for any pods
+			log.Infof("Attempt %d: No deployment names found, waiting for pods...", attempt+1)
+			time.Sleep(10 * time.Second)
+			continue
+		} else {
+			// Deployments exist but pods not created yet
+			log.Infof("Attempt %d: Pods not created yet for deployments %v", attempt+1, deploymentNames)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		// Check for fatal errors only in relevant pods
+		if strings.Contains(podsToCheck, "CrashLoopBackOff") ||
+			strings.Contains(podsToCheck, "ImagePullBackOff") || 
+			strings.Contains(podsToCheck, "ErrImagePull") ||
+			strings.Contains(podsToCheck, "Error") {
+			return false, fmt.Sprintf("Pods have errors:\n%s", podsToCheck)
 		}
 
 		// Count running pods
-		lines := strings.Split(podsStr, "\n")
 		runningCount := 0
 		pendingCount := 0
 		totalPods := 0
 		
-		for _, line := range lines {
+		checkLines := strings.Split(podsToCheck, "\n")
+		for _, line := range checkLines {
 			if strings.Contains(line, "Running") {
 				runningCount++
 				totalPods++
@@ -402,4 +456,60 @@ func cleanupHelmRelease(releaseName, namespace string) string {
 		log.Warnf("Failed to cleanup helm release %s: %v", releaseName, err)
 	}
 	return string(output)
+}
+
+// NamespaceListResponse represents the response for listing namespaces
+type NamespaceListResponse struct {
+	Success    bool     `json:"success"`
+	Namespaces []string `json:"namespaces"`
+	Message    string   `json:"message,omitempty"`
+}
+
+// ListNamespacesHandler returns a handler that lists all available Kubernetes namespaces
+func ListNamespacesHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check if kubectl is available and connected to a cluster
+		if err := checkKubernetesConnection(); err != nil {
+			log.Errorf("Kubernetes connection check failed: %v", err)
+			c.JSON(http.StatusInternalServerError, NamespaceListResponse{
+				Success: false,
+				Message: "Failed to connect to Kubernetes cluster: " + err.Error(),
+			})
+			return
+		}
+
+		// Get all namespaces using kubectl
+		cmd := exec.Command("kubectl", "get", "namespaces", "-o", "jsonpath={.items[*].metadata.name}")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Errorf("Failed to get namespaces: %v, output: %s", err, string(output))
+			c.JSON(http.StatusInternalServerError, NamespaceListResponse{
+				Success: false,
+				Message: "Failed to list namespaces: " + err.Error(),
+			})
+			return
+		}
+
+		// Parse the output (space-separated namespace names)
+		namespacesStr := strings.TrimSpace(string(output))
+		var namespaces []string
+		if namespacesStr != "" {
+			namespaces = strings.Split(namespacesStr, " ")
+		}
+
+		// Filter out empty strings
+		filteredNamespaces := make([]string, 0, len(namespaces))
+		for _, ns := range namespaces {
+			ns = strings.TrimSpace(ns)
+			if ns != "" {
+				filteredNamespaces = append(filteredNamespaces, ns)
+			}
+		}
+
+		log.Infof("Found %d namespaces", len(filteredNamespaces))
+		c.JSON(http.StatusOK, NamespaceListResponse{
+			Success:    true,
+			Namespaces: filteredNamespaces,
+		})
+	}
 }

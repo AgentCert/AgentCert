@@ -1,5 +1,18 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput, SelectOption, ConfirmationDialog, Dialog } from '@harnessio/uicore';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import {
+  Layout,
+  Text,
+  Button,
+  ButtonVariation,
+  Container,
+  useToaster,
+  TableV2,
+  TextInput,
+  SelectOption,
+  ConfirmationDialog,
+  Dialog,
+  Select
+} from '@harnessio/uicore';
 import { Color, FontVariation, Intent } from '@harnessio/design-system';
 import { useLocation, useHistory } from 'react-router-dom';
 import type { Column, CellProps } from 'react-table';
@@ -98,7 +111,7 @@ export default function AgentOnboardingView(): React.ReactElement {
   const [faasUrl, setFaasUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDeploying, setIsDeploying] = useState<boolean>(false);
-  
+
   // Validation state
   const [validationStatus, setValidationStatus] = useState<ValidationStatus>(ValidationStatus.IDLE);
   const [validationReleaseInfo, setValidationReleaseInfo] = useState<{
@@ -106,7 +119,7 @@ export default function AgentOnboardingView(): React.ReactElement {
     namespace: string;
     chartName: string;
   } | null>(null);
-  
+
   // Helm form state
   const [helmForm, setHelmForm] = useState<HelmFormState>({
     agentName: '',
@@ -117,11 +130,15 @@ export default function AgentOnboardingView(): React.ReactElement {
     capabilities: [],
     valuesYaml: ''
   });
-  
+
+  // Namespace dropdown state
+  const [namespaceOptions, setNamespaceOptions] = useState<SelectOption[]>([{ label: 'default', value: 'default' }]);
+  const [namespacesLoading, setNamespacesLoading] = useState<boolean>(false);
+
   // Delete confirmation state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [agentToDelete, setAgentToDelete] = useState<AgentDisplay | null>(null);
-  
+
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [agentToEdit, setAgentToEdit] = useState<AgentDisplay | null>(null);
@@ -130,21 +147,25 @@ export default function AgentOnboardingView(): React.ReactElement {
     description: '',
     capabilities: []
   });
-  
+
   // Get projectID from app store
   const { projectID } = useAppStore();
 
   // Deploy agent with Helm mutation
   const [deployAgentWithHelm] = useDeployAgentWithHelm();
-  
+
   // Delete agent mutation
   const [deleteAgent] = useDeleteAgent();
-  
+
   // Update agent mutation
   const [updateAgent, { loading: updateLoading }] = useUpdateAgent();
 
   // Fetch agents from API
-  const { data: agentsData, loading: agentsLoading, refetch: refetchAgents } = useListAgents({
+  const {
+    data: agentsData,
+    loading: agentsLoading,
+    refetch: refetchAgents
+  } = useListAgents({
     variables: {
       pagination: { page: 1, limit: 50 }
     }
@@ -159,16 +180,44 @@ export default function AgentOnboardingView(): React.ReactElement {
     return agentsData.listAgents.agents
       .filter((agent: ListedAgent) => agent.status === 'REGISTERED')
       .map((agent: ListedAgent) => ({
-      id: agent.agentID,
-      name: agent.name,
-      namespace: agent.namespace || 'default',
-      capabilities: agent.capabilities?.join(', ') || '',
-      status: agent.status || 'Unknown',
-      createdAt: agent.auditInfo?.createdAt 
-        ? new Date(parseInt(agent.auditInfo.createdAt)).toLocaleDateString()
-        : 'N/A'
-    }));
+        id: agent.agentID,
+        name: agent.name,
+        namespace: agent.namespace || 'default',
+        capabilities: agent.capabilities?.join(', ') || '',
+        status: agent.status || 'Unknown',
+        createdAt: agent.auditInfo?.createdAt
+          ? new Date(parseInt(agent.auditInfo.createdAt)).toLocaleDateString()
+          : 'N/A'
+      }));
   }, [agentsData]);
+
+  // Fetch namespaces when Helm method is selected
+  useEffect(() => {
+    const fetchNamespaces = async (): Promise<void> => {
+      if (selectedMethod !== OnboardingMethod.HELM_CHART) return;
+
+      setNamespacesLoading(true);
+      try {
+        const response = await fetch('/api/namespaces');
+        const result = await response.json();
+
+        if (result.success && result.namespaces) {
+          const options: SelectOption[] = result.namespaces.map((ns: string) => ({
+            label: ns,
+            value: ns
+          }));
+          setNamespaceOptions(options);
+        }
+      } catch (_error) {
+        // Keep default namespace option on error
+        setNamespaceOptions([{ label: 'default', value: 'default' }]);
+      } finally {
+        setNamespacesLoading(false);
+      }
+    };
+
+    fetchNamespaces();
+  }, [selectedMethod]);
 
   useDocumentTitle(getString('agentOnboarding'));
 
@@ -312,6 +361,7 @@ export default function AgentOnboardingView(): React.ReactElement {
       // Create FormData to send the helm package to the backend
       const formData = new FormData();
       formData.append('helmPackage', uploadedFile.file);
+      formData.append('namespace', helmForm.namespace);
 
       // Call backend API to validate helm chart
       const response = await fetch('/api/validate-helm', {
@@ -355,17 +405,17 @@ export default function AgentOnboardingView(): React.ReactElement {
       // Reset validation when new file is uploaded
       setValidationStatus(ValidationStatus.IDLE);
       setValidationReleaseInfo(null);
-      
+
       // For Helm charts (.tgz), extract values.yaml from the archive
       if (selectedMethod === OnboardingMethod.HELM_CHART && file.name.endsWith('.tgz')) {
         try {
           const arrayBuffer = await file.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
-          
+
           // Import pako dynamically for decompression
           const pako = await import('pako');
           const decompressed = pako.ungzip(uint8Array);
-          
+
           // Parse tar file to find values.yaml
           let yamlFound = '';
           let offset = 0;
@@ -373,27 +423,27 @@ export default function AgentOnboardingView(): React.ReactElement {
             // Read tar header (512 bytes)
             const header = decompressed.slice(offset, offset + 512);
             if (header[0] === 0) break; // End of archive
-            
+
             // Extract filename from header (first 100 bytes)
             const nameBytes = header.slice(0, 100);
             const name = new TextDecoder().decode(nameBytes).replace(/\0/g, '').trim();
-            
+
             // Extract file size from header (bytes 124-135, octal)
             const sizeBytes = header.slice(124, 136);
             const sizeStr = new TextDecoder().decode(sizeBytes).replace(/\0/g, '').trim();
             const size = parseInt(sizeStr, 8) || 0;
-            
+
             // Check if this is values.yaml
             if (name.endsWith('values.yaml') || name.endsWith('/values.yaml')) {
               const content = decompressed.slice(offset + 512, offset + 512 + size);
               yamlFound = new TextDecoder().decode(content);
               break;
             }
-            
+
             // Move to next file (512-byte aligned)
             offset += 512 + Math.ceil(size / 512) * 512;
           }
-          
+
           setHelmForm(prev => ({
             ...prev,
             valuesYaml: yamlFound || '# values.yaml not found in the chart',
@@ -410,7 +460,7 @@ export default function AgentOnboardingView(): React.ReactElement {
       } else if (selectedMethod === OnboardingMethod.HELM_CHART) {
         // For regular YAML files, read as text
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = e => {
           const content = e.target?.result as string;
           setHelmForm(prev => ({
             ...prev,
@@ -420,7 +470,7 @@ export default function AgentOnboardingView(): React.ReactElement {
         };
         reader.readAsText(file);
       }
-      
+
       showSuccess(getString('uploadedSuccessfully'));
     }
     // Reset the input so the same file can be selected again if needed
@@ -449,7 +499,7 @@ export default function AgentOnboardingView(): React.ReactElement {
 
   const isOnboardDisabled = (): boolean => {
     if (!selectedMethod || isDeploying) return true;
-    
+
     switch (selectedMethod) {
       case OnboardingMethod.HELM_CHART:
         // Require validation success before onboarding
@@ -537,10 +587,10 @@ export default function AgentOnboardingView(): React.ReactElement {
     setAgentToDelete(agent);
     setDeleteConfirmOpen(true);
   };
-  
+
   const confirmDeleteAgent = async (): Promise<void> => {
     if (!agentToDelete) return;
-    
+
     try {
       const result = await deleteAgent({ agentID: agentToDelete.id, hardDelete: false });
       if (result.data?.deleteAgent?.success) {
@@ -556,10 +606,10 @@ export default function AgentOnboardingView(): React.ReactElement {
       setAgentToDelete(null);
     }
   };
-  
+
   const handleUpdateAgent = async (): Promise<void> => {
     if (!agentToEdit) return;
-    
+
     try {
       const result = await updateAgent({
         agentID: agentToEdit.id,
@@ -611,8 +661,8 @@ export default function AgentOnboardingView(): React.ReactElement {
       Header: getString('status'),
       accessor: 'status',
       Cell: ({ value }: CellProps<AgentDisplay>) => (
-        <Text 
-          font={{ variation: FontVariation.BODY }} 
+        <Text
+          font={{ variation: FontVariation.BODY }}
           color={value === 'REGISTERED' || value === 'Active' ? Color.GREEN_700 : Color.GREY_500}
         >
           {value}
@@ -633,18 +683,10 @@ export default function AgentOnboardingView(): React.ReactElement {
       id: 'actions',
       Cell: ({ row }: CellProps<AgentDisplay>) => (
         <Layout.Horizontal spacing="medium">
-          <Text
-            className={css.actionLink}
-            color={Color.PRIMARY_7}
-            onClick={() => handleEditAgent(row.original)}
-          >
+          <Text className={css.actionLink} color={Color.PRIMARY_7} onClick={() => handleEditAgent(row.original)}>
             {getString('edit')}
           </Text>
-          <Text
-            className={css.actionLink}
-            color={Color.RED_600}
-            onClick={() => handleDeleteAgent(row.original)}
-          >
+          <Text className={css.actionLink} color={Color.RED_600} onClick={() => handleDeleteAgent(row.original)}>
             {getString('delete')}
           </Text>
         </Layout.Horizontal>
@@ -653,18 +695,11 @@ export default function AgentOnboardingView(): React.ReactElement {
   ];
 
   return (
-    <DefaultLayoutTemplate
-      breadcrumbs={breadcrumbs}
-      title={getString('agentOnboarding')}
-    >
+    <DefaultLayoutTemplate breadcrumbs={breadcrumbs} title={getString('agentOnboarding')}>
       <Container className={css.container}>
         {!showOptions ? (
           <Layout.Vertical spacing="large">
-            <Text
-              font={{ variation: FontVariation.H3 }}
-              color={Color.GREY_800}
-              className={css.heading}
-            >
+            <Text font={{ variation: FontVariation.H3 }} color={Color.GREY_800} className={css.heading}>
               {getString('agentOnboarding')}
             </Text>
             <Container className={css.newAgentButtonContainer}>
@@ -684,18 +719,10 @@ export default function AgentOnboardingView(): React.ReactElement {
               </Container>
             ) : agents.length > 0 ? (
               <Container className={css.tableContainer}>
-                <Text
-                  font={{ variation: FontVariation.H5 }}
-                  color={Color.GREY_800}
-                  className={css.tableHeading}
-                >
+                <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800} className={css.tableHeading}>
                   {getString('onboardedAgents')}
                 </Text>
-                <TableV2<AgentDisplay>
-                  columns={columns}
-                  data={agents}
-                  className={css.agentsTable}
-                />
+                <TableV2<AgentDisplay> columns={columns} data={agents} className={css.agentsTable} />
               </Container>
             ) : (
               <Container className={css.tableContainer}>
@@ -707,11 +734,7 @@ export default function AgentOnboardingView(): React.ReactElement {
           </Layout.Vertical>
         ) : (
           <Layout.Vertical spacing="large">
-            <Text
-              font={{ variation: FontVariation.H3 }}
-              color={Color.GREY_800}
-              className={css.heading}
-            >
+            <Text font={{ variation: FontVariation.H3 }} color={Color.GREY_800} className={css.heading}>
               {getString('onboardYourAgent')}
             </Text>
 
@@ -743,7 +766,11 @@ export default function AgentOnboardingView(): React.ReactElement {
                       <Text font={{ variation: FontVariation.BODY1 }} color={Color.GREY_900} className={css.radioTitle}>
                         {option.title}
                       </Text>
-                      <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500} className={css.radioDescription}>
+                      <Text
+                        font={{ variation: FontVariation.SMALL }}
+                        color={Color.GREY_500}
+                        className={css.radioDescription}
+                      >
                         {option.description}
                       </Text>
                     </div>
@@ -754,71 +781,106 @@ export default function AgentOnboardingView(): React.ReactElement {
                         <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800}>
                           Agent Configuration
                         </Text>
-                        
+
                         <Layout.Horizontal spacing="medium" className={css.formRow}>
                           <div className={css.formField}>
-                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                            <Text
+                              font={{ variation: FontVariation.SMALL }}
+                              color={Color.GREY_700}
+                              className={css.fieldLabel}
+                            >
                               Agent Name *
                             </Text>
                             <TextInput
                               placeholder="Enter agent name"
                               value={helmForm.agentName}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleHelmFormChange('agentName', e.target.value)}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                handleHelmFormChange('agentName', e.target.value)
+                              }
                               className={css.formInput}
                             />
                           </div>
                           <div className={css.formField}>
-                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                            <Text
+                              font={{ variation: FontVariation.SMALL }}
+                              color={Color.GREY_700}
+                              className={css.fieldLabel}
+                            >
                               Namespace *
                             </Text>
-                            <TextInput
-                              placeholder="default"
-                              value={helmForm.namespace}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleHelmFormChange('namespace', e.target.value)}
-                              className={css.formInput}
+                            <Select
+                              name="namespace"
+                              items={namespaceOptions}
+                              value={namespaceOptions.find(opt => opt.value === helmForm.namespace)}
+                              onChange={(selectedOption: SelectOption) =>
+                                handleHelmFormChange('namespace', selectedOption.value as string)
+                              }
+                              disabled={namespacesLoading}
                             />
                           </div>
                         </Layout.Horizontal>
-                        
+
                         <div className={css.formField}>
-                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                          <Text
+                            font={{ variation: FontVariation.SMALL }}
+                            color={Color.GREY_700}
+                            className={css.fieldLabel}
+                          >
                             Description
                           </Text>
                           <TextInput
                             placeholder="Enter agent description (optional)"
                             value={helmForm.description}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleHelmFormChange('description', e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                              handleHelmFormChange('description', e.target.value)
+                            }
                             className={css.formInput}
                           />
                         </div>
-                        
+
                         <Layout.Horizontal spacing="medium" className={css.formRow}>
                           <div className={css.formField}>
-                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                            <Text
+                              font={{ variation: FontVariation.SMALL }}
+                              color={Color.GREY_700}
+                              className={css.fieldLabel}
+                            >
                               Helm Release Name *
                             </Text>
                             <TextInput
                               placeholder="my-agent-release"
                               value={helmForm.helmReleaseName}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleHelmFormChange('helmReleaseName', e.target.value)}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                handleHelmFormChange('helmReleaseName', e.target.value)
+                              }
                               className={css.formInput}
                             />
                           </div>
                           <div className={css.formField}>
-                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                            <Text
+                              font={{ variation: FontVariation.SMALL }}
+                              color={Color.GREY_700}
+                              className={css.fieldLabel}
+                            >
                               Helm Chart Version
                             </Text>
                             <TextInput
                               placeholder="1.0.0"
                               value={helmForm.helmChartVersion}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleHelmFormChange('helmChartVersion', e.target.value)}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                handleHelmFormChange('helmChartVersion', e.target.value)
+                              }
                               className={css.formInput}
                             />
                           </div>
                         </Layout.Horizontal>
-                        
+
                         <div className={css.formField}>
-                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                          <Text
+                            font={{ variation: FontVariation.SMALL }}
+                            color={Color.GREY_700}
+                            className={css.fieldLabel}
+                          >
                             Domains * (Select one or more)
                           </Text>
                           <div className={css.capabilitiesGrid}>
@@ -827,12 +889,15 @@ export default function AgentOnboardingView(): React.ReactElement {
                                 <input
                                   type="checkbox"
                                   checked={helmForm.capabilities.includes(cap.value as string)}
-                                  onChange={(e) => {
+                                  onChange={e => {
                                     const value = cap.value as string;
                                     if (e.target.checked) {
                                       handleHelmFormChange('capabilities', [...helmForm.capabilities, value]);
                                     } else {
-                                      handleHelmFormChange('capabilities', helmForm.capabilities.filter(c => c !== value));
+                                      handleHelmFormChange(
+                                        'capabilities',
+                                        helmForm.capabilities.filter(c => c !== value)
+                                      );
                                     }
                                   }}
                                 />
@@ -843,15 +908,23 @@ export default function AgentOnboardingView(): React.ReactElement {
                             ))}
                           </div>
                         </div>
-                        
+
                         <div className={css.formField}>
-                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                          <Text
+                            font={{ variation: FontVariation.SMALL }}
+                            color={Color.GREY_700}
+                            className={css.fieldLabel}
+                          >
                             Values YAML (Optional - Upload or paste)
                           </Text>
                           <Layout.Horizontal spacing="small" className={css.uploadRow}>
                             <Button
                               variation={ButtonVariation.SECONDARY}
-                              text={uploadedFile?.method === OnboardingMethod.HELM_CHART ? uploadedFile.name : getString('upload')}
+                              text={
+                                uploadedFile?.method === OnboardingMethod.HELM_CHART
+                                  ? uploadedFile.name
+                                  : getString('upload')
+                              }
                               icon="upload"
                               onClick={handleUploadClick}
                               className={css.uploadButton}
@@ -872,7 +945,7 @@ export default function AgentOnboardingView(): React.ReactElement {
                           <textarea
                             placeholder="Paste your values.yaml content here..."
                             value={helmForm.valuesYaml}
-                            onChange={(e) => handleHelmFormChange('valuesYaml', e.target.value)}
+                            onChange={e => handleHelmFormChange('valuesYaml', e.target.value)}
                             className={css.yamlTextarea}
                             rows={6}
                           />
@@ -885,7 +958,9 @@ export default function AgentOnboardingView(): React.ReactElement {
                       <TextInput
                         placeholder={getTextboxPlaceholder(option.value)}
                         value={getTextboxValue(option.value)}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextboxChange(option.value, e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          handleTextboxChange(option.value, e.target.value)
+                        }
                         className={css.urlTextbox}
                       />
                       <Button
@@ -896,7 +971,11 @@ export default function AgentOnboardingView(): React.ReactElement {
                         className={css.uploadButton}
                       />
                       {uploadedFile && uploadedFile.method === option.value && (
-                        <Text font={{ variation: FontVariation.SMALL }} color={Color.GREEN_700} className={css.uploadedFileName}>
+                        <Text
+                          font={{ variation: FontVariation.SMALL }}
+                          color={Color.GREEN_700}
+                          className={css.uploadedFileName}
+                        >
                           ✓
                         </Text>
                       )}
@@ -917,7 +996,9 @@ export default function AgentOnboardingView(): React.ReactElement {
               {selectedMethod === OnboardingMethod.HELM_CHART && (
                 <Button
                   variation={ButtonVariation.SECONDARY}
-                  text={validationStatus === ValidationStatus.VALIDATING ? getString('validating') : getString('validate')}
+                  text={
+                    validationStatus === ValidationStatus.VALIDATING ? getString('validating') : getString('validate')
+                  }
                   icon={validationStatus === ValidationStatus.VALIDATING ? undefined : 'tick'}
                   onClick={handleValidate}
                   disabled={isValidateDisabled()}
@@ -938,7 +1019,7 @@ export default function AgentOnboardingView(): React.ReactElement {
           </Layout.Vertical>
         )}
       </Container>
-      
+
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={deleteConfirmOpen}
@@ -956,7 +1037,7 @@ export default function AgentOnboardingView(): React.ReactElement {
           }
         }}
       />
-      
+
       {/* Edit Agent Modal */}
       <Dialog
         isOpen={editModalOpen}
@@ -980,7 +1061,9 @@ export default function AgentOnboardingView(): React.ReactElement {
               <TextInput
                 placeholder="Enter agent name"
                 value={editForm.name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setEditForm(prev => ({ ...prev, name: e.target.value }))
+                }
                 className={css.formInput}
               />
             </div>
@@ -994,7 +1077,7 @@ export default function AgentOnboardingView(): React.ReactElement {
                     <input
                       type="checkbox"
                       checked={editForm.capabilities.includes(cap.value as string)}
-                      onChange={(e) => {
+                      onChange={e => {
                         const value = cap.value as string;
                         if (e.target.checked) {
                           setEditForm(prev => ({ ...prev, capabilities: [...prev.capabilities, value] }));
