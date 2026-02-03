@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-log-tool
+  labels:
+    app: k8s-log-tool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-log-tool
+  template:
+    metadata:
+      labels:
+        app: k8s-log-tool
+    spec:
+      serviceAccountName: k8s-log-tool
+      containers:
+      - name: k8s-log-tool
+        image: k8s-log-tool:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PORT
+          value: "8080"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-log-tool
+  labels:
+    app: k8s-log-tool
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app: k8s-log-tool
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-log-tool
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-log-tool
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-log-tool
+subjects:
+- kind: ServiceAccount
+  name: k8s-log-tool
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: k8s-log-tool
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Optional: Ingress for external access (uncomment if needed)
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: k8s-log-tool
+#   annotations:
+#     nginx.ingress.kubernetes.io/rewrite-target: /
+# spec:
+#   rules:
+#   - host: k8s-log-tool.local
+#     http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: k8s-log-tool
+#             port:
+#               number: 8080
