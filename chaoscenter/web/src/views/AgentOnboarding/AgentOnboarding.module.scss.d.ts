@@ -33,6 +33,8 @@ declare namespace AgentOnboardingModuleScssNamespace {
     uploadSection: string;
     uploadedFileName: string;
     urlTextbox: string;
+    validateFailed: string;
+    validateSuccess: string;
     yamlTextarea: string;
   }
 }

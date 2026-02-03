@@ -16,7 +16,8 @@
 
 .radioRow {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--spacing-medium);
 }
 
@@ -73,9 +74,36 @@
 
 .inputSection {
   display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+  width: 100%;
+  padding-left: var(--spacing-xlarge);
+  margin-top: var(--spacing-small);
+}
+
+.environmentDropdownContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xsmall);
+  width: 100%;
+  margin-bottom: var(--spacing-small);
+}
+
+.dropdownLabel {
+  font-weight: 500;
+}
+
+.environmentDropdown {
+  width: 100%;
+  min-width: 300px;
+}
+
+.helmChartInputRow {
+  display: flex;
   align-items: center;
   gap: var(--spacing-small);
-  min-width: 500px;
+  width: 100%;
 }
 
 .urlTextbox {
@@ -106,6 +134,39 @@
 
 .uploadedFileName {
   white-space: nowrap;
+  margin-left: var(--spacing-small);
+}
+
+.yamlContentContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-small);
+  width: 100%;
+  margin-top: var(--spacing-medium);
+}
+
+.yamlLabel {
+  font-weight: 500;
+}
+
+.yamlTextarea {
+  width: 100%;
+  min-height: 300px;
+  padding: var(--spacing-medium);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid var(--grey-300);
+  border-radius: 4px;
+  background-color: var(--grey-50);
+  color: var(--grey-900);
+  resize: vertical;
+  overflow: auto;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-7);
+  }
 }
 
 .newAppButtonContainer {
@@ -163,5 +224,39 @@
 
   &:hover {
     text-decoration: underline;
+  }
+}
+
+.validateSuccess {
+  background-color: var(--green-100) !important;
+  border-color: var(--green-500) !important;
+  color: var(--green-700) !important;
+
+  &:hover {
+    background-color: var(--green-200) !important;
+  }
+}
+
+.validateFailed {
+  background-color: var(--red-100) !important;
+  border-color: var(--red-500) !important;
+  color: var(--red-700) !important;
+
+  &:hover {
+    background-color: var(--red-200) !important;
+  }
+}
+
+.loadingIcon {
+  margin-right: var(--spacing-small);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }

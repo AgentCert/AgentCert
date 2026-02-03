@@ -29,6 +29,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/config"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apps_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/handlers"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/projects"
 	pb "github.com/litmuschaos/litmus/chaoscenter/graphql/server/protos"
@@ -166,6 +167,19 @@ func main() {
 	//general routers
 	router.GET("/status", handlers.StatusHandler())
 	router.GET("/readiness", handlers.ReadinessHandler())
+
+	// helm validation router for apps onboarding
+	router.POST("/api/validate-helm", handlers.ValidateHelmHandler())
+	
+	// helm cleanup router for onboarding flows
+	router.POST("/api/cleanup-helm", handlers.CleanupHelmHandler())
+
+	// apps registry routers
+	appsHandler := apps_registry.NewHandler(mongodb.MgoClient.Database(mongodb.DbName))
+	router.POST("/api/apps/register", appsHandler.RegisterApp())
+	router.GET("/api/apps", appsHandler.ListApps())
+	router.GET("/api/apps/:appId", appsHandler.GetApp())
+	router.DELETE("/api/apps/:appId", appsHandler.DeleteApp())
 
 	projectEventChannel := make(chan string)
 	go projects.ProjectEvents(projectEventChannel, mongodb.MgoClient, mongodbOperator)

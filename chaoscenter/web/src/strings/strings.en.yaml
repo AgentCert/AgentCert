@@ -146,6 +146,7 @@ onboardUsingAPIsDesc: Integrate your agent programmatically using our REST APIs
 onboardUsingFaaS: Onboard agent using Function as a Service
 onboardUsingFaaSDesc: Deploy your agent as serverless functions on cloud platforms
 onboard: Onboard
+onboarding: Onboarding...
 upload: Upload
 uploadedSuccessfully: File uploaded successfully
 pleaseUploadFile: Please upload the required file to proceed
@@ -1034,6 +1035,7 @@ seeAllChaosHubs: See All ChaosHubs
 seeAllChaosInfrastructures: See All Infrastructures
 seeAllEnvironments: See All Environments
 seeAllFaults: See All Faults
+selectEnvironment: Select Environment
 selectAProbe: Select a Probe
 selectAppKind: Select App Kind
 selectAppLabel: Select App Label
@@ -1142,6 +1144,10 @@ testYour1: Test your
 testYour2: of the experiment against the result
 testingConnection: Testing Chaos Infrastructure Connection
 thisExperimentHasNoRuns: This experiment has no runs yet
+validate: Validate
+validating: Validating...
+validatedSuccessfully: Validated successfully
+validationFailed: Deployment failed, please check the logs for more details
 timeout: Timeout
 toBeDefined: (To be defined)
 tokenCreateSuccessMessage: Token created successfully
