@@ -531,6 +531,22 @@ type CreateEnvironmentRequest struct {
 	Tags          []string        `json:"tags,omitempty"`
 }
 
+// CreateFaultStudioRequest contains the data needed to create a new fault studio.
+type CreateFaultStudioRequest struct {
+	// Name of the fault studio (must be unique within project)
+	Name string `json:"name"`
+	// Optional description
+	Description *string `json:"description,omitempty"`
+	// Tags for categorization
+	Tags []string `json:"tags,omitempty"`
+	// ID of the source ChaosHub
+	SourceHubID string `json:"sourceHubId"`
+	// Initial list of selected faults
+	SelectedFaults []*FaultSelectionInput `json:"selectedFaults"`
+	// Whether the studio should be active upon creation
+	IsActive *bool `json:"isActive,omitempty"`
+}
+
 type CreateRemoteChaosHub struct {
 	// Name of the chaos hub
 	Name string `json:"name"`
@@ -903,11 +919,184 @@ type FaultDetails struct {
 	CSV string `json:"csv"`
 }
 
+// FaultInjectionConfig contains configuration for how and when a fault should be injected.
+type FaultInjectionConfig struct {
+	// Type of injection timing
+	InjectionType InjectionType `json:"injectionType"`
+	// Cron expression for scheduled injection (e.g., '0 */5 * * *')
+	Schedule *string `json:"schedule,omitempty"`
+	// Duration of the fault injection (e.g., '30s', '5m')
+	Duration *string `json:"duration,omitempty"`
+	// Kubernetes selector for targeting specific pods/nodes
+	TargetSelector *string `json:"targetSelector,omitempty"`
+	// Interval between repeated injections
+	Interval *string `json:"interval,omitempty"`
+}
+
+// FaultInjectionConfigInput is the input type for FaultInjectionConfig.
+type FaultInjectionConfigInput struct {
+	// Type of injection timing
+	InjectionType InjectionType `json:"injectionType"`
+	// Cron expression for scheduled injection
+	Schedule *string `json:"schedule,omitempty"`
+	// Duration of the fault injection
+	Duration *string `json:"duration,omitempty"`
+	// Kubernetes selector for targeting
+	TargetSelector *string `json:"targetSelector,omitempty"`
+	// Interval between injections
+	Interval *string `json:"interval,omitempty"`
+}
+
 type FaultList struct {
 	Name        string   `json:"name"`
 	DisplayName string   `json:"displayName"`
 	Description string   `json:"description"`
 	Plan        []string `json:"plan,omitempty"`
+}
+
+// FaultSelection represents a single fault selected from a ChaosHub for inclusion in a Fault Studio.
+type FaultSelection struct {
+	// Category of the fault (e.g., 'kubernetes', 'aws', 'azure', 'gcp', 'network')
+	FaultCategory string `json:"faultCategory"`
+	// Internal name of the fault
+	FaultName string `json:"faultName"`
+	// Human-readable display name
+	DisplayName string `json:"displayName"`
+	// Description of what the fault does
+	Description *string `json:"description,omitempty"`
+	// Whether this fault is currently enabled in the studio
+	Enabled bool `json:"enabled"`
+	// Configuration for how the fault should be injected
+	InjectionConfig *FaultInjectionConfig `json:"injectionConfig,omitempty"`
+	// Custom parameters to override default fault settings (JSON string)
+	CustomParameters *string `json:"customParameters,omitempty"`
+	// Priority/weight for fault selection (higher = more likely)
+	Weight int `json:"weight"`
+}
+
+// FaultSelectionInput is the input type for creating/updating fault selections.
+type FaultSelectionInput struct {
+	// Category of the fault (e.g., 'kubernetes', 'aws', 'azure', 'gcp', 'network')
+	FaultCategory string `json:"faultCategory"`
+	// Internal name of the fault
+	FaultName string `json:"faultName"`
+	// Human-readable display name
+	DisplayName string `json:"displayName"`
+	// Description of what the fault does
+	Description *string `json:"description,omitempty"`
+	// Whether this fault is enabled
+	Enabled bool `json:"enabled"`
+	// Injection configuration
+	InjectionConfig *FaultInjectionConfigInput `json:"injectionConfig,omitempty"`
+	// Custom parameters as JSON string
+	CustomParameters *string `json:"customParameters,omitempty"`
+	// Priority/weight for fault selection
+	Weight *int `json:"weight,omitempty"`
+}
+
+// FaultStudio represents a configured collection of faults from a ChaosHub
+// that can be used for AI agent testing and benchmarking.
+type FaultStudio struct {
+	// Unique identifier for the fault studio
+	ID string `json:"id"`
+	// Name of the fault studio
+	Name string `json:"name"`
+	// Description of the fault studio's purpose
+	Description *string `json:"description,omitempty"`
+	// Tags for categorization
+	Tags []string `json:"tags,omitempty"`
+	// Project ID that owns this fault studio
+	ProjectID string `json:"projectId"`
+	// ID of the source ChaosHub from which faults are selected
+	SourceHubID string `json:"sourceHubId"`
+	// Name of the source ChaosHub (cached for display)
+	SourceHubName string `json:"sourceHubName"`
+	// List of selected and configured faults
+	SelectedFaults []*FaultSelection `json:"selectedFaults"`
+	// Whether the fault studio is currently active
+	IsActive bool `json:"isActive"`
+	// Total number of faults in the studio
+	TotalFaults int `json:"totalFaults"`
+	// Number of enabled faults
+	EnabledFaults int `json:"enabledFaults"`
+	// Whether the fault studio has been deleted (soft delete)
+	IsRemoved bool `json:"isRemoved"`
+	// Timestamp when the fault studio was created
+	CreatedAt string `json:"createdAt"`
+	// Timestamp when the fault studio was last updated
+	UpdatedAt string `json:"updatedAt"`
+	// User who created the fault studio
+	CreatedBy *UserDetails `json:"createdBy,omitempty"`
+	// User who last updated the fault studio
+	UpdatedBy *UserDetails `json:"updatedBy,omitempty"`
+}
+
+func (FaultStudio) IsResourceDetails()           {}
+func (this FaultStudio) GetName() string         { return this.Name }
+func (this FaultStudio) GetDescription() *string { return this.Description }
+func (this FaultStudio) GetTags() []string {
+	if this.Tags == nil {
+		return nil
+	}
+	interfaceSlice := make([]string, 0, len(this.Tags))
+	for _, concrete := range this.Tags {
+		interfaceSlice = append(interfaceSlice, concrete)
+	}
+	return interfaceSlice
+}
+
+func (FaultStudio) IsAudit()                        {}
+func (this FaultStudio) GetUpdatedAt() *string      { return &this.UpdatedAt }
+func (this FaultStudio) GetCreatedAt() *string      { return &this.CreatedAt }
+func (this FaultStudio) GetUpdatedBy() *UserDetails { return this.UpdatedBy }
+func (this FaultStudio) GetCreatedBy() *UserDetails { return this.CreatedBy }
+
+// FaultStudioFilterInput provides filtering options for listing fault studios.
+type FaultStudioFilterInput struct {
+	// Filter by fault studio name (partial match)
+	Name *string `json:"name,omitempty"`
+	// Filter by source ChaosHub ID
+	SourceHubID *string `json:"sourceHubId,omitempty"`
+	// Filter by active status
+	IsActive *bool `json:"isActive,omitempty"`
+	// Filter by tags (match any)
+	Tags []string `json:"tags,omitempty"`
+}
+
+// FaultStudioStatsResponse contains statistics about fault studios in a project.
+type FaultStudioStatsResponse struct {
+	// Total number of fault studios
+	TotalFaultStudios int `json:"totalFaultStudios"`
+	// Number of active fault studios
+	ActiveFaultStudios int `json:"activeFaultStudios"`
+	// Total number of faults across all studios
+	TotalFaultsConfigured int `json:"totalFaultsConfigured"`
+}
+
+// FaultStudioSummary is a lightweight view of a fault studio for list operations.
+type FaultStudioSummary struct {
+	// Unique identifier
+	ID string `json:"id"`
+	// Name of the fault studio
+	Name string `json:"name"`
+	// Description
+	Description *string `json:"description,omitempty"`
+	// Project ID
+	ProjectID string `json:"projectId"`
+	// Source ChaosHub ID
+	SourceHubID string `json:"sourceHubId"`
+	// Source ChaosHub name
+	SourceHubName string `json:"sourceHubName"`
+	// Total number of faults
+	TotalFaults int `json:"totalFaults"`
+	// Number of enabled faults
+	EnabledFaults int `json:"enabledFaults"`
+	// Whether the studio is active
+	IsActive bool `json:"isActive"`
+	// Creation timestamp
+	CreatedAt string `json:"createdAt"`
+	// Last update timestamp
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // Details of GET request
@@ -1716,6 +1905,26 @@ type ListExperimentRunResponse struct {
 	ExperimentRuns []*ExperimentRun `json:"experimentRuns"`
 }
 
+// ListFaultStudioRequest contains parameters for listing fault studios.
+type ListFaultStudioRequest struct {
+	// Optional list of specific studio IDs to retrieve
+	StudioIds []string `json:"studioIds,omitempty"`
+	// Filter options
+	Filter *FaultStudioFilterInput `json:"filter,omitempty"`
+	// Pagination: number of items to return
+	Limit *int `json:"limit,omitempty"`
+	// Pagination: number of items to skip
+	Offset *int `json:"offset,omitempty"`
+}
+
+// ListFaultStudioResponse contains the paginated list of fault studios.
+type ListFaultStudioResponse struct {
+	// Total count of fault studios matching the filter
+	TotalCount int `json:"totalCount"`
+	// List of fault studio summaries
+	FaultStudios []*FaultStudioSummary `json:"faultStudios"`
+}
+
 // Defines the details for a infra
 type ListInfraRequest struct {
 	// Array of infra IDs for which details will be fetched
@@ -2282,6 +2491,16 @@ type SyncResponse struct {
 	Message string `json:"message"`
 }
 
+// ToggleFaultResponse is returned after enabling/disabling a fault in a studio.
+type ToggleFaultResponse struct {
+	// The updated fault studio
+	FaultStudio *FaultStudio `json:"faultStudio"`
+	// Whether the operation was successful
+	Success bool `json:"success"`
+	// Optional message about the operation
+	Message *string `json:"message,omitempty"`
+}
+
 type Toleration struct {
 	TolerationSeconds *int    `json:"tolerationSeconds,omitempty"`
 	Key               *string `json:"key,omitempty"`
@@ -2356,6 +2575,20 @@ type UpdateEnvironmentRequest struct {
 	Description   *string          `json:"description,omitempty"`
 	Tags          []*string        `json:"tags,omitempty"`
 	Type          *EnvironmentType `json:"type,omitempty"`
+}
+
+// UpdateFaultStudioRequest contains the data for updating an existing fault studio.
+type UpdateFaultStudioRequest struct {
+	// Updated name (optional)
+	Name *string `json:"name,omitempty"`
+	// Updated description (optional)
+	Description *string `json:"description,omitempty"`
+	// Updated tags (optional)
+	Tags []string `json:"tags,omitempty"`
+	// Updated list of selected faults (optional - replaces entire list)
+	SelectedFaults []*FaultSelectionInput `json:"selectedFaults,omitempty"`
+	// Updated active status (optional)
+	IsActive *bool `json:"isActive,omitempty"`
 }
 
 type UserDetails struct {
@@ -3008,6 +3241,53 @@ func (e *InfrastructureType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e InfrastructureType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// InjectionType represents how a fault should be injected during agent testing.
+type InjectionType string
+
+const (
+	// Fault is injected based on a cron schedule
+	InjectionTypeScheduled InjectionType = "SCHEDULED"
+	// Fault is injected manually on demand
+	InjectionTypeOnDemand InjectionType = "ON_DEMAND"
+	// Fault is continuously active during the test
+	InjectionTypeContinuous InjectionType = "CONTINUOUS"
+)
+
+var AllInjectionType = []InjectionType{
+	InjectionTypeScheduled,
+	InjectionTypeOnDemand,
+	InjectionTypeContinuous,
+}
+
+func (e InjectionType) IsValid() bool {
+	switch e {
+	case InjectionTypeScheduled, InjectionTypeOnDemand, InjectionTypeContinuous:
+		return true
+	}
+	return false
+}
+
+func (e InjectionType) String() string {
+	return string(e)
+}
+
+func (e *InjectionType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = InjectionType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid InjectionType", str)
+	}
+	return nil
+}
+
+func (e InjectionType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
