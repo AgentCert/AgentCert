@@ -1,0 +1,37 @@
+.infoCard {
+  padding: var(--spacing-large);
+}
+
+.activeStatus {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.faultsContainer {
+  flex-wrap: wrap;
+}
+
+.faultCard {
+  width: 280px;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease-in-out;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.enabledStatus {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.faultToggle {
+  margin-bottom: 0 !important;
+  
+  :global(.bp3-control-indicator) {
+    margin-top: 0 !important;
+  }
+}

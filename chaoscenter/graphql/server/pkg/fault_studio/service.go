@@ -17,6 +17,12 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+// DefaultHubID is the constant ID for the default Litmus ChaosHub
+const DefaultHubID = "6f39cea9-6264-4951-83a8-29976b614289"
+
+// DefaultHubName is the name of the default Litmus ChaosHub
+const DefaultHubName = "Litmus ChaosHub"
+
 // Service defines the interface for fault studio operations
 type Service interface {
 	// CreateFaultStudio creates a new fault studio
@@ -85,11 +91,26 @@ func (s *faultStudioService) CreateFaultStudio(ctx context.Context, projectID st
 		return nil, errors.New("fault studio name already exists in this project")
 	}
 
-	// Get the source ChaosHub to validate it exists and get its name
-	chaosHub, err := s.chaosHubOperator.GetHubByID(ctx, request.SourceHubID, projectID)
-	if err != nil {
-		log.Error("error getting source chaos hub: ", err)
-		return nil, errors.New("source ChaosHub not found")
+	// Get the source ChaosHub name
+	var sourceHubName string
+	
+	// Check if this is the default hub (not stored in DB, generated dynamically)
+	if request.SourceHubID == DefaultHubID {
+		sourceHubName = DefaultHubName
+		log.Info("Using default Litmus ChaosHub as source")
+	} else {
+		// Try to get from database - first by project_id
+		chaosHub, err := s.chaosHubOperator.GetHubByID(ctx, request.SourceHubID, projectID)
+		if err != nil {
+			// If not found, try to get by hub_id only
+			log.Info("Hub not found by project_id, trying by hub_id only...")
+			chaosHub, err = s.chaosHubOperator.GetHubByIDOnly(ctx, request.SourceHubID)
+			if err != nil {
+				log.Error("error getting source chaos hub: ", err)
+				return nil, errors.New("source ChaosHub not found")
+			}
+		}
+		sourceHubName = chaosHub.Name
 	}
 
 	// Get username from context
@@ -134,7 +155,7 @@ func (s *faultStudioService) CreateFaultStudio(ctx context.Context, projectID st
 			Tags:        request.Tags,
 		},
 		SourceHubID:    request.SourceHubID,
-		SourceHubName:  chaosHub.Name,
+		SourceHubName:  sourceHubName,
 		SelectedFaults: selectedFaults,
 		IsActive:       isActive,
 		TotalFaults:    totalFaults,

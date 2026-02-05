@@ -339,7 +339,7 @@ extend type Query {
   """
   getFaultStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
   ): FaultStudio! @authorized
   
   """
@@ -364,7 +364,7 @@ extend type Query {
   isFaultStudioNameAvailable(
     projectID: ID!
     name: String!
-    excludeStudioId: ID
+    excludeStudioID: ID
   ): Boolean! @authorized
 }
 
@@ -386,7 +386,7 @@ extend type Mutation {
   """
   updateFaultStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     request: UpdateFaultStudioRequest!
   ): FaultStudio! @authorized
   
@@ -395,7 +395,7 @@ extend type Mutation {
   """
   deleteFaultStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
   ): Boolean! @authorized
   
   """
@@ -403,7 +403,7 @@ extend type Mutation {
   """
   toggleFaultInStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     faultName: String!
     enabled: Boolean!
   ): ToggleFaultResponse! @authorized
@@ -413,7 +413,7 @@ extend type Mutation {
   """
   setFaultStudioActive(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     isActive: Boolean!
   ): FaultStudio! @authorized
   
@@ -422,7 +422,7 @@ extend type Mutation {
   """
   addFaultToStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     fault: FaultSelectionInput!
   ): FaultStudio! @authorized
   
@@ -431,7 +431,7 @@ extend type Mutation {
   """
   removeFaultFromStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     faultName: String!
   ): FaultStudio! @authorized
   
@@ -440,7 +440,7 @@ extend type Mutation {
   """
   updateFaultInStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     faultName: String!
     fault: FaultSelectionInput!
   ): FaultStudio! @authorized

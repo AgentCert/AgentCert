@@ -3900,7 +3900,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.AddFaultToStudio(childComplexity, args["projectID"].(string), args["studioId"].(string), args["fault"].(model.FaultSelectionInput)), true
+		return e.complexity.Mutation.AddFaultToStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["fault"].(model.FaultSelectionInput)), true
 
 	case "Mutation.addProbe":
 		if e.complexity.Mutation.AddProbe == nil {
@@ -4056,7 +4056,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.DeleteFaultStudio(childComplexity, args["projectID"].(string), args["studioId"].(string)), true
+		return e.complexity.Mutation.DeleteFaultStudio(childComplexity, args["projectID"].(string), args["studioID"].(string)), true
 
 	case "Mutation.deleteImageRegistry":
 		if e.complexity.Mutation.DeleteImageRegistry == nil {
@@ -4231,7 +4231,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.RemoveFaultFromStudio(childComplexity, args["projectID"].(string), args["studioId"].(string), args["faultName"].(string)), true
+		return e.complexity.Mutation.RemoveFaultFromStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["faultName"].(string)), true
 
 	case "Mutation.runChaosExperiment":
 		if e.complexity.Mutation.RunChaosExperiment == nil {
@@ -4279,7 +4279,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.SetFaultStudioActive(childComplexity, args["projectID"].(string), args["studioId"].(string), args["isActive"].(bool)), true
+		return e.complexity.Mutation.SetFaultStudioActive(childComplexity, args["projectID"].(string), args["studioID"].(string), args["isActive"].(bool)), true
 
 	case "Mutation.stopExperimentRuns":
 		if e.complexity.Mutation.StopExperimentRuns == nil {
@@ -4327,7 +4327,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.ToggleFaultInStudio(childComplexity, args["projectID"].(string), args["studioId"].(string), args["faultName"].(string), args["enabled"].(bool)), true
+		return e.complexity.Mutation.ToggleFaultInStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["faultName"].(string), args["enabled"].(bool)), true
 
 	case "Mutation.updateAgent":
 		if e.complexity.Mutation.UpdateAgent == nil {
@@ -4399,7 +4399,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.UpdateFaultInStudio(childComplexity, args["projectID"].(string), args["studioId"].(string), args["faultName"].(string), args["fault"].(model.FaultSelectionInput)), true
+		return e.complexity.Mutation.UpdateFaultInStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["faultName"].(string), args["fault"].(model.FaultSelectionInput)), true
 
 	case "Mutation.updateFaultStudio":
 		if e.complexity.Mutation.UpdateFaultStudio == nil {
@@ -4411,7 +4411,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.UpdateFaultStudio(childComplexity, args["projectID"].(string), args["studioId"].(string), args["request"].(model.UpdateFaultStudioRequest)), true
+		return e.complexity.Mutation.UpdateFaultStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["request"].(model.UpdateFaultStudioRequest)), true
 
 	case "Mutation.updateGitOps":
 		if e.complexity.Mutation.UpdateGitOps == nil {
@@ -4946,7 +4946,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.GetFaultStudio(childComplexity, args["projectID"].(string), args["studioId"].(string)), true
+		return e.complexity.Query.GetFaultStudio(childComplexity, args["projectID"].(string), args["studioID"].(string)), true
 
 	case "Query.getFaultStudioStats":
 		if e.complexity.Query.GetFaultStudioStats == nil {
@@ -5121,7 +5121,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.IsFaultStudioNameAvailable(childComplexity, args["projectID"].(string), args["name"].(string), args["excludeStudioId"].(*string)), true
+		return e.complexity.Query.IsFaultStudioNameAvailable(childComplexity, args["projectID"].(string), args["name"].(string), args["excludeStudioID"].(*string)), true
 
 	case "Query.listAgents":
 		if e.complexity.Query.ListAgents == nil {
@@ -9225,7 +9225,7 @@ extend type Query {
   """
   getFaultStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
   ): FaultStudio! @authorized
   
   """
@@ -9250,7 +9250,7 @@ extend type Query {
   isFaultStudioNameAvailable(
     projectID: ID!
     name: String!
-    excludeStudioId: ID
+    excludeStudioID: ID
   ): Boolean! @authorized
 }
 
@@ -9272,7 +9272,7 @@ extend type Mutation {
   """
   updateFaultStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     request: UpdateFaultStudioRequest!
   ): FaultStudio! @authorized
   
@@ -9281,7 +9281,7 @@ extend type Mutation {
   """
   deleteFaultStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
   ): Boolean! @authorized
   
   """
@@ -9289,7 +9289,7 @@ extend type Mutation {
   """
   toggleFaultInStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     faultName: String!
     enabled: Boolean!
   ): ToggleFaultResponse! @authorized
@@ -9299,7 +9299,7 @@ extend type Mutation {
   """
   setFaultStudioActive(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     isActive: Boolean!
   ): FaultStudio! @authorized
   
@@ -9308,7 +9308,7 @@ extend type Mutation {
   """
   addFaultToStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     fault: FaultSelectionInput!
   ): FaultStudio! @authorized
   
@@ -9317,7 +9317,7 @@ extend type Mutation {
   """
   removeFaultFromStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     faultName: String!
   ): FaultStudio! @authorized
   
@@ -9326,7 +9326,7 @@ extend type Mutation {
   """
   updateFaultInStudio(
     projectID: ID!
-    studioId: ID!
+    studioID: ID!
     faultName: String!
     fault: FaultSelectionInput!
   ): FaultStudio! @authorized
@@ -10772,14 +10772,14 @@ func (ec *executionContext) field_Mutation_addFaultToStudio_args(ctx context.Con
 	}
 	args["projectID"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["studioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioId"))
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
 		arg1, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["studioId"] = arg1
+	args["studioID"] = arg1
 	var arg2 model.FaultSelectionInput
 	if tmp, ok := rawArgs["fault"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fault"))
@@ -11084,14 +11084,14 @@ func (ec *executionContext) field_Mutation_deleteFaultStudio_args(ctx context.Co
 	}
 	args["projectID"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["studioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioId"))
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
 		arg1, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["studioId"] = arg1
+	args["studioID"] = arg1
 	return args, nil
 }
 
@@ -11384,14 +11384,14 @@ func (ec *executionContext) field_Mutation_removeFaultFromStudio_args(ctx contex
 	}
 	args["projectID"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["studioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioId"))
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
 		arg1, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["studioId"] = arg1
+	args["studioID"] = arg1
 	var arg2 string
 	if tmp, ok := rawArgs["faultName"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("faultName"))
@@ -11489,14 +11489,14 @@ func (ec *executionContext) field_Mutation_setFaultStudioActive_args(ctx context
 	}
 	args["projectID"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["studioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioId"))
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
 		arg1, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["studioId"] = arg1
+	args["studioID"] = arg1
 	var arg2 bool
 	if tmp, ok := rawArgs["isActive"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("isActive"))
@@ -11603,14 +11603,14 @@ func (ec *executionContext) field_Mutation_toggleFaultInStudio_args(ctx context.
 	}
 	args["projectID"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["studioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioId"))
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
 		arg1, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["studioId"] = arg1
+	args["studioID"] = arg1
 	var arg2 string
 	if tmp, ok := rawArgs["faultName"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("faultName"))
@@ -11774,14 +11774,14 @@ func (ec *executionContext) field_Mutation_updateFaultInStudio_args(ctx context.
 	}
 	args["projectID"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["studioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioId"))
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
 		arg1, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["studioId"] = arg1
+	args["studioID"] = arg1
 	var arg2 string
 	if tmp, ok := rawArgs["faultName"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("faultName"))
@@ -11816,14 +11816,14 @@ func (ec *executionContext) field_Mutation_updateFaultStudio_args(ctx context.Co
 	}
 	args["projectID"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["studioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioId"))
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
 		arg1, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["studioId"] = arg1
+	args["studioID"] = arg1
 	var arg2 model.UpdateFaultStudioRequest
 	if tmp, ok := rawArgs["request"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("request"))
@@ -12203,14 +12203,14 @@ func (ec *executionContext) field_Query_getFaultStudio_args(ctx context.Context,
 	}
 	args["projectID"] = arg0
 	var arg1 string
-	if tmp, ok := rawArgs["studioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioId"))
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
 		arg1, err = ec.unmarshalNID2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["studioId"] = arg1
+	args["studioID"] = arg1
 	return args, nil
 }
 
@@ -12515,14 +12515,14 @@ func (ec *executionContext) field_Query_isFaultStudioNameAvailable_args(ctx cont
 	}
 	args["name"] = arg1
 	var arg2 *string
-	if tmp, ok := rawArgs["excludeStudioId"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("excludeStudioId"))
+	if tmp, ok := rawArgs["excludeStudioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("excludeStudioID"))
 		arg2, err = ec.unmarshalOID2ᚖstring(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["excludeStudioId"] = arg2
+	args["excludeStudioID"] = arg2
 	return args, nil
 }
 
@@ -33662,7 +33662,7 @@ func (ec *executionContext) _Mutation_updateFaultStudio(ctx context.Context, fie
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().UpdateFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioId"].(string), fc.Args["request"].(model.UpdateFaultStudioRequest))
+			return ec.resolvers.Mutation().UpdateFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["request"].(model.UpdateFaultStudioRequest))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
@@ -33771,7 +33771,7 @@ func (ec *executionContext) _Mutation_deleteFaultStudio(ctx context.Context, fie
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().DeleteFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioId"].(string))
+			return ec.resolvers.Mutation().DeleteFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
@@ -33846,7 +33846,7 @@ func (ec *executionContext) _Mutation_toggleFaultInStudio(ctx context.Context, f
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().ToggleFaultInStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioId"].(string), fc.Args["faultName"].(string), fc.Args["enabled"].(bool))
+			return ec.resolvers.Mutation().ToggleFaultInStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["faultName"].(string), fc.Args["enabled"].(bool))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
@@ -33929,7 +33929,7 @@ func (ec *executionContext) _Mutation_setFaultStudioActive(ctx context.Context, 
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().SetFaultStudioActive(rctx, fc.Args["projectID"].(string), fc.Args["studioId"].(string), fc.Args["isActive"].(bool))
+			return ec.resolvers.Mutation().SetFaultStudioActive(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["isActive"].(bool))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
@@ -34038,7 +34038,7 @@ func (ec *executionContext) _Mutation_addFaultToStudio(ctx context.Context, fiel
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().AddFaultToStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioId"].(string), fc.Args["fault"].(model.FaultSelectionInput))
+			return ec.resolvers.Mutation().AddFaultToStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["fault"].(model.FaultSelectionInput))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
@@ -34147,7 +34147,7 @@ func (ec *executionContext) _Mutation_removeFaultFromStudio(ctx context.Context,
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().RemoveFaultFromStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioId"].(string), fc.Args["faultName"].(string))
+			return ec.resolvers.Mutation().RemoveFaultFromStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["faultName"].(string))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
@@ -34256,7 +34256,7 @@ func (ec *executionContext) _Mutation_updateFaultInStudio(ctx context.Context, f
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Mutation().UpdateFaultInStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioId"].(string), fc.Args["faultName"].(string), fc.Args["fault"].(model.FaultSelectionInput))
+			return ec.resolvers.Mutation().UpdateFaultInStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["faultName"].(string), fc.Args["fault"].(model.FaultSelectionInput))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
@@ -39723,7 +39723,7 @@ func (ec *executionContext) _Query_getFaultStudio(ctx context.Context, field gra
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Query().GetFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioId"].(string))
+			return ec.resolvers.Query().GetFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
@@ -40002,7 +40002,7 @@ func (ec *executionContext) _Query_isFaultStudioNameAvailable(ctx context.Contex
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		directive0 := func(rctx context.Context) (interface{}, error) {
 			ctx = rctx // use context from middleware stack in children
-			return ec.resolvers.Query().IsFaultStudioNameAvailable(rctx, fc.Args["projectID"].(string), fc.Args["name"].(string), fc.Args["excludeStudioId"].(*string))
+			return ec.resolvers.Query().IsFaultStudioNameAvailable(rctx, fc.Args["projectID"].(string), fc.Args["name"].(string), fc.Args["excludeStudioID"].(*string))
 		}
 		directive1 := func(ctx context.Context) (interface{}, error) {
 			if ec.directives.Authorized == nil {
