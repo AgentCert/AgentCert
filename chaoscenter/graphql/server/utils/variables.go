@@ -40,6 +40,11 @@ type Configuration struct {
 	TlsKeyPath                  string   `split_words:"true"`
 	CaCertTlsPath               string   `split_words:"true"`
 	AllowedOrigins              []string `split_words:"true" default:"^(http://|https://|)litmuschaos.io(:[0-9]+|)?,^(http://|https://|)localhost(:[0-9]+|)"`
+	// Langfuse configuration
+	LangfuseEnabled   string `split_words:"true" default:"false"`
+	LangfuseHost      string `split_words:"true" default:"http://localhost:3002"`
+	LangfusePublicKey string `split_words:"true"`
+	LangfuseSecretKey string `split_words:"true"`
 }
 
 var Config Configuration

@@ -15,6 +15,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -31,6 +32,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/config"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apps_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/handlers"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/langfuse"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/projects"
 	pb "github.com/litmuschaos/litmus/chaoscenter/graphql/server/protos"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
@@ -42,10 +44,27 @@ func init() {
 	log.Printf("go version: %s", runtime.Version())
 	log.Printf("go os/arch: %s/%s", runtime.GOOS, runtime.GOARCH)
 
+	// Load .env file if it exists (for local development)
+	// In production, environment variables should be set via K8s secrets or other means
+	if err := godotenv.Load(); err != nil {
+		log.Debug("No .env file found, using environment variables")
+	} else {
+		log.Info("Loaded configuration from .env file")
+	}
+
 	err := envconfig.Process("", &utils.Config)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Initialize Langfuse for observability tracing
+	langfuseEnabled, _ := strconv.ParseBool(utils.Config.LangfuseEnabled)
+	langfuse.Initialize(langfuse.Config{
+		Host:      utils.Config.LangfuseHost,
+		PublicKey: utils.Config.LangfusePublicKey,
+		SecretKey: utils.Config.LangfuseSecretKey,
+		Enabled:   langfuseEnabled,
+	})
 }
 
 func validateVersion() error {
@@ -141,6 +160,13 @@ func main() {
 		srv.Use(extension.Introspection{})
 	}
 
+	// Add Langfuse tracing middleware
+	if langfuseClient := langfuse.GetClient(); langfuseClient != nil && langfuseClient.IsEnabled() {
+		srv.Use(langfuse.NewGraphQLMiddleware(langfuseClient))
+		log.Info("Langfuse GraphQL tracing middleware enabled")
+		defer langfuse.Flush()
+	}
+
 	// go routine for syncing chaos hubs
 	go chaoshub.NewService(dbSchemaChaosHub.NewChaosHubOperator(mongodbOperator)).RecurringHubSync()
 	go chaoshub.NewService(dbSchemaChaosHub.NewChaosHubOperator(mongodbOperator)).SyncDefaultChaosHubs()
@@ -170,10 +196,10 @@ func main() {
 
 	// helm validation router for apps onboarding
 	router.POST("/api/validate-helm", handlers.ValidateHelmHandler())
-	
+
 	// namespace listing router for dropdown
 	router.GET("/api/namespaces", handlers.ListNamespacesHandler())
-	
+
 	// helm cleanup router for onboarding flows
 	router.POST("/api/cleanup-helm", handlers.CleanupHelmHandler())
 
