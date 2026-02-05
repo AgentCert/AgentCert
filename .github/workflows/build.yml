@@ -8,6 +8,11 @@ on:
 env:
   DOCKER_BUILDKIT: 1 # Enable Docker_buildkit in all build jobs
 
+# Add permissions for paths-filter to read PR changes
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   changes:
     runs-on: ubuntu-latest
