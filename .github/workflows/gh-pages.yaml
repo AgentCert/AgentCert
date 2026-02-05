@@ -1,9 +1,16 @@
 name: Deploy Docs
 
+# DISABLED: Documentation deployment not needed yet
+# To enable later: 
+#   1. Set up MkDocs in mkdocs/ folder
+#   2. Add PERSONAL_TOKEN secret in GitHub settings
+#   3. Enable GitHub Pages in repo settings
+#   4. Uncomment the push trigger below
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:  # Only runs manually from Actions tab
+  # push:
+  #   branches:
+  #     - main
 
 jobs:
   deploy:
