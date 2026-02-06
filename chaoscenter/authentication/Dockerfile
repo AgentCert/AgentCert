@@ -34,3 +34,4 @@ USER 65534
 CMD ["./server"]
 
 EXPOSE 3000
+ 
