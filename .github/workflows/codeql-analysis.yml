@@ -56,13 +56,33 @@ jobs:
       if: matrix.language == 'python'
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.12'
 
     - name: Install Python dependencies for better analysis
       if: matrix.language == 'python'
       run: |
         cd agentcert
         pip install -r requirements.txt || true
+
+    # Set up Go for better CodeQL analysis
+    - name: Set up Go for CodeQL
+      if: matrix.language == 'go'
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.5'
+
+    # Set up Node.js for JavaScript analysis
+    - name: Set up Node.js for CodeQL
+      if: matrix.language == 'javascript'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Install JavaScript dependencies for better analysis
+      if: matrix.language == 'javascript'
+      run: |
+        cd chaoscenter/web
+        npm install || true
 
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
