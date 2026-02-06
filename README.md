@@ -442,3 +442,4 @@ Use Chaoscenter to connect an Infrastructure, download the manifest and apply it
 ```bash
 cd subscriberINFRA_ID=<INFRA_ID> ACCESS_KEY=<ACCESS_KEY> INFRA_SCOPE=cluster SERVER_ADDR=http://localhost:8080/query INFRA_NAMESPACE=litmus IS_INFRA_CONFIRMED="false" COMPONENTS="DEPLOYMENTS: ["app=chaos-exporter", "name=chaos-operator", "app=workflow-controller"]"  START_TIME=1631089756 VERSION="ci" AGENT_POD="subscriber-78f6bd4db5-ck5d9" SKIP_SSL_VERIFY="false" go run subscriber.go -kubeconfig ~/.kube/config
 ```
+# Testing build workflow - Fri Feb  6 08:44:12 AM UTC 2026
