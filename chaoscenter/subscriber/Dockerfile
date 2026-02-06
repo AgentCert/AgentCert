@@ -29,4 +29,4 @@ RUN chown 65534:0 $APP_DIR/subscriber && chmod 755 $APP_DIR/subscriber
 WORKDIR $APP_DIR
 USER 65534
 
-CMD ["./subscriber"]
+CMD ["./subscriber"] 

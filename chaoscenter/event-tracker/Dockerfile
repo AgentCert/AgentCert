@@ -31,4 +31,4 @@ USER 65534
 
 CMD ["./event-tracker"]
 
-EXPOSE 8080
+EXPOSE 8080 
