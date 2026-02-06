@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput } from '@harnessio/uicore';
 import { Icon } from '@harnessio/icons';
-import { getScope } from '@utils';
 import { Color, FontVariation } from '@harnessio/design-system';
 import { useLocation, useHistory } from 'react-router-dom';
 import type { Column, CellProps } from 'react-table';
 import cx from 'classnames';
+import { getScope } from '@utils';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
 import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
@@ -82,7 +82,7 @@ export default function AppsOnboardingView(): React.ReactElement {
       setIsLoadingApps(true);
       const response = await fetch(`/api/apps?projectId=${scope.projectID}`);
       const result = await response.json();
-      
+
       if (response.ok && result.success) {
         // Filter to only show apps with 'REGISTERED' status
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -174,15 +174,15 @@ export default function AppsOnboardingView(): React.ReactElement {
         method: selectedMethod === OnboardingMethod.HELM_CHART ? 'HELM_CHART' : 'CLOUD_MANAGED',
         // Pass release info for cleanup during onboard
         releaseName: validationReleaseInfo?.releaseName || '',
-        releaseNamespace: validationReleaseInfo?.namespace || 'default',
+        releaseNamespace: validationReleaseInfo?.namespace || 'default'
       };
 
       const response = await fetch('/api/apps/register', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(registerRequest),
+        body: JSON.stringify(registerRequest)
       });
 
       const result = await response.json();
@@ -220,18 +220,18 @@ export default function AppsOnboardingView(): React.ReactElement {
       setValidationStatus(ValidationStatus.IDLE); // Reset validation when new file is uploaded
       setValidationReleaseInfo(null); // Reset release info when new file is uploaded
       setYamlContent(''); // Reset YAML content
-      
+
       // For Helm charts (.tgz), extract and display values.yaml content
       if (selectedMethod === OnboardingMethod.HELM_CHART && file.name.endsWith('.tgz')) {
         try {
           // Use pako to decompress gzip and read tar
           const arrayBuffer = await file.arrayBuffer();
           const uint8Array = new Uint8Array(arrayBuffer);
-          
+
           // Import pako dynamically for decompression
           const pako = await import('pako');
           const decompressed = pako.ungzip(uint8Array);
-          
+
           // Parse tar file to find values.yaml
           let yamlFound = '';
           let offset = 0;
@@ -239,27 +239,27 @@ export default function AppsOnboardingView(): React.ReactElement {
             // Read tar header (512 bytes)
             const header = decompressed.slice(offset, offset + 512);
             if (header[0] === 0) break; // End of archive
-            
+
             // Extract filename from header (first 100 bytes)
             const nameBytes = header.slice(0, 100);
             const name = new TextDecoder().decode(nameBytes).replace(/\0/g, '').trim();
-            
+
             // Extract file size from header (bytes 124-135, octal)
             const sizeBytes = header.slice(124, 136);
             const sizeStr = new TextDecoder().decode(sizeBytes).replace(/\0/g, '').trim();
             const size = parseInt(sizeStr, 8) || 0;
-            
+
             // Check if this is values.yaml
             if (name.endsWith('values.yaml') || name.endsWith('/values.yaml')) {
               const content = decompressed.slice(offset + 512, offset + 512 + size);
               yamlFound = new TextDecoder().decode(content);
               break;
             }
-            
+
             // Move to next file (512-byte aligned)
             offset += 512 + Math.ceil(size / 512) * 512;
           }
-          
+
           if (yamlFound) {
             setYamlContent(yamlFound);
           } else {
@@ -269,7 +269,7 @@ export default function AppsOnboardingView(): React.ReactElement {
           setYamlContent('# Failed to extract values.yaml from the chart');
         }
       }
-      
+
       showSuccess(getString('uploadedSuccessfully'));
     }
     // Reset the input so the same file can be selected again if needed
@@ -344,7 +344,7 @@ export default function AppsOnboardingView(): React.ReactElement {
   const isOnboardDisabled = (): boolean => {
     if (isOnboarding) return true;
     if (!selectedMethod) return true;
-    
+
     switch (selectedMethod) {
       case OnboardingMethod.HELM_CHART:
         // For Helm Chart, require successful validation before onboarding
@@ -424,10 +424,7 @@ export default function AppsOnboardingView(): React.ReactElement {
       Header: getString('status'),
       accessor: 'status',
       Cell: ({ value }: CellProps<Application>) => (
-        <Text 
-          font={{ variation: FontVariation.BODY }} 
-          color={value === 'Active' ? Color.GREEN_700 : Color.GREY_500}
-        >
+        <Text font={{ variation: FontVariation.BODY }} color={value === 'Active' ? Color.GREEN_700 : Color.GREY_500}>
           {value}
         </Text>
       )
@@ -446,18 +443,10 @@ export default function AppsOnboardingView(): React.ReactElement {
       id: 'actions',
       Cell: ({ row }: CellProps<Application>) => (
         <Layout.Horizontal spacing="medium">
-          <Text
-            className={css.actionLink}
-            color={Color.PRIMARY_7}
-            onClick={() => handleEditApplication(row.original)}
-          >
+          <Text className={css.actionLink} color={Color.PRIMARY_7} onClick={() => handleEditApplication(row.original)}>
             {getString('edit')}
           </Text>
-          <Text
-            className={css.actionLink}
-            color={Color.RED_600}
-            onClick={() => handleDeleteApplication(row.original)}
-          >
+          <Text className={css.actionLink} color={Color.RED_600} onClick={() => handleDeleteApplication(row.original)}>
             {getString('delete')}
           </Text>
         </Layout.Horizontal>
@@ -466,18 +455,11 @@ export default function AppsOnboardingView(): React.ReactElement {
   ];
 
   return (
-    <DefaultLayoutTemplate
-      breadcrumbs={breadcrumbs}
-      title={getString('appsOnboarding')}
-    >
+    <DefaultLayoutTemplate breadcrumbs={breadcrumbs} title={getString('appsOnboarding')}>
       <Container className={css.container}>
         {!showOptions ? (
           <Layout.Vertical spacing="large">
-            <Text
-              font={{ variation: FontVariation.H3 }}
-              color={Color.GREY_800}
-              className={css.heading}
-            >
+            <Text font={{ variation: FontVariation.H3 }} color={Color.GREY_800} className={css.heading}>
               {getString('appsOnboarding')}
             </Text>
             <Container className={css.newAppButtonContainer}>
@@ -491,28 +473,16 @@ export default function AppsOnboardingView(): React.ReactElement {
 
             {applications.length > 0 && (
               <Container className={css.tableContainer}>
-                <Text
-                  font={{ variation: FontVariation.H5 }}
-                  color={Color.GREY_800}
-                  className={css.tableHeading}
-                >
+                <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800} className={css.tableHeading}>
                   {getString('onboardedApplications')}
                 </Text>
-                <TableV2<Application>
-                  columns={columns}
-                  data={applications}
-                  className={css.appsTable}
-                />
+                <TableV2<Application> columns={columns} data={applications} className={css.appsTable} />
               </Container>
             )}
           </Layout.Vertical>
         ) : (
           <Layout.Vertical spacing="large">
-            <Text
-              font={{ variation: FontVariation.H3 }}
-              color={Color.GREY_800}
-              className={css.heading}
-            >
+            <Text font={{ variation: FontVariation.H3 }} color={Color.GREY_800} className={css.heading}>
               {getString('onboardYourApp')}
             </Text>
 
@@ -544,7 +514,11 @@ export default function AppsOnboardingView(): React.ReactElement {
                       <Text font={{ variation: FontVariation.BODY1 }} color={Color.GREY_900} className={css.radioTitle}>
                         {option.title}
                       </Text>
-                      <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500} className={css.radioDescription}>
+                      <Text
+                        font={{ variation: FontVariation.SMALL }}
+                        color={Color.GREY_500}
+                        className={css.radioDescription}
+                      >
                         {option.description}
                       </Text>
                     </div>
@@ -555,7 +529,9 @@ export default function AppsOnboardingView(): React.ReactElement {
                         <TextInput
                           placeholder={getTextboxPlaceholder(option.value)}
                           value={getTextboxValue(option.value)}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextboxChange(option.value, e.target.value)}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            handleTextboxChange(option.value, e.target.value)
+                          }
                           disabled={option.value === OnboardingMethod.HELM_CHART}
                           className={css.urlTextbox}
                         />
@@ -567,22 +543,25 @@ export default function AppsOnboardingView(): React.ReactElement {
                           className={css.uploadButton}
                         />
                         {uploadedFile && uploadedFile.method === option.value && (
-                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREEN_700} className={css.uploadedFileName}>
+                          <Text
+                            font={{ variation: FontVariation.SMALL }}
+                            color={Color.GREEN_700}
+                            className={css.uploadedFileName}
+                          >
                             ✓
                           </Text>
                         )}
                       </div>
                       {option.value === OnboardingMethod.HELM_CHART && yamlContent && (
                         <div className={css.yamlContentContainer}>
-                          <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800} className={css.yamlLabel}>
+                          <Text
+                            font={{ variation: FontVariation.BODY }}
+                            color={Color.GREY_800}
+                            className={css.yamlLabel}
+                          >
                             values.yaml
                           </Text>
-                          <textarea
-                            className={css.yamlTextarea}
-                            value={yamlContent}
-                            readOnly
-                            rows={15}
-                          />
+                          <textarea className={css.yamlTextarea} value={yamlContent} readOnly rows={15} />
                         </div>
                       )}
                     </div>
@@ -601,7 +580,9 @@ export default function AppsOnboardingView(): React.ReactElement {
               {selectedMethod === OnboardingMethod.HELM_CHART && (
                 <Button
                   variation={ButtonVariation.SECONDARY}
-                  text={validationStatus === ValidationStatus.VALIDATING ? getString('validating') : getString('validate')}
+                  text={
+                    validationStatus === ValidationStatus.VALIDATING ? getString('validating') : getString('validate')
+                  }
                   icon={validationStatus === ValidationStatus.VALIDATING ? undefined : 'tick'}
                   onClick={handleValidate}
                   disabled={isValidateDisabled()}
@@ -621,9 +602,7 @@ export default function AppsOnboardingView(): React.ReactElement {
                 onClick={handleOnboard}
                 disabled={isOnboardDisabled()}
               >
-                {isOnboarding && (
-                  <Icon name="loading" size={16} className={css.loadingIcon} />
-                )}
+                {isOnboarding && <Icon name="loading" size={16} className={css.loadingIcon} />}
               </Button>
             </Container>
           </Layout.Vertical>
