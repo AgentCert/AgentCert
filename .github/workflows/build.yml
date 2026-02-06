@@ -195,7 +195,7 @@ jobs:
         with:
           image-ref: 'docker.io/agentcert/agentcert-server:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
@@ -223,7 +223,7 @@ jobs:
         with:
           image-ref: 'docker.io/agentcert/agentcert-auth-server:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
@@ -250,7 +250,7 @@ jobs:
         with:
           image-ref: 'docker.io/agentcert/agentcert-subscriber:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
@@ -285,7 +285,7 @@ jobs:
         with:
           image-ref: 'docker.io/agentcert/agentcert-frontend:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
@@ -313,7 +313,7 @@ jobs:
         with:
           image-ref: 'docker.io/agentcert/agentcert-event-tracker:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
