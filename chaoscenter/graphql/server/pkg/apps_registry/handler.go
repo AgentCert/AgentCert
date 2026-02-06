@@ -93,7 +93,7 @@ func (h *Handler) RegisterApp() gin.HandlerFunc {
 				releaseNamespace = "default"
 			}
 			log.Infof("Cleaning up Helm release '%s' in namespace '%s' before onboarding", req.ReleaseName, releaseNamespace)
-			
+
 			// Step 1: Uninstall the Helm release
 			cleanupCmd := exec.Command("helm", "uninstall", req.ReleaseName, "-n", "default")
 			cleanupOutput, cleanupErr := cleanupCmd.CombinedOutput()

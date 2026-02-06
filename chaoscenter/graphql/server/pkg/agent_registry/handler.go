@@ -74,7 +74,7 @@ func (h *Handler) RegisterAgent(ctx context.Context, input model.RegisterAgentIn
 
 	// Attempt Langfuse sync (non-blocking, best effort)
 	syncStatus := model.SyncStatusSkipped
-	
+
 	if agent.LangfuseConfig != nil && agent.LangfuseConfig.SyncEnabled {
 		syncErr := h.service.SyncToLangfuse(ctx, agent)
 		if syncErr != nil {
@@ -165,7 +165,7 @@ func (h *Handler) ListAgents(ctx context.Context, filter *model.ListAgentsFilter
 
 	// Transform GraphQL filter to internal filter
 	internalFilter := MapAgentFilterInputToFilter(filter)
-	
+
 	// Transform GraphQL pagination to internal pagination
 	internalPagination := MapPaginationInputToPagination(pagination)
 
@@ -194,7 +194,7 @@ func (h *Handler) ListAgents(ctx context.Context, filter *model.ListAgentsFilter
 	if pagination.Limit > 0 {
 		// totalPages = ceil(totalCount / limit)
 		gqlResponse.TotalPages = (gqlResponse.TotalCount + pagination.Limit - 1) / pagination.Limit
-		
+
 		// hasNextPage = currentPage < totalPages
 		gqlResponse.HasNextPage = gqlResponse.CurrentPage < gqlResponse.TotalPages
 	} else {
@@ -498,7 +498,7 @@ func (h *Handler) SyncAgentToLangfuse(ctx context.Context, id string) (*model.Sy
 
 	// Call service to sync agent to Langfuse
 	err = h.service.SyncToLangfuse(ctx, agent)
-	
+
 	// Build response
 	response := &model.SyncResponse{
 		Success: err == nil,

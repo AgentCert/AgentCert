@@ -56,15 +56,15 @@ const (
 	ListEnvironments  RoleQuery = "ListEnvironments"
 
 	// Probe
-	AddProbe                 RoleQuery = "AddProbe"
-	DeleteProbe              RoleQuery = "DeleteProbe"
+	AddProbe    RoleQuery = "AddProbe"
+	DeleteProbe RoleQuery = "DeleteProbe"
 
 	// FaultStudio
-	CreateFaultStudio RoleQuery = "CreateFaultStudio"
-	UpdateFaultStudio RoleQuery = "UpdateFaultStudio"
-	DeleteFaultStudio RoleQuery = "DeleteFaultStudio"
-	ListFaultStudios  RoleQuery = "ListFaultStudios"
-	GetFaultStudio    RoleQuery = "GetFaultStudio"
+	CreateFaultStudio        RoleQuery = "CreateFaultStudio"
+	UpdateFaultStudio        RoleQuery = "UpdateFaultStudio"
+	DeleteFaultStudio        RoleQuery = "DeleteFaultStudio"
+	ListFaultStudios         RoleQuery = "ListFaultStudios"
+	GetFaultStudio           RoleQuery = "GetFaultStudio"
 	UpdateProbe              RoleQuery = "UpdateProbe"
 	GetProbe                 RoleQuery = "GetProbe"
 	ListProbes               RoleQuery = "ListProbes"

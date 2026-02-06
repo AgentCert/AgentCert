@@ -265,7 +265,7 @@ func detectHelmNamespace(releaseName, defaultNamespace string) string {
 	// Parse the manifest to find namespaces used
 	manifest := string(output)
 	namespaces := make(map[string]bool)
-	
+
 	// Look for namespace declarations in the manifest
 	lines := strings.Split(manifest, "\n")
 	for _, line := range lines {
@@ -294,7 +294,7 @@ func detectHelmNamespace(releaseName, defaultNamespace string) string {
 		podsStr := string(podsOutput)
 		podsLines := strings.Split(podsStr, "\n")
 		podNamespaces := make(map[string]int)
-		
+
 		for _, line := range podsLines {
 			fields := strings.Fields(line)
 			if len(fields) >= 2 {
@@ -322,10 +322,10 @@ func detectHelmNamespace(releaseName, defaultNamespace string) string {
 // It polls for pods to be in Running state
 func checkDeploymentHealth(ctx context.Context, releaseName, namespace string) (bool, string) {
 	log.Infof("Checking deployment health for release %s in namespace %s", releaseName, namespace)
-	
+
 	// Wait a bit for resources to be created
 	time.Sleep(5 * time.Second)
-	
+
 	// Get deployments created by this helm release using kubectl
 	// The deployment names are needed to find the pods
 	deplCmd := exec.CommandContext(ctx, "kubectl", "get", "deployments", "-n", namespace, "-o", "jsonpath={.items[*].metadata.name}")
@@ -335,7 +335,7 @@ func checkDeploymentHealth(ctx context.Context, releaseName, namespace string) (
 	}
 	deploymentNames := strings.Fields(strings.TrimSpace(string(deplOutput)))
 	log.Infof("Found deployments in namespace %s: %v", namespace, deploymentNames)
-	
+
 	// Poll for pods to be running
 	maxAttempts := 18 // 18 * 10s = 3 minutes
 	for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -400,7 +400,7 @@ func checkDeploymentHealth(ctx context.Context, releaseName, namespace string) (
 
 		// Check for fatal errors only in relevant pods
 		if strings.Contains(podsToCheck, "CrashLoopBackOff") ||
-			strings.Contains(podsToCheck, "ImagePullBackOff") || 
+			strings.Contains(podsToCheck, "ImagePullBackOff") ||
 			strings.Contains(podsToCheck, "ErrImagePull") ||
 			strings.Contains(podsToCheck, "Error") {
 			return false, fmt.Sprintf("Pods have errors:\n%s", podsToCheck)
@@ -410,7 +410,7 @@ func checkDeploymentHealth(ctx context.Context, releaseName, namespace string) (
 		runningCount := 0
 		pendingCount := 0
 		totalPods := 0
-		
+
 		checkLines := strings.Split(podsToCheck, "\n")
 		for _, line := range checkLines {
 			if strings.Contains(line, "Running") {

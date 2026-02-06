@@ -26,11 +26,11 @@ type ContainerImage struct {
 
 // AgentEndpoint represents the endpoint configuration for an agent.
 type AgentEndpoint struct {
-	URL           string               `bson:"url" json:"url"`
-	Type          EndpointType         `bson:"type" json:"type"`
+	URL           string                `bson:"url" json:"url"`
+	Type          EndpointType          `bson:"type" json:"type"`
 	DiscoveryType EndpointDiscoveryType `bson:"discoveryType" json:"discoveryType"`
-	HealthPath    string               `bson:"healthPath" json:"healthPath"`
-	ReadyPath     string               `bson:"readyPath" json:"readyPath"`
+	HealthPath    string                `bson:"healthPath" json:"healthPath"`
+	ReadyPath     string                `bson:"readyPath" json:"readyPath"`
 }
 
 // LangfuseConfig represents Langfuse integration configuration.

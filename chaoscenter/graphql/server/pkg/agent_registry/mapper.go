@@ -1,8 +1,8 @@
-
 package agent_registry
 
 import (
 	"strconv"
+
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 )
 
@@ -60,14 +60,14 @@ func MapRegisterAgentInputToRequest(input model.RegisterAgentInput) (*RegisterAg
 	if input.Endpoint != nil {
 		healthPath := "/health"
 		readyPath := "/ready"
-		
+
 		if input.Endpoint.HealthPath != nil {
 			healthPath = *input.Endpoint.HealthPath
 		}
 		if input.Endpoint.ReadyPath != nil {
 			readyPath = *input.Endpoint.ReadyPath
 		}
-		
+
 		req.Endpoint = &AgentEndpoint{
 			URL:           input.Endpoint.URL,
 			Type:          EndpointType(input.Endpoint.EndpointType),
@@ -130,7 +130,7 @@ func MapUpdateAgentInputToRequest(input model.UpdateAgentInput) (*UpdateAgentReq
 	if input.ContainerImage != nil {
 		req.ContainerImage = &ContainerImage{
 			Registry:   input.ContainerImage.Registry,
-			Repository:input.ContainerImage.Repository,
+			Repository: input.ContainerImage.Repository,
 			Tag:        input.ContainerImage.Tag,
 		}
 	}
@@ -139,14 +139,14 @@ func MapUpdateAgentInputToRequest(input model.UpdateAgentInput) (*UpdateAgentReq
 	if input.Endpoint != nil {
 		healthPath := "/health"
 		readyPath := "/ready"
-		
+
 		if input.Endpoint.HealthPath != nil {
 			healthPath = *input.Endpoint.HealthPath
 		}
 		if input.Endpoint.ReadyPath != nil {
 			readyPath = *input.Endpoint.ReadyPath
 		}
-		
+
 		req.Endpoint = &AgentEndpoint{
 			URL:           input.Endpoint.URL,
 			Type:          EndpointType(input.Endpoint.EndpointType),
@@ -201,22 +201,22 @@ func MapAgentFilterInputToFilter(input *model.ListAgentsFilter) *AgentFilter {
 	if input == nil {
 		return &AgentFilter{}
 	}
-	
+
 	filter := &AgentFilter{}
-	
+
 	if input.ProjectID != nil {
 		filter.ProjectID = *input.ProjectID
 	}
-	
+
 	if input.Status != nil {
 		status := AgentStatus(*input.Status)
 		filter.Status = &status
 	}
-	
+
 	if len(input.Capabilities) > 0 {
 		filter.Capabilities = input.Capabilities
 	}
-	
+
 	if input.SearchTerm != nil {
 		filter.SearchTerm = input.SearchTerm
 	}
@@ -312,10 +312,10 @@ func MapAgentToModel(agent *Agent) *model.Agent {
 	// Map AuditInfo
 	if agent.AuditInfo != nil {
 		gqlAgent.AuditInfo = &model.AuditInfo{
-			CreatedAt:  strconv.FormatInt(agent.AuditInfo.CreatedAt, 10),
-			CreatedBy:  agent.AuditInfo.CreatedBy,
-			UpdatedAt:  strconv.FormatInt(agent.AuditInfo.UpdatedAt, 10),
-			UpdatedBy:  agent.AuditInfo.UpdatedBy,
+			CreatedAt: strconv.FormatInt(agent.AuditInfo.CreatedAt, 10),
+			CreatedBy: agent.AuditInfo.CreatedBy,
+			UpdatedAt: strconv.FormatInt(agent.AuditInfo.UpdatedAt, 10),
+			UpdatedBy: agent.AuditInfo.UpdatedBy,
 		}
 		if agent.AuditInfo.LastHealthCheck != nil {
 			lastCheck := strconv.FormatInt(*agent.AuditInfo.LastHealthCheck, 10)

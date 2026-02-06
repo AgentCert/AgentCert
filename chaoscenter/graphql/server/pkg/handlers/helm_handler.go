@@ -336,11 +336,11 @@ func PortForwardHandler(mongoClient *mongo.Client) gin.HandlerFunc {
 
 		// Parse JSON body
 		var request struct {
-			Namespace     string `json:"namespace" binding:"required"`
-			ServiceName   string `json:"serviceName" binding:"required"`
-			ServicePort   int    `json:"servicePort" binding:"required"`
-			LocalPort     int    `json:"localPort" binding:"required"`
-			ProjectID     string `json:"projectId" binding:"required"`
+			Namespace   string `json:"namespace" binding:"required"`
+			ServiceName string `json:"serviceName" binding:"required"`
+			ServicePort int    `json:"servicePort" binding:"required"`
+			LocalPort   int    `json:"localPort" binding:"required"`
+			ProjectID   string `json:"projectId" binding:"required"`
 		}
 
 		if err := c.ShouldBindJSON(&request); err != nil {

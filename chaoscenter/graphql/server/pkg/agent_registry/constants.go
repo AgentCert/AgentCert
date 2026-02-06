@@ -17,8 +17,8 @@ const (
 	DefaultHTTPClientTimeout  = 10 * time.Second
 
 	// Retry configuration
-	MaxRetries          = 3
-	InitialRetryDelay   = 1 * time.Second
+	MaxRetries           = 3
+	InitialRetryDelay    = 1 * time.Second
 	RetryDelayMultiplier = 2
 
 	// Concurrent health check limit

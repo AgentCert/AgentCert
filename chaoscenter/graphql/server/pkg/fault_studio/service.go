@@ -11,8 +11,8 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
-	dbSchemaFaultStudio "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/fault_studio"
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
+	dbSchemaFaultStudio "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/fault_studio"
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -93,7 +93,7 @@ func (s *faultStudioService) CreateFaultStudio(ctx context.Context, projectID st
 
 	// Get the source ChaosHub name
 	var sourceHubName string
-	
+
 	// Check if this is the default hub (not stored in DB, generated dynamically)
 	if request.SourceHubID == DefaultHubID {
 		sourceHubName = DefaultHubName
