@@ -26,3 +26,4 @@ litmus-portal/graphql-server/server
 data/*
 # Setup scripts for local development
 setup/
+actions-runner/
