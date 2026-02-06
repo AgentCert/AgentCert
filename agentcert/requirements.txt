@@ -28,4 +28,4 @@ urllib3>=2.0.0
 uvicorn==0.40.0
 # MongoDB
 pymongo[srv]==4.16.0
-motor==3.7.1
+motor==3.7.1 
