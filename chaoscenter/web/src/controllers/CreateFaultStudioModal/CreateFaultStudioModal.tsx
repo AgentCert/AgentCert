@@ -17,10 +17,7 @@ export default function CreateFaultStudioModalController({
   const scope = getScope();
 
   // Fetch available ChaosHubs for selection
-  const {
-    data: chaosHubsData,
-    loading: chaosHubsLoading
-  } = listChaosHub({
+  const { data: chaosHubsData, loading: chaosHubsLoading } = listChaosHub({
     projectID: scope.projectID,
     options: {
       skip: !isOpen // Only fetch when modal is open

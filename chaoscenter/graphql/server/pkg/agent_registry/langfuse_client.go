@@ -14,7 +14,7 @@ import (
 type LangfuseClient interface {
 	// CreateOrUpdateUser creates or updates a user in Langfuse
 	CreateOrUpdateUser(ctx context.Context, payload *LangfuseUserPayload) error
-	
+
 	// DeleteUser marks a user as deleted in Langfuse
 	DeleteUser(ctx context.Context, agentID string) error
 }

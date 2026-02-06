@@ -97,13 +97,18 @@ export interface UpdateAgentVariables {
 
 export function useUpdateAgent(
   options?: MutationHookOptions<UpdateAgentMutationResponse, UpdateAgentVariables>
-): [(variables: UpdateAgentVariables) => Promise<{ data?: UpdateAgentMutationResponse | null }>, { loading: boolean; error?: Error }] {
+): [
+  (variables: UpdateAgentVariables) => Promise<{ data?: UpdateAgentMutationResponse | null }>,
+  { loading: boolean; error?: Error }
+] {
   const [mutate, { loading, error }] = useMutation<UpdateAgentMutationResponse, UpdateAgentVariables>(
     UPDATE_AGENT,
     options
   );
 
-  const updateAgent = async (variables: UpdateAgentVariables): Promise<{ data?: UpdateAgentMutationResponse | null }> => {
+  const updateAgent = async (
+    variables: UpdateAgentVariables
+  ): Promise<{ data?: UpdateAgentMutationResponse | null }> => {
     return mutate({ variables });
   };
 

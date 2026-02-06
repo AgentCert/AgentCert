@@ -365,7 +365,7 @@ func (h *HelmService) StartPortForward(namespace, serviceName string, servicePor
 
 	// Start the port-forward process in the background
 	cmd := exec.Command("kubectl", args...)
-	
+
 	// Capture output for debugging
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

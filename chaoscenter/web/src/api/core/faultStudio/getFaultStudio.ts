@@ -15,11 +15,10 @@ export function getFaultStudio({
   projectID,
   studioID,
   options = {}
-}: GqlAPIQueryRequest<
+}: GqlAPIQueryRequest<GetFaultStudioResponse, GetFaultStudioRequest, { studioID: string }>): GqlAPIQueryResponse<
   GetFaultStudioResponse,
-  GetFaultStudioRequest,
-  { studioID: string }
->): GqlAPIQueryResponse<GetFaultStudioResponse, GetFaultStudioRequest> {
+  GetFaultStudioRequest
+> {
   const { data, loading, ...rest } = useQuery<GetFaultStudioResponse, GetFaultStudioRequest>(
     gql`
       query getFaultStudio($projectID: ID!, $studioID: ID!) {

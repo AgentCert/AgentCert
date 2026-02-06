@@ -14,11 +14,7 @@ export default function FaultStudioController(): React.ReactElement {
   const scope = getScope();
   const { showError } = useToaster();
 
-  const {
-    data,
-    loading,
-    refetch
-  } = getFaultStudio({
+  const { data, loading, refetch } = getFaultStudio({
     projectID: scope.projectID,
     studioID,
     options: {
@@ -28,11 +24,5 @@ export default function FaultStudioController(): React.ReactElement {
 
   const faultStudio = data?.getFaultStudio;
 
-  return (
-    <FaultStudioView
-      faultStudio={faultStudio}
-      loading={loading}
-      refetch={refetch}
-    />
-  );
+  return <FaultStudioView faultStudio={faultStudio} loading={loading} refetch={refetch} />;
 }

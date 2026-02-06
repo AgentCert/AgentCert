@@ -1,7 +1,17 @@
 import type { ApolloQueryResult } from '@apollo/client';
 import { Classes, Menu, PopoverInteractionKind, Position } from '@blueprintjs/core';
 import { Color, FontVariation } from '@harnessio/design-system';
-import { Card, CardBody, Container, ExpandingSearchInput, Layout, Text, Button, ButtonVariation, useToggleOpen } from '@harnessio/uicore';
+import {
+  Card,
+  CardBody,
+  Container,
+  ExpandingSearchInput,
+  Layout,
+  Text,
+  Button,
+  ButtonVariation,
+  useToggleOpen
+} from '@harnessio/uicore';
 import { Icon } from '@harnessio/icons';
 import React, { useState } from 'react';
 import { useHistory } from 'react-router-dom';
@@ -50,13 +60,13 @@ export default function FaultStudiosView({
   const { getString } = useStrings();
   const history = useHistory();
   const paths = useRouteWithBaseUrl();
-  
+
   // Modal state
   const { isOpen: isCreateModalOpen, open: openCreateModal, close: closeCreateModal } = useToggleOpen();
-  
+
   // Delete dialog state
   const [deleteStudio, setDeleteStudio] = useState<{ id: string; name: string } | null>(null);
-  
+
   useDocumentTitle(getString('faultStudios'));
 
   const breadcrumbs = [{ label: getString('faultStudios'), url: '' }];
@@ -79,11 +89,7 @@ export default function FaultStudiosView({
         defaultValue={searchTerm}
         width={250}
       />
-      <Button
-        variation={ButtonVariation.PRIMARY}
-        text={getString('newFaultStudio')}
-        onClick={openCreateModal}
-      />
+      <Button variation={ButtonVariation.PRIMARY} text={getString('newFaultStudio')} onClick={openCreateModal} />
     </Layout.Horizontal>
   );
 
@@ -158,14 +164,14 @@ export default function FaultStudiosView({
           )}
         </Loader>
       </Container>
-      
+
       {/* Create Fault Studio Modal */}
       <CreateFaultStudioModalController
         isOpen={isCreateModalOpen}
         onClose={closeCreateModal}
         onSuccess={handleCreateSuccess}
       />
-      
+
       {/* Delete Fault Studio Confirmation Dialog */}
       {deleteStudio && (
         <DeleteFaultStudioDialog

@@ -1,7 +1,7 @@
 .modal {
   width: 700px !important;
   height: 80vh !important;
-  
+
   :global(.bp3-dialog-header) {
     display: none;
   }
@@ -26,7 +26,7 @@
   padding: var(--spacing-small);
   border-radius: 4px;
   cursor: pointer;
-  
+
   &:hover {
     background: var(--grey-100);
   }

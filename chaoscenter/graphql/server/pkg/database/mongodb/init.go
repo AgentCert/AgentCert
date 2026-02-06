@@ -96,7 +96,7 @@ func MongoConnection() (*mongo.Client, error) {
 	}
 
 	clientOptions := options.Client().ApplyURI(dbServer)
-	
+
 	// Only set auth if credentials are provided
 	if dbUser != "" && dbPassword != "" {
 		credential := options.Credential{

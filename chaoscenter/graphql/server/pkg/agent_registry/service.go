@@ -1,6 +1,3 @@
-
-
-
 package agent_registry
 
 import (
@@ -35,25 +32,25 @@ type AgentStatusResponse struct {
 type Service interface {
 	// RegisterAgent registers a new agent with the platform
 	RegisterAgent(ctx context.Context, input *RegisterAgentRequest) (*Agent, error)
-	
+
 	// GetAgent retrieves an agent by ID
 	GetAgent(ctx context.Context, id string) (*Agent, error)
-	
+
 	// ListAgents retrieves agents with filtering and pagination
 	ListAgents(ctx context.Context, filter *AgentFilter, pagination *PaginationInput) (*AgentListResponse, error)
-	
+
 	// UpdateAgent updates an existing agent's metadata
 	UpdateAgent(ctx context.Context, id string, input *UpdateAgentRequest) (*Agent, error)
-	
+
 	// DeleteAgent removes an agent (soft or hard delete)
 	DeleteAgent(ctx context.Context, id string, hardDelete bool) (*DeleteAgentResponse, error)
-	
+
 	// GetAgentsByCapabilities retrieves agents that support all specified capabilities
 	GetAgentsByCapabilities(ctx context.Context, projectID string, capabilities []string) ([]*Agent, error)
-	
+
 	// ValidateAgentHealth performs health check on an agent
 	ValidateAgentHealth(ctx context.Context, id string) (*HealthCheckResult, error)
-	
+
 	// SyncToLangfuse synchronizes agent metadata to Langfuse
 	SyncToLangfuse(ctx context.Context, agent *Agent) error
 
@@ -65,7 +62,7 @@ type Service interface {
 
 	// GetAgentCapabilitiesTaxonomy returns the list of supported capabilities
 	GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*CapabilityDefinition, error)
-// Implementation for these methods is below, outside the interface block.
+	// Implementation for these methods is below, outside the interface block.
 }
 
 // serviceImpl is the concrete implementation of the Service interface.
@@ -130,11 +127,11 @@ type PaginationInput struct {
 
 // AgentListResponse represents the response for list operations.
 type AgentListResponse struct {
-	Agents       []*Agent
-	TotalCount   int64
-	CurrentPage  int
-	TotalPages   int
-	HasNextPage  bool
+	Agents      []*Agent
+	TotalCount  int64
+	CurrentPage int
+	TotalPages  int
+	HasNextPage bool
 }
 
 // DeleteAgentResponse represents the response for delete operations.
@@ -165,10 +162,10 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 	if err := s.validator.ValidateRegistration(ctx, input); err != nil {
 		return nil, err
 	}
-	
+
 	// Generate UUID for agentId
 	agentID := uuid.New().String()
-	
+
 	// Determine endpoint (use default if not provided and auto-discovery fails)
 	endpoint := input.Endpoint
 	if endpoint == nil {
@@ -186,13 +183,13 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 			endpoint = discoveredEndpoint
 		}
 	}
-	
+
 	// Get current timestamp
 	now := time.Now().Unix()
-	
+
 	// Extract user ID from context (placeholder - will be replaced with actual JWT extraction)
 	userID := "system" // TODO: Extract from JWT context
-	
+
 	// Create Agent struct with status REGISTERED
 	agent := &Agent{
 		AgentID:        agentID,
@@ -214,12 +211,12 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 			UpdatedBy: userID,
 		},
 	}
-	
+
 	// Save to database
 	if err := s.operator.CreateAgent(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to create agent: %w", err)
 	}
-	
+
 	// Asynchronously sync to Langfuse (non-blocking)
 	go func() {
 		if err := s.SyncToLangfuse(context.Background(), agent); err != nil {
@@ -227,7 +224,7 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 			fmt.Printf("Langfuse sync failed for agent %s: %v\n", agent.AgentID, err)
 		}
 	}()
-	
+
 	// Asynchronously initiate health check to transition to VALIDATING
 	go func() {
 		time.Sleep(1 * time.Second) // Brief delay before health check
@@ -236,16 +233,16 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 			fmt.Printf("Initial health check failed for agent %s: %v\n", agent.AgentID, err)
 		}
 	}()
-	
+
 	return agent, nil
 }
 
 // discoverAgentEndpoint discovers agent endpoint from Kubernetes Service.
 func (s *serviceImpl) discoverAgentEndpoint(ctx context.Context, agentName, namespace string) (*AgentEndpoint, error) {
 	//if s.k8sClient == nil {
-		return nil, fmt.Errorf("Kubernetes client not configured; please provide endpoint manually")
+	return nil, fmt.Errorf("Kubernetes client not configured; please provide endpoint manually")
 	//}
-	
+
 	// Try to find service matching agent name
 	//service, err := s.k8sClient.CoreV1().Services(namespace).Get(ctx, agentName, metav1.GetOptions{})
 	//if err != nil {
@@ -278,35 +275,35 @@ func (s *serviceImpl) GetAgent(ctx context.Context, id string) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// TODO: Verify user has access to agent's project via JWT context
 	// For now, return agent directly
 	// userID := extractUserIDFromContext(ctx)
 	// if !hasProjectAccess(userID, agent.ProjectID) {
 	//     return nil, ErrUnauthorized
 	// }
-	
+
 	return agent, nil
 }
 
 // ListAgents retrieves agents with filtering and pagination.
 func (s *serviceImpl) ListAgents(ctx context.Context, filter *AgentFilter, pagination *PaginationInput) (*AgentListResponse, error) {
 	// TODO: Verify user project access from JWT context
-	
+
 	// Calculate skip and limit from pagination
 	skip := (pagination.Page - 1) * pagination.Limit
 	limit := pagination.Limit
-	
+
 	// Call operator to list agents
 	agents, totalCount, err := s.operator.ListAgents(ctx, filter, skip, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list agents: %w", err)
 	}
-	
+
 	// Calculate pagination info
 	totalPages := int(math.Ceil(float64(totalCount) / float64(pagination.Limit)))
 	hasNextPage := pagination.Page < totalPages
-	
+
 	return &AgentListResponse{
 		Agents:      agents,
 		TotalCount:  totalCount,
@@ -322,23 +319,23 @@ func (s *serviceImpl) UpdateAgent(ctx context.Context, id string, input *UpdateA
 	if err := s.validator.ValidateUpdate(ctx, input); err != nil {
 		return nil, err
 	}
-	
+
 	// Fetch existing agent
 	agent, err := s.operator.GetAgent(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// TODO: Verify user authorization (PROJECT_OWNER or PROJECT_ADMIN)
 	// userID := extractUserIDFromContext(ctx)
 	// userRole := getUserRole(userID, agent.ProjectID)
 	// if userRole != "PROJECT_OWNER" && userRole != "PROJECT_ADMIN" {
 	//     return nil, ErrInsufficientPermissions
 	// }
-	
+
 	// Merge updates into agent struct (preserve non-updated fields)
 	metadataChanged := false
-	
+
 	if input.Name != nil {
 		agent.Name = *input.Name
 		metadataChanged = true
@@ -371,18 +368,18 @@ func (s *serviceImpl) UpdateAgent(ctx context.Context, id string, input *UpdateA
 		agent.Metadata = input.Metadata
 		metadataChanged = true
 	}
-	
+
 	// Update audit info
 	now := time.Now().Unix()
 	userID := "system" // TODO: Extract from JWT context
 	agent.AuditInfo.UpdatedAt = now
 	agent.AuditInfo.UpdatedBy = userID
-	
+
 	// Save updated agent
 	if err := s.operator.UpdateAgent(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to update agent: %w", err)
 	}
-	
+
 	// Asynchronously sync to Langfuse if metadata changed
 	if metadataChanged {
 		go func() {
@@ -391,7 +388,7 @@ func (s *serviceImpl) UpdateAgent(ctx context.Context, id string, input *UpdateA
 			}
 		}()
 	}
-	
+
 	return agent, nil
 }
 
@@ -402,15 +399,15 @@ func (s *serviceImpl) DeleteAgent(ctx context.Context, id string, hardDelete boo
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// TODO: Verify user authorization (PROJECT_OWNER or PROJECT_ADMIN)
-	
+
 	// TODO: Check for active benchmarks using this agent
 	// This will be implemented when benchmark service is available
 	// if hasActiveBenchmarks(agent.AgentID) {
 	//     return nil, fmt.Errorf("cannot delete agent with active benchmarks")
 	// }
-	
+
 	if hardDelete {
 		// Hard delete - remove from database
 		if err := s.operator.DeleteAgent(ctx, id); err != nil {
@@ -421,19 +418,19 @@ func (s *serviceImpl) DeleteAgent(ctx context.Context, id string, hardDelete boo
 		agent.Status = AgentStatusDeleted
 		agent.AuditInfo.UpdatedAt = time.Now().Unix()
 		agent.AuditInfo.UpdatedBy = "system" // TODO: Extract from JWT context
-		
+
 		if err := s.operator.UpdateAgent(ctx, agent); err != nil {
 			return nil, fmt.Errorf("failed to mark agent as deleted: %w", err)
 		}
 	}
-	
+
 	// Asynchronously sync deletion to Langfuse
 	go func() {
 		if err := s.SyncToLangfuse(context.Background(), agent); err != nil {
 			fmt.Printf("Langfuse sync failed for deleted agent %s: %v\n", agent.AgentID, err)
 		}
 	}()
-	
+
 	return &DeleteAgentResponse{
 		Success: true,
 		Message: fmt.Sprintf("Agent %s successfully deleted", id),
@@ -443,13 +440,13 @@ func (s *serviceImpl) DeleteAgent(ctx context.Context, id string, hardDelete boo
 // GetAgentsByCapabilities retrieves agents that support all specified capabilities.
 func (s *serviceImpl) GetAgentsByCapabilities(ctx context.Context, projectID string, capabilities []string) ([]*Agent, error) {
 	// TODO: Verify user has access to project
-	
+
 	// Call operator to get agents with ALL specified capabilities
 	agents, err := s.operator.GetAgentsByCapabilities(ctx, projectID, capabilities)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get agents by capabilities: %w", err)
 	}
-	
+
 	return agents, nil
 }
 
@@ -517,7 +514,7 @@ func (s *serviceImpl) GetCapabilitiesTaxonomy(ctx context.Context) ([]*Capabilit
 			Category:    "Service Chaos",
 		},
 	}
-	
+
 	return capabilities, nil
 }
 
@@ -716,14 +713,14 @@ func (s *serviceImpl) SyncToLangfuse(ctx context.Context, agent *Agent) error {
 
 	// Build Langfuse user payload from agent fields
 	metadata := map[string]interface{}{
-		"version":       agent.Version,
-		"vendor":        agent.Vendor,
-		"capabilities":  agent.Capabilities,
-		"status":        string(agent.Status),
-		"namespace":     agent.Namespace,
-		"projectId":     agent.ProjectID,
-		"registeredAt":  agent.AuditInfo.CreatedAt,
-		"updatedAt":     agent.AuditInfo.UpdatedAt,
+		"version":      agent.Version,
+		"vendor":       agent.Vendor,
+		"capabilities": agent.Capabilities,
+		"status":       string(agent.Status),
+		"namespace":    agent.Namespace,
+		"projectId":    agent.ProjectID,
+		"registeredAt": agent.AuditInfo.CreatedAt,
+		"updatedAt":    agent.AuditInfo.UpdatedAt,
 	}
 
 	// Add container image details
@@ -783,6 +780,7 @@ func (s *serviceImpl) SyncToLangfuse(ctx context.Context, agent *Agent) error {
 	fmt.Printf("Successfully synced agent %s to Langfuse at %d\n", agent.AgentID, now)
 	return nil
 }
+
 // GetAgentCapabilitiesTaxonomy returns the list of supported capabilities.
 func (s *serviceImpl) GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*CapabilityDefinition, error) {
 	return s.GetCapabilitiesTaxonomy(ctx)
@@ -825,28 +823,28 @@ func (s *serviceImpl) GetAgentStatus(ctx context.Context, id string) (*AgentStat
 
 // SyncAgentToLangfuse synchronizes agent metadata and returns sync response.
 func (s *serviceImpl) SyncAgentToLangfuse(ctx context.Context, id string) (*SyncResponse, error) {
-		agent, err := s.operator.GetAgent(ctx, id)
-		if err != nil {
-			return nil, err
-		}
+	agent, err := s.operator.GetAgent(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 
-		nowUnix := time.Now().Unix()
-		nowRFC := time.Unix(nowUnix, 0).UTC().Format(time.RFC3339)
-		msg := "Agent synced to Langfuse successfully"
+	nowUnix := time.Now().Unix()
+	nowRFC := time.Unix(nowUnix, 0).UTC().Format(time.RFC3339)
+	msg := "Agent synced to Langfuse successfully"
 
-		if agent.LangfuseConfig == nil {
-			agent.LangfuseConfig = &LangfuseConfig{}
-		}
-		agent.LangfuseConfig.LastSyncedAt = &nowUnix
+	if agent.LangfuseConfig == nil {
+		agent.LangfuseConfig = &LangfuseConfig{}
+	}
+	agent.LangfuseConfig.LastSyncedAt = &nowUnix
 
-		// Persist update
-		if err := s.operator.UpdateAgent(ctx, agent); err != nil {
-			return nil, err
-		}
+	// Persist update
+	if err := s.operator.UpdateAgent(ctx, agent); err != nil {
+		return nil, err
+	}
 
-		return &SyncResponse{
-			Success:  true,
-			SyncedAt: &nowRFC,
-			Message:  &msg,
-		}, nil
+	return &SyncResponse{
+		Success:  true,
+		SyncedAt: &nowRFC,
+		Message:  &msg,
+	}, nil
 }

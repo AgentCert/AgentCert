@@ -15,7 +15,10 @@ export interface RemoveFaultFromStudioResponse {
 export function removeFaultFromStudio(
   options?: GqlAPIMutationRequest<RemoveFaultFromStudioResponse, RemoveFaultFromStudioRequest>
 ): GqlAPIMutationResponse<RemoveFaultFromStudioResponse, RemoveFaultFromStudioRequest> {
-  const [removeFaultFromStudioMutation, result] = useMutation<RemoveFaultFromStudioResponse, RemoveFaultFromStudioRequest>(
+  const [removeFaultFromStudioMutation, result] = useMutation<
+    RemoveFaultFromStudioResponse,
+    RemoveFaultFromStudioRequest
+  >(
     gql`
       mutation removeFaultFromStudio($projectID: ID!, $studioID: ID!, $faultName: String!) {
         removeFaultFromStudio(projectID: $projectID, studioID: $studioID, faultName: $faultName) {

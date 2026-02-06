@@ -106,16 +106,16 @@ export interface ListAgentsQueryResponse {
   listAgents: AgentListResponse;
 }
 
-export function useListAgents(
-  options?: QueryHookOptions<ListAgentsQueryResponse, ListAgentsVariables>
-): { data: ListAgentsQueryResponse | undefined; loading: boolean; error: Error | undefined; refetch: () => void } {
-  const { data, loading, error, refetch } = useQuery<ListAgentsQueryResponse, ListAgentsVariables>(
-    LIST_AGENTS,
-    {
-      ...options,
-      fetchPolicy: options?.fetchPolicy || 'cache-and-network',
-    }
-  );
+export function useListAgents(options?: QueryHookOptions<ListAgentsQueryResponse, ListAgentsVariables>): {
+  data: ListAgentsQueryResponse | undefined;
+  loading: boolean;
+  error: Error | undefined;
+  refetch: () => void;
+} {
+  const { data, loading, error, refetch } = useQuery<ListAgentsQueryResponse, ListAgentsVariables>(LIST_AGENTS, {
+    ...options,
+    fetchPolicy: options?.fetchPolicy || 'cache-and-network'
+  });
 
   return { data, loading, error: error as Error | undefined, refetch };
 }

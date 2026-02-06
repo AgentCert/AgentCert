@@ -126,12 +126,7 @@ export default function CreateFaultStudioModal({
               Create a new Fault Studio to configure and manage faults for AI agent testing
             </Text>
           </Layout.Vertical>
-          <Button
-            icon="cross"
-            variation={ButtonVariation.ICON}
-            onClick={onClose}
-            disabled={createLoading}
-          />
+          <Button icon="cross" variation={ButtonVariation.ICON} onClick={onClose} disabled={createLoading} />
         </Layout.Horizontal>
 
         {/* Form */}
@@ -191,20 +186,11 @@ export default function CreateFaultStudioModal({
                 </Container>
 
                 {/* Tags Field */}
-                <FormInput.KVTagInput
-                  name="tags"
-                  label="Tags"
-                  isArray={true}
-                  disabled={createLoading}
-                />
+                <FormInput.KVTagInput name="tags" label="Tags" isArray={true} disabled={createLoading} />
 
                 {/* Active Toggle */}
                 <Layout.Horizontal spacing="small" flex={{ alignItems: 'center' }}>
-                  <FormInput.CheckBox
-                    name="isActive"
-                    label="Activate immediately"
-                    disabled={createLoading}
-                  />
+                  <FormInput.CheckBox name="isActive" label="Activate immediately" disabled={createLoading} />
                   <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>
                     (Studio will be active upon creation)
                   </Text>

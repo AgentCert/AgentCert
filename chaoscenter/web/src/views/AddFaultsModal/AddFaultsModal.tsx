@@ -40,7 +40,7 @@ export default function AddFaultsModal({
 }: AddFaultsModalProps): React.ReactElement {
   const scope = getScope();
   const { showSuccess, showError } = useToaster();
-  
+
   const [selectedFaults, setSelectedFaults] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -59,12 +59,12 @@ export default function AddFaultsModal({
   // Transform Chart data into flat fault list
   const allFaults: FaultItem[] = useMemo(() => {
     if (!faultsData?.listChaosFaults) return [];
-    
+
     const faults: FaultItem[] = [];
     faultsData.listChaosFaults.forEach((chart: Chart) => {
       const category = chart.metadata.name;
       const categoryDisplayName = chart.spec.displayName;
-      
+
       chart.spec.faults?.forEach((fault: FaultList) => {
         faults.push({
           category,
@@ -75,27 +75,28 @@ export default function AddFaultsModal({
         });
       });
     });
-    
+
     return faults;
   }, [faultsData]);
 
   // Filter faults based on search
   const filteredFaults = useMemo(() => {
     if (!searchTerm) return allFaults;
-    
+
     const term = searchTerm.toLowerCase();
-    return allFaults.filter(fault => 
-      fault.faultName.toLowerCase().includes(term) ||
-      fault.displayName.toLowerCase().includes(term) ||
-      fault.category.toLowerCase().includes(term) ||
-      fault.categoryDisplayName.toLowerCase().includes(term)
+    return allFaults.filter(
+      fault =>
+        fault.faultName.toLowerCase().includes(term) ||
+        fault.displayName.toLowerCase().includes(term) ||
+        fault.category.toLowerCase().includes(term) ||
+        fault.categoryDisplayName.toLowerCase().includes(term)
     );
   }, [allFaults, searchTerm]);
 
   // Group filtered faults by category
   const faultsByCategory = useMemo(() => {
     const grouped: Record<string, { displayName: string; faults: FaultItem[] }> = {};
-    
+
     filteredFaults.forEach(fault => {
       if (!grouped[fault.category]) {
         grouped[fault.category] = {
@@ -105,7 +106,7 @@ export default function AddFaultsModal({
       }
       grouped[fault.category].faults.push(fault);
     });
-    
+
     return grouped;
   }, [filteredFaults]);
 
@@ -117,13 +118,13 @@ export default function AddFaultsModal({
   const toggleFault = (category: string, faultName: string): void => {
     const key = `${category}/${faultName}`;
     const newSelected = new Set(selectedFaults);
-    
+
     if (newSelected.has(key)) {
       newSelected.delete(key);
     } else {
       newSelected.add(key);
     }
-    
+
     setSelectedFaults(newSelected);
   };
 
@@ -135,7 +136,7 @@ export default function AddFaultsModal({
       const newFaults: FaultSelectionInput[] = Array.from(selectedFaults).map(key => {
         const [category, faultName] = key.split('/');
         const faultItem = allFaults.find(f => f.category === category && f.faultName === faultName);
-        
+
         return {
           faultCategory: category,
           faultName: faultName,
@@ -153,13 +154,15 @@ export default function AddFaultsModal({
         displayName: f.displayName,
         description: f.description,
         enabled: f.enabled,
-        injectionConfig: f.injectionConfig ? {
-          injectionType: f.injectionConfig.injectionType,
-          schedule: f.injectionConfig.schedule,
-          duration: f.injectionConfig.duration,
-          targetSelector: f.injectionConfig.targetSelector,
-          interval: f.injectionConfig.interval
-        } : undefined,
+        injectionConfig: f.injectionConfig
+          ? {
+              injectionType: f.injectionConfig.injectionType,
+              schedule: f.injectionConfig.schedule,
+              duration: f.injectionConfig.duration,
+              targetSelector: f.injectionConfig.targetSelector,
+              interval: f.injectionConfig.interval
+            }
+          : undefined,
         customParameters: f.customParameters,
         weight: f.weight
       }));
@@ -202,7 +205,7 @@ export default function AddFaultsModal({
     >
       <Layout.Vertical className={css.modalContent}>
         {/* Header */}
-        <Layout.Horizontal 
+        <Layout.Horizontal
           flex={{ justifyContent: 'space-between', alignItems: 'center' }}
           padding={{ left: 'xlarge', right: 'xlarge', top: 'large' }}
         >
@@ -214,12 +217,7 @@ export default function AddFaultsModal({
               Select faults from &quot;{faultStudio.sourceHubName}&quot; to add to your Fault Studio
             </Text>
           </Layout.Vertical>
-          <Button
-            icon="cross"
-            variation={ButtonVariation.ICON}
-            onClick={onClose}
-            disabled={updateLoading}
-          />
+          <Button icon="cross" variation={ButtonVariation.ICON} onClick={onClose} disabled={updateLoading} />
         </Layout.Horizontal>
 
         {/* Search */}
@@ -261,9 +259,9 @@ export default function AddFaultsModal({
                         const key = `${fault.category}/${fault.faultName}`;
                         const isAlreadyAdded = existingFaultNames.has(key);
                         const isSelected = selectedFaults.has(key);
-                        
+
                         return (
-                          <Layout.Horizontal 
+                          <Layout.Horizontal
                             key={key}
                             className={css.faultRow}
                             flex={{ alignItems: 'center', justifyContent: 'flex-start' }}
@@ -276,8 +274,8 @@ export default function AddFaultsModal({
                             />
                             <Layout.Vertical spacing="none">
                               <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
-                                <Text 
-                                  font={{ variation: FontVariation.BODY }} 
+                                <Text
+                                  font={{ variation: FontVariation.BODY }}
                                   color={isAlreadyAdded ? Color.GREY_400 : Color.GREY_800}
                                 >
                                   {fault.displayName || fault.faultName}
@@ -289,11 +287,7 @@ export default function AddFaultsModal({
                                 )}
                               </Layout.Horizontal>
                               {fault.description && (
-                                <Text 
-                                  font={{ variation: FontVariation.SMALL }} 
-                                  color={Color.GREY_400}
-                                  lineClamp={1}
-                                >
+                                <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_400} lineClamp={1}>
                                   {fault.description}
                                 </Text>
                               )}
@@ -310,11 +304,7 @@ export default function AddFaultsModal({
         </Container>
 
         {/* Actions */}
-        <Layout.Horizontal 
-          spacing="medium" 
-          padding="xlarge"
-          className={css.actions}
-        >
+        <Layout.Horizontal spacing="medium" padding="xlarge" className={css.actions}>
           <Button
             variation={ButtonVariation.PRIMARY}
             text={updateLoading ? 'Adding...' : `Add ${selectedFaults.size} Fault(s)`}
@@ -322,12 +312,7 @@ export default function AddFaultsModal({
             disabled={isLoading || selectedFaults.size === 0}
             icon={updateLoading ? 'loading' : undefined}
           />
-          <Button
-            variation={ButtonVariation.TERTIARY}
-            text="Cancel"
-            onClick={onClose}
-            disabled={updateLoading}
-          />
+          <Button variation={ButtonVariation.TERTIARY} text="Cancel" onClick={onClose} disabled={updateLoading} />
         </Layout.Horizontal>
       </Layout.Vertical>
     </Dialog>

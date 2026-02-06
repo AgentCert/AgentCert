@@ -1,7 +1,20 @@
 import type { ApolloQueryResult } from '@apollo/client';
 import { Classes, Intent, Menu, PopoverInteractionKind, Position, Switch } from '@blueprintjs/core';
 import { Color, FontVariation } from '@harnessio/design-system';
-import { Container, Layout, Text, Tabs, Tab, Button, ButtonVariation, Card, CardBody, useToggleOpen, useToaster, ConfirmationDialog } from '@harnessio/uicore';
+import {
+  Container,
+  Layout,
+  Text,
+  Tabs,
+  Tab,
+  Button,
+  ButtonVariation,
+  Card,
+  CardBody,
+  useToggleOpen,
+  useToaster,
+  ConfirmationDialog
+} from '@harnessio/uicore';
 import { Icon } from '@harnessio/icons';
 import React, { useState } from 'react';
 import { useHistory } from 'react-router-dom';
@@ -47,11 +60,7 @@ function FaultCard({ fault, onRemove, onToggle, isToggling }: FaultCardProps): R
           </Text>
           <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
             <div onClick={handleToggleClick} style={{ cursor: 'pointer' }}>
-              <Switch
-                checked={fault.enabled}
-                disabled={isToggling}
-                className={css.faultToggle}
-              />
+              <Switch checked={fault.enabled} disabled={isToggling} className={css.faultToggle} />
             </div>
             <div onClick={killEvent}>
               <CardBody.Menu
@@ -93,28 +102,24 @@ function FaultCard({ fault, onRemove, onToggle, isToggling }: FaultCardProps): R
   );
 }
 
-export default function FaultStudioView({
-  faultStudio,
-  loading,
-  refetch
-}: FaultStudioViewProps): React.ReactElement {
+export default function FaultStudioView({ faultStudio, loading, refetch }: FaultStudioViewProps): React.ReactElement {
   const { getString } = useStrings();
   const paths = useRouteWithBaseUrl();
   const history = useHistory();
   const scope = getScope();
   const { showSuccess, showError } = useToaster();
-  
+
   // Modal state
   const { isOpen: isEditModalOpen, open: openEditModal, close: closeEditModal } = useToggleOpen();
   const { isOpen: isDeleteDialogOpen, open: openDeleteDialog, close: closeDeleteDialog } = useToggleOpen();
   const { isOpen: isAddFaultsModalOpen, open: openAddFaultsModal, close: closeAddFaultsModal } = useToggleOpen();
-  
+
   // Remove fault state
   const [faultToRemove, setFaultToRemove] = useState<string | null>(null);
-  
+
   // Toggle fault state
   const [togglingFault, setTogglingFault] = useState<string | null>(null);
-  
+
   // Remove fault mutation
   const [removeFaultMutation, { loading: removingFault }] = removeFaultFromStudio({
     onCompleted: () => {
@@ -122,26 +127,26 @@ export default function FaultStudioView({
       setFaultToRemove(null);
       refetch();
     },
-    onError: (err) => {
+    onError: err => {
       showError(err.message);
       setFaultToRemove(null);
     }
   });
-  
+
   // Toggle fault mutation
   const [toggleFaultMutation] = toggleFaultInStudio({
-    onCompleted: (data) => {
+    onCompleted: data => {
       const newState = data.toggleFaultInStudio.message?.includes('enabled') ? 'enabled' : 'disabled';
       showSuccess(`Fault ${newState} successfully`);
       setTogglingFault(null);
       refetch();
     },
-    onError: (err) => {
+    onError: err => {
       showError(err.message);
       setTogglingFault(null);
     }
   });
-  
+
   useDocumentTitle(faultStudio?.name || getString('faultStudio'));
 
   const breadcrumbs = [
@@ -246,7 +251,10 @@ export default function FaultStudioView({
                       <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="4" cy="4" r="4" fill={faultStudio.isActive ? '#0AB000' : '#CF2318'} />
                       </svg>
-                      <Text font={{ variation: FontVariation.BODY }} color={faultStudio.isActive ? Color.GREEN_700 : Color.RED_600}>
+                      <Text
+                        font={{ variation: FontVariation.BODY }}
+                        color={faultStudio.isActive ? Color.GREEN_700 : Color.RED_600}
+                      >
                         {faultStudio.isActive ? 'Active' : 'Inactive'}
                       </Text>
                     </div>
@@ -287,9 +295,9 @@ export default function FaultStudioView({
                         <Layout.Vertical spacing="medium">
                           <Layout.Horizontal spacing="medium" className={css.faultsContainer}>
                             {faultStudio.selectedFaults.map((fault: FaultSelection, index: number) => (
-                              <FaultCard 
-                                key={`${fault.faultName}-${index}`} 
-                                fault={fault} 
+                              <FaultCard
+                                key={`${fault.faultName}-${index}`}
+                                fault={fault}
                                 onRemove={handleRemoveFault}
                                 onToggle={handleToggleFault}
                                 isToggling={togglingFault === fault.faultName}
@@ -336,7 +344,7 @@ export default function FaultStudioView({
           </Container>
         )}
       </Loader>
-      
+
       {/* Edit Fault Studio Modal */}
       {faultStudio && (
         <EditFaultStudioModalController
@@ -346,7 +354,7 @@ export default function FaultStudioView({
           onSuccess={handleEditSuccess}
         />
       )}
-      
+
       {/* Delete Fault Studio Confirmation Dialog */}
       {faultStudio && (
         <DeleteFaultStudioDialog
@@ -357,7 +365,7 @@ export default function FaultStudioView({
           onSuccess={handleDeleteSuccess}
         />
       )}
-      
+
       {/* Add Faults Modal */}
       {faultStudio && (
         <AddFaultsModal
@@ -367,7 +375,7 @@ export default function FaultStudioView({
           onSuccess={handleAddFaultsSuccess}
         />
       )}
-      
+
       {/* Remove Fault Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={faultToRemove !== null}

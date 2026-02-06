@@ -25,13 +25,18 @@ export interface DeleteAgentVariables {
 
 export function useDeleteAgent(
   options?: MutationHookOptions<DeleteAgentMutationResponse, DeleteAgentVariables>
-): [(variables: DeleteAgentVariables) => Promise<{ data?: DeleteAgentMutationResponse | null }>, { loading: boolean; error?: Error }] {
+): [
+  (variables: DeleteAgentVariables) => Promise<{ data?: DeleteAgentMutationResponse | null }>,
+  { loading: boolean; error?: Error }
+] {
   const [mutate, { loading, error }] = useMutation<DeleteAgentMutationResponse, DeleteAgentVariables>(
     DELETE_AGENT,
     options
   );
 
-  const deleteAgent = async (variables: DeleteAgentVariables): Promise<{ data?: DeleteAgentMutationResponse | null }> => {
+  const deleteAgent = async (
+    variables: DeleteAgentVariables
+  ): Promise<{ data?: DeleteAgentMutationResponse | null }> => {
     return mutate({ variables });
   };
 

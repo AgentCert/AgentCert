@@ -42,12 +42,14 @@ export function useRegisterAgent(
   (variables: RegisterAgentRequest) => Promise<{ data?: RegisterAgentResponse | null | undefined }>,
   { data: RegisterAgentResponse | null | undefined; loading: boolean; error: Error | undefined }
 ] {
-  const [registerAgentMutation, { data, loading, error }] = useMutation<
-    RegisterAgentResponse,
-    RegisterAgentRequest
-  >(REGISTER_AGENT, options);
+  const [registerAgentMutation, { data, loading, error }] = useMutation<RegisterAgentResponse, RegisterAgentRequest>(
+    REGISTER_AGENT,
+    options
+  );
 
-  const registerAgent = async (variables: RegisterAgentRequest): Promise<{ data?: RegisterAgentResponse | null | undefined }> => {
+  const registerAgent = async (
+    variables: RegisterAgentRequest
+  ): Promise<{ data?: RegisterAgentResponse | null | undefined }> => {
     return registerAgentMutation({ variables });
   };
 

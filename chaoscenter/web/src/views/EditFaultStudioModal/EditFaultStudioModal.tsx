@@ -1,13 +1,5 @@
 import React from 'react';
-import {
-  Button,
-  ButtonVariation,
-  Container,
-  FormInput,
-  Layout,
-  Text,
-  useToaster
-} from '@harnessio/uicore';
+import { Button, ButtonVariation, Container, FormInput, Layout, Text, useToaster } from '@harnessio/uicore';
 import { Form, Formik, FormikProps } from 'formik';
 import * as Yup from 'yup';
 import type { MutationFunction } from '@apollo/client';
@@ -110,12 +102,7 @@ export default function EditFaultStudioModal({
               Update the settings for &quot;{faultStudio.name}&quot;
             </Text>
           </Layout.Vertical>
-          <Button
-            icon="cross"
-            variation={ButtonVariation.ICON}
-            onClick={onClose}
-            disabled={updateLoading}
-          />
+          <Button icon="cross" variation={ButtonVariation.ICON} onClick={onClose} disabled={updateLoading} />
         </Layout.Horizontal>
 
         {/* Form */}
@@ -160,20 +147,11 @@ export default function EditFaultStudioModal({
                 </Container>
 
                 {/* Tags Field */}
-                <FormInput.KVTagInput
-                  name="tags"
-                  label="Tags"
-                  isArray={true}
-                  disabled={updateLoading}
-                />
+                <FormInput.KVTagInput name="tags" label="Tags" isArray={true} disabled={updateLoading} />
 
                 {/* Active Toggle */}
                 <Layout.Horizontal spacing="small" flex={{ alignItems: 'center' }}>
-                  <FormInput.CheckBox
-                    name="isActive"
-                    label="Active"
-                    disabled={updateLoading}
-                  />
+                  <FormInput.CheckBox name="isActive" label="Active" disabled={updateLoading} />
                   <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>
                     (Inactive studios will not inject faults)
                   </Text>

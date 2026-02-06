@@ -18,10 +18,10 @@ const (
 // FaultInjectionConfig stores configuration for how a fault should be injected
 type FaultInjectionConfig struct {
 	InjectionType  InjectionType `bson:"injection_type" json:"injectionType"`
-	Schedule       string        `bson:"schedule,omitempty" json:"schedule,omitempty"`             // Cron expression for scheduled injection
-	Duration       string        `bson:"duration,omitempty" json:"duration,omitempty"`             // Duration of fault injection
+	Schedule       string        `bson:"schedule,omitempty" json:"schedule,omitempty"`              // Cron expression for scheduled injection
+	Duration       string        `bson:"duration,omitempty" json:"duration,omitempty"`              // Duration of fault injection
 	TargetSelector string        `bson:"target_selector,omitempty" json:"targetSelector,omitempty"` // Pod/Node selector
-	Interval       string        `bson:"interval,omitempty" json:"interval,omitempty"`             // Interval between injections
+	Interval       string        `bson:"interval,omitempty" json:"interval,omitempty"`              // Interval between injections
 }
 
 // FaultSelection represents a single fault selected from a ChaosHub
@@ -38,12 +38,12 @@ type FaultSelection struct {
 
 // FaultStudio represents a collection of faults configured for agent testing
 type FaultStudio struct {
-	ID                      string           `bson:"studio_id" json:"id"`
-	ProjectID               string           `bson:"project_id" json:"projectId"`
+	ID                      string `bson:"studio_id" json:"id"`
+	ProjectID               string `bson:"project_id" json:"projectId"`
 	mongodb.ResourceDetails `bson:",inline"`
 	mongodb.Audit           `bson:",inline"`
-	SourceHubID             string           `bson:"source_hub_id" json:"sourceHubId"`       // Reference to ChaosHub
-	SourceHubName           string           `bson:"source_hub_name" json:"sourceHubName"`   // Cached hub name for display
+	SourceHubID             string           `bson:"source_hub_id" json:"sourceHubId"`     // Reference to ChaosHub
+	SourceHubName           string           `bson:"source_hub_name" json:"sourceHubName"` // Cached hub name for display
 	SelectedFaults          []FaultSelection `bson:"selected_faults" json:"selectedFaults"`
 	IsActive                bool             `bson:"is_active" json:"isActive"`
 	TotalFaults             int              `bson:"total_faults" json:"totalFaults"`

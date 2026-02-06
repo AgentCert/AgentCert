@@ -8,13 +8,5 @@ interface AgentCertLogoProps {
 }
 
 export default function AgentCertLogo({ size = 30, className }: AgentCertLogoProps): React.ReactElement {
-  return (
-    <img
-      src={agentCertLogo}
-      alt="AgentCert"
-      width={size}
-      height={size}
-      className={className || css.logo}
-    />
-  );
+  return <img src={agentCertLogo} alt="AgentCert" width={size} height={size} className={className || css.logo} />;
 }
