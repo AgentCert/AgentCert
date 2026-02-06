@@ -1,0 +1,38 @@
+.modal {
+  width: 700px !important;
+  height: 80vh !important;
+  
+  :global(.bp3-dialog-header) {
+    display: none;
+  }
+}
+
+.modalContent {
+  background: var(--white);
+  border-radius: 8px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.faultsList {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+  max-height: calc(80vh - 250px);
+}
+
+.faultRow {
+  padding: var(--spacing-small);
+  border-radius: 4px;
+  cursor: pointer;
+  
+  &:hover {
+    background: var(--grey-100);
+  }
+}
+
+.actions {
+  border-top: 1px solid var(--grey-200);
+  margin-top: auto;
+}
