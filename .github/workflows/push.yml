@@ -174,3 +174,4 @@ jobs:
           echo "Next steps:"
           echo "  kubectl apply -f chaoscenter/manifests/"
           echo "=================================="
+ 
