@@ -65,7 +65,7 @@ jobs:
           flake8 src/ utils/ data_models/ --max-line-length=120 --extend-ignore=E203,W503 || echo "⚠️ Flake8 issues found"
 
   build-and-deploy-to-minikube:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs:
       - backend-checks
       - frontend-checks
