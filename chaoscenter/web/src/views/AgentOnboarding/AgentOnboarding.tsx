@@ -1,13 +1,24 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput, SelectOption, ConfirmationDialog, Dialog } from '@harnessio/uicore';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput, DropDown, SelectOption, ConfirmationDialog, Dialog } from '@harnessio/uicore';
 import { Color, FontVariation, Intent } from '@harnessio/design-system';
 import { useLocation, useHistory } from 'react-router-dom';
 import type { Column, CellProps } from 'react-table';
 import cx from 'classnames';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
 import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
+import { getScope } from '@utils';
 import { useStrings } from '@strings';
-import { useListAgents, ListedAgent, useDeployAgentWithHelm, useDeleteAgent, useUpdateAgent } from '@api/core';
+import {
+  useListAgents,
+  ListedAgent,
+  useDeployAgentWithHelm,
+  useDeleteAgent,
+  useUpdateAgent,
+  listChaosInfraMinimal,
+  kubeNamespaceSubscription,
+  useValidateHelmDeployment,
+  useGetEnvironmentVariables
+} from '@api/core';
 import { useAppStore } from '@context';
 import css from './AgentOnboarding.module.scss';
 
@@ -88,7 +99,104 @@ export default function AgentOnboardingView(): React.ReactElement {
   const [apiUrl, setApiUrl] = useState<string>('');
   const [faasUrl, setFaasUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const envFileInputRef = useRef<HTMLInputElement>(null);
   const [isDeploying, setIsDeploying] = useState<boolean>(false);
+  const [selectedInfraID, setSelectedInfraID] = useState<string>('');
+  const [uploadedEnvFile, setUploadedEnvFile] = useState<string | null>(null);
+  
+  // Environment variables state (pre-populated from backend)
+  const [envVariables, setEnvVariables] = useState<Record<string, { value: string; isSensitive: boolean }>>({
+    'AZURE_OPENAI_ENDPOINT': { value: '', isSensitive: false },
+    'AZURE_OPENAI_DEPLOYMENT': { value: '', isSensitive: false },
+    'AZURE_OPENAI_API_VERSION': { value: '', isSensitive: false },
+    'AZURE_OPENAI_EMBEDDING_DEPLOYMENT': { value: '', isSensitive: false },
+    'AZURE_OPENAI_KEY': { value: '', isSensitive: true }
+  });
+
+  // Load environment variables from backend (pre-populated from .env in dev)
+  const { data: envData } = useGetEnvironmentVariables();
+
+  // Helper function to parse .env file content
+  const parseEnvFile = (content: string): Record<string, string> => {
+    const parsed: Record<string, string> = {};
+    const lines = content.split('\n');
+    
+    lines.forEach(line => {
+      // Skip comments and empty lines
+      if (!line.trim() || line.trim().startsWith('#')) {
+        return;
+      }
+      
+      const [key, ...valueParts] = line.split('=');
+      if (key) {
+        const trimmedKey = key.trim();
+        const value = valueParts.join('=').trim();
+        // Remove quotes if present
+        const cleanValue = value.replace(/^['"]|['"]$/g, '');
+        parsed[trimmedKey] = cleanValue;
+      }
+    });
+    
+    return parsed;
+  };
+
+  // Handle .env file upload
+  const handleEnvFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsed = parseEnvFile(content);
+        
+        // Merge parsed values into envVariables
+        setEnvVariables(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(key => {
+            if (parsed[key]) {
+              updated[key] = {
+                ...updated[key],
+                value: parsed[key]
+              };
+            }
+          });
+          return updated;
+        });
+
+        setUploadedEnvFile(file.name);
+        showSuccess(`Loaded environment variables from ${file.name}`);
+      } catch (error) {
+        showError(`Failed to parse .env file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  useEffect(() => {
+    const baseEnvVars: Record<string, { value: string; isSensitive: boolean }> = {
+      'AZURE_OPENAI_ENDPOINT': { value: '', isSensitive: false },
+      'AZURE_OPENAI_DEPLOYMENT': { value: '', isSensitive: false },
+      'AZURE_OPENAI_API_VERSION': { value: '', isSensitive: false },
+      'AZURE_OPENAI_EMBEDDING_DEPLOYMENT': { value: '', isSensitive: false },
+      'AZURE_OPENAI_KEY': { value: '', isSensitive: true }
+    };
+
+    if (envData?.getEnvironmentVariables?.length) {
+      const merged = { ...baseEnvVars };
+      envData.getEnvironmentVariables.forEach(v => {
+        merged[v.name] = {
+          value: v.value || '',
+          isSensitive: Boolean(v.isSensitive)
+        };
+      });
+      setEnvVariables(merged);
+      return;
+    }
+
+    setEnvVariables(baseEnvVars);
+  }, [envData]);
   
   // Helm form state
   const [helmForm, setHelmForm] = useState<HelmFormState>({
@@ -100,6 +208,11 @@ export default function AgentOnboardingView(): React.ReactElement {
     capabilities: [],
     valuesYaml: ''
   });
+  
+  // Store the actual file blob for .tgz charts
+  const [helmChartFile, setHelmChartFile] = useState<File | null>(null);
+  const [isValidated, setIsValidated] = useState<boolean>(false);
+  const [mergedHelmValues, setMergedHelmValues] = useState<string | null>(null);
   
   // Delete confirmation state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -116,9 +229,69 @@ export default function AgentOnboardingView(): React.ReactElement {
   
   // Get projectID from app store
   const { projectID } = useAppStore();
+  const scope = getScope();
+
+  // Fetch infra list to resolve infraID for namespace subscription
+  const { data: infraData, loading: infraLoading, error: infraError } = listChaosInfraMinimal({
+    ...scope,
+    pagination: { page: 0, limit: 50 }
+  });
+
+  const infrastructureOptions = useMemo<SelectOption[]>(
+    () =>
+      infraData?.listInfras?.infras?.map(infrastructure => ({
+        label: infrastructure.name,
+        value: infrastructure.infraID
+      })) ?? [],
+    [infraData]
+  );
+
+  // Fetch available Kubernetes namespaces via subscription
+  const { data: namespacesData, loading: namespacesLoading, error: namespacesError } = kubeNamespaceSubscription({
+    request: {
+      infraID: selectedInfraID || ''
+    },
+    skip: !selectedInfraID,
+    shouldResubscribe: true
+  });
+
+  const [namespaceOptions, setNamespaceOptions] = useState<SelectOption[]>([]);
+  const isNamespaceLoading = infraLoading || (namespacesLoading && namespaceOptions.length === 0);
+
+  useEffect(() => {
+    setNamespaceOptions([]);
+    setHelmForm(prev => ({
+      ...prev,
+      namespace: ''
+    }));
+  }, [selectedInfraID]);
+
+  // Update namespace options when data is loaded
+  useEffect(() => {
+    if (namespacesData?.getKubeNamespace?.kubeNamespace) {
+      const options = namespacesData.getKubeNamespace.kubeNamespace.map(ns => ({
+        label: ns.name,
+        value: ns.name
+      }));
+      setNamespaceOptions(options);
+
+      // Autofill with 'litmus-chaos' if available, otherwise 'default'
+      const preferredNamespace = options.some(opt => opt.value === 'litmus-chaos')
+        ? 'litmus-chaos'
+        : options[0]?.value || 'default';
+      
+      setHelmForm(prev => ({
+        ...prev,
+        namespace: preferredNamespace
+      }));
+    }
+  }, [namespacesData]);
 
   // Deploy agent with Helm mutation
   const [deployAgentWithHelm] = useDeployAgentWithHelm();
+  
+  // Validate Helm deployment mutation
+  const [validateHelmDeployment] = useValidateHelmDeployment();
   
   // Delete agent mutation
   const [deleteAgent] = useDeleteAgent();
@@ -145,7 +318,7 @@ export default function AgentOnboardingView(): React.ReactElement {
       capabilities: agent.capabilities?.join(', ') || '',
       status: agent.status || 'Unknown',
       createdAt: agent.auditInfo?.createdAt 
-        ? new Date(parseInt(agent.auditInfo.createdAt)).toLocaleDateString()
+        ? new Date(parseInt(agent.auditInfo.createdAt) * 1000).toLocaleDateString()
         : 'N/A'
     }));
   }, [agentsData]);
@@ -212,8 +385,24 @@ export default function AgentOnboardingView(): React.ReactElement {
         return;
       }
 
+      const azureKey = envVariables['AZURE_OPENAI_KEY']?.value || '';
+      if (!azureKey) {
+        showError('Please enter AZURE_OPENAI_KEY before deploy');
+        return;
+      }
+
       setIsDeploying(true);
       try {
+        // Prepare chart data if .tgz file was uploaded
+        let chartDataBase64: string | undefined;
+        if (helmChartFile) {
+          const arrayBuffer = await helmChartFile.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          chartDataBase64 = btoa(String.fromCharCode(...bytes));
+        }
+
+        const effectiveValuesYaml = mergedHelmValues || helmForm.valuesYaml || undefined;
+
         const result = await deployAgentWithHelm({
           projectID,
           request: {
@@ -223,7 +412,14 @@ export default function AgentOnboardingView(): React.ReactElement {
             capabilities: helmForm.capabilities,
             helmReleaseName: helmForm.helmReleaseName,
             helmChartVersion: helmForm.helmChartVersion,
-            valuesYaml: helmForm.valuesYaml
+            valuesYaml: effectiveValuesYaml,
+            chartData: chartDataBase64,
+            // Pass Azure OpenAI credentials from UI form
+            azureOpenAIKey: envVariables['AZURE_OPENAI_KEY']?.value,
+            azureOpenAIEndpoint: envVariables['AZURE_OPENAI_ENDPOINT']?.value,
+            azureOpenAIDeployment: envVariables['AZURE_OPENAI_DEPLOYMENT']?.value,
+            azureOpenAIAPIVersion: envVariables['AZURE_OPENAI_API_VERSION']?.value,
+            azureOpenAIEmbeddingDeployment: envVariables['AZURE_OPENAI_EMBEDDING_DEPLOYMENT']?.value
           }
         });
 
@@ -240,6 +436,8 @@ export default function AgentOnboardingView(): React.ReactElement {
             valuesYaml: ''
           });
           setUploadedFile(null);
+          setHelmChartFile(null);
+          setIsValidated(false);
           setSelectedMethod(null);
           refetchAgents();
           history.push({ search: '' });
@@ -263,28 +461,50 @@ export default function AgentOnboardingView(): React.ReactElement {
     const file = event.target.files?.[0];
     if (file && selectedMethod) {
       setUploadedFile({ name: file.name, method: selectedMethod });
+      setIsValidated(false);
       
-      // For Helm charts, read the file content
+      // For Helm charts, handle based on file type
       if (selectedMethod === OnboardingMethod.HELM_CHART) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const content = e.target?.result as string;
+        const isTgz = file.name.toLowerCase().endsWith('.tgz') || file.name.toLowerCase().endsWith('.tar.gz');
+        
+        if (isTgz) {
+          // Store the file blob for .tgz charts
+          setHelmChartFile(file);
           setHelmForm(prev => ({
             ...prev,
-            valuesYaml: content,
-            // Try to extract release name from filename
-            helmReleaseName: prev.helmReleaseName || file.name.replace(/\.(yaml|yml|tgz)$/i, '')
+            valuesYaml: '', // Clear values since we're using packaged chart
+            helmReleaseName: prev.helmReleaseName || file.name.replace(/\.(tgz|tar\.gz)$/i, '')
           }));
-        };
-        reader.readAsText(file);
+        } else {
+          // For YAML files, read as text
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const content = e.target?.result as string;
+            setHelmForm(prev => ({
+              ...prev,
+              valuesYaml: content,
+              helmReleaseName: prev.helmReleaseName || file.name.replace(/\.(yaml|yml)$/i, '')
+            }));
+          };
+          reader.readAsText(file);
+          setHelmChartFile(null);
+        }
       }
       
-      showSuccess(getString('uploadedSuccessfully'));
+      showSuccess('File loaded');
     }
     // Reset the input so the same file can be selected again if needed
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  // Handle environment variable changes
+  const handleEnvVarChange = (varName: string, newValue: string): void => {
+    setEnvVariables(prev => ({
+      ...prev,
+      [varName]: { ...prev[varName], value: newValue }
+    }));
   };
 
   // Handle Helm form field changes
@@ -462,7 +682,7 @@ export default function AgentOnboardingView(): React.ReactElement {
       Cell: ({ value }: CellProps<AgentDisplay>) => (
         <Text 
           font={{ variation: FontVariation.BODY }} 
-          color={value === 'REGISTERED' || value === 'Active' ? Color.GREEN_700 : Color.GREY_500}
+          color={value === 'REGISTERED' || value === 'ACTIVE' ? Color.GREEN_700 : Color.GREY_500}
         >
           {value}
         </Text>
@@ -572,6 +792,14 @@ export default function AgentOnboardingView(): React.ReactElement {
               onChange={handleFileChange}
             />
 
+            <input
+              ref={envFileInputRef}
+              type="file"
+              accept=".env"
+              style={{ display: 'none' }}
+              onChange={handleEnvFileChange}
+            />
+
             <div className={css.radioGroup}>
               {radioOptions.map(option => (
                 <div key={option.value} className={css.radioRow}>
@@ -618,28 +846,281 @@ export default function AgentOnboardingView(): React.ReactElement {
                           </div>
                           <div className={css.formField}>
                             <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                              Infrastructure *
+                            </Text>
+                            <DropDown
+                              items={infrastructureOptions}
+                              value={selectedInfraID}
+                              onChange={(selected) => setSelectedInfraID(selected.value as string)}
+                              placeholder={infraLoading ? 'Loading infrastructure...' : 'Select infrastructure'}
+                              disabled={infraLoading || infrastructureOptions.length === 0}
+                            />
+                            {!infraLoading && infrastructureOptions.length === 0 && (
+                              <Text font={{ variation: FontVariation.SMALL }} color={Color.RED_600}>
+                                No infrastructure found. Connect an infrastructure to load namespaces.
+                              </Text>
+                            )}
+                            {infraError && (
+                              <Text font={{ variation: FontVariation.SMALL }} color={Color.RED_600}>
+                                Unable to load infrastructure.
+                              </Text>
+                            )}
+                          </div>
+                        </Layout.Horizontal>
+
+                        <Layout.Horizontal spacing="medium" className={css.formRow}>
+                          <div className={css.formField}>
+                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
                               Namespace *
                             </Text>
-                            <TextInput
-                              placeholder="default"
+                            <DropDown
+                              items={namespaceOptions}
                               value={helmForm.namespace}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleHelmFormChange('namespace', e.target.value)}
+                              onChange={(selected) => handleHelmFormChange('namespace', selected.value as string)}
+                              placeholder={
+                                !selectedInfraID
+                                  ? 'Select infrastructure first'
+                                  : isNamespaceLoading
+                                  ? 'Loading namespaces...'
+                                  : 'Select namespace'
+                              }
+                              disabled={isNamespaceLoading || !selectedInfraID || namespaceOptions.length === 0}
+                            />
+                            {selectedInfraID && namespacesError && (
+                              <Text font={{ variation: FontVariation.SMALL }} color={Color.RED_600}>
+                                Unable to load namespaces.
+                              </Text>
+                            )}
+                          </div>
+                        </Layout.Horizontal>
+
+                        <div className={css.formField}>
+                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                            Values YAML (Optional - Upload or paste)
+                          </Text>
+                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500} style={{ marginBottom: '8px' }}>
+                            Upload a values.yaml file or .tgz Helm chart package, or paste YAML content directly
+                          </Text>
+                          <Layout.Horizontal spacing="small" className={css.uploadRow}>
+                            <Button
+                              variation={ButtonVariation.SECONDARY}
+                              text={uploadedFile?.method === OnboardingMethod.HELM_CHART ? uploadedFile.name : getString('upload')}
+                              icon="upload"
+                              onClick={handleUploadClick}
+                              className={css.uploadButton}
+                            />
+                            <Button
+                              variation={ButtonVariation.SECONDARY}
+                              text={uploadedEnvFile ? `✓ ${uploadedEnvFile}` : 'Upload .env'}
+                              icon="upload"
+                              onClick={() => envFileInputRef.current?.click()}
+                              className={css.uploadButton}
+                            />
+                            <Button
+                              variation={ButtonVariation.SECONDARY}
+                              text="Validate"
+                              icon="tick"
+                              onClick={async () => {
+                                if (!helmForm.helmReleaseName.trim()) {
+                                  showError('Please enter a release name');
+                                  return;
+                                }
+                                if (!helmForm.namespace.trim()) {
+                                  showError('Please enter a namespace');
+                                  return;
+                                }
+
+                                const azureKey = envVariables['AZURE_OPENAI_KEY']?.value || '';
+                                if (!azureKey) {
+                                  showError('Please enter AZURE_OPENAI_KEY before validation');
+                                  return;
+                                }
+
+                                try {
+                                  const result = await validateHelmDeployment({
+                                    variables: {
+                                      projectID,
+                                      request: {
+                                        name: helmForm.agentName,
+                                        helmReleaseName: helmForm.helmReleaseName,
+                                        namespace: helmForm.namespace,
+                                        helmChartVersion: helmForm.helmChartVersion,
+                                        description: helmForm.description,
+                                        version: helmForm.version,
+                                        capabilities: helmForm.capabilities.length > 0 ? helmForm.capabilities : [],
+                                        chartData: helmChartFile ? null : null,
+                                        valuesYaml: helmForm.valuesYaml || null,
+                                        kubeconfig: null,
+                                        azureOpenAIKey: envVariables['AZURE_OPENAI_KEY']?.value,
+                                        azureOpenAIEndpoint: envVariables['AZURE_OPENAI_ENDPOINT']?.value,
+                                        azureOpenAIDeployment: envVariables['AZURE_OPENAI_DEPLOYMENT']?.value,
+                                        azureOpenAIAPIVersion: envVariables['AZURE_OPENAI_API_VERSION']?.value,
+                                        azureOpenAIEmbeddingDeployment: envVariables['AZURE_OPENAI_EMBEDDING_DEPLOYMENT']?.value
+                                      },
+                                    },
+                                  });
+
+                                  console.log('[Validate] Full result:', result);
+                                  console.log('[Validate] Merged values:', result.data?.validateHelmDeployment?.mergedValues);
+
+                                  if (result.data?.validateHelmDeployment) {
+                                    const validation = result.data.validateHelmDeployment;
+                                    
+                                    if (validation.valid) {
+                                      showSuccess('Helm configuration validated successfully!');
+                                      setIsValidated(true);
+                                      // Store merged values for display
+                                      setMergedHelmValues(validation.mergedValues || '');
+                                      (window as any).mergedHelmValues = validation.mergedValues;
+                                      console.log('[Validate] Stored merged values to window and state');
+                                    } else {
+                                      showError(`Validation failed: ${validation.errors?.join(', ') || 'Unknown error'}`);
+                                      setIsValidated(false);
+                                      setMergedHelmValues(null);
+                                    }
+                                  }
+                                } catch (error) {
+                                  console.error('[Validate] Error:', error);
+                                  showError(`Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                  setIsValidated(false);
+                                }
+                              }}
+                              className={css.uploadButton}
+                            />
+                            {uploadedFile?.method === OnboardingMethod.HELM_CHART && (
+                              <Text font={{ variation: FontVariation.SMALL }} color={Color.GREEN_700}>
+                                ✓ File loaded
+                              </Text>
+                            )}
+                            {isValidated && (
+                              <Text font={{ variation: FontVariation.SMALL }} color={Color.GREEN_700}>
+                                ✓ Validated
+                              </Text>
+                            )}
+                          </Layout.Horizontal>
+                          {helmChartFile ? (
+                            <>
+                              <div style={{ padding: '12px', background: '#f5f5f5', borderRadius: '4px', marginTop: '8px' }}>
+                                <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                  <strong>📦 Helm Chart Package:</strong> {helmChartFile.name}
+                                </Text>
+                                <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600}>
+                                  Size: {(helmChartFile.size / 1024).toFixed(2)} KB
+                                </Text>
+                                <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600}>
+                                  The chart will be deployed with its default values. To customize, extract values.yaml and upload it instead.
+                                </Text>
+                              </div>
+                              {isValidated && (
+                                <div style={{ padding: '12px', background: '#f0f7ff', borderRadius: '4px', marginTop: '12px', border: '1px solid #d0e9ff' }}>
+                                  <Text font={{ variation: FontVariation.SMALL }} color={Color.BLUE_900} style={{ marginBottom: '8px' }}>
+                                    <strong>✓ Deployment Configuration</strong>
+                                  </Text>
+                                  <Layout.Vertical spacing="small">
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Release Name:</strong> {helmForm.helmReleaseName}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Namespace:</strong> {helmForm.namespace}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Chart Version:</strong> {helmForm.helmChartVersion}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Agent Name:</strong> {helmForm.agentName}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Capabilities:</strong> {helmForm.capabilities.join(', ') || 'None'}
+                                    </Text>
+                                    {mergedHelmValues && (
+                                      <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #d0e9ff' }}>
+                                        <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} style={{ marginBottom: '8px' }}>
+                                          <strong>Merged Helm Values (with Azure OpenAI):</strong>
+                                        </Text>
+                                        <div style={{ 
+                                          background: '#ffffff', 
+                                          border: '1px solid #ccc', 
+                                          borderRadius: '3px', 
+                                          padding: '8px',
+                                          maxHeight: '200px',
+                                          overflowY: 'auto',
+                                          fontFamily: 'monospace',
+                                          fontSize: '11px',
+                                          whiteSpace: 'pre-wrap',
+                                          wordBreak: 'break-all'
+                                        }}>
+                                          {mergedHelmValues}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Layout.Vertical>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <textarea
+                                placeholder="Paste your values.yaml content here, or leave empty to use default chart values..."
+                                value={helmForm.valuesYaml}
+                                onChange={(e) => handleHelmFormChange('valuesYaml', e.target.value)}
+                                className={css.yamlTextarea}
+                                rows={6}
+                              />
+                              {isValidated && (
+                                <div style={{ padding: '12px', background: '#f0f7ff', borderRadius: '4px', marginTop: '12px', border: '1px solid #d0e9ff' }}>
+                                  <Text font={{ variation: FontVariation.SMALL }} color={Color.BLUE_900} style={{ marginBottom: '8px' }}>
+                                    <strong>✓ Deployment Configuration</strong>
+                                  </Text>
+                                  <Layout.Vertical spacing="small">
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Release Name:</strong> {helmForm.helmReleaseName}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Namespace:</strong> {helmForm.namespace}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Chart Version:</strong> {helmForm.helmChartVersion}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Agent Name:</strong> {helmForm.agentName}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Capabilities:</strong> {helmForm.capabilities.join(', ') || 'None'}
+                                    </Text>
+                                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                      <strong>Values Source:</strong> {helmForm.valuesYaml.trim() ? 'Custom values.yaml' : 'Default chart values'}
+                                    </Text>
+                                    {helmForm.valuesYaml.trim() && (
+                                      <>
+                                        <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} style={{ marginTop: '8px' }}>
+                                          <strong>Custom Values Preview:</strong>
+                                        </Text>
+                                        <div style={{ background: '#fff', padding: '8px', borderRadius: '3px', maxHeight: '150px', overflowY: 'auto', fontSize: '11px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                          {helmForm.valuesYaml.substring(0, 500)}
+                                          {helmForm.valuesYaml.length > 500 && '...'}
+                                        </div>
+                                      </>
+                                    )}
+                                  </Layout.Vertical>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+
+                        <Layout.Horizontal spacing="medium" className={css.formRow}>
+                          <div className={css.formField}>
+                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
+                              Description
+                            </Text>
+                            <TextInput
+                              placeholder="Enter agent description (optional)"
+                              value={helmForm.description}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleHelmFormChange('description', e.target.value)}
                               className={css.formInput}
                             />
                           </div>
                         </Layout.Horizontal>
-                        
-                        <div className={css.formField}>
-                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
-                            Description
-                          </Text>
-                          <TextInput
-                            placeholder="Enter agent description (optional)"
-                            value={helmForm.description}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleHelmFormChange('description', e.target.value)}
-                            className={css.formInput}
-                          />
-                        </div>
                         
                         <Layout.Horizontal spacing="medium" className={css.formRow}>
                           <div className={css.formField}>
@@ -666,7 +1147,43 @@ export default function AgentOnboardingView(): React.ReactElement {
                           </div>
                         </Layout.Horizontal>
                         
-                        <div className={css.formField}>
+                        {/* Environment Variables Section */}
+                        <div style={{ marginTop: '20px', padding: '16px', background: '#f9f9f9', borderRadius: '4px', border: '1px solid #e0e0e0' }}>
+                          <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800} style={{ marginBottom: '12px' }}>
+                            🔐 Environment Configuration
+                          </Text>
+                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600} style={{ marginBottom: '16px' }}>
+                            These environment variables will be injected into your deployed agent. Update values as needed or upload a .env file.
+                          </Text>
+                          
+                          <Layout.Vertical spacing="small">
+                            {Object.entries(envVariables).map(([varName, varData]) => (
+                              <div key={varName} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                                <div style={{ flex: '0 0 200px' }}>
+                                  <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
+                                    <strong>{varName}</strong>
+                                    {varData.isSensitive && <span style={{ marginLeft: '4px', color: '#e74c3c' }}>🔒</span>}
+                                  </Text>
+                                </div>
+                                <div style={{ flex: '1' }}>
+                                  <TextInput
+                                    placeholder={varData.isSensitive ? '••••••••' : `Enter ${varName}`}
+                                    type={varData.isSensitive && !varData.value.startsWith('***') ? 'password' : 'text'}
+                                    value={varData.value}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleEnvVarChange(varName, e.target.value)}
+                                    style={{ width: '100%' }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </Layout.Vertical>
+                          
+                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600} style={{ marginTop: '12px', fontStyle: 'italic' }}>
+                            💡 Tip: Upload a .env file to load multiple values at once, or manually edit values above. Click Undo to revert to backend defaults.
+                          </Text>
+                        </div>
+                        
+                        <div className={css.formField} style={{ marginTop: '20px' }}>
                           <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
                             Domains * (Select one or more)
                           </Text>
@@ -691,40 +1208,6 @@ export default function AgentOnboardingView(): React.ReactElement {
                               </label>
                             ))}
                           </div>
-                        </div>
-                        
-                        <div className={css.formField}>
-                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700} className={css.fieldLabel}>
-                            Values YAML (Optional - Upload or paste)
-                          </Text>
-                          <Layout.Horizontal spacing="small" className={css.uploadRow}>
-                            <Button
-                              variation={ButtonVariation.SECONDARY}
-                              text={uploadedFile?.method === OnboardingMethod.HELM_CHART ? uploadedFile.name : getString('upload')}
-                              icon="upload"
-                              onClick={handleUploadClick}
-                              className={css.uploadButton}
-                            />
-                            <Button
-                              variation={ButtonVariation.SECONDARY}
-                              text="Validate"
-                              icon="tick"
-                              onClick={() => showSuccess('Validation successful')}
-                              className={css.uploadButton}
-                            />
-                            {uploadedFile?.method === OnboardingMethod.HELM_CHART && (
-                              <Text font={{ variation: FontVariation.SMALL }} color={Color.GREEN_700}>
-                                ✓ File loaded
-                              </Text>
-                            )}
-                          </Layout.Horizontal>
-                          <textarea
-                            placeholder="Paste your values.yaml content here..."
-                            value={helmForm.valuesYaml}
-                            onChange={(e) => handleHelmFormChange('valuesYaml', e.target.value)}
-                            className={css.yamlTextarea}
-                            rows={6}
-                          />
                         </div>
                       </Layout.Vertical>
                     </div>

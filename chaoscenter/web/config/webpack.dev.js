@@ -29,7 +29,7 @@ const devConfig = {
   devServer: {
     static: [path.join(process.cwd(), 'src/static')],
     historyApiFallback: true,
-    port: 3000,
+    port: 2001,
     server: {
       type: 'https',
       options: {

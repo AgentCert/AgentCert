@@ -10,6 +10,7 @@ type Agent struct {
 	Capabilities   []string        `bson:"capabilities" json:"capabilities"`
 	ContainerImage *ContainerImage `bson:"containerImage" json:"containerImage"`
 	Namespace      string          `bson:"namespace" json:"namespace"`
+	HelmReleaseName string          `bson:"helmReleaseName,omitempty" json:"helmReleaseName,omitempty"`
 	Endpoint       *AgentEndpoint  `bson:"endpoint" json:"endpoint"`
 	LangfuseConfig *LangfuseConfig `bson:"langfuseConfig,omitempty" json:"langfuseConfig,omitempty"`
 	Status         AgentStatus     `bson:"status" json:"status"`

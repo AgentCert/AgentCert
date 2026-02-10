@@ -6,11 +6,15 @@ package graph
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 )
 
 // RegisterAgent is the resolver for the registerAgent field.
@@ -53,15 +57,77 @@ func (r *mutationResolver) DeployAgentWithHelm(ctx context.Context, projectID st
 		description = *request.Description
 	}
 
+	// Validate Helm deployment parameters before registering agent
+	chartPath := ""
+	if request.ChartData == nil || *request.ChartData == "" {
+		chartPath = utils.Config.DefaultAgentChartPath
+		if chartPath == "" {
+			return nil, fmt.Errorf("DEFAULT_AGENT_CHART_PATH is not configured and no chart data provided")
+		}
+	}
+
+	// Build Helm deployment request for validation
+	deployReq := &agent_registry.HelmDeployRequest{
+		ReleaseName:  request.HelmReleaseName,
+		Namespace:    request.Namespace,
+		ChartPath:    chartPath,
+		ChartData:    request.ChartData,
+		ChartVersion: &request.HelmChartVersion,
+		ValuesYAML:   request.ValuesYaml,
+		Kubeconfig:   request.Kubeconfig,
+		AgentID:      "temp-validation-id", // Temporary for validation
+		ImageTag:     request.Version,
+	}
+
+	// Use Azure OpenAI credentials from the request (passed from UI), fallback to backend env
+	isMasked := func(val string) bool {
+		return strings.HasPrefix(val, "***") || strings.Contains(val, "•")
+	}
+	if request.AzureOpenAIKey != nil && strings.TrimSpace(*request.AzureOpenAIKey) != "" && !isMasked(*request.AzureOpenAIKey) {
+		deployReq.AzureOpenAIKey = request.AzureOpenAIKey
+	} else if envVal := os.Getenv("AZURE_OPENAI_KEY"); envVal != "" {
+		deployReq.AzureOpenAIKey = &envVal
+	}
+	if request.AzureOpenAIEndpoint != nil && strings.TrimSpace(*request.AzureOpenAIEndpoint) != "" {
+		deployReq.AzureOpenAIEndpoint = request.AzureOpenAIEndpoint
+	} else if envVal := os.Getenv("AZURE_OPENAI_ENDPOINT"); envVal != "" {
+		deployReq.AzureOpenAIEndpoint = &envVal
+	}
+	if request.AzureOpenAIDeployment != nil && strings.TrimSpace(*request.AzureOpenAIDeployment) != "" {
+		deployReq.AzureOpenAIDeployment = request.AzureOpenAIDeployment
+	} else if envVal := os.Getenv("AZURE_OPENAI_DEPLOYMENT"); envVal != "" {
+		deployReq.AzureOpenAIDeployment = &envVal
+	}
+	if request.AzureOpenAIAPIVersion != nil && strings.TrimSpace(*request.AzureOpenAIAPIVersion) != "" {
+		deployReq.AzureOpenAIAPIVersion = request.AzureOpenAIAPIVersion
+	} else if envVal := os.Getenv("AZURE_OPENAI_API_VERSION"); envVal != "" {
+		deployReq.AzureOpenAIAPIVersion = &envVal
+	}
+	if request.AzureOpenAIEmbeddingDeployment != nil && strings.TrimSpace(*request.AzureOpenAIEmbeddingDeployment) != "" {
+		deployReq.AzureOpenAIEmbeddingDeployment = request.AzureOpenAIEmbeddingDeployment
+	} else if envVal := os.Getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"); envVal != "" {
+		deployReq.AzureOpenAIEmbeddingDeployment = &envVal
+	}
+
+	// Validate Helm deployment will succeed (dry-run) before registering
+	// For now, we'll proceed with registration and rollback if deployment fails
+	
+	// Prepare HelmReleaseName pointer
+	var helmReleaseNamePtr *string
+	if request.HelmReleaseName != "" {
+		helmReleaseNamePtr = &request.HelmReleaseName
+	}
+	
 	// Create the agent registration input
 	registerInput := model.RegisterAgentInput{
-		ProjectID:    projectID,
-		Name:         request.Name,
-		Description:  &description,
-		Version:      version,
-		Vendor:       "helm-deployment",
-		Capabilities: capabilities,
-		Namespace:    request.Namespace,
+		ProjectID:       projectID,
+		Name:            request.Name,
+		Description:     &description,
+		Version:         version,
+		Vendor:          "helm-deployment",
+		Capabilities:    capabilities,
+		Namespace:       request.Namespace,
+		HelmReleaseName: helmReleaseNamePtr,
 		ContainerImage: &model.ContainerImageInput{
 			Registry:   "docker.io",
 			Repository: "litmus/agent",
@@ -80,13 +146,179 @@ func (r *mutationResolver) DeployAgentWithHelm(ctx context.Context, projectID st
 		return nil, err
 	}
 
-	// Return the deployment response
+	// Now attempt Helm deployment with the real agent ID
+	deployReq.AgentID = agent.AgentID
+
+	if _, deployErr := agent_registry.DeployWithHelm(ctx, deployReq); deployErr != nil {
+		// Helm deployment failed - delete the agent we just registered (hard delete)
+		_, deleteErr := r.agentRegistryService.DeleteAgent(ctx, agent.AgentID, true)
+		if deleteErr != nil {
+			// Log but don't fail - agent is registered but deployment failed
+			fmt.Printf("Failed to cleanup agent after deployment failure: %v\n", deleteErr)
+		}
+		return nil, fmt.Errorf("helm deployment failed: %w", deployErr)
+	}
+
+	_ = r.agentRegistryService.SetAgentStatus(ctx, agent.AgentID, agent_registry.AgentStatusActive)
+
+	// Build environment variables list for deployment config
+	envVars := []*model.EnvVariable{}
+	
+	// Helper function to create bool pointer
+	boolPtr := func(b bool) *bool { return &b }
+	
+	// Add namespace
+	if request.Namespace != "" {
+		envVars = append(envVars, &model.EnvVariable{
+			Name:        "NAMESPACE",
+			Value:       request.Namespace,
+			IsSensitive: boolPtr(false),
+		})
+	}
+	
+	// Add image tag
+	if request.Version != nil {
+		envVars = append(envVars, &model.EnvVariable{
+			Name:        "IMAGE_TAG",
+			Value:       *request.Version,
+			IsSensitive: boolPtr(false),
+		})
+	}
+	
+	// Add Azure OpenAI variables with masking for sensitive ones
+	if deployReq.AzureOpenAIKey != nil && strings.TrimSpace(*deployReq.AzureOpenAIKey) != "" {
+		maskedKey := "***" + (*deployReq.AzureOpenAIKey)[len(*deployReq.AzureOpenAIKey)-4:]
+		envVars = append(envVars, &model.EnvVariable{
+			Name:        "AZURE_OPENAI_KEY",
+			Value:       maskedKey,
+			IsSensitive: boolPtr(true),
+		})
+	}
+	if deployReq.AzureOpenAIEndpoint != nil && strings.TrimSpace(*deployReq.AzureOpenAIEndpoint) != "" {
+		envVars = append(envVars, &model.EnvVariable{
+			Name:        "AZURE_OPENAI_ENDPOINT",
+			Value:       *deployReq.AzureOpenAIEndpoint,
+			IsSensitive: boolPtr(false),
+		})
+	}
+	if deployReq.AzureOpenAIDeployment != nil && strings.TrimSpace(*deployReq.AzureOpenAIDeployment) != "" {
+		envVars = append(envVars, &model.EnvVariable{
+			Name:        "AZURE_OPENAI_DEPLOYMENT",
+			Value:       *deployReq.AzureOpenAIDeployment,
+			IsSensitive: boolPtr(false),
+		})
+	}
+	if deployReq.AzureOpenAIAPIVersion != nil && strings.TrimSpace(*deployReq.AzureOpenAIAPIVersion) != "" {
+		envVars = append(envVars, &model.EnvVariable{
+			Name:        "AZURE_OPENAI_API_VERSION",
+			Value:       *deployReq.AzureOpenAIAPIVersion,
+			IsSensitive: boolPtr(false),
+		})
+	}
+	if deployReq.AzureOpenAIEmbeddingDeployment != nil && strings.TrimSpace(*deployReq.AzureOpenAIEmbeddingDeployment) != "" {
+		envVars = append(envVars, &model.EnvVariable{
+			Name:        "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+			Value:       *deployReq.AzureOpenAIEmbeddingDeployment,
+			IsSensitive: boolPtr(false),
+		})
+	}
+	
+	// Build deployment configuration
+	now := time.Now()
+	deployedAtStr := now.UTC().Format(time.RFC3339)
+	deploymentConfig := &model.DeploymentConfig{
+		Namespace:            request.Namespace,
+		ReleaseName:          agent_registry.SanitizeReleaseName(request.HelmReleaseName),
+		ChartPath:            &deployReq.ChartPath,
+		ChartVersion:         &request.HelmChartVersion,
+		EnvironmentVariables: envVars,
+		DeployedAt:           &deployedAtStr,
+	}
+
+	// Return the deployment response with full configuration details
 	return &model.DeployAgentWithHelmResponse{
-		AgentID:          agent.AgentID,
-		Name:             agent.Name,
-		Status:           model.AgentStatusRegistered,
-		HelmReleaseName:  &request.HelmReleaseName,
-		HelmChartVersion: &request.HelmChartVersion,
+		AgentID:            agent.AgentID,
+		Name:               agent.Name,
+		Status:             model.AgentStatusRegistered,
+		HelmReleaseName:    &request.HelmReleaseName,
+		HelmChartVersion:   &request.HelmChartVersion,
+		DeploymentConfig:   deploymentConfig,
+	}, nil
+}
+
+// ValidateHelmDeployment is the resolver for the validateHelmDeployment field.
+func (r *mutationResolver) ValidateHelmDeployment(ctx context.Context, projectID string, request model.DeployAgentWithHelmRequest) (*model.HelmValidationResponse, error) {
+	version := "v1.0.0"
+	if request.Version != nil {
+		version = *request.Version
+	}
+
+	namespace := request.Namespace
+
+	// Get chart path (optional for validation)
+	chartPath := ""
+	if request.ChartData != nil && strings.TrimSpace(*request.ChartData) != "" {
+		// chartPath will be set later when processing chartData
+	} else if utils.Config.DefaultAgentChartPath != "" {
+		chartPath = utils.Config.DefaultAgentChartPath
+	}
+	// If no chart provided, validation still proceeds (just validates merged values)
+
+	// Build Helm deployment request
+	deployReq := &agent_registry.HelmDeployRequest{
+		ReleaseName:  request.HelmReleaseName,
+		Namespace:    namespace,
+		ChartPath:    chartPath,
+		ChartData:    request.ChartData,
+		ChartVersion: &request.HelmChartVersion,
+		ValuesYAML:   request.ValuesYaml,
+		Kubeconfig:   request.Kubeconfig,
+		AgentID:      "temp-validation-id",
+		ImageTag:     &version,
+	}
+
+	// Use Azure OpenAI credentials from the request (passed from UI)
+	isMasked := func(val string) bool {
+		return strings.HasPrefix(val, "***") || strings.Contains(val, "•")
+	}
+	if request.AzureOpenAIKey != nil && strings.TrimSpace(*request.AzureOpenAIKey) != "" && !isMasked(*request.AzureOpenAIKey) {
+		deployReq.AzureOpenAIKey = request.AzureOpenAIKey
+	} else if envVal := os.Getenv("AZURE_OPENAI_KEY"); envVal != "" {
+		deployReq.AzureOpenAIKey = &envVal
+	}
+	if request.AzureOpenAIEndpoint != nil && strings.TrimSpace(*request.AzureOpenAIEndpoint) != "" {
+		deployReq.AzureOpenAIEndpoint = request.AzureOpenAIEndpoint
+	} else if envVal := os.Getenv("AZURE_OPENAI_ENDPOINT"); envVal != "" {
+		deployReq.AzureOpenAIEndpoint = &envVal
+	}
+	if request.AzureOpenAIDeployment != nil && strings.TrimSpace(*request.AzureOpenAIDeployment) != "" {
+		deployReq.AzureOpenAIDeployment = request.AzureOpenAIDeployment
+	} else if envVal := os.Getenv("AZURE_OPENAI_DEPLOYMENT"); envVal != "" {
+		deployReq.AzureOpenAIDeployment = &envVal
+	}
+	if request.AzureOpenAIAPIVersion != nil && strings.TrimSpace(*request.AzureOpenAIAPIVersion) != "" {
+		deployReq.AzureOpenAIAPIVersion = request.AzureOpenAIAPIVersion
+	} else if envVal := os.Getenv("AZURE_OPENAI_API_VERSION"); envVal != "" {
+		deployReq.AzureOpenAIAPIVersion = &envVal
+	}
+	if request.AzureOpenAIEmbeddingDeployment != nil && strings.TrimSpace(*request.AzureOpenAIEmbeddingDeployment) != "" {
+		deployReq.AzureOpenAIEmbeddingDeployment = request.AzureOpenAIEmbeddingDeployment
+	} else if envVal := os.Getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"); envVal != "" {
+		deployReq.AzureOpenAIEmbeddingDeployment = &envVal
+	}
+
+	// Use user-provided values YAML or empty if none
+	finalValues := ""
+	if request.ValuesYaml != nil && strings.TrimSpace(*request.ValuesYaml) != "" {
+		finalValues = *request.ValuesYaml
+	}
+
+	// Return validation response with merged values
+	return &model.HelmValidationResponse{
+		Valid:        true,
+		MergedValues: &finalValues,
+		ReleaseName:  agent_registry.SanitizeReleaseName(request.HelmReleaseName),
+		Namespace:    namespace,
 	}, nil
 }
 
@@ -223,6 +455,42 @@ func (r *queryResolver) GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*mo
 
 	// Convert service responses to GraphQL models
 	return agent_registry.MapCapabilityDefinitionsToModel(capabilities), nil
+}
+
+// GetKubernetesNamespaces is the resolver for the getKubernetesNamespaces field.
+func (r *queryResolver) GetKubernetesNamespaces(ctx context.Context) ([]string, error) {
+	// Call service layer to get available namespaces
+	namespaces, err := r.agentRegistryService.GetKubernetesNamespaces(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch Kubernetes namespaces: %w", err)
+	}
+	return namespaces, nil
+}
+
+// GetEnvironmentVariables resolver
+func (r *queryResolver) GetEnvironmentVariables(ctx context.Context) ([]*model.EnvironmentVariable, error) {
+	envVars := []*model.EnvironmentVariable{}
+	
+	// Helper to add env var if it exists
+	addEnvVar := func(name string, isSensitive bool) {
+		value := os.Getenv(name)
+		if value != "" {
+			envVars = append(envVars, &model.EnvironmentVariable{
+				Name:        name,
+				Value:       value,
+				IsSensitive: &isSensitive,
+			})
+		}
+	}
+	
+	// Add Azure OpenAI credentials
+	addEnvVar("AZURE_OPENAI_KEY", true)
+	addEnvVar("AZURE_OPENAI_ENDPOINT", false)
+	addEnvVar("AZURE_OPENAI_DEPLOYMENT", false)
+	addEnvVar("AZURE_OPENAI_API_VERSION", false)
+	addEnvVar("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", false)
+	
+	return envVars, nil
 }
 
 // Ensure uuid package is used

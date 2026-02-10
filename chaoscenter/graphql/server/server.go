@@ -15,6 +15,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -30,6 +31,7 @@ import (
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/config"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/handlers"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/projects"
 	pb "github.com/litmuschaos/litmus/chaoscenter/graphql/server/protos"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
@@ -40,6 +42,18 @@ func init() {
 	log.SetReportCaller(true)
 	log.Printf("go version: %s", runtime.Version())
 	log.Printf("go os/arch: %s/%s", runtime.GOOS, runtime.GOARCH)
+
+	// Load .env files if they exist (for development/local deployment)
+	_ = godotenv.Load()
+	// Try common workspace paths for local-custom config
+	for _, p := range []string{
+		"./local-custom/config/.env",
+		"../local-custom/config/.env",
+		"../../local-custom/config/.env",
+		"../../../local-custom/config/.env",
+	} {
+		_ = godotenv.Overload(p)
+	}
 
 	err := envconfig.Process("", &utils.Config)
 	if err != nil {
@@ -94,6 +108,12 @@ func main() {
 
 	if err := validateVersion(); err != nil {
 		log.Fatal(err)
+	}
+
+	// Initialize Langfuse tracer for backend observability
+	if err := observability.InitializeLangfuseTracer(); err != nil {
+		log.Printf("Failed to initialize Langfuse tracer: %v", err)
+		// Don't fail startup if Langfuse is not configured
 	}
 
 	enableHTTPSConnection, err := strconv.ParseBool(utils.Config.EnableInternalTls)

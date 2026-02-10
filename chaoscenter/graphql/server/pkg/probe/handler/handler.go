@@ -725,6 +725,20 @@ func (p *probeService) ValidateUniqueProbe(ctx context.Context, probeName, proje
 	return isUnique, nil
 }
 
+// extractServiceNameFromLabel extracts the service name from an app label
+// e.g., "app.kubernetes.io/instance=myservice" -> "myservice"
+func extractServiceNameFromLabel(label string) string {
+	if label == "" {
+		return ""
+	}
+	// Split by = to get the value
+	parts := strings.Split(label, "=")
+	if len(parts) == 2 {
+		return strings.TrimSpace(parts[1])
+	}
+	return label
+}
+
 // GenerateExperimentManifestWithProbes - uses GenerateProbeManifest to get and store the respective probe attribute into Raw Data template for Non Cron Workflow
 func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, projectID string) (argoTypes.Workflow, error) {
 	var (
@@ -794,6 +808,21 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 										return argoTypes.Workflow{}, fmt.Errorf("failed to unmarshal http probe, error: %s", err.Error())
 									}
 
+									// Auto-inject target service URL if URL is generic/placeholder
+									if httpProbe.HTTPProbeInputs.URL == "" || httpProbe.HTTPProbeInputs.URL == "http://localhost:8080" {
+										// Extract target app info from ChaosEngine
+										targetNs := meta.Namespace
+										if targetNs == "" {
+											targetNs = meta.Spec.Appinfo.Appns
+										}
+										targetLabel := meta.Spec.Appinfo.Applabel
+										// Extract service name from label (e.g., "app=myapp" -> "myapp")
+										serviceName := extractServiceNameFromLabel(targetLabel)
+										if serviceName != "" && targetNs != "" {
+											httpProbe.HTTPProbeInputs.URL = fmt.Sprintf("http://%s.%s.svc.cluster.local:80", serviceName, targetNs)
+										}
+									}
+
 									probes = append(probes, v1alpha1.ProbeAttributes{
 										Name: httpProbe.Name,
 										Type: httpProbe.Type,
@@ -844,6 +873,25 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 									err := json.Unmarshal([]byte(probeManifestString), &k8sProbe)
 									if err != nil {
 										return argoTypes.Workflow{}, fmt.Errorf("failed to unmarshal k8s probe, error: %s", err.Error())
+									}
+
+									// Auto-inject target namespace for K8S probe if not specified
+									if k8sProbe.K8sProbeInputs.Namespace == "" || k8sProbe.K8sProbeInputs.Namespace == "default" {
+										targetNs := meta.Namespace
+										if targetNs == "" {
+											targetNs = meta.Spec.Appinfo.Appns
+										}
+										if targetNs != "" {
+											k8sProbe.K8sProbeInputs.Namespace = targetNs
+										}
+									}
+
+									// Auto-inject label selector if not specified
+									if k8sProbe.K8sProbeInputs.LabelSelector == "" {
+										targetLabel := meta.Spec.Appinfo.Applabel
+										if targetLabel != "" {
+											k8sProbe.K8sProbeInputs.LabelSelector = targetLabel
+										}
 									}
 
 									probes = append(probes, v1alpha1.ProbeAttributes{

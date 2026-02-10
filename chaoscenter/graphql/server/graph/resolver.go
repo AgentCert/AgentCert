@@ -73,7 +73,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	// Initialize Agent Registry dependencies
 	agentRegistryOperator := agent_registry.NewOperator(mongodbOperator.(*mongodb.MongoOperations).MongoClient.Database)
 	agentRegistryValidator := agent_registry.NewValidator(agentRegistryOperator)
-	langfuseClient := agent_registry.NewLangfuseClient("", "") // Empty config for now
+	langfuseClient := agent_registry.NewLangfuseClient("", "", "") // Empty config - disabled
 	agentRegistryService := agent_registry.NewService(agentRegistryOperator, agentRegistryValidator, langfuseClient, nil)
 
 	//handler
