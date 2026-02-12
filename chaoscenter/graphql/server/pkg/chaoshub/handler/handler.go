@@ -22,13 +22,13 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const DefaultPath = "/tmp/"
+const DefaultPath = "../../../chaoshub-faults/"
 
 // GetChartsPath is used to construct path for given chart.
 func GetChartsPath(chartsInput model.CloningInput, projectID string, isDefault bool) string {
 	var repoPath string
 	if isDefault {
-		repoPath = DefaultPath + "default/" + chartsInput.Name + "/faults/"
+		repoPath = "../../../chaoshub-faults/faults/"
 	} else {
 		repoPath = DefaultPath + projectID + "/" + chartsInput.Name + "/faults/"
 	}
@@ -300,10 +300,15 @@ func SyncRemoteRepo(hubData model.CloningInput, projectID string) error {
 func ValidateLocalRepository(hub chaos_hub.ChaosHub) (bool, error) {
 	var repoPath string
 	if hub.IsDefault {
-		repoPath = DefaultPath + "default/" + hub.Name
-	} else {
-		repoPath = DefaultPath + hub.ProjectID + "/" + hub.Name
+		// Default hub uses local files from the AgentCert repo, not a git clone
+		repoPath = "../../../chaoshub-faults/faults"
+		_, err := os.Stat(repoPath)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
 	}
+	repoPath = DefaultPath + hub.ProjectID + "/" + hub.Name
 	err := chaoshubops.GitPlainOpen(repoPath)
 	if err != nil {
 		return false, err
@@ -355,7 +360,7 @@ func DefaultChaosHubIconHandler() gin.HandlerFunc {
 		)
 
 		if strings.ToLower(c.Param("chartName")) == "predefined" {
-			img, err = os.Open(utils.Config.DefaultChaosHubPath + c.Param("hubName") + "/experiments/icons/" + c.Param("iconName"))
+			img, err = os.Open(utils.Config.DefaultChaosHubPath + "experiments/icons/" + c.Param("iconName"))
 			responseStatusCode = http.StatusOK
 			if err != nil {
 				responseStatusCode = http.StatusInternalServerError
@@ -363,7 +368,7 @@ func DefaultChaosHubIconHandler() gin.HandlerFunc {
 				fmt.Fprint(c.Writer, "icon cannot be fetched, err : "+err.Error())
 			}
 		} else {
-			img, err = os.Open(utils.Config.DefaultChaosHubPath + c.Param("hubName") + "/faults/" + c.Param("chartName") + "/icons/" + c.Param("iconName"))
+			img, err = os.Open(utils.Config.DefaultChaosHubPath + c.Param("chartName") + "/icons/" + c.Param("iconName"))
 			responseStatusCode = http.StatusOK
 			if err != nil {
 				responseStatusCode = http.StatusInternalServerError
