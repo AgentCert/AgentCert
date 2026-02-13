@@ -70,7 +70,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	gitOpsService := gitops3.NewGitOpsService(gitopsOperator, chaosExperimentService, *chaosExperimentOperator)
 	imageRegistryService := image_registry.NewImageRegistryService(imageRegistryOperator)
 	environmentService := envHandler.NewEnvironmentService(EnvironmentOperator)
-	
+
 	// Initialize Agent Registry dependencies
 	agentRegistryOperator := agent_registry.NewOperator(mongodbOperator.(*mongodb.MongoOperations).MongoClient.Database)
 	agentRegistryValidator := agent_registry.NewValidator(agentRegistryOperator)
