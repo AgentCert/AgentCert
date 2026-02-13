@@ -71,10 +71,11 @@ jobs:
         with:
           go-version: "1.23" # Latest stable Go version
 
-      - name: Check Golang imports order
-        uses: Jerome1337/goimports-action@v1.0.3
-        with:
-          goimports-path: ./chaoscenter
+      # Note: goimports check disabled in favor of standard gofmt check in Makefile
+      # - name: Check Golang imports order
+      #   uses: Jerome1337/goimports-action@v1.0.3
+      #   with:
+      #     goimports-path: ./chaoscenter
 
       - name: Backend checks
         shell: bash
