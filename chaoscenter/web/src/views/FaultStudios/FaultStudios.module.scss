@@ -1,0 +1,19 @@
+.cardsContainer {
+  flex-wrap: wrap;
+}
+
+.studioCard {
+  width: 300px;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease-in-out;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.activeStatus {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

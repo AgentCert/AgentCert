@@ -32,6 +32,9 @@ export interface UseRouteDefinitionsProps {
   toProjectMembers(): string;
   toImageRegistry(): string;
   toGitops(): string;
+  // Fault Studio Routes
+  toFaultStudios(): string;
+  toFaultStudio(params: { studioID: string }): string;
 }
 
 export const paths: UseRouteDefinitionsProps = {
@@ -74,5 +77,8 @@ export const paths: UseRouteDefinitionsProps = {
   toProjectSetup: () => '/setup',
   toProjectMembers: () => '/setup/members',
   toImageRegistry: () => `/setup/image-registry`,
-  toGitops: () => `/setup/gitops`
+  toGitops: () => `/setup/gitops`,
+  // Fault Studio Routes
+  toFaultStudios: () => '/fault-studios',
+  toFaultStudio: ({ studioID }) => `/fault-studios/${studioID}`
 };

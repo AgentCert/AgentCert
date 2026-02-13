@@ -114,6 +114,8 @@ export default function SideNav(): ReactElement {
             <SidebarLink label={getString('environments')} to={paths.toEnvironments()} />
             <SidebarLink label={getString('resilienceProbes')} to={paths.toChaosProbes()} />
             <SidebarLink label={getString('chaoshubs')} to={paths.toChaosHubs()} />
+            {/* Fault Studios link temporarily hidden - API still available */}
+            {/* <SidebarLink label={getString('faultStudios')} to={paths.toFaultStudios()} /> */}
             <SidebarLink label={getString('agentOnboarding')} to={paths.toAgentOnboarding()} />
             <SidebarLink label={getString('appsOnboarding')} to={paths.toAppsOnboarding()} />
             {projectRole === PermissionGroup.OWNER && (

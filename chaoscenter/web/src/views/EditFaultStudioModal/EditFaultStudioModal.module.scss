@@ -1,0 +1,12 @@
+.modal {
+  width: 600px !important;
+  
+  :global(.bp3-dialog-header) {
+    display: none;
+  }
+}
+
+.modalContent {
+  background: var(--white);
+  border-radius: 8px;
+}

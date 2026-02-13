@@ -1,5 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput, DropDown, SelectOption } from '@harnessio/uicore';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Layout, Text, Button, ButtonVariation, Container, useToaster, TableV2, TextInput } from '@harnessio/uicore';
+import { Icon } from '@harnessio/icons';
+import { getScope } from '@utils';
 import { Color, FontVariation } from '@harnessio/design-system';
 import { useLocation, useHistory } from 'react-router-dom';
 import type { Column, CellProps } from 'react-table';
@@ -7,9 +9,6 @@ import cx from 'classnames';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
 import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
-import { getScope } from '@utils';
-import { listEnvironment } from '@api/core/environments';
-import type { Environment } from '@api/entities';
 import css from './AppsOnboarding.module.scss';
 
 export enum OnboardingMethod {
@@ -26,67 +25,93 @@ interface RadioOption {
 interface UploadedFile {
   name: string;
   method: OnboardingMethod;
+  file?: File;
+}
+
+enum ValidationStatus {
+  IDLE = 'idle',
+  VALIDATING = 'validating',
+  SUCCESS = 'success',
+  FAILED = 'failed'
 }
 
 interface Application {
   id: string;
+  appId?: string;
   name: string;
   method: string;
   status: string;
   createdAt: string;
+  environmentId?: string;
+  namespace?: string;
+  version?: string;
 }
 
-// Mock data for applications table
-const mockApplications: Application[] = [
-  { id: '1', name: 'Payment Service', method: 'Kubernetes Manifest', status: 'Active', createdAt: '2026-01-18' },
-  { id: '2', name: 'User Auth API', method: 'Docker Image', status: 'Active', createdAt: '2026-01-12' },
-  { id: '3', name: 'Notification Service', method: 'Helm Chart', status: 'Inactive', createdAt: '2026-01-08' },
-  { id: '4', name: 'Analytics Dashboard', method: 'Cloud Managed', status: 'Active', createdAt: '2026-01-03' }
-];
+// Removed mock data - apps will be fetched from database
 
 export default function AppsOnboardingView(): React.ReactElement {
   const { getString } = useStrings();
-  const { showSuccess } = useToaster();
+  const { showSuccess, showError } = useToaster();
   const location = useLocation();
   const history = useHistory();
   const paths = useRouteWithBaseUrl();
   const searchParams = new URLSearchParams(location.search);
   const showOptions = searchParams.get('step') === 'select';
   const [selectedMethod, setSelectedMethod] = useState<OnboardingMethod | null>(null);
+  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('');
+  const [validationStatus, setValidationStatus] = useState<ValidationStatus>(ValidationStatus.IDLE);
+  const scope = getScope();
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [cloudManagedUrl, setCloudManagedUrl] = useState<string>('');
-  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [applications, setApplications] = useState<Application[]>(mockApplications);
-  const scope = getScope();
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [, setIsLoadingApps] = useState<boolean>(true);
+  const [isOnboarding, setIsOnboarding] = useState<boolean>(false);
+  // Store release info from validation for cleanup during onboard
+  const [validationReleaseInfo, setValidationReleaseInfo] = useState<{
+    releaseName: string;
+    namespace: string;
+    chartName: string;
+  } | null>(null);
+  // Store YAML content extracted from the helm chart
+  const [yamlContent, setYamlContent] = useState<string>('');
 
-  // Fetch environments list
-  const { data: environmentsData, loading: environmentsLoading, error: environmentsError } = listEnvironment({
-    projectID: scope.projectID,
-    environmentIDs: [],
-    pagination: { page: 0, limit: 100 },
-    options: {
-      fetchPolicy: 'cache-and-network'
+  // Fetch registered apps from database
+  const fetchApplications = useCallback(async (): Promise<void> => {
+    try {
+      setIsLoadingApps(true);
+      const response = await fetch(`/api/apps?projectId=${scope.projectID}`);
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // Filter to only show apps with 'REGISTERED' status
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const registeredApps = result.apps?.filter((app: any) => app.status === 'REGISTERED') || [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const apps = registeredApps.map((app: any) => ({
+          id: app.appId,
+          appId: app.appId,
+          name: app.name,
+          method: app.method === 'HELM_CHART' ? 'Helm Chart' : app.method,
+          status: app.status,
+          createdAt: new Date(app.auditInfo?.createdAt * 1000).toISOString().split('T')[0],
+          environmentId: app.environmentId,
+          namespace: app.namespace,
+          version: app.version
+        }));
+        setApplications(apps);
+      }
+    } catch (_error) {
+      // Failed to fetch applications
+    } finally {
+      setIsLoadingApps(false);
     }
-  });
+  }, [scope.projectID]);
 
-  const environments: Environment[] = environmentsData?.listEnvironments?.environments || [];
-  const environmentOptions: SelectOption[] = environments.map(env => ({
-    label: env.name,
-    value: env.environmentID
-  }));
-
-  // Debug logging
-  React.useEffect(() => {
-    console.log('Environments Debug:', {
-      projectID: scope.projectID,
-      loading: environmentsLoading,
-      error: environmentsError,
-      data: environmentsData,
-      environments: environments.length,
-      options: environmentOptions.length
-    });
-  }, [environmentsData, environmentsLoading, environmentsError]);
+  // Fetch applications on mount
+  useEffect(() => {
+    fetchApplications();
+  }, [fetchApplications]);
 
   useDocumentTitle(getString('appsOnboarding'));
 
@@ -121,12 +146,66 @@ export default function AppsOnboardingView(): React.ReactElement {
     }
   ];
 
-  const handleOnboard = (): void => {
-    if (selectedMethod && uploadedFile) {
-      const environmentInfo = selectedMethod === OnboardingMethod.HELM_CHART && selectedEnvironment 
-        ? ` in environment: ${environments.find(env => env.environmentID === selectedEnvironment)?.name || selectedEnvironment}`
-        : '';
-      showSuccess(`You have selected: ${getMethodLabel(selectedMethod)} with file: ${uploadedFile.name}${environmentInfo}`);
+  const handleOnboard = async (): Promise<void> => {
+    if (!selectedMethod || !uploadedFile) {
+      return;
+    }
+
+    setIsOnboarding(true);
+
+    try {
+      // Extract app name from the file name (remove extension and version)
+      let appName = uploadedFile.name;
+      appName = appName.replace(/\.(tgz|tar\.gz|yaml|yml|json)$/i, '');
+      // Remove version suffix if present (e.g., sock-shop-0.1.0 -> sock-shop)
+      const versionMatch = appName.match(/^(.+)-(\d+\.\d+\.\d+)$/);
+      if (versionMatch) {
+        appName = versionMatch[1];
+      }
+
+      const registerRequest = {
+        projectId: scope.projectID,
+        name: appName,
+        version: versionMatch ? versionMatch[2] : '1.0.0',
+        description: `Application onboarded via ${getMethodLabel(selectedMethod)}`,
+        chartName: uploadedFile.name,
+        namespace: validationReleaseInfo?.namespace || 'default',
+        environmentId: selectedEnvironment || '',
+        method: selectedMethod === OnboardingMethod.HELM_CHART ? 'HELM_CHART' : 'CLOUD_MANAGED',
+        // Pass release info for cleanup during onboard
+        releaseName: validationReleaseInfo?.releaseName || '',
+        releaseNamespace: validationReleaseInfo?.namespace || 'default',
+      };
+
+      const response = await fetch('/api/apps/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(registerRequest),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        showSuccess(`Application "${appName}" registered successfully!`);
+        // Refresh the applications list
+        await fetchApplications();
+        // Navigate back to the main list
+        history.push({ search: '' });
+        // Reset form
+        setUploadedFile(null);
+        setSelectedMethod(null);
+        setValidationStatus(ValidationStatus.IDLE);
+        setSelectedEnvironment('');
+        setValidationReleaseInfo(null);
+      } else {
+        showError(result.message || 'Failed to register application');
+      }
+    } catch (_error) {
+      showError('Failed to register application');
+    } finally {
+      setIsOnboarding(false);
     }
   };
 
@@ -134,10 +213,63 @@ export default function AppsOnboardingView(): React.ReactElement {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = event.target.files?.[0];
     if (file && selectedMethod) {
-      setUploadedFile({ name: file.name, method: selectedMethod });
+      setUploadedFile({ name: file.name, method: selectedMethod, file: file });
+      setValidationStatus(ValidationStatus.IDLE); // Reset validation when new file is uploaded
+      setValidationReleaseInfo(null); // Reset release info when new file is uploaded
+      setYamlContent(''); // Reset YAML content
+      
+      // For Helm charts (.tgz), extract and display values.yaml content
+      if (selectedMethod === OnboardingMethod.HELM_CHART && file.name.endsWith('.tgz')) {
+        try {
+          // Use pako to decompress gzip and read tar
+          const arrayBuffer = await file.arrayBuffer();
+          const uint8Array = new Uint8Array(arrayBuffer);
+          
+          // Import pako dynamically for decompression
+          const pako = await import('pako');
+          const decompressed = pako.ungzip(uint8Array);
+          
+          // Parse tar file to find values.yaml
+          let yamlFound = '';
+          let offset = 0;
+          while (offset < decompressed.length) {
+            // Read tar header (512 bytes)
+            const header = decompressed.slice(offset, offset + 512);
+            if (header[0] === 0) break; // End of archive
+            
+            // Extract filename from header (first 100 bytes)
+            const nameBytes = header.slice(0, 100);
+            const name = new TextDecoder().decode(nameBytes).replace(/\0/g, '').trim();
+            
+            // Extract file size from header (bytes 124-135, octal)
+            const sizeBytes = header.slice(124, 136);
+            const sizeStr = new TextDecoder().decode(sizeBytes).replace(/\0/g, '').trim();
+            const size = parseInt(sizeStr, 8) || 0;
+            
+            // Check if this is values.yaml
+            if (name.endsWith('values.yaml') || name.endsWith('/values.yaml')) {
+              const content = decompressed.slice(offset + 512, offset + 512 + size);
+              yamlFound = new TextDecoder().decode(content);
+              break;
+            }
+            
+            // Move to next file (512-byte aligned)
+            offset += 512 + Math.ceil(size / 512) * 512;
+          }
+          
+          if (yamlFound) {
+            setYamlContent(yamlFound);
+          } else {
+            setYamlContent('# values.yaml not found in the chart');
+          }
+        } catch (_err) {
+          setYamlContent('# Failed to extract values.yaml from the chart');
+        }
+      }
+      
       showSuccess(getString('uploadedSuccessfully'));
     }
     // Reset the input so the same file can be selected again if needed
@@ -146,10 +278,62 @@ export default function AppsOnboardingView(): React.ReactElement {
     }
   };
 
+  // Validate Helm chart by deploying to local Kubernetes cluster
+  const handleValidate = async (): Promise<void> => {
+    if (!uploadedFile?.file || selectedMethod !== OnboardingMethod.HELM_CHART) {
+      return;
+    }
+
+    setValidationStatus(ValidationStatus.VALIDATING);
+
+    try {
+      // Create FormData to send the helm package to the backend
+      const formData = new FormData();
+      formData.append('helmPackage', uploadedFile.file);
+      formData.append('environmentId', selectedEnvironment);
+
+      // Call backend API to validate helm chart
+      const response = await fetch('/api/validate-helm', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        setValidationStatus(ValidationStatus.SUCCESS);
+        // Store release info for cleanup during onboard
+        if (result.releaseName) {
+          setValidationReleaseInfo({
+            releaseName: result.releaseName,
+            namespace: result.namespace || 'default',
+            chartName: result.chartName || ''
+          });
+        }
+        showSuccess(getString('validatedSuccessfully'));
+      } else {
+        setValidationStatus(ValidationStatus.FAILED);
+        setValidationReleaseInfo(null);
+        showError(getString('validationFailed'));
+      }
+    } catch (error) {
+      setValidationStatus(ValidationStatus.FAILED);
+      setValidationReleaseInfo(null);
+      showError(getString('validationFailed'));
+    }
+  };
+
+  const isValidateDisabled = (): boolean => {
+    if (selectedMethod !== OnboardingMethod.HELM_CHART) return true;
+    if (!uploadedFile || uploadedFile.method !== selectedMethod) return true;
+    if (validationStatus === ValidationStatus.VALIDATING) return true;
+    return false;
+  };
+
   const getAcceptedFileTypes = (method: OnboardingMethod): string => {
     switch (method) {
       case OnboardingMethod.HELM_CHART:
-        return '.yaml,.yml,.tgz';
+        return '.tgz';
       case OnboardingMethod.CLOUD_MANAGED:
         return '.yaml,.yml,.json';
       default:
@@ -158,11 +342,13 @@ export default function AppsOnboardingView(): React.ReactElement {
   };
 
   const isOnboardDisabled = (): boolean => {
+    if (isOnboarding) return true;
     if (!selectedMethod) return true;
     
     switch (selectedMethod) {
       case OnboardingMethod.HELM_CHART:
-        return !uploadedFile || uploadedFile.method !== selectedMethod || !selectedEnvironment;
+        // For Helm Chart, require successful validation before onboarding
+        return !uploadedFile || uploadedFile.method !== selectedMethod || validationStatus !== ValidationStatus.SUCCESS;
       case OnboardingMethod.CLOUD_MANAGED:
         return !cloudManagedUrl.trim() || !uploadedFile || uploadedFile.method !== selectedMethod;
       default:
@@ -364,18 +550,15 @@ export default function AppsOnboardingView(): React.ReactElement {
                     </div>
                   </label>
                   {selectedMethod === option.value && (
-                    <Layout.Vertical spacing="medium" className={css.inputSection}>
-                      {/* First row: Upload filename and button */}
-                      <Layout.Horizontal spacing="medium" style={{ alignItems: 'center', justifyContent: 'flex-start' }}>
-                        <div style={{ flex: 1 }}>
-                          <TextInput
-                            placeholder={getTextboxPlaceholder(option.value)}
-                            value={getTextboxValue(option.value)}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextboxChange(option.value, e.target.value)}
-                            disabled={option.value === OnboardingMethod.HELM_CHART}
-                            className={css.urlTextbox}
-                          />
-                        </div>
+                    <div className={css.inputSection}>
+                      <div className={css.helmChartInputRow}>
+                        <TextInput
+                          placeholder={getTextboxPlaceholder(option.value)}
+                          value={getTextboxValue(option.value)}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleTextboxChange(option.value, e.target.value)}
+                          disabled={option.value === OnboardingMethod.HELM_CHART}
+                          className={css.urlTextbox}
+                        />
                         <Button
                           variation={ButtonVariation.SECONDARY}
                           text={getString('upload')}
@@ -388,38 +571,21 @@ export default function AppsOnboardingView(): React.ReactElement {
                             ✓
                           </Text>
                         )}
-                      </Layout.Horizontal>
-                      
-                      {/* Second row: Environment dropdown (only for Helm Chart) */}
-                      {option.value === OnboardingMethod.HELM_CHART && (
-                        <div style={{ alignSelf: 'flex-start', width: '100%', maxWidth: '400px' }}>
-                          <Text font={{ variation: FontVariation.FORM_LABEL }} color={Color.GREY_800} style={{ marginBottom: '8px' }}>
-                            Select Environment
+                      </div>
+                      {option.value === OnboardingMethod.HELM_CHART && yamlContent && (
+                        <div className={css.yamlContentContainer}>
+                          <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800} className={css.yamlLabel}>
+                            values.yaml
                           </Text>
-                          {environmentsLoading ? (
-                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600}>
-                              Loading environments...
-                            </Text>
-                          ) : environmentsError ? (
-                            <Text font={{ variation: FontVariation.SMALL }} color={Color.RED_600}>
-                              Error loading environments
-                            </Text>
-                          ) : environments.length === 0 ? (
-                            <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600}>
-                              No environments found
-                            </Text>
-                          ) : (
-                            <DropDown
-                              value={selectedEnvironment}
-                              items={environmentOptions}
-                              onChange={(selectedOption: SelectOption) => setSelectedEnvironment(selectedOption.value as string)}
-                              placeholder="Choose an environment"
-                              disabled={environmentsLoading}
-                            />
-                          )}
+                          <textarea
+                            className={css.yamlTextarea}
+                            value={yamlContent}
+                            readOnly
+                            rows={15}
+                          />
                         </div>
                       )}
-                    </Layout.Vertical>
+                    </div>
                   )}
                 </div>
               ))}
@@ -432,12 +598,33 @@ export default function AppsOnboardingView(): React.ReactElement {
                 icon="arrow-left"
                 onClick={handleBack}
               />
+              {selectedMethod === OnboardingMethod.HELM_CHART && (
+                <Button
+                  variation={ButtonVariation.SECONDARY}
+                  text={validationStatus === ValidationStatus.VALIDATING ? getString('validating') : getString('validate')}
+                  icon={validationStatus === ValidationStatus.VALIDATING ? undefined : 'tick'}
+                  onClick={handleValidate}
+                  disabled={isValidateDisabled()}
+                  className={cx({
+                    [css.validateSuccess]: validationStatus === ValidationStatus.SUCCESS,
+                    [css.validateFailed]: validationStatus === ValidationStatus.FAILED
+                  })}
+                >
+                  {validationStatus === ValidationStatus.VALIDATING && (
+                    <Icon name="loading" size={16} className={css.loadingIcon} />
+                  )}
+                </Button>
+              )}
               <Button
                 variation={ButtonVariation.PRIMARY}
-                text={getString('onboard')}
+                text={isOnboarding ? getString('onboarding') : getString('onboard')}
                 onClick={handleOnboard}
                 disabled={isOnboardDisabled()}
-              />
+              >
+                {isOnboarding && (
+                  <Icon name="loading" size={16} className={css.loadingIcon} />
+                )}
+              </Button>
             </Container>
           </Layout.Vertical>
         )}

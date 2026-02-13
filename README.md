@@ -275,7 +275,11 @@ Frontend component
 Step-1: Pull and run the image
 
 ```bash
-docker pull mongo:5docker network create mongo-cluster docker run -d --net mongo-cluster -p 27015:27015 --name m1 mongo:4.2 mongod --replSet rs0 --port 27015 docker run -d --net mongo-cluster -p 27016:27016 --name m2 mongo:4.2 mongod --replSet rs0 --port 27016docker run -d --net mongo-cluster -p 27017:27017 --name m3 mongo:4.2 mongod --replSet rs0 --port 27017
+docker pull mongo:5
+docker network create mongo-cluster
+docker run -d --net mongo-cluster -p 27015:27015 --name m1 mongo:4.2 mongod --replSet rs0 --port 27015
+docker run -d --net mongo-cluster -p 27016:27016 --name m2 mongo:4.2 mongod --replSet rs0 --port 27016
+docker run -d --net mongo-cluster -p 27017:27017 --name m3 mongo:4.2 mongod --replSet rs0 --port 27017
 ```
 
 Step-2: Add hosts
@@ -283,24 +287,33 @@ Step-2: Add hosts
 ## "Windows"
 
 ```bash
-# add hosts in hosts notepad C:WindowsSystem32driversetchosts# add the below line127.0.0.1       m1 m2 m3
+# add hosts in hosts notepad C:\\Windows\\System32\\drivers\\etc\\hosts
+# add the below line
+127.0.0.1       m1 m2 m3
 ```
 
 ## "macOS/Linux"
 
 ```bash
-# add hosts in hosts sudo vim /etc/hosts# add the below line127.0.0.1       m1 m2 m3
+# add hosts in hosts
+sudo vim /etc/hosts
+# add the below line
+127.0.0.1       m1 m2 m3
 ```
 
 Step-3: Configure the mongoDB replica set
 
 ```bash
-docker exec -it m1 mongo -port 27015config={"_id":"rs0","members":[{"_id":0,"host":"m1:27015"},{"_id":1,"host":"m2:27016"},{"_id":2,"host":"m3:27017"}]}rs.initiate(config)db.getSiblingDB("admin").createUser({user:"admin",pwd:"1234",roles:[{role:"root",db:"admin"}]});
+docker exec -it m1 mongo -port 27015
+config={"_id":"rs0","members":[{"_id":0,"host":"m1:27015"},{"_id":1,"host":"m2:27016"},{"_id":2,"host":"m3:27017"}]}
+rs.initiate(config)
+db.getSiblingDB("admin").createUser({user:"admin",pwd:"1234",roles:[{role:"root",db:"admin"}]});
 ```
 
 ### 2. Run the Authentication Server
 
-:::noteMake sure to run backend services before the frontend. If you haven’t already cloned the AgentCert project do so from the `AgentCert/AgentCert` repository:::
+:::note
+Make sure to run backend services before the frontend. If you haven’t already cloned the AgentCert project do so from the `AgentCert/AgentCert` repository:::
 
 ```bash
 git clone https://github.com/AgentCert/AgentCert.git agentcert --depth 1
@@ -344,13 +357,17 @@ export DEFAULT_HUB_BRANCH_NAME=master
 Docker or Hyper-V is reserving that port range. You can use 3030 ports by running the command below
 
 ```bash
-netsh interface ipv4 show excludedportrange protocol=tcpnet stop winnatnetsh int ipv4 add excludedportrange protocol=tcp startport=3030 numberofports=1net start winnat
+netsh interface ipv4 show excludedportrange protocol=tcp
+net stop winnat
+netsh int ipv4 add excludedportrange protocol=tcp startport=3030 numberofports=1
+net start winnat
 ```
 
 Step-2: Run the go application
 
 ```bash
-cd chaoscenter/authentication/apigo run main.go
+cd chaoscenter/authentication/api
+go run main.go
 ```
 
 ### 3. Run the GraphQL Server
@@ -390,7 +407,8 @@ export ALLOWED_ORIGINS=".*"
 Step-2: Run the go application
 
 ```bash
-cd chaoscenter/graphql/servergo run server.go
+cd chaoscenter/graphql/server
+go run server.go
 ```
 
 ### 4. Run Frontend
@@ -400,7 +418,8 @@ cd chaoscenter/graphql/servergo run server.go
 Step-1: Install all the dependencies
 
 ```bash
-cd chaoscenter/webyarn
+cd chaoscenter/web
+yarn
 ```
 
 Step-2: Generate the ssl certificate
@@ -410,7 +429,13 @@ Step-2: Generate the ssl certificate
 The command you run is in the script/generate-certificate.sh file, but it doesn't work in a Windows environment, so please run the script below instead
 
 ```bash
-mkdir -p certificatesopenssl req -x509 -newkey rsa:4096 -keyout certificates/localhost-key.pem -out certificates/localhost.pem -days 365 -nodes -subj '//C=US'
+mkdir -p certificates
+openssl req -x509 -newkey rsa:4096 \
+  -keyout certificates/localhost-key.pem \
+  -out certificates/localhost.pem \
+  -days 365 \
+  -nodes \
+  -subj '//C=US'
 ```
 
 ## "macOS/Linux"
@@ -430,7 +455,8 @@ yarn dev
 Once you are able to see the Login Screen of Litmus use the following default credentials
 
 ```
-Username: adminPassword: litmus
+Username: admin
+Password: litmus
 ```
 
 ## **Steps to connect Chaos Infrastructure**
@@ -440,5 +466,17 @@ Username: adminPassword: litmus
 Use Chaoscenter to connect an Infrastructure, download the manifest and apply it on k3d/minikube. Once the pods are up(except the subscriber), run the following command:
 
 ```bash
-cd subscriberINFRA_ID=<INFRA_ID> ACCESS_KEY=<ACCESS_KEY> INFRA_SCOPE=cluster SERVER_ADDR=http://localhost:8080/query INFRA_NAMESPACE=litmus IS_INFRA_CONFIRMED="false" COMPONENTS="DEPLOYMENTS: ["app=chaos-exporter", "name=chaos-operator", "app=workflow-controller"]"  START_TIME=1631089756 VERSION="ci" AGENT_POD="subscriber-78f6bd4db5-ck5d9" SKIP_SSL_VERIFY="false" go run subscriber.go -kubeconfig ~/.kube/config
+cd subscriber
+INFRA_ID="<INFRA_ID>" \
+ACCESS_KEY="<ACCESS_KEY>" \
+INFRA_SCOPE="cluster" \
+SERVER_ADDR="http://localhost:8080/query" \
+INFRA_NAMESPACE="litmus" \
+IS_INFRA_CONFIRMED="false" \
+COMPONENTS='DEPLOYMENTS: ["app=chaos-exporter", "name=chaos-operator", "app=workflow-controller"]' \
+START_TIME="1631089756" \
+VERSION="ci" \
+AGENT_POD="subscriber-78f6bd4db5-ck5d9" \
+SKIP_SSL_VERIFY="false" \
+go run subscriber.go -kubeconfig ~/.kube/config
 ```
