@@ -3,20 +3,18 @@ package graph
 import (
 	"context"
 
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/authConfig"
-
-	chaos_experiment2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/ops"
-
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/generated"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/handler"
+	chaos_experiment2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/ops"
 	chaos_experiment_run2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment_run"
 	runHandler "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment_run/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/authConfig"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment_run"
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
@@ -72,11 +70,11 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	gitOpsService := gitops3.NewGitOpsService(gitopsOperator, chaosExperimentService, *chaosExperimentOperator)
 	imageRegistryService := image_registry.NewImageRegistryService(imageRegistryOperator)
 	environmentService := envHandler.NewEnvironmentService(EnvironmentOperator)
-	
+
 	// Initialize Agent Registry dependencies
 	agentRegistryOperator := agent_registry.NewOperator(mongodbOperator.(*mongodb.MongoOperations).MongoClient.Database)
 	agentRegistryValidator := agent_registry.NewValidator(agentRegistryOperator)
-	langfuseClient := agent_registry.NewLangfuseClient("", "") // Empty config for now
+	langfuseClient := agent_registry.NewLangfuseClient("", "", "") // Empty config - disabled
 	agentRegistryService := agent_registry.NewService(agentRegistryOperator, agentRegistryValidator, langfuseClient, nil)
 
 	// Initialize Fault Studio dependencies

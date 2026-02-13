@@ -8,9 +8,36 @@ export const DEPLOY_AGENT_WITH_HELM = gql`
       status
       helmReleaseName
       helmChartVersion
+      deploymentConfig {
+        namespace
+        releaseName
+        chartPath
+        chartVersion
+        environmentVariables {
+          name
+          value
+          isSensitive
+        }
+        deployedAt
+      }
     }
   }
 `;
+
+export interface EnvironmentVariable {
+  name: string;
+  value: string;
+  isSensitive?: boolean;
+}
+
+export interface DeploymentConfig {
+  namespace: string;
+  releaseName: string;
+  chartPath?: string;
+  chartVersion?: string;
+  environmentVariables?: EnvironmentVariable[];
+  deployedAt?: string;
+}
 
 export interface DeployedAgent {
   agentID: string;
@@ -18,6 +45,7 @@ export interface DeployedAgent {
   status: string;
   helmReleaseName?: string;
   helmChartVersion?: string;
+  deploymentConfig?: DeploymentConfig;
 }
 
 export interface DeployAgentWithHelmRequest {
@@ -32,7 +60,14 @@ export interface DeployAgentWithHelmRequest {
     helmReleaseName: string;
     helmChartVersion: string;
     valuesYaml?: string;
+    chartData?: string; // Base64-encoded .tgz file
     kubeconfig?: string;
+    // Azure OpenAI credentials
+    azureOpenAIKey?: string;
+    azureOpenAIEndpoint?: string;
+    azureOpenAIDeployment?: string;
+    azureOpenAIAPIVersion?: string;
+    azureOpenAIEmbeddingDeployment?: string;
   };
 }
 

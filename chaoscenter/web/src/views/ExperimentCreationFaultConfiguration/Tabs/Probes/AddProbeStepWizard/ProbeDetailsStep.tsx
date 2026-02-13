@@ -5,6 +5,7 @@ import { Button, ButtonVariation, Container, FormError, FormInput, Layout, Text,
 import { Color, FontVariation } from '@harnessio/design-system';
 import { FileInput, FormGroup } from '@blueprintjs/core';
 import type { CmdProbeInputs, HTTPProbeInputs, K8sProbeInputs, PromProbeInputs } from '@models';
+import { KubeGVRRequest, kubeObjectSubscription } from '@api/core';
 import { fileUpload } from '@utils';
 import { useStrings } from '@strings';
 import type { StepData, StepProps } from './AddProbeStepWizard';
@@ -17,11 +18,60 @@ export const ProbeDetailsStep: React.FC<StepProps<StepData>> = props => {
   const totalSteps = props.totalSteps?.();
   const currentStep = props.currentStep?.();
   const { formData, name } = props;
+  const [podList, setPodList] = React.useState<Array<{ label: string; value: string }>>([]);
+  const [selectedPodNamespace, setSelectedPodNamespace] = React.useState<string>('');
+  const [selectedPodName, setSelectedPodName] = React.useState<string>('');
+  const [infrastructureID] = React.useState<string>(''); // TODO: Get from context/props
+  
+  // Fetch pods from the selected namespace
+  const { data: podsData } = kubeObjectSubscription({
+    shouldResubscribe: true,
+    skip: !selectedPodNamespace || !infrastructureID,
+    request: {
+      infraID: infrastructureID,
+      kubeObjRequest: {
+        group: '',
+        resource: 'pods',
+        version: 'v1'
+      } as KubeGVRRequest,
+      namespace: selectedPodNamespace,
+      objectType: 'kubeobject'
+    }
+  });
+
+  React.useEffect(() => {
+    if (podsData?.getKubeObject?.kubeObj?.data) {
+      const pods = podsData.getKubeObject.kubeObj.data.map((pod: any) => ({
+        label: pod.name,
+        value: pod.name
+      }));
+      setPodList(pods);
+    }
+  }, [podsData]);
+
+  const targetNamespace = faultData?.engineCR?.spec?.appinfo?.appns ?? '';
+  const targetAppLabel = faultData?.engineCR?.spec?.appinfo?.applabel ?? '';
+  const targetServiceName = React.useMemo(() => {
+    if (!targetAppLabel) return '';
+    const parts = targetAppLabel.split('=');
+    return parts.length > 1 ? parts[parts.length - 1] : targetAppLabel;
+  }, [targetAppLabel]);
+
+  const defaultHttpUrl = React.useMemo(() => {
+    if (targetNamespace && targetServiceName) {
+      return `http://${targetServiceName}.${targetNamespace}.svc.cluster.local:80`;
+    }
+    return 'https://127.0.0.1';
+  }, [targetNamespace, targetServiceName]);
+
   if (formData.type === 'httpProbe') {
     return (
       <Formik
+        enableReinitialize
         initialValues={{
-          url: 'https://127.0.0.1',
+          podNamespace: '',
+          podName: '',
+          url: defaultHttpUrl,
           insecureSkipVerify: false,
           method: 'get',
           criteria: '==',
@@ -97,6 +147,35 @@ export const ProbeDetailsStep: React.FC<StepProps<StepData>> = props => {
                     height={500}
                     style={{ overflow: 'scroll' }}
                   >
+                    <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
+                      Select Pod (Optional - Auto-populate URL)
+                    </Text>
+                    <FormInput.Text
+                      name="podNamespace"
+                      label="Pod Namespace"
+                      placeholder="agent-demo"
+                      onChange={(e: any) => {
+                        setSelectedPodNamespace(e.currentTarget.value);
+                      }}
+                      tooltipProps={{ dataTooltipId: 'chaos_probe_pod_namespace' }}
+                    />
+                    <FormInput.Select
+                      name="podName"
+                      label="Select Pod"
+                      placeholder="Select a pod"
+                      items={podList}
+                      onChange={(value: any) => {
+                        setSelectedPodName(value);
+                        // Auto-populate URL based on pod name and service
+                        if (value) {
+                          const serviceName = value.replace('-[0-9]+$', ''); // Remove pod suffix to get service name
+                          const port = '8080'; // Default port, can be made configurable
+                          const autoUrl = `http://${serviceName}.${selectedPodNamespace}.svc.cluster.local:${port}`;
+                          formikProps.setFieldValue('url', autoUrl);
+                        }
+                      }}
+                      tooltipProps={{ dataTooltipId: 'chaos_probe_pod_select' }}
+                    />
                     <FormInput.Text
                       name="url"
                       label="URL"

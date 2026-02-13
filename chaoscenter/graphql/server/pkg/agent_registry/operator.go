@@ -75,6 +75,7 @@ func (o *operatorImpl) GetAgentByProjectAndName(ctx context.Context, projectID, 
 	filter := bson.M{
 		"projectId": projectID,
 		"name":      name,
+		"status":    bson.M{"$ne": "DELETED"}, // Exclude deleted agents
 	}
 	
 	var agent Agent
@@ -108,6 +109,9 @@ func (o *operatorImpl) ListAgents(ctx context.Context, filter *AgentFilter, skip
 		// Filter by statuses (multiple) - takes precedence over single status
 		if len(filter.Statuses) > 0 {
 			mongoFilter["status"] = bson.M{"$in": filter.Statuses}
+		} else if filter.Status == nil {
+			// Default: exclude DELETED agents unless explicitly requested
+			mongoFilter["status"] = bson.M{"$ne": "DELETED"}
 		}
 		
 		// Filter by capabilities (must have ALL capabilities)
@@ -123,6 +127,9 @@ func (o *operatorImpl) ListAgents(ctx context.Context, filter *AgentFilter, skip
 				{"vendor": bson.M{"$regex": searchTerm, "$options": "i"}},
 			}
 		}
+	} else {
+		// If no filter provided, still exclude DELETED agents by default
+		mongoFilter["status"] = bson.M{"$ne": "DELETED"}
 	}
 	
 	// Get total count

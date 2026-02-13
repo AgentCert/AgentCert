@@ -1,8 +1,8 @@
-
 package agent_registry
 
 import (
 	"strconv"
+
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 )
 
@@ -38,13 +38,19 @@ func MapAgentStatusResponseToModel(resp *AgentStatusResponse) *model.AgentStatus
 
 // MapRegisterAgentInputToRequest converts GraphQL input to service request.
 func MapRegisterAgentInputToRequest(input model.RegisterAgentInput) (*RegisterAgentRequest, error) {
+	helmReleaseName := ""
+	if input.HelmReleaseName != nil {
+		helmReleaseName = *input.HelmReleaseName
+	}
+	
 	req := &RegisterAgentRequest{
-		ProjectID:    input.ProjectID,
-		Name:         input.Name,
-		Version:      input.Version,
-		Vendor:       input.Vendor,
-		Capabilities: input.Capabilities,
-		Namespace:    input.Namespace,
+		ProjectID:       input.ProjectID,
+		Name:            input.Name,
+		Version:         input.Version,
+		Vendor:          input.Vendor,
+		Capabilities:    input.Capabilities,
+		Namespace:       input.Namespace,
+		HelmReleaseName: helmReleaseName,
 	}
 
 	// Map ContainerImage
@@ -243,6 +249,11 @@ func MapAgentToModel(agent *Agent) *model.Agent {
 		Capabilities: agent.Capabilities,
 		Namespace:    agent.Namespace,
 		Status:       model.AgentStatus(agent.Status),
+	}
+
+	// Map HelmReleaseName if present
+	if agent.HelmReleaseName != "" {
+		gqlAgent.HelmReleaseName = &agent.HelmReleaseName
 	}
 
 	// Map ContainerImage

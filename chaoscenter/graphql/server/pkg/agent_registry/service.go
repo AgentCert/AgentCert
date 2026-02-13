@@ -1,18 +1,18 @@
-
-
-
 package agent_registry
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	//"k8s.io/client-go/kubernetes"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // SyncResponse represents the response for agent sync operations.
@@ -65,6 +65,12 @@ type Service interface {
 
 	// GetAgentCapabilitiesTaxonomy returns the list of supported capabilities
 	GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*CapabilityDefinition, error)
+
+	// SetAgentStatus updates the status of an agent
+	SetAgentStatus(ctx context.Context, id string, status AgentStatus) error
+
+	// GetKubernetesNamespaces returns the list of available Kubernetes namespaces
+	GetKubernetesNamespaces(ctx context.Context) ([]string, error)
 // Implementation for these methods is below, outside the interface block.
 }
 
@@ -89,16 +95,17 @@ func NewService(operator Operator, validator Validator, langfuseClient LangfuseC
 
 // RegisterAgentRequest represents the input for agent registration.
 type RegisterAgentRequest struct {
-	ProjectID      string
-	Name           string
-	Version        string
-	Vendor         string
-	Capabilities   []string
-	ContainerImage *ContainerImage
-	Namespace      string
-	Endpoint       *AgentEndpoint
-	LangfuseConfig *LangfuseConfig
-	Metadata       *AgentMetadata
+	ProjectID       string
+	Name            string
+	Version         string
+	Vendor          string
+	Capabilities    []string
+	ContainerImage  *ContainerImage
+	Namespace       string
+	HelmReleaseName string
+	Endpoint        *AgentEndpoint
+	LangfuseConfig  *LangfuseConfig
+	Metadata        *AgentMetadata
 }
 
 // UpdateAgentRequest represents the input for agent updates.
@@ -195,18 +202,19 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 	
 	// Create Agent struct with status REGISTERED
 	agent := &Agent{
-		AgentID:        agentID,
-		ProjectID:      input.ProjectID,
-		Name:           input.Name,
-		Version:        input.Version,
-		Vendor:         input.Vendor,
-		Capabilities:   input.Capabilities,
-		ContainerImage: input.ContainerImage,
-		Namespace:      input.Namespace,
-		Endpoint:       endpoint,
-		LangfuseConfig: input.LangfuseConfig,
-		Status:         AgentStatusRegistered,
-		Metadata:       input.Metadata,
+		AgentID:         agentID,
+		ProjectID:       input.ProjectID,
+		Name:            input.Name,
+		Version:         input.Version,
+		Vendor:          input.Vendor,
+		Capabilities:    input.Capabilities,
+		ContainerImage:  input.ContainerImage,
+		Namespace:       input.Namespace,
+		HelmReleaseName: input.HelmReleaseName,
+		Endpoint:        endpoint,
+		LangfuseConfig:  input.LangfuseConfig,
+		Status:          AgentStatusRegistered,
+		Metadata:        input.Metadata,
 		AuditInfo: &AuditInfo{
 			CreatedAt: now,
 			CreatedBy: userID,
@@ -410,6 +418,32 @@ func (s *serviceImpl) DeleteAgent(ctx context.Context, id string, hardDelete boo
 	// if hasActiveBenchmarks(agent.AgentID) {
 	//     return nil, fmt.Errorf("cannot delete agent with active benchmarks")
 	// }
+	
+	// Call helm uninstall if agent was deployed via helm
+	if agent.Vendor == "helm-deployment" {
+		// Use HelmReleaseName if available, otherwise fall back to Name
+		releaseName := agent.HelmReleaseName
+		if releaseName == "" {
+			releaseName = agent.Name
+		}
+		
+		if releaseName != "" && agent.Namespace != "" {
+			helmReq := &HelmUninstallRequest{
+				ReleaseName: releaseName,
+				Namespace:   agent.Namespace,
+			}
+			
+			// Use stored kubeconfig if available (in future implementation)
+			// For now, use default cluster context
+			output, err := UninstallWithHelm(ctx, helmReq)
+			if err != nil {
+				log.Printf("[DeleteAgent] Helm uninstall warning for %s (release: %s): %v (output: %s)", agent.Name, releaseName, err, output)
+				// Continue with soft delete even if helm uninstall fails
+			} else {
+				log.Printf("[DeleteAgent] Successfully uninstalled Helm release %s: %s", releaseName, output)
+			}
+		}
+	}
 	
 	if hardDelete {
 		// Hard delete - remove from database
@@ -849,4 +883,64 @@ func (s *serviceImpl) SyncAgentToLangfuse(ctx context.Context, id string) (*Sync
 			SyncedAt: &nowRFC,
 			Message:  &msg,
 		}, nil
+}
+
+// SetAgentStatus updates an agent status directly.
+func (s *serviceImpl) SetAgentStatus(ctx context.Context, id string, status AgentStatus) error {
+	agent, err := s.operator.GetAgent(ctx, id)
+	if err != nil {
+		return err
+	}
+	return s.updateAgentStatus(ctx, agent, status)
+}
+
+// GetKubernetesNamespaces returns the list of available Kubernetes namespaces.
+func (s *serviceImpl) GetKubernetesNamespaces(ctx context.Context) ([]string, error) {
+	// Get in-cluster config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		// If not running in cluster, return default namespaces
+		return []string{"default", "litmus-chaos", "litmus"}, fmt.Errorf("not running in cluster, returning defaults: %w", err)
+	}
+
+	// Create Kubernetes clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return []string{"default", "litmus-chaos", "litmus"}, fmt.Errorf("failed to create k8s client, returning defaults: %w", err)
+	}
+
+	// List all namespaces
+	namespaceList, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return []string{"default", "litmus-chaos", "litmus"}, fmt.Errorf("failed to list namespaces, returning defaults: %w", err)
+	}
+
+	// System namespaces to exclude
+	systemNamespaces := map[string]bool{
+		"kube-system":      true,
+		"kube-public":      true,
+		"kube-node-lease":  true,
+	}
+
+	// Filter out system namespaces
+	var namespaces []string
+	for _, ns := range namespaceList.Items {
+		nsName := ns.Name
+		// Skip system namespaces
+		if systemNamespaces[nsName] {
+			continue
+		}
+		// Skip namespaces starting with kube-
+		if strings.HasPrefix(nsName, "kube-") {
+			continue
+		}
+		namespaces = append(namespaces, nsName)
+	}
+
+	// If no namespaces found, return default
+	if len(namespaces) == 0 {
+		return []string{"default"}, nil
+	}
+
+	return namespaces, nil
 }

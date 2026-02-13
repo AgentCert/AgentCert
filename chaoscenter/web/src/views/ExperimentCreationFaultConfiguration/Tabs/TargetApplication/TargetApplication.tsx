@@ -49,10 +49,9 @@ export default function TargetApplicationTab({
 
   function getAppLabelItems(): SelectOption[] {
     if (loadingObject) return [];
-    //    const filteredAppInfo = appInfoData.filter(data => data.namespace === targetApp?.appns)[0];
-    return appInfoData?.appLabel.map(data => ({
-      label: data,
-      value: data
+    return appInfoData?.appLabels.map(option => ({
+      label: option.name,
+      value: option.label
     }));
   }
 
@@ -110,13 +109,14 @@ export default function TargetApplicationTab({
               items={getAppLabelItems()}
               value={targetApp?.applabel}
               onChange={selectedItem => {
+                const selectedLabel = selectedItem.value ?? selectedItem.label;
                 const tmp = {
                   ...targetApp,
-                  applabel: selectedItem.label
+                  applabel: selectedLabel
                 };
                 setTargetApp(tmp);
                 if (engineCR?.spec?.appinfo?.applabel !== undefined)
-                  engineCR.spec.appinfo.applabel = selectedItem.label;
+                  engineCR.spec.appinfo.applabel = selectedLabel;
                 setFaultData(faultData => {
                   if (faultData?.faultName) return { ...faultData, engineCR: faultData?.engineCR };
                 });

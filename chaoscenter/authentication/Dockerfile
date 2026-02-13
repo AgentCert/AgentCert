@@ -20,7 +20,19 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:9.6
 
 LABEL maintainer="LitmusChaos"
 
+# Langfuse Configuration (passed via --build-arg)
+ARG LANGFUSE_HOST=""
+ARG LANGFUSE_PUBLIC_KEY=""
+ARG LANGFUSE_SECRET_KEY=""
+ARG LANGFUSE_ORG_ID=""
+ARG LANGFUSE_PROJECT_ID=""
+
 ENV APP_DIR="/litmus"
+ENV LANGFUSE_HOST=${LANGFUSE_HOST}
+ENV LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+ENV LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+ENV LANGFUSE_ORG_ID=${LANGFUSE_ORG_ID}
+ENV LANGFUSE_PROJECT_ID=${LANGFUSE_PROJECT_ID}
 
 # Ensure base packages (including libxslt) are patched
 RUN microdnf -y update && microdnf clean all
