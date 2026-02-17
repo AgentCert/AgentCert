@@ -76,18 +76,6 @@ func (c *Operator) GetHubByID(ctx context.Context, hubID string, projectID strin
 	return chaosHub, nil
 }
 
-// GetHubByIDOnly returns a single chaosHub based on hubID only (for default hubs)
-func (c *Operator) GetHubByIDOnly(ctx context.Context, hubID string) (ChaosHub, error) {
-	var chaosHub ChaosHub
-	result, err := c.operator.Get(ctx, mongodb.ChaosHubCollection, bson.D{{"hub_id", hubID}})
-	err = result.Decode(&chaosHub)
-	if err != nil {
-		return ChaosHub{}, err
-	}
-
-	return chaosHub, nil
-}
-
 // UpdateChaosHub updates the chaosHub
 func (c *Operator) UpdateChaosHub(ctx context.Context, query bson.D, update bson.D) error {
 	updateResult, err := c.operator.Update(ctx, mongodb.ChaosHubCollection, query, update)

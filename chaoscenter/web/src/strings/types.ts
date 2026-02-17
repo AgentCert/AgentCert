@@ -30,7 +30,6 @@ export interface StringsMap {
   'actualResilienceScore': unknown
   'add': unknown
   'addExperimentToChaosHub': unknown
-  'addFaultToStudio': unknown
   'addNewCluster': unknown
   'addNewCustomizedProbes': unknown
   'addNewProbes': unknown
@@ -219,7 +218,6 @@ export interface StringsMap {
   'deleteExperiment': unknown
   'deleteExperimentDesc': unknown
   'deleteExperimentHeading': unknown
-  'deleteFaultStudio': unknown
   'deleteProbe': unknown
   'deleteProbeDesc': unknown
   'deleteProbeHeading': unknown
@@ -263,7 +261,6 @@ export interface StringsMap {
   'editExperimentCopy': unknown
   'editExperimentOptions': unknown
   'editExperimentSame': unknown
-  'editFaultStudio': unknown
   'editHubDescription': unknown
   'editInChaosStudio': unknown
   'editName': unknown
@@ -359,16 +356,6 @@ export interface StringsMap {
   'faultConfiguration': unknown
   'faultDetails': unknown
   'faultShouldHaveAtleastOneProbe': unknown
-  'faultStudio': unknown
-  'faultStudioActive': unknown
-  'faultStudioCategory': unknown
-  'faultStudioCreatedSuccessfully': unknown
-  'faultStudioDeletedSuccessfully': unknown
-  'faultStudioDescription': unknown
-  'faultStudioInactive': unknown
-  'faultStudioName': unknown
-  'faultStudioUpdatedSuccessfully': unknown
-  'faultStudios': unknown
   'faultSummary': unknown
   'faultVerdict': unknown
   'faults': unknown
@@ -547,7 +534,6 @@ export interface StringsMap {
   'newChaosInfrastructure': unknown
   'newEnvironment': unknown
   'newExperiment': unknown
-  'newFaultStudio': unknown
   'newMember': unknown
   'newPassword': unknown
   'newProbe': unknown
@@ -580,7 +566,6 @@ export interface StringsMap {
   'noExperiments': unknown
   'noExperimentsAdded': unknown
   'noExpiration': unknown
-  'noFaultStudios': unknown
   'noFaults': unknown
   'noFilteredActiveInfra': unknown
   'noFilteredData.subtitle': unknown
@@ -650,7 +635,6 @@ export interface StringsMap {
   'onboardYourApp': unknown
   'onboardedAgents': unknown
   'onboardedApplications': unknown
-  'onboarding': unknown
   'openInNewTab': unknown
   'operation': unknown
   'operator': unknown
@@ -803,7 +787,6 @@ export interface StringsMap {
   'remoteHub': unknown
   'remoteRepo': unknown
   'remove': unknown
-  'removeFaultFromStudio': unknown
   'removeMember': unknown
   'removeMemberConfirmation': PrimitiveObject<'username'>
   'removeProbeDesc': unknown
@@ -892,7 +875,6 @@ export interface StringsMap {
   'selectChaosInfrastructureFormLabel': unknown
   'selectChaosInfrastructureType': unknown
   'selectDeployChaosInfrastructure': unknown
-  'selectEnvironment': unknown
   'selectExperimentToViewDetails': unknown
   'selectExperiments': unknown
   'selectHub': unknown
@@ -1040,11 +1022,7 @@ export interface StringsMap {
   'usernameValidText': unknown
   'usersNotAvailableMessage': unknown
   'usersNotAvailableTitle': unknown
-  'validate': unknown
-  'validatedSuccessfully': unknown
-  'validating': unknown
   'validationError': unknown
-  'validationFailed': unknown
   'value': unknown
   'valuePlaceholder': unknown
   'version': unknown

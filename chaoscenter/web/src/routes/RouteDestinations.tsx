@@ -29,8 +29,6 @@ import ProjectDashboardController from '@controllers/ProjectDashboard';
 import PasswordResetController from '@controllers/PasswordReset';
 import AgentOnboardingController from '@controllers/AgentOnboarding';
 import AppsOnboardingController from '@controllers/AppsOnboarding';
-import FaultStudiosController from '@controllers/FaultStudios';
-import FaultStudioController from '@controllers/FaultStudio';
 
 const experimentID = ':experimentID';
 const runID = ':runID';
@@ -42,7 +40,6 @@ const chaosInfrastructureID = ':chaosInfrastructureID';
 const experimentKey = ':experimentKey';
 const notifyID = ':notifyID';
 const probeName = ':probeName';
-const studioID = ':studioID';
 
 export function RoutesWithAuthentication(): React.ReactElement {
   const projectMatchPaths = useRouteDefinitionsMatch();
@@ -134,9 +131,6 @@ export function RoutesWithAuthentication(): React.ReactElement {
       />
       <Route exact path={projectMatchPaths.toChaosProbes()} component={ChaosProbesController} />
       <Route exact path={projectMatchPaths.toChaosProbe({ probeName })} component={ChaosProbeController} />
-      {/* Fault Studios */}
-      <Route exact path={projectMatchPaths.toFaultStudios()} component={FaultStudiosController} />
-      <Route exact path={projectMatchPaths.toFaultStudio({ studioID })} component={FaultStudioController} />
       <Route exact path={projectMatchPaths.toImageRegistry()} component={ImageRegistryController} />
       <Route exact path={projectMatchPaths.toGitops()} component={GitopsController} />
       {/* Project */}
