@@ -1,13 +1,10 @@
 name: Litmus-CI
-# DISABLED: E2E tests not configured for AgentCert yet
-# To enable later: uncomment triggers below and update paths/repository references
 on:
-  workflow_dispatch:  # Only runs manually from Actions tab
-  # issue_comment:
-  #   types: [created]
-  # push:
-  #   branches:
-  #     - main
+  issue_comment:
+    types: [created]
+  push:
+    branches:
+      - master
 
 jobs:
   # Job for finding last commit sha of pull-request
