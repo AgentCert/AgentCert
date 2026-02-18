@@ -300,15 +300,11 @@ func SyncRemoteRepo(hubData model.CloningInput, projectID string) error {
 func ValidateLocalRepository(hub chaos_hub.ChaosHub) (bool, error) {
 	var repoPath string
 	if hub.IsDefault {
-		// Default hub uses local files from the AgentCert repo, not a git clone
-		repoPath = "./chaoshub-faults/faults"
-		_, err := os.Stat(repoPath)
-		if err != nil {
-			return false, err
-		}
-		return true, nil
+		// Default hub clones from git, use dynamic path
+		repoPath = DefaultPath + "default/" + hub.Name
+	} else {
+		repoPath = DefaultPath + hub.ProjectID + "/" + hub.Name
 	}
-	repoPath = DefaultPath + hub.ProjectID + "/" + hub.Name
 	err := chaoshubops.GitPlainOpen(repoPath)
 	if err != nil {
 		return false, err
