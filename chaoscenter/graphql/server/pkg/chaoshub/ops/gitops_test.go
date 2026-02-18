@@ -83,7 +83,7 @@ func TestGitClone(t *testing.T) {
 			projectID: uuid.New().String(),
 			repoData: model.CloningInput{
 				Name:       "hub1",
-				RepoURL:    "https://github.com/litmuschaos/chaos-charts",
+				RepoURL:    "https://github.com/agentcert/chaos-charts",
 				RepoBranch: "master",
 				IsPrivate:  false,
 			},
@@ -177,7 +177,7 @@ func TestGitSyncHandlerForProjects(t *testing.T) {
 			name:      "success",
 			repoData: model.CloningInput{
 				Name:       "hub1",
-				RepoURL:    "https://github.com/litmuschaos/chaos-charts",
+				RepoURL:    "https://github.com/agentcert/chaos-charts",
 				RepoBranch: "master",
 				IsPrivate:  false,
 			},
@@ -228,7 +228,7 @@ func TestGitPull(t *testing.T) {
 			repoData: model.CloningInput{
 
 				Name:       "hub1",
-				RepoURL:    "https://github.com/litmuschaos/chaos-charts",
+				RepoURL:    "https://github.com/agentcert/chaos-charts",
 				RepoBranch: "master",
 				IsPrivate:  false,
 			},
