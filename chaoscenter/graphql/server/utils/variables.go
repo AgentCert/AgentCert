@@ -32,8 +32,8 @@ type Configuration struct {
 	DefaultHubGitURL            string   `required:"true" default:"https://github.com/litmuschaos/chaos-charts"`
 	GitUsername                 string   `required:"true" split_words:"true" default:"litmus"`
 	DefaultHubBranchName        string   `required:"true" split_words:"true"`
-	CustomChaosHubPath          string   `split_words:"true" default:"../../../chaoshub-faults/"`
-	DefaultChaosHubPath         string   `split_words:"true" default:"../../../chaoshub-faults/faults/"`
+	CustomChaosHubPath          string   `split_words:"true" default:"/tmp/"`
+	DefaultChaosHubPath         string   `split_words:"true" default:"/tmp/default/"`
 	EnableGQLIntrospection      string   `split_words:"true" default:"false"`
 	EnableInternalTls           string   `split_words:"true" default:"false"`
 	TlsCertPath                 string   `split_words:"true"`

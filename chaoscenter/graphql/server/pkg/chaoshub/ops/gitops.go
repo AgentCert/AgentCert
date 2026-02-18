@@ -20,7 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const DefaultPath = "../../../chaoshub-faults/"
+const DefaultPath = "/tmp/"
 
 // ChaosHubConfig is the config used for all git operations
 type ChaosHubConfig struct {
@@ -45,7 +45,7 @@ func GetClonePath(c ChaosHubConfig) string {
 
 	var repoPath string
 	if c.IsDefault {
-		repoPath = "../../../chaoshub-faults/faults"
+		repoPath = "/tmp/default/" + c.HubName
 	} else {
 		repoPath = DefaultPath + c.ProjectID + "/" + c.HubName
 	}

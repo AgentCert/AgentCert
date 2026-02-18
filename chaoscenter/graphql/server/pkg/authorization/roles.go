@@ -61,6 +61,14 @@ const (
 	UpdateProbe              RoleQuery = "UpdateProbe"
 	GetProbe                 RoleQuery = "GetProbe"
 	ListProbes               RoleQuery = "ListProbes"
+
+	// Fault Studio
+	CreateFaultStudio RoleQuery = "CreateFaultStudio"
+	UpdateFaultStudio RoleQuery = "UpdateFaultStudio"
+	DeleteFaultStudio RoleQuery = "DeleteFaultStudio"
+	ListFaultStudios  RoleQuery = "ListFaultStudios"
+	GetFaultStudio    RoleQuery = "GetFaultStudio"
+
 	MemberRoleOwnerString              = string(model.MemberRoleOwner)
 	MemberRoleExecutorString           = string(model.MemberRoleExecutor)
 	MemberRoleViewerString             = string(model.MemberRoleViewer)
@@ -105,4 +113,9 @@ var MutationRbacRules = map[RoleQuery][]string{
 	GetProbe:              {MemberRoleOwnerString, MemberRoleExecutorString, MemberRoleViewerString},
 	ListProbes:            {MemberRoleOwnerString, MemberRoleExecutorString, MemberRoleViewerString},
 	DeleteProbe:           {MemberRoleOwnerString},
+	CreateFaultStudio:     {MemberRoleOwnerString},
+	UpdateFaultStudio:     {MemberRoleOwnerString},
+	DeleteFaultStudio:     {MemberRoleOwnerString},
+	ListFaultStudios:      {MemberRoleOwnerString, MemberRoleExecutorString, MemberRoleViewerString},
+	GetFaultStudio:        {MemberRoleOwnerString, MemberRoleExecutorString, MemberRoleViewerString},
 }

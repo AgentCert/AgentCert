@@ -22,10 +22,12 @@ import (
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
 	dbChaosInfra "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/environments"
+	dbSchemaFaultStudio "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/fault_studio"
 	gitops2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/gitops"
 	image_registry2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/image_registry"
 	dbSchemaProbe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/probe"
 	envHandler "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/environment/handler"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/fault_studio"
 	gitops3 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/image_registry"
 	probe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/handler"
@@ -47,6 +49,7 @@ type Resolver struct {
 	environmentService         envHandler.EnvironmentHandler
 	probeService               probe.Service
 	agentRegistryService       agent_registry.Service
+	faultStudioService         fault_studio.Service
 }
 
 func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
@@ -59,6 +62,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	imageRegistryOperator := image_registry2.NewImageRegistryOperator(mongodbOperator)
 	EnvironmentOperator := environments.NewEnvironmentOperator(mongodbOperator)
 	probeOperator := dbSchemaProbe.NewChaosProbeOperator(mongodbOperator)
+	faultStudioOperator := dbSchemaFaultStudio.NewFaultStudioOperator(mongodbOperator)
 
 	//service
 	probeService := probe.NewProbeService(probeOperator)
@@ -75,6 +79,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	agentRegistryValidator := agent_registry.NewValidator(agentRegistryOperator)
 	langfuseClient := agent_registry.NewLangfuseClient("", "", "") // Empty config - disabled
 	agentRegistryService := agent_registry.NewService(agentRegistryOperator, agentRegistryValidator, langfuseClient, nil)
+	faultStudioService := fault_studio.NewService(faultStudioOperator, chaosHubOperator)
 
 	//handler
 	chaosExperimentHandler := handler.NewChaosExperimentHandler(chaosExperimentService, chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
@@ -93,6 +98,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 			chaosExperimentRunHandler:  *choasExperimentRunHandler,
 			probeService:               probeService,
 			agentRegistryService:       agentRegistryService,
+			faultStudioService:         faultStudioService,
 		}}
 
 	config.Directives.Authorized = func(ctx context.Context, obj interface{}, next graphql.Resolver) (interface{}, error) {

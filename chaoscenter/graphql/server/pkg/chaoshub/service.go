@@ -24,8 +24,7 @@ import (
 
 const (
 	timeInterval               = 6 * time.Hour
-	DefaultPath                = "../../../chaoshub-faults/"
-	DefaultHubBasePath         = "../../../chaoshub-faults/faults/"
+	DefaultPath                = "/tmp/"
 	DefaultHubID               = "6f39cea9-6264-4951-83a8-29976b614289"
 	DefaultHubSyncTimeInterval = 6 * time.Hour
 )
@@ -483,7 +482,7 @@ func (c *chaosHubService) GetChaosFault(ctx context.Context, request model.Exper
 	}
 	var basePath string
 	if chaosHub.IsDefault {
-		basePath = DefaultHubBasePath + request.Category + "/" + request.ExperimentName
+		basePath = "/tmp/default/" + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
 	} else {
 		basePath = DefaultPath + projectID + "/" + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
 	}
@@ -616,7 +615,7 @@ func (c *chaosHubService) ListChaosHubs(ctx context.Context, projectID string, r
 		isConfirmed := false
 		var chartPath string
 		if hub.IsDefault {
-			chartPath = DefaultHubBasePath
+			chartPath = DefaultPath + "default/" + hub.Name + "/faults/"
 		} else {
 			chartPath = DefaultPath + hub.ProjectID + "/" + hub.Name + "/faults/"
 		}
@@ -682,9 +681,9 @@ func (c *chaosHubService) GetChaosHub(ctx context.Context, chaosHubID string, pr
 	experimentCount := 0
 	var chartPath string
 	if hub.IsDefault {
-		chartPath = DefaultHubBasePath
+		chartPath = DefaultPath + "default/" + hub.Name + "/faults/"
 	} else {
-		chartPath = DefaultPath + hub.ProjectID + "/" + hub.Name
+		chartPath = DefaultPath + hub.ProjectID + "/" + hub.Name + "/faults/"
 	}
 	chartsData, err := handler.GetChartsData(chartPath)
 	if err != nil {
@@ -737,7 +736,7 @@ func (c *chaosHubService) ListPredefinedExperiments(ctx context.Context, hubID s
 
 	var hubPath string
 	if hub.IsDefault {
-		hubPath = DefaultHubBasePath + "../experiments/"
+		hubPath = DefaultPath + "default/" + hub.Name + "/experiments/"
 	} else {
 		hubPath = DefaultPath + projectID + "/" + hub.Name + "/experiments/"
 	}
@@ -796,7 +795,7 @@ func (c *chaosHubService) GetPredefinedExperiment(ctx context.Context, hubID str
 	}
 	var hubPath string
 	if hub.IsDefault {
-		hubPath = DefaultHubBasePath + "../experiments/"
+		hubPath = DefaultPath + "default/" + hub.Name + "/experiments/"
 	} else {
 		hubPath = DefaultPath + projectID + "/" + hub.Name + "/experiments/"
 	}
@@ -976,15 +975,21 @@ func (c *chaosHubService) listDefaultHubs() *model.ChaosHub {
 func (c *chaosHubService) SyncDefaultChaosHubs() {
 	log.Infof("syncing default chaos hub directories")
 	for {
-		// Default hub uses local fault files from the AgentCert repo
-		// (chaoshub-faults/faults/), no git clone/pull needed.
-		localPath := DefaultHubBasePath
-		if _, err := os.Stat(localPath); err != nil {
+		defaultHub := c.listDefaultHubs()
+
+		chartsInput := model.CloningInput{
+			Name:       defaultHub.Name,
+			RepoURL:    defaultHub.RepoURL,
+			RepoBranch: defaultHub.RepoBranch,
+			IsDefault:  true,
+		}
+		err := chaosHubOps.GitSyncDefaultHub(chartsInput)
+		if err != nil {
 			log.WithFields(log.Fields{
-				"localPath": localPath,
-			}).WithError(err).Error("default chaos hub local faults directory not found")
-		} else {
-			log.Infof("default chaos hub local faults directory verified at: %s", localPath)
+				"repoUrl":    defaultHub.RepoURL,
+				"repoBranch": defaultHub.RepoBranch,
+				"hubName":    defaultHub.Name,
+			}).WithError(err).Error("failed to sync default chaos hubs")
 		}
 		// Syncing Completed
 		time.Sleep(DefaultHubSyncTimeInterval)
