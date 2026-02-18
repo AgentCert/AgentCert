@@ -136,7 +136,7 @@ func TestDownloadRemoteHub(t *testing.T) {
 			projectID: uuid.New().String(),
 			chaosHub: model.CreateRemoteChaosHub{
 				Name:    uuid.New().String(),
-				RepoURL: "https://github.com/litmuschaos/chaos-charts/archive/refs/heads/master.zip",
+				RepoURL: "https://github.com/agentcert/chaos-charts/archive/refs/heads/master.zip",
 			},
 		},
 		{
@@ -153,7 +153,7 @@ func TestDownloadRemoteHub(t *testing.T) {
 			projectID: uuid.New().String(),
 			chaosHub: model.CreateRemoteChaosHub{
 				Name:    uuid.New().String(),
-				RepoURL: "https://github.com/litmuschaos/chaos-charts",
+				RepoURL: "https://github.com/agentcert/chaos-charts",
 			},
 			isError: true,
 		},
@@ -188,7 +188,7 @@ func TestSyncRemoteRepo(t *testing.T) {
 			projectID: uuid.New().String(),
 			chaosHub: model.CloningInput{
 				Name:    uuid.New().String(),
-				RepoURL: "https://github.com/litmuschaos/chaos-charts/archive/refs/heads/master.zip",
+				RepoURL: "https://github.com/agentcert/chaos-charts/archive/refs/heads/master.zip",
 			},
 		},
 		{
@@ -205,7 +205,7 @@ func TestSyncRemoteRepo(t *testing.T) {
 			projectID: uuid.New().String(),
 			chaosHub: model.CloningInput{
 				Name:    uuid.New().String(),
-				RepoURL: "https://github.com/litmuschaos/chaos-charts",
+				RepoURL: "https://github.com/agentcert/chaos-charts",
 			},
 			isError: true,
 		},
@@ -275,7 +275,7 @@ func TestGetChartsData(t *testing.T) {
 			projectID: uuid.New().String(),
 			repoData: model.CloningInput{
 				Name:       uuid.New().String(),
-				RepoURL:    "https://github.com/litmuschaos/chaos-charts",
+				RepoURL:    "https://github.com/agentcert/chaos-charts",
 				RepoBranch: "master",
 				IsPrivate:  false,
 				IsDefault:  false,
@@ -369,7 +369,7 @@ func TestListPredefinedWorkflowDetails(t *testing.T) {
 	err := chaosHubOps.GitClone(
 		model.CloningInput{
 			Name:       succeedName,
-			RepoURL:    "https://github.com/litmuschaos/chaos-charts",
+			RepoURL:    "https://github.com/agentcert/chaos-charts",
 			RepoBranch: "master",
 			IsPrivate:  false,
 		}, succeedProjectID)

@@ -1,0 +1,166 @@
+# MongoDB Single-Node Replica Set Setup Instructions
+
+This guide outlines the steps to deploy a MongoDB 5.0 container configured as a single-node replica set with admin authentication.
+
+## 1. Environment Preparation
+### Navigate to your project workspace and ensure you have the latest MongoDB 5 image.
+```
+docker pull mongo:5
+```
+
+### Clean up the resources
+```
+docker stop mongo \
+docker system prune -y
+```
+
+### Deploy the Container
+```
+docker run -d \
+  --name simple-mongo \
+  -p 27017:27017 \
+  mongo:5 mongod --replSet rs0 --bind_ip_all
+```
+
+### Initialize the Replica Set
+### Access the MongoDB shell to initiate the cluster configuration
+```
+docker exec -it simple-mongo mongosh
+```
+### Inside the shell, run:
+```
+rs.initiate({
+  _id: "rs0",
+  members: [{ _id: 0, host: "localhost:27017" }]
+})
+```
+### Create a root administrative user.
+```
+db.getSiblingDB("admin").createUser({
+  user: "admin",
+  pwd: "1234",
+  roles: [{ role: "root", db: "admin" }]
+})
+
+exit()
+```
+
+### Verify Connection
+### Test the administrative access using the credentials created in the previous step.
+```
+docker exec -it simple-mongo mongosh -u admin -p 1234 --authenticationDatabase admin
+```
+
+# Start the auth services
+```
+export DB_USER=admin                               
+export DB_PASSWORD=1234
+export DB_SERVER="mongodb://$DB_USER:$DB_PASSWORD@localhost:27017/?replicaSet=rs0&authSource=admin"
+export JWT_SECRET=litmus-portal@123
+export PORTAL_ENDPOINT=http://localhost:8080
+export LITMUS_SVC_ENDPOINT=""
+export SELF_AGENT=false
+export INFRA_SCOPE=cluster
+export INFRA_NAMESPACE=litmus
+export LITMUS_PORTAL_NAMESPACE=litmus
+export PORTAL_SCOPE=namespace
+export SUBSCRIBER_IMAGE=litmuschaos/litmusportal-subscriber:ci
+export EVENT_TRACKER_IMAGE=litmuschaos/litmusportal-event-tracker:ci
+export CONTAINER_RUNTIME_EXECUTOR=k8sapi
+export ARGO_WORKFLOW_CONTROLLER_IMAGE=argoproj/workflow-controller:v2.11.0
+export ARGO_WORKFLOW_EXECUTOR_IMAGE=argoproj/argoexec:v2.11.0
+export CHAOS_CENTER_SCOPE=cluster
+export WORKFLOW_HELPER_IMAGE_VERSION=3.0.0
+export LITMUS_CHAOS_OPERATOR_IMAGE=litmuschaos/chaos-operator:3.0.0
+export LITMUS_CHAOS_RUNNER_IMAGE=litmuschaos/chaos-runner:3.0.0
+export LITMUS_CHAOS_EXPORTER_IMAGE=litmuschaos/chaos-exporter:3.0.0
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=litmus
+export VERSION=ci
+export HUB_BRANCH_NAME=v2.0.x
+export INFRA_DEPLOYMENTS="[\"app=chaos-exporter\", \"name=chaos-operator\", \"app=event-tracker\",\"app=workflow-controller\"]"
+export INFRA_COMPATIBLE_VERSIONS='["0.2.0", "0.1.0","ci"]'
+export DEFAULT_HUB_BRANCH_NAME=master
+export REST_PORT=3000                              
+export GRPC_PORT=3030
+export ALLOWED_ORIGINS="*" 
+```
+
+### Run the service
+```
+cd chaoscenter/authentication/api
+go run main.go  
+```
+
+# Start the graphql server
+```
+export DB_USER=admin                               
+export DB_PASSWORD=1234
+export DB_SERVER="mongodb://$DB_USER:$DB_PASSWORD@localhost:27017/?replicaSet=rs0&authSource=admin"
+export JWT_SECRET=litmus-portal@123
+export PORTAL_ENDPOINT=http://localhost:8080
+export LITMUS_SVC_ENDPOINT=""
+export SELF_AGENT=false
+export INFRA_SCOPE=cluster
+export INFRA_NAMESPACE=litmus
+export LITMUS_PORTAL_NAMESPACE=litmus
+export PORTAL_SCOPE=namespace
+export SUBSCRIBER_IMAGE=litmuschaos/litmusportal-subscriber:ci
+export EVENT_TRACKER_IMAGE=litmuschaos/litmusportal-event-tracker:ci
+export CONTAINER_RUNTIME_EXECUTOR=k8sapi
+export ARGO_WORKFLOW_CONTROLLER_IMAGE=argoproj/workflow-controller:v2.11.0
+export ARGO_WORKFLOW_EXECUTOR_IMAGE=argoproj/argoexec:v2.11.0
+export CHAOS_CENTER_SCOPE=cluster
+export WORKFLOW_HELPER_IMAGE_VERSION=3.0.0
+export LITMUS_CHAOS_OPERATOR_IMAGE=litmuschaos/chaos-operator:3.0.0
+export LITMUS_CHAOS_RUNNER_IMAGE=litmuschaos/chaos-runner:3.0.0
+export LITMUS_CHAOS_EXPORTER_IMAGE=litmuschaos/chaos-exporter:3.0.0
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=litmusexport VERSION=ci
+export HUB_BRANCH_NAME=v2.0.x
+export INFRA_DEPLOYMENTS="["app=chaos-exporter", "name=chaos-operator", "app=event-tracker","app=workflow-controller"]"export INFRA_COMPATIBLE_VERSIONS='["0.2.0", "0.1.0","ci"]'
+export DEFAULT_HUB_BRANCH_NAME=master
+export ALLOWED_ORIGINS=".*"
+```
+
+### Run the service
+```
+cd chaoscenter/graphql/server
+go run server.go  
+```
+
+# Start the UI
+```
+cd chaoscenter/web
+yarn
+yarn dev
+```
+
+# Start Minikube
+```
+minikube start --cpus=2 --memory=4096 --driver=docker
+```
+
+# Initialise the environment, setup chaos with cluster level access, download the yaml file
+## alter the SERVER_ADDRESS: http://<System IP address>:8080/query
+```
+kubectl apply -f <yaml file>
+```
+
+## Verify if all pods are running
+```
+kubectl get po -A
+```
+## Issue: RBAC Permission Denied (Namespace Creation)
+### The Litmus Chaos workflow failed because the argo-chaos ServiceAccount lacked sufficient permissions to create the sock-shop namespace at the cluster scope.
+### Grant the ServiceAccount the necessary cluster-wide permissions by creating a ClusterRoleBinding using the kubectl command-line tool:
+```
+kubectl create clusterrolebinding argo-chaos-cluster-admin \
+  --clusterrole=cluster-admin \
+  --serviceaccount=litmus:argo-chaos
+```
+
+## Onboard the chaos to the choashub from https://github.com/AgentCert/chaos-charts.git
+
+
+
