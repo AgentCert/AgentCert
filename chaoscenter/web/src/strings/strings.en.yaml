@@ -21,13 +21,11 @@ accessType: Access Type
 account: Account
 accountURL: Account URL
 actionItems: Action Items
-actions: Actions
 active: Active
 activeMembers: Active members
 actualResilienceScore: Actual Resilience Score
 add: Add
 addExperimentToChaosHub: Add Experiment to ChaosHub
-addFaultToStudio: Add Fault to Studio
 addNewCluster: Add new cluster (Coming soon!)
 addNewCustomizedProbes: Add new customized probes to the fault
 addNewProbes: Select or Add new probes
@@ -45,7 +43,6 @@ addViewSummaryNotes: Add/View Summary Notes
 addtoHubLoading: Adding to ChaosHub, please wait...
 advanced: Advanced (Optional)
 advancedOptions: Advanced Options
-agentOnboarding: Agents
 all: All
 allChaosEnabled: All Chaos Enabled Infrastructures
 allExecutions: All Executions
@@ -61,7 +58,6 @@ appLabelName: app_label
 appNameSpace: App Namespace
 apply: Apply
 applyChanges: Apply Changes
-appsOnboarding: Applications
 at: At
 atAGlance: At a Glance
 attempt: Attempt
@@ -84,7 +80,6 @@ branch: Branch
 cancel: Cancel
 cannotPushToDefault: Cannot push experiment to default ChaosHub
 cannotReRun: Cannot re-run an already running experiment
-capabilities: Capabilities
 changePassword: Change Password
 chaos: Chaos
 chaosComponentInstallation: Chaos Components Installation
@@ -92,6 +87,7 @@ chaosController: Chaos Controller
 chaosEnableFailed: Failed to register the chaos enablement job, please contact support
 chaosEngineName: ChaosEngine Name
 chaosEngineResult: Chaos Engine Result
+capabilities: Capabilities
 chaosExperiment: Chaos Experiment
 chaosExperiments: Chaos Experiments
 chaosFaults: Chaos Faults
@@ -125,6 +121,38 @@ chaosResults: Chaos Results
 chaosStudio: Chaos Studio
 chaoshubDisconnectedWillSync: ChaosHub is disconnected, will attempt to sync
 chaoshubs: ChaosHubs
+agentOnboarding: Agents
+newAgent: New Agent
+onboardedAgents: List of Onboarded Agents
+deleteAgent: Delete Agent
+onboardedApplications: List of Onboarded Applications
+actions: Actions
+appsOnboarding: Applications
+newApplication: New Application
+onboardYourApp: Onboard Your Application
+onboardAppUsingKubernetesManifest: Onboard app using Kubernetes Manifest
+onboardAppUsingKubernetesManifestDesc: Deploy your application using Kubernetes manifest files
+onboardAppUsingDockerImage: Onboard app using Docker Image
+onboardAppUsingDockerImageDesc: Containerize and deploy your application using Docker images
+onboardAppUsingHelmChart: Onboard app using Helm Chart
+onboardAppUsingHelmChartDesc: Deploy your application using Kubernetes Helm charts for easy installation
+onboardAppUsingCloudManaged: Onboard app using Cloud Managed Services
+onboardAppUsingCloudManagedDesc: Deploy your application using cloud-managed services like AWS, Azure, or GCP
+onboardYourAgent: Onboard Your Agent
+onboardUsingHelmChart: Onboard agent using Helm Chart
+onboardUsingHelmChartDesc: Deploy your agent using Kubernetes Helm charts for easy installation and management
+onboardUsingAPIs: Onboard agent using APIs
+onboardUsingAPIsDesc: Integrate your agent programmatically using our REST APIs
+onboardUsingFaaS: Onboard agent using Function as a Service
+onboardUsingFaaSDesc: Deploy your agent as serverless functions on cloud platforms
+onboard: Onboard
+upload: Upload
+uploadedSuccessfully: File uploaded successfully
+pleaseUploadFile: Please upload the required file to proceed
+uploadedFileName: Uploaded file name
+enterApiUrl: Enter API endpoint URL
+enterCloudManagedUrl: Enter Cloud Managed service URL
+enterFaasUrl: Enter Function as a Service URL
 checkConnection: Check Connection
 checkLogs: Check the Chaos Infrastructure Logs
 checkStatus: Check the status of your Chaos Infrastructure on your cluster
@@ -249,7 +277,6 @@ defaultValueText: >-
   cannot be changed.
 degelateNotActive: Selected infrastructure is inactive. Please select an active one.
 delete: Delete
-deleteAgent: Delete Agent
 deleteApiTokenDescription: Are you sure you want to delete this API Token?
 deleteChaosInfrastructure: Are you sure you want to disable this Chaos Infrastructure?
 deleteExperiment: Delete Experiment
@@ -257,7 +284,6 @@ deleteExperimentDesc: >-
   Deletes all the experiment runs from the chaos control plane. This will also
   stop all experiments runs that are running.
 deleteExperimentHeading: Delete this experiment?
-deleteFaultStudio: Delete Fault Studio
 deleteProbe: Delete Probe
 deleteProbeDesc: >-
   Deletes the probe and all the associations with experiment runs from the chaos
@@ -304,7 +330,6 @@ editExperiment: Edit Experiment
 editExperimentCopy: Edit Copy
 editExperimentOptions: Do you want to edit the same experiment or edit a copy?
 editExperimentSame: Edit Same
-editFaultStudio: Edit Fault Studio
 editHubDescription: >-
   We recommend you to create a new Experiment in case of addition/deletion of
   faults or probes, as editing experiments with new faults or probes,
@@ -338,10 +363,7 @@ enablingChaos: Enabling chaos...
 endTime: End Time
 endedAt: Ended at
 endpoint: Endpoint
-enterApiUrl: Enter API endpoint URL
-enterCloudManagedUrl: Enter Cloud Managed service URL
 enterCustomCron: Enter a custom cron expression
-enterFaasUrl: Enter Function as a Service URL
 enterHubAccountURL: Enter Hub Account URL
 enterHubName: Enter Hub Name
 enterHubRepositoryBranch: Enter Hub Repository Branch
@@ -410,16 +432,6 @@ faultActivity: Fault Activity
 faultConfiguration: Fault Configuration
 faultDetails: Fault Details
 faultShouldHaveAtleastOneProbe: Fault should have at least one probe available
-faultStudio: Fault Studio
-faultStudioActive: Active
-faultStudioCategory: Category
-faultStudioCreatedSuccessfully: Fault Studio created successfully
-faultStudioDeletedSuccessfully: Fault Studio deleted successfully
-faultStudioDescription: Description
-faultStudioInactive: Inactive
-faultStudioName: Fault Studio Name
-faultStudioUpdatedSuccessfully: Fault Studio updated successfully
-faultStudios: Fault Studios
 faultSummary: Fault Summary
 faultVerdict: Fault Verdict
 faults: Faults
@@ -639,14 +651,11 @@ navigationCheckText: >-
   saving?
 navigationCheckTitle: Close without saving?
 needAttention: Needs Attention
-newAgent: New Agent
-newApplication: New Application
 newChaosExperiment: New Chaos Experiment
 newChaosHub: New ChaosHub
 newChaosInfrastructure: Enable Chaos
 newEnvironment: New Environment
 newExperiment: New Experiment
-newFaultStudio: +New Fault Category
 newMember: New Member
 newPassword: New Password
 newProbe: New Probe
@@ -676,19 +685,18 @@ noDataCV: No Data
 noDataToDisplay: No data to display
 noDescriptionProvided: No description provided
 noEnvironmentFound: No Environments found
-noEnvironmentFoundMessage: >-
-  No Environments found in this project, click on 'New Environment' to add
-  environments.
 noEnvironmentFoundNewMessage: >-
   An environment represents where you are installing your chaos infrastructure 
   and acts as an additional level of abstraction for the same.
+noEnvironmentFoundMessage: >-
+  No Environments found in this project, click on 'New Environment' to add
+  environments.
 noExpFound: No Predefined Chaos Experiments found using this Fault.
 noExperimentFoundMatchingSearch: No experiment found matching your search
 noExperimentSelected: No experiment selected
 noExperiments: No Experiments found
 noExperimentsAdded: No experiments added
 noExpiration: No Expiration
-noFaultStudios: No Fault Studios found
 noFaults: No Faults found in selected hub
 noFilteredActiveInfra: No active Chaos Infrastructures found for the search term
 noFilteredData:
@@ -760,28 +768,6 @@ oldPassword: Old Password
 'on': 'On'
 onThe: on the
 onThisPage: ON THIS PAGE
-onboard: Onboard
-onboardAppUsingCloudManaged: Onboard app using Cloud Managed Services
-onboardAppUsingCloudManagedDesc: Deploy your application using cloud-managed services like AWS, Azure, or GCP
-onboardAppUsingDockerImage: Onboard app using Docker Image
-onboardAppUsingDockerImageDesc: Containerize and deploy your application using Docker images
-onboardAppUsingHelmChart: Onboard app using Helm Chart
-onboardAppUsingHelmChartDesc: Deploy your application using Kubernetes Helm charts for easy installation
-onboardAppUsingKubernetesManifest: Onboard app using Kubernetes Manifest
-onboardAppUsingKubernetesManifestDesc: Deploy your application using Kubernetes manifest files
-onboardUsingAPIs: Onboard agent using APIs
-onboardUsingAPIsDesc: Integrate your agent programmatically using our REST APIs
-onboardUsingFaaS: Onboard agent using Function as a Service
-onboardUsingFaaSDesc: Deploy your agent as serverless functions on cloud platforms
-onboardUsingHelmChart: Onboard agent using Helm Chart
-onboardUsingHelmChartDesc: >-
-  Deploy your agent using Kubernetes Helm charts for easy installation and
-  management
-onboardYourAgent: Onboard Your Agent
-onboardYourApp: Onboard Your Application
-onboardedAgents: List of Onboarded Agents
-onboardedApplications: List of Onboarded Applications
-onboarding: Onboarding...
 openInNewTab: Open in new tab
 operation: Operation
 operator: Operator
@@ -819,7 +805,6 @@ platform: Platform
 pleaseComplete: Please complete all the steps
 pleaseSelectLeastOneExperiment: Please select at least one experiment
 pleaseSpecifyYAMLValues: Please specify the values in the YAML script
-pleaseUploadFile: Please upload the required file to proceed
 points: point(s)
 pollingInterval: Polling Interval
 preProd: Pre-Prod
@@ -963,7 +948,6 @@ registryType: Registry Type
 remoteHub: Select Remote hub
 remoteRepo: Remote Repository
 remove: Remove
-removeFaultFromStudio: Remove Fault from Studio
 removeMember: Remove Member
 removeMemberConfirmation: Are you sure you want to remove {{username}}?
 removeProbeDesc: >-
@@ -1059,7 +1043,6 @@ selectChaosInfrastructure: Select a Chaos Infrastructure
 selectChaosInfrastructureFormLabel: Select a Chaos Infrastructure to run this experiment
 selectChaosInfrastructureType: Select Chaos Infrastructure Type
 selectDeployChaosInfrastructure: Enable Chaos on your infrastructure
-selectEnvironment: Select Environment
 selectExperimentToViewDetails: Please select an experiment to view its details.
 selectExperiments: Select Experiments
 selectHub: Select a ChaosHub
@@ -1198,7 +1181,6 @@ updatedAt: Updated at
 updatedBy: Updated by
 upgradeChaosInfrastructure: Upgrade Chaos Infrastructure
 upgradeManifestDownloadedSuccessfully: Upgrade manifest downloaded successfully
-upload: Upload
 uploadYAMLButton: Select YAML file from your device
 uploadYAMLDescription: Upload experiment manifest
 uploadYAMLDescriptionBuilder: >-
@@ -1208,8 +1190,6 @@ uploadYAMLDragText: Drag & Drop the YAML file
 uploadYAMLTitle: Upload YAML
 uploadYAMLTitleBuilder: Drag and drop experiment YAML file
 uploadYaml: Upload Yaml
-uploadedFileName: Uploaded file name
-uploadedSuccessfully: File uploaded successfully
 url: URL
 useIntegerValue: Please enter an integer value
 useThisTemplate: Use this template
@@ -1221,11 +1201,7 @@ usernameIsRequired: Username is a required field
 usernameValidText: Username can only contain letters, digits, underscores, and hyphens
 usersNotAvailableMessage: No users available to send invitation
 usersNotAvailableTitle: No users available
-validate: Validate
-validatedSuccessfully: Validated successfully
-validating: Validating...
 validationError: Validation Error
-validationFailed: Deployment failed, please check the logs for more details
 value: Value
 valuePlaceholder: Enter a value
 version: Version

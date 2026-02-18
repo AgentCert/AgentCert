@@ -20,6 +20,8 @@ import { noop, omit } from 'lodash-es';
 import { Divider } from '@blueprintjs/core';
 import { parse } from 'yaml';
 import { Icon } from '@harnessio/icons';
+import { KubeGVRRequest, kubeNamespaceSubscription, kubeObjectSubscription, listChaosInfra } from '@api/core';
+import { listEnvironment } from '@api/core/environments';
 import { cleanApolloResponse, getIcon, getScope } from '@utils';
 import { useStrings } from '@strings';
 import NameDescriptionTags from '@components/NameIdDescriptionTags';
@@ -71,6 +73,8 @@ interface AddProbeFormData {
   tags: string[];
   type: ProbeType | null;
   infrastructureType: InfrastructureType | undefined;
+  environmentID?: string;
+  infrastructureID?: string;
   kubernetesHTTPProperties: TypeWithMethodDropdown<Probe['kubernetesHTTPProperties']> | undefined;
   kubernetesCMDProperties: Probe['kubernetesCMDProperties'] | undefined;
   promProperties: Probe['promProperties'] | undefined;
@@ -103,6 +107,8 @@ export let initialValues: AddProbeFormData = {
   tags: [],
   type: null,
   infrastructureType: undefined,
+  environmentID: undefined,
+  infrastructureID: undefined,
   kubernetesHTTPProperties: undefined,
   kubernetesCMDProperties: undefined,
   promProperties: undefined,
@@ -437,11 +443,122 @@ const TuneDetailsStep: React.FC<
   const [isSourceSelected, setIsSourceSelected] = React.useState<boolean>(
     props.formData.kubernetesCMDProperties?.source ? true : false
   );
+  
+  // HTTP Probe - Kubernetes pod selection state (moved to component level)
+  const [environmentOptions, setEnvironmentOptions] = React.useState<Array<{ label: string; value: string }>>([]);
+  const [infrastructureOptions, setInfrastructureOptions] = React.useState<Array<{ label: string; value: string }>>([]);
+  const [namespaceOptions, setNamespaceOptions] = React.useState<Array<{ label: string; value: string }>>([]);
+  const [podList, setPodList] = React.useState<Array<{ label: string; value: string }>>([]);
+  const [selectedPodNamespace, setSelectedPodNamespace] = React.useState<string>('');
+  const [selectedInfraID, setSelectedInfraID] = React.useState<string>('');
+  const [servicesMap, setServicesMap] = React.useState<{ [key: string]: number }>({});
+  
   const { error, loading, mutation, isEdit, hideDarkModal } = props;
 
   const preventDefault = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
   };
+
+  // Component-level Kubernetes queries
+  const { data: servicesData } = kubeObjectSubscription({
+    shouldResubscribe: true,
+    skip: !selectedPodNamespace || !selectedInfraID,
+    request: {
+      infraID: selectedInfraID,
+      kubeObjRequest: {
+        group: '',
+        resource: 'services',
+        version: 'v1'
+      } as KubeGVRRequest,
+      namespace: selectedPodNamespace,
+      objectType: 'kubeobject'
+    }
+  });
+
+  const { data: namespacesDataComponent } = kubeNamespaceSubscription({
+    shouldResubscribe: true,
+    skip: !selectedInfraID,
+    request: {
+      infraID: selectedInfraID
+    }
+  });
+
+  // Fetch pods from the selected namespace
+  const { data: podsData } = kubeObjectSubscription({
+    shouldResubscribe: true,
+    skip: !selectedPodNamespace || !selectedInfraID,
+    request: {
+      infraID: selectedInfraID,
+      kubeObjRequest: {
+        group: '',
+        resource: 'pods',
+        version: 'v1'
+      } as KubeGVRRequest,
+      namespace: selectedPodNamespace,
+      objectType: 'kubeobject'
+    }
+  });
+
+  // Process services data to build servicesMap
+  React.useEffect(() => {
+    if (servicesData?.getKubeObject?.kubeObj?.data) {
+      const services = servicesData.getKubeObject.kubeObj.data;
+      const svcMap: { [key: string]: number } = {};
+      services.forEach((svc: any) => {
+        const svcName = svc.name || svc.metadata?.name;
+        const ports = svc.spec?.ports || [];
+        if (ports.length > 0) {
+          svcMap[svcName] = ports[0].port || 80;
+        }
+      });
+      setServicesMap(svcMap);
+    } else if (servicesData?.getKubeObject?.kubeObj) {
+      const objData = Array.isArray(servicesData.getKubeObject.kubeObj) ? servicesData.getKubeObject.kubeObj : [];
+      const svcMap: { [key: string]: number } = {};
+      objData.forEach((svc: any) => {
+        const svcName = svc.name || svc.metadata?.name;
+        const ports = svc.spec?.ports || [];
+        if (ports.length > 0) {
+          svcMap[svcName] = ports[0].port || 80;
+        }
+      });
+      setServicesMap(svcMap);
+    } else {
+      setServicesMap({});
+    }
+  }, [servicesData]);
+
+  // Process namespace data at component level
+  React.useEffect(() => {
+    if (namespacesDataComponent?.getKubeNamespace?.kubeNamespace) {
+      const namespaces = namespacesDataComponent.getKubeNamespace.kubeNamespace.map((ns: any) => ({
+        label: ns.name,
+        value: ns.name
+      }));
+      setNamespaceOptions(namespaces);
+    }
+  }, [namespacesDataComponent]);
+
+  // Process pods data at component level
+  React.useEffect(() => {
+    if (podsData?.getKubeObject?.kubeObj?.data) {
+      const pods = podsData.getKubeObject.kubeObj.data.map((pod: any) => ({
+        label: pod.name,
+        value: pod.name
+      }));
+      setPodList(pods);
+    } else if (podsData?.getKubeObject?.kubeObj) {
+      // Fallback: check if data is directly in kubeObj
+      const objData = Array.isArray(podsData.getKubeObject.kubeObj) ? podsData.getKubeObject.kubeObj : [];
+      const pods = objData.map((pod: any) => ({
+        label: pod.name || pod.metadata?.name,
+        value: pod.name || pod.metadata?.name
+      }));
+      setPodList(pods);
+    } else {
+      setPodList([]);
+    }
+  }, [podsData]);
 
   // Checks for the type of probe from `ProbeType` and sets the data as well as calls the respective mutation
   const handleClick = (formikProps: FormikProps<AddProbeFormData>): void => {
@@ -470,6 +587,8 @@ const TuneDetailsStep: React.FC<
                 infrastructureType: InfrastructureType.KUBERNETES,
                 kubernetesHTTPProperties: omit(initialValues.kubernetesHTTPProperties, [
                   'methodDropdown',
+                  'podNamespace',
+                  'podName',
                   `method.${
                     initialValues.kubernetesHTTPProperties?.methodDropdown === HTTPMethod.GET
                       ? HTTPMethod.POST
@@ -768,11 +887,115 @@ const TuneDetailsStep: React.FC<
    * Function to retrieve HTTP details
    * @returns HTTP details for HTTP probes
    */ const httpRenderer = (formikProps: FormikProps<AddProbeFormData>): React.ReactElement => {
+    const scope = getScope();
+    const selectedEnvironmentID = formikProps.values.environmentID || '';
+    const infrastructureID = formikProps.values.infrastructureID || props.formData.infrastructureID || '';
+
+    const { data: environmentsData } = listEnvironment({
+      ...scope,
+      options: {
+        onError: () => undefined
+      }
+    });
+
+    const { data: infraData } = listChaosInfra({
+      ...scope,
+      environmentIDs: selectedEnvironmentID ? [selectedEnvironmentID] : undefined,
+      filter: { name: '' },
+      pagination: { page: 0, limit: 200 },
+      options: {
+        onError: () => undefined
+      }
+    });
+
+    React.useEffect(() => {
+      if (environmentsData?.listEnvironments?.environments) {
+        const envs = environmentsData.listEnvironments.environments.map(env => ({
+          label: env.name,
+          value: env.environmentID
+        }));
+        setEnvironmentOptions(envs);
+      }
+    }, [environmentsData]);
+
+    React.useEffect(() => {
+      if (infraData?.listInfras?.infras) {
+        const infras = infraData.listInfras.infras.map(infra => ({
+          label: infra.name,
+          value: infra.infraID
+        }));
+        setInfrastructureOptions(infras);
+      } else {
+        setInfrastructureOptions([]);
+      }
+    }, [infraData]);
+
     return (
       <>
         {props.formData.infrastructureType === InfrastructureType.KUBERNETES ? (
           <>
             {/* Probe details for Kubernetes HTTP probe */}
+            <FormInput.Select
+              name="environmentID"
+              label={'Environment'}
+              placeholder={'Select environment'}
+              items={environmentOptions}
+              onChange={(value: any) => {
+                const envId = value?.value ?? value;
+                formikProps.setFieldValue('environmentID', envId);
+                formikProps.setFieldValue('infrastructureID', '');
+                setInfrastructureOptions([]);
+                setNamespaceOptions([]);
+                setPodList([]);
+              }}
+            />
+            <FormInput.Select
+              name="infrastructureID"
+              label={'Infrastructure'}
+              placeholder={'Select infrastructure'}
+              items={infrastructureOptions}
+              onChange={(value: any) => {
+                const infraId = value?.value ?? value;
+                formikProps.setFieldValue('infrastructureID', infraId);
+                setSelectedInfraID(infraId);
+                setNamespaceOptions([]);
+                setPodList([]);
+              }}
+            />
+            <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700} margin={{ bottom: 'medium' }}>
+              Select Pod (Optional - Auto-populate URL)
+            </Text>
+            <FormInput.Select
+              name="kubernetesHTTPProperties.podNamespace"
+              label={'Pod Namespace'}
+              placeholder={'Select a namespace'}
+              items={namespaceOptions}
+              onChange={(value: any) => {
+                const ns = value?.value ?? value;
+                setSelectedPodNamespace(ns);
+                formikProps.setFieldValue('kubernetesHTTPProperties.podNamespace', ns);
+                formikProps.setFieldValue('kubernetesHTTPProperties.podName', '');
+                // Don't clear podList - let the useEffect refetch handle it
+              }}
+            />
+            <FormInput.Select
+              name="kubernetesHTTPProperties.podName"
+              label={'Select Pod'}
+              placeholder={'Select a pod'}
+              items={podList}
+              onChange={(value: any) => {
+                const podName = value?.value ?? value;
+                formikProps.setFieldValue('kubernetesHTTPProperties.podName', podName);
+                if (podName) {
+                  // Auto-populate URL based on pod name and service
+                  // Remove ReplicaSet hash and pod suffix (last 2 parts: -<hash>-<suffix>)
+                  const serviceName = podName.replace(/-[a-z0-9]+-[a-z0-9]+$/, '');
+                  const port = servicesMap[serviceName] || 80; // Get port from servicesMap, default to 80
+                  const autoUrl = `http://${serviceName}.${selectedPodNamespace}.svc.cluster.local:${port}`;
+                  formikProps.setFieldValue('kubernetesHTTPProperties.url', autoUrl);
+                }
+              }}
+            />
             <FormInput.Text name="kubernetesHTTPProperties.url" label={'URL'} placeholder={'http://localhost:8080'} />
             <FormInput.Toggle name="kubernetesHTTPProperties.insecureSkipVerify" label={'Insecure Skip Verify'} />
             <FormInput.Select
@@ -1161,6 +1384,8 @@ export default function AddProbeModalWizardView({
     tags: [],
     type: type,
     infrastructureType: infrastructureType,
+    environmentID: undefined,
+    infrastructureID: undefined,
     kubernetesHTTPProperties: undefined,
     kubernetesCMDProperties: undefined,
     promProperties: undefined,

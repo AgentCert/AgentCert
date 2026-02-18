@@ -681,9 +681,9 @@ func (c *chaosHubService) GetChaosHub(ctx context.Context, chaosHubID string, pr
 	experimentCount := 0
 	var chartPath string
 	if hub.IsDefault {
-		chartPath = DefaultPath + "default/" + hub.Name
+		chartPath = DefaultPath + "default/" + hub.Name + "/faults/"
 	} else {
-		chartPath = DefaultPath + hub.ProjectID + "/" + hub.Name
+		chartPath = DefaultPath + hub.ProjectID + "/" + hub.Name + "/faults/"
 	}
 	chartsData, err := handler.GetChartsData(chartPath)
 	if err != nil {
@@ -736,7 +736,7 @@ func (c *chaosHubService) ListPredefinedExperiments(ctx context.Context, hubID s
 
 	var hubPath string
 	if hub.IsDefault {
-		hubPath = "/tmp/default/" + hub.Name + "/experiments/"
+		hubPath = DefaultPath + "default/" + hub.Name + "/experiments/"
 	} else {
 		hubPath = DefaultPath + projectID + "/" + hub.Name + "/experiments/"
 	}
@@ -795,7 +795,7 @@ func (c *chaosHubService) GetPredefinedExperiment(ctx context.Context, hubID str
 	}
 	var hubPath string
 	if hub.IsDefault {
-		hubPath = "/tmp/default/" + hub.Name + "/experiments/"
+		hubPath = DefaultPath + "default/" + hub.Name + "/experiments/"
 	} else {
 		hubPath = DefaultPath + projectID + "/" + hub.Name + "/experiments/"
 	}
@@ -995,3 +995,5 @@ func (c *chaosHubService) SyncDefaultChaosHubs() {
 		time.Sleep(DefaultHubSyncTimeInterval)
 	}
 }
+
+

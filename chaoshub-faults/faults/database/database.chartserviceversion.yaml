@@ -1,0 +1,54 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: database
+  version: 0.1.0
+  annotations:
+    categories: Database
+    vendor: LitmusChaos
+spec:
+  displayName: Database Faults
+  categoryDescription: |
+    Database faults disrupt database operations and data availability in Kubernetes clusters.
+    - Injects various database failures including pod deletion, disk failures, and volume detachment
+    - Simulates real-world database failure scenarios
+    - Tests database resilience, failover mechanisms, and recovery workflows
+  keywords:
+    - Kubernetes
+    - Database
+    - Chaos
+    - Fault Injection
+  platforms:
+    - GKE
+    - Konvoy
+    - Packet(Kubeadm)
+    - Minikube
+    - EKS
+    - AKS
+    - Kind
+    - Rancher
+    - OpenShift(OKD)
+  maintainers:
+    - name: LitmusChaos
+      email: support@litmuschaos.io
+  faults:
+    - name: disk-kill
+      description: Injects disk failures on target database pods to simulate disk unavailability.
+      displayName: "Disk Kill"
+    - name: db-pod-kill
+      description: Kills database pods to simulate pod failure and test failover mechanisms.
+      displayName: "DB Pod Kill"
+    - name: volume-detach
+      description: Detaches persistent volumes from database pods to simulate storage failures.
+      displayName: "Volume Detach"
+  minKubeVersion: 1.12.0
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: ci
+  links:
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents
+  icon:
+    - url: /faults/database/icons/database.svg
+      mediatype: "image/svg+xml"

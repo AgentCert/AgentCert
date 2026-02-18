@@ -96,6 +96,7 @@ export const ProbeStepWizard = ({
           name={getString('probeDetails')}
           formData={formData}
           setFormData={setFormData}
+          faultData={faultData}
         />
       </StepWizard>
     </>

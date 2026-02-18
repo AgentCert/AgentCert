@@ -8,6 +8,11 @@ export interface NamespaceData {
   namespace: string[];
 }
 
+export interface AppLabelOption {
+  name: string;
+  label: string;
+}
+
 export interface AppInfoData {
-  appLabel: string[];
+  appLabels: AppLabelOption[];
 }

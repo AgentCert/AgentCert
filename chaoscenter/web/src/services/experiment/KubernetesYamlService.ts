@@ -1141,8 +1141,13 @@ function updateContainerImage(image: string, registry: ImageRegistry | undefined
   const parts = image.split('/');
   const lastPart = parts[parts.length - 1]; // litmus-checker:2.11.0
 
+  // If no registry is provided, use the default image
+  if (!registry || !registry.repo) {
+    return image;
+  }
+
   // Build new image
-  const newImage = `${registry?.repo}/${lastPart}`;
+  const newImage = `${registry.repo}/${lastPart}`;
 
   return newImage;
 }

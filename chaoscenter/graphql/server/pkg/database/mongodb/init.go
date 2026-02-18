@@ -28,7 +28,6 @@ const (
 	EnvironmentCollection
 	ChaosProbeCollection
 	AgentRegistryCollection
-	AppsRegistrationsCollection
 	FaultStudioCollection
 )
 
@@ -55,7 +54,6 @@ type MongoClient struct {
 	EnvironmentCollection         *mongo.Collection
 	ChaosProbeCollection          *mongo.Collection
 	AgentRegistryCollection       *mongo.Collection
-	AppsRegistrationsCollection   *mongo.Collection
 	FaultStudioCollection         *mongo.Collection
 }
 
@@ -75,7 +73,6 @@ var (
 		ProjectCollection:             "project",
 		EnvironmentCollection:         "environment",
 		AgentRegistryCollection:       "agentRegistry",
-		AppsRegistrationsCollection:   "apps_registrations",
 		FaultStudioCollection:         "faultStudios",
 	}
 
@@ -367,53 +364,6 @@ func (m *MongoClient) initAllCollection() {
 		logrus.WithError(err).Error("failed to create indexes for agentRegistry collection")
 	}
 
-	// Apps Registrations Collection
-	err = m.Database.CreateCollection(backgroundContext, Collections[AppsRegistrationsCollection], nil)
-	if err != nil {
-		if strings.Contains(err.Error(), "already exists") {
-			logrus.Info(Collections[AppsRegistrationsCollection] + "'s collection already exists, continuing with the existing mongo collection")
-		} else {
-			logrus.WithError(err).Error("failed to create apps_registrations collection")
-		}
-	}
-
-	m.AppsRegistrationsCollection = m.Database.Collection(Collections[AppsRegistrationsCollection])
-	_, err = m.AppsRegistrationsCollection.Indexes().CreateMany(backgroundContext, []mongo.IndexModel{
-		{
-			Keys: bson.D{
-				{Key: "appId", Value: 1},
-			},
-			Options: options.Index().SetUnique(true),
-		},
-		{
-			Keys: bson.D{
-				{Key: "projectId", Value: 1},
-				{Key: "name", Value: 1},
-			},
-			Options: options.Index().SetUnique(true).SetPartialFilterExpression(bson.D{{
-				Key: "status", Value: bson.M{"$ne": "DELETED"},
-			}}),
-		},
-		{
-			Keys: bson.D{
-				{Key: "projectId", Value: 1},
-			},
-		},
-		{
-			Keys: bson.D{
-				{Key: "environmentId", Value: 1},
-			},
-		},
-		{
-			Keys: bson.D{
-				{Key: "status", Value: 1},
-			},
-		},
-	})
-	if err != nil {
-		logrus.WithError(err).Error("failed to create indexes for apps_registrations collection")
-	}
-
 	// Fault Studio Collection
 	err = m.Database.CreateCollection(backgroundContext, Collections[FaultStudioCollection], nil)
 	if err != nil {
@@ -435,25 +385,6 @@ func (m *MongoClient) initAllCollection() {
 		{
 			Keys: bson.D{
 				{Key: "project_id", Value: 1},
-				{Key: "name", Value: 1},
-			},
-			Options: options.Index().SetUnique(true).SetPartialFilterExpression(bson.D{{
-				Key: "is_removed", Value: false,
-			}}),
-		},
-		{
-			Keys: bson.D{
-				{Key: "project_id", Value: 1},
-			},
-		},
-		{
-			Keys: bson.D{
-				{Key: "source_hub_id", Value: 1},
-			},
-		},
-		{
-			Keys: bson.D{
-				{Key: "is_active", Value: 1},
 			},
 		},
 	})

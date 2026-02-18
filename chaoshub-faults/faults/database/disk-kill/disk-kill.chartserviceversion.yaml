@@ -1,0 +1,46 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: disk-kill
+  version: 0.1.0
+  annotations:
+    categories: Database
+    vendor: LitmusChaos
+spec:
+  displayName: Disk Kill
+  categoryDescription: |
+    Disk kill fault injects disk failures on the target pods in a Kubernetes cluster.
+    - Simulates disk space exhaustion or disk failures on database pods
+    - The applications deployed on the pods may experience storage unavailability and I/O errors
+    - Tests application resiliency and recovery workflows under disk failure scenarios
+  keywords:
+    - Kubernetes
+    - Database
+    - Disk
+    - Chaos
+  platforms:
+    - GKE
+    - Konvoy
+    - Packet(Kubeadm)
+    - Minikube
+    - EKS
+    - AKS
+    - Kind
+    - Rancher
+    - OpenShift(OKD)
+  maintainers:
+    - name: LitmusChaos
+      email: support@litmuschaos.io
+  experiments:
+    - disk-kill
+  minKubeVersion: 1.12.0
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: ci
+  links:
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents
+  icon:
+    - url: /faults/database/icons/disk-kill.svg
+      mediatype: "image/svg+xml"

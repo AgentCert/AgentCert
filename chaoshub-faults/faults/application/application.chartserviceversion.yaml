@@ -1,0 +1,55 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: application
+  version: 0.1.0
+  annotations:
+    categories: Application
+    vendor: LitmusChaos
+spec:
+  displayName: Application Faults
+  categoryDescription: |
+    Application faults disrupt application behavior and performance in Kubernetes clusters.
+    - Injects various application failures including pod/container termination, HTTP errors, and config misconfigurations
+    - Simulates real-world application failure scenarios
+    - Tests application resilience, error handling, and recovery mechanisms
+  keywords:
+    - Kubernetes
+    - Application
+    - Chaos
+    - Error Injection
+    - HTTP
+  platforms:
+    - GKE
+    - Konvoy
+    - Packet(Kubeadm)
+    - Minikube
+    - EKS
+    - AKS
+    - Kind
+    - Rancher
+    - OpenShift(OKD)
+  maintainers:
+    - name: LitmusChaos
+      email: support@litmuschaos.io
+  faults:
+    - name: pod-container-kill
+      description: Kills containers and pods to simulate application process failures.
+      displayName: "Pod/Container Kill"
+    - name: http-5xx-abort
+      description: Injects HTTP 5xx errors and connection aborts on services.
+      displayName: "HTTP 5xx/Abort"
+    - name: config-misconfig
+      description: Injects configuration errors to test application validation logic.
+      displayName: "Config Misconfig"
+  minKubeVersion: 1.12.0
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: ci
+  links:
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents
+  icon:
+    - url: /faults/application/icons/application.svg
+      mediatype: image/svg+xml

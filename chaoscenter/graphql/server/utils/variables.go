@@ -39,6 +39,9 @@ type Configuration struct {
 	TlsCertPath                 string   `split_words:"true"`
 	TlsKeyPath                  string   `split_words:"true"`
 	CaCertTlsPath               string   `split_words:"true"`
+	DefaultAgentChartPath       string   `split_words:"true"`
+	HelmBinary                  string   `split_words:"true" default:"helm"`
+	HelmTimeout                 string   `split_words:"true" default:"5m"`
 	AllowedOrigins              []string `split_words:"true" default:"^(http://|https://|)litmuschaos.io(:[0-9]+|)?,^(http://|https://|)localhost(:[0-9]+|)"`
 }
 

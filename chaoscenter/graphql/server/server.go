@@ -15,6 +15,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -29,8 +30,8 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/config"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apps_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/handlers"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/projects"
 	pb "github.com/litmuschaos/litmus/chaoscenter/graphql/server/protos"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
@@ -41,6 +42,18 @@ func init() {
 	log.SetReportCaller(true)
 	log.Printf("go version: %s", runtime.Version())
 	log.Printf("go os/arch: %s/%s", runtime.GOOS, runtime.GOARCH)
+
+	// Load .env files if they exist (for development/local deployment)
+	_ = godotenv.Load()
+	// Try common workspace paths for local-custom config
+	for _, p := range []string{
+		"./local-custom/config/.env",
+		"../local-custom/config/.env",
+		"../../local-custom/config/.env",
+		"../../../local-custom/config/.env",
+	} {
+		_ = godotenv.Overload(p)
+	}
 
 	err := envconfig.Process("", &utils.Config)
 	if err != nil {
@@ -95,6 +108,12 @@ func main() {
 
 	if err := validateVersion(); err != nil {
 		log.Fatal(err)
+	}
+
+	// Initialize Langfuse tracer for backend observability
+	if err := observability.InitializeLangfuseTracer(); err != nil {
+		log.Printf("Failed to initialize Langfuse tracer: %v", err)
+		// Don't fail startup if Langfuse is not configured
 	}
 
 	enableHTTPSConnection, err := strconv.ParseBool(utils.Config.EnableInternalTls)
@@ -167,22 +186,6 @@ func main() {
 	//general routers
 	router.GET("/status", handlers.StatusHandler())
 	router.GET("/readiness", handlers.ReadinessHandler())
-
-	// helm validation router for apps onboarding
-	router.POST("/api/validate-helm", handlers.ValidateHelmHandler())
-	
-	// namespace listing router for dropdown
-	router.GET("/api/namespaces", handlers.ListNamespacesHandler())
-	
-	// helm cleanup router for onboarding flows
-	router.POST("/api/cleanup-helm", handlers.CleanupHelmHandler())
-
-	// apps registry routers
-	appsHandler := apps_registry.NewHandler(mongodb.MgoClient.Database(mongodb.DbName))
-	router.POST("/api/apps/register", appsHandler.RegisterApp())
-	router.GET("/api/apps", appsHandler.ListApps())
-	router.GET("/api/apps/:appId", appsHandler.GetApp())
-	router.DELETE("/api/apps/:appId", appsHandler.DeleteApp())
 
 	projectEventChannel := make(chan string)
 	go projects.ProjectEvents(projectEventChannel, mongodb.MgoClient, mongodbOperator)

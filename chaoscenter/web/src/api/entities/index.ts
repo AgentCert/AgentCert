@@ -7,4 +7,3 @@ export * from './workflowRun';
 export * from './stats';
 export * from './environment';
 export * from './imageRegistry';
-export * from './faultStudio';

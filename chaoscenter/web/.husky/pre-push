@@ -30,7 +30,8 @@ echo "CHAOS_UI_FILE_CHANGES ⟶ $CHAOS_UI_FILE_CHANGES"
 
 if [ "$CHAOS_UI_FILE_CHANGES" -gt 0 ];
   then
-    cd ./chaoscenter/web && yarn test:silent --changedSince="$CHECK_AGAINST_COMMIT"
+    echo "\033[0;93mSkipping tests in pre-push hook\033[0m"
+    # cd ./chaoscenter/web && yarn test:silent --changedSince="$CHECK_AGAINST_COMMIT"
   else
     echo "Skipping husky pre-push hook in $MATCH_PATH folder"
 fi

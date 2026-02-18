@@ -1,0 +1,47 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: network-latency
+  version: 0.1.0
+  annotations:
+    categories: Network
+    vendor: LitmusChaos
+spec:
+  displayName: Network Latency
+  categoryDescription: |
+    Network latency fault injects network delay/latency on the target pods in a Kubernetes cluster.
+    - Causes network latency/delay in the outgoing traffic of a pod by injecting network delay using traffic control (tc) and iptables.
+    - The applications deployed on the pods may stall in the scenarios of high latency conditions.
+    - Tests application resiliency and recovery workflows under high-latency network conditions.
+  keywords:
+    - Kubernetes
+    - Network
+    - Latency
+    - Chaos
+  platforms:
+    - GKE
+    - Konvoy
+    - Packet(Kubeadm)
+    - Minikube
+    - EKS
+    - AKS
+    - Kind
+    - Rancher
+    - OpenShift(OKD)
+  maintainers:
+    - name: LitmusChaos
+      email: support@litmuschaos.io
+  experiments:
+    - network-latency
+  minKubeVersion: 1.12.0
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: ci
+  links:
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents
+  icon:
+    - url: /faults/network/icons/network-latency.svg
+      mediatype: "image/svg+xml"
+
