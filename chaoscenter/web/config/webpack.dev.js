@@ -91,8 +91,8 @@ const devConfig = {
       },
       '/auth': {
         pathRewrite: { '^/auth': '' },
-        target: process.env.CHAOS_MANAGER
-          ? process.env.CHAOS_MANAGER
+        target: process.env.AUTH_SERVER
+          ? process.env.AUTH_SERVER
           : targetLocalHost
           ? 'http://localhost:3000'
           : `${baseUrl}/auth`,
