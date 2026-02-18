@@ -150,8 +150,11 @@ function Get-EnvValue {
 }
 
 function Get-MinikubeHostIP {
-    $hostIp = minikube ssh "getent hosts host.minikube.internal | awk '{print `$1}'" 2>$null | Select-Object -First 1
-    return $hostIp.Trim()
+    $hostIp = minikube ssh "getent hosts host.minikube.internal | awk '{print \`$1}'" 2>$null | Select-Object -First 1
+    if ($hostIp) {
+        return $hostIp.Trim()
+    }
+    return ""
 }
 
 function Sync-AzureEnv {
@@ -176,14 +179,14 @@ function Sync-AzureEnv {
         if ($apiVersion) { $cmData["AZURE_OPENAI_API_VERSION"] = $apiVersion }
         if ($embedding) { $cmData["AZURE_OPENAI_EMBEDDING_DEPLOYMENT"] = $embedding }
         
-        $cmPatch = @{ data = $cmData } | ConvertTo-Json -Compress
-        kubectl -n $Namespace patch configmap litmus-portal-admin-config --type merge -p $cmPatch 2>$null
+        $cmPatch = (@{ data = $cmData } | ConvertTo-Json -Compress -Depth 10)
+        kubectl -n $Namespace patch configmap litmus-portal-admin-config --type merge -p $cmPatch 2>$null | Out-Null
     }
 
     # Patch Secret
     if ($key) {
-        $secPatch = @{ stringData = @{ AZURE_OPENAI_KEY = $key } } | ConvertTo-Json -Compress
-        kubectl -n $Namespace patch secret litmus-portal-admin-secret --type merge -p $secPatch 2>$null
+        $secPatch = (@{ stringData = @{ AZURE_OPENAI_KEY = $key } } | ConvertTo-Json -Compress -Depth 10)
+        kubectl -n $Namespace patch secret litmus-portal-admin-secret --type merge -p $secPatch 2>$null | Out-Null
     }
 }
 
@@ -208,8 +211,8 @@ function Sync-LangfuseEnv {
         if ($orgId) { $cmData["LANGFUSE_ORG_ID"] = $orgId }
         if ($projectId) { $cmData["LANGFUSE_PROJECT_ID"] = $projectId }
         
-        $cmPatch = @{ data = $cmData } | ConvertTo-Json -Compress
-        kubectl -n $Namespace patch configmap litmus-portal-admin-config --type merge -p $cmPatch 2>$null
+        $cmPatch = (@{ data = $cmData } | ConvertTo-Json -Compress -Depth 10)
+        kubectl -n $Namespace patch configmap litmus-portal-admin-config --type merge -p $cmPatch 2>$null | Out-Null
     }
 
     # Patch Secret
@@ -218,8 +221,8 @@ function Sync-LangfuseEnv {
         if ($secretKey) { $secData["LANGFUSE_SECRET_KEY"] = $secretKey }
         if ($publicKey) { $secData["LANGFUSE_PUBLIC_KEY"] = $publicKey }
         
-        $secPatch = @{ stringData = $secData } | ConvertTo-Json -Compress
-        kubectl -n $Namespace patch secret litmus-portal-admin-secret --type merge -p $secPatch 2>$null
+        $secPatch = (@{ stringData = $secData } | ConvertTo-Json -Compress -Depth 10)
+        kubectl -n $Namespace patch secret litmus-portal-admin-secret --type merge -p $secPatch 2>$null | Out-Null
     }
 }
 
@@ -232,8 +235,8 @@ function Sync-MongoDBConnection {
 
     Write-Section "Syncing MongoDB connection to cluster"
     $dbServer = "mongodb://root:1234@${hostIp}:27017/admin"
-    $cmPatch = @{ data = @{ DB_SERVER = $dbServer } } | ConvertTo-Json -Compress
-    kubectl -n $Namespace patch configmap litmus-portal-admin-config --type merge -p $cmPatch 2>$null
+    $cmPatch = (@{ data = @{ DB_SERVER = $dbServer } } | ConvertTo-Json -Compress -Depth 10)
+    kubectl -n $Namespace patch configmap litmus-portal-admin-config --type merge -p $cmPatch 2>$null | Out-Null
     Write-Success "MongoDB connection updated to use host IP: $hostIp"
 }
 
@@ -415,17 +418,29 @@ function Build-DockerImage {
     $langfuseOrgId = Get-EnvValue "LANGFUSE_ORG_ID" $LocalEnvFile
     $langfuseProjectId = Get-EnvValue "LANGFUSE_PROJECT_ID" $LocalEnvFile
     
+    # Convert Windows paths to forward slashes for Docker
+    $dockerfilePath = $Dockerfile -replace '\\', '/'
+    $contextPath = $Context -replace '\\', '/'
+    
     $start = Get-Date
-    $buildCmd = "docker build -t `"$Image`" -f `"$Dockerfile`" `"$Context`" " +
-                "--build-arg TARGETOS=linux --build-arg TARGETARCH=amd64 " +
-                "--build-arg LANGFUSE_HOST=`"$langfuseHost`" " +
-                "--build-arg LANGFUSE_PUBLIC_KEY=`"$langfusePublicKey`" " +
-                "--build-arg LANGFUSE_SECRET_KEY=`"$langfuseSecretKey`" " +
-                "--build-arg LANGFUSE_ORG_ID=`"$langfuseOrgId`" " +
-                "--build-arg LANGFUSE_PROJECT_ID=`"$langfuseProjectId`" 2>&1"
+    
+    # Build arguments array
+    $buildArgs = @(
+        'build',
+        '-t', $Image,
+        '-f', $dockerfilePath,
+        '--build-arg', 'TARGETOS=linux',
+        '--build-arg', 'TARGETARCH=amd64',
+        '--build-arg', "LANGFUSE_HOST=$langfuseHost",
+        '--build-arg', "LANGFUSE_PUBLIC_KEY=$langfusePublicKey",
+        '--build-arg', "LANGFUSE_SECRET_KEY=$langfuseSecretKey",
+        '--build-arg', "LANGFUSE_ORG_ID=$langfuseOrgId",
+        '--build-arg', "LANGFUSE_PROJECT_ID=$langfuseProjectId",
+        $contextPath
+    )
     
     try {
-        Invoke-Expression $buildCmd | Tee-Object -FilePath $BuildLogFile -Append
+        & docker $buildArgs 2>&1 | Tee-Object -FilePath $BuildLogFile -Append
         if ($LASTEXITCODE -ne 0) {
             Write-ErrorMsg "Build failed"
             return $false
@@ -455,7 +470,7 @@ function Build-AllImages {
     
     $success = Build-DockerImage `
         -Dockerfile "$ProjectRoot\chaoscenter\graphql\server\Dockerfile" `
-        -Context "$ProjectRoot\chaoscenter\graphql" `
+        -Context "$ProjectRoot\chaoscenter" `
         -Image $GraphQLServerImage `
         -Name "GraphQL Server"
     
