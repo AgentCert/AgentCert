@@ -1,0 +1,56 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: security
+  version: 0.1.0
+  annotations:
+    categories: Security
+    vendor: LitmusChaos
+spec:
+  displayName: Security Faults
+  categoryDescription: |
+    Security faults disrupt security controls and access policies in Kubernetes clusters.
+    - Injects various security failures including network policy violations, certificate expiry, and RBAC misconfigurations
+    - Simulates real-world security scenarios and policy violations
+    - Tests security posture and access control resilience
+  keywords:
+    - Kubernetes
+    - Security
+    - Chaos
+    - RBAC
+    - Network Policy
+    - TLS
+  platforms:
+    - GKE
+    - Konvoy
+    - Packet(Kubeadm)
+    - Minikube
+    - EKS
+    - AKS
+    - Kind
+    - Rancher
+    - OpenShift(OKD)
+  maintainers:
+    - name: LitmusChaos
+      email: support@litmuschaos.io
+  faults:
+    - name: network-policy-misconfig
+      description: Injects network policy violations on target pods to simulate policy misconfigurations.
+      displayName: "Network Policy Misconfig"
+    - name: tls-expiry
+      description: Simulates expired TLS certificates to test certificate validation and renewal.
+      displayName: "TLS Expiry"
+    - name: rbac-revoke
+      description: Revokes RBAC permissions to simulate authorization failures.
+      displayName: "RBAC Revoke"
+  minKubeVersion: 1.12.0
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: ci
+  links:
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents
+  icon:
+    - url: /faults/security/icons/security.svg
+      mediatype: image/svg+xml

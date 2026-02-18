@@ -1,0 +1,12 @@
+---
+packageName: application
+faults:
+  - name: pod-container-kill
+    CSV: pod-container-kill/pod-container-kill.chartserviceversion.yaml
+    desc: "pod-container-kill"
+  - name: http-5xx-abort
+    CSV: http-5xx-abort/http-5xx-abort.chartserviceversion.yaml
+    desc: "http-5xx-abort"
+  - name: config-misconfig
+    CSV: config-misconfig/config-misconfig.chartserviceversion.yaml
+    desc: "config-misconfig"
