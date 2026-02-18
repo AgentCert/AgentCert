@@ -1,0 +1,47 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: tls-expiry
+  version: 0.1.0
+  annotations:
+    categories: Security
+    vendor: LitmusChaos
+spec:
+  displayName: TLS Expiry
+  categoryDescription: |
+    TLS expiry fault injects TLS certificate expiration chaos on target services in a Kubernetes cluster.
+    - Simulates expired or invalid TLS certificates on services
+    - Tests application behavior under certificate validation failures
+    - Validates certificate renewal and rotation mechanisms
+  keywords:
+    - Kubernetes
+    - Security
+    - TLS
+    - Certificate
+    - Chaos
+  platforms:
+    - GKE
+    - Konvoy
+    - Packet(Kubeadm)
+    - Minikube
+    - EKS
+    - AKS
+    - Kind
+    - Rancher
+    - OpenShift(OKD)
+  maintainers:
+    - name: LitmusChaos
+      email: support@litmuschaos.io
+  experiments:
+    - tls-expiry
+  minKubeVersion: 1.12.0
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: ci
+  links:
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents
+  icon:
+    - url: /faults/security/icons/tls-expiry.svg
+      mediatype: image/svg+xml

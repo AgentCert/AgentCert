@@ -1,0 +1,34 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: disk-kill-chaos
+  namespace: default
+spec:
+  appinfo:
+    appns: ''
+    applabel: ''
+    appkind: ''
+  # It can be active/stop
+  engineState: 'active'
+  chaosServiceAccount: disk-kill-sa
+  experiments:
+    - name: disk-kill
+      spec:
+        components:
+          env:
+            # set chaos duration (in sec) as desired
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            # Disk device to target
+            - name: DISK_DEVICE
+              value: ''
+
+            # Disk space fill percentage
+            - name: DISK_FILL_PERCENTAGE
+              value: '80'
+
+            ## percentage of total pods to target
+            - name: PODS_AFFECTED_PERC
+              value: ''

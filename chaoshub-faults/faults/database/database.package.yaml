@@ -1,0 +1,12 @@
+---
+packageName: database
+faults:
+  - name: disk-kill
+    CSV: disk-kill/disk-kill.chartserviceversion.yaml
+    desc: "disk-kill"
+  - name: db-pod-kill
+    CSV: db-pod-kill/db-pod-kill.chartserviceversion.yaml
+    desc: "db-pod-kill"
+  - name: volume-detach
+    CSV: volume-detach/volume-detach.chartserviceversion.yaml
+    desc: "volume-detach"

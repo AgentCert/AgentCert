@@ -1,0 +1,47 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: pod-container-kill
+  version: 0.1.0
+  annotations:
+    categories: Application
+    vendor: LitmusChaos
+spec:
+  displayName: Pod/Container Kill
+  categoryDescription: |
+    Pod/Container kill fault injects container and pod termination chaos on target applications in a Kubernetes cluster.
+    - Kills containers and pods running application workloads
+    - Tests application restart policies and recovery mechanisms
+    - Validates replication controller and orchestration resilience
+  keywords:
+    - Kubernetes
+    - Application
+    - Container
+    - Pod
+    - Chaos
+  platforms:
+    - GKE
+    - Konvoy
+    - Packet(Kubeadm)
+    - Minikube
+    - EKS
+    - AKS
+    - Kind
+    - Rancher
+    - OpenShift(OKD)
+  maintainers:
+    - name: LitmusChaos
+      email: support@litmuschaos.io
+  experiments:
+    - pod-container-kill
+  minKubeVersion: 1.12.0
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: ci
+  links:
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents
+  icon:
+    - url: /faults/application/icons/pod-container-kill.svg
+      mediatype: image/svg+xml
