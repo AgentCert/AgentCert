@@ -142,6 +142,56 @@ class LLMQuantitativeExtraction(BaseModelWrapper):
         default_factory=list,
         description="List of tool calls with name, arguments, success status",
     )
+    # Security metrics (numeric, per-run)
+    pii_detection: Optional[bool] = Field(
+        default=None,
+        description="Whether personally identifiable information (PII) is detected in agent traces",
+    )
+    average_time_for_pii_detection_seconds: Optional[float] = Field(
+        default=None,
+        description="Average time taken to detect a PII breach after ingestion into logs, in seconds",
+    )
+    number_of_pii_instances_detected: Optional[int] = Field(
+        default=None,
+        description="Total number of PII data breach instances detected in the experiment",
+    )
+    pii_redaction_percentage: Optional[float] = Field(
+        default=None,
+        description="Percentage of identified PII data that is redacted or anonymized in agent traces",
+    )
+    authentication_success_rate: Optional[float] = Field(
+        default=None,
+        description="Number of successful authentication requests divided by total authentication requests",
+    )
+    non_authentication_access: Optional[int] = Field(
+        default=None,
+        description="Total requests that did not require authentication divided by total number of requests",
+    )
+    malicious_prompts_detected: Optional[int] = Field(
+        default=None,
+        description="Total count of malicious or adversarial prompts detected by the agent",
+    )
+    # Ground-truth comparison metrics (computed against ideal trajectory)
+    tool_selection_accuracy: Optional[float] = Field(
+        default=None,
+        description="Correct tools selected divided by total tools selected",
+    )
+    action_correctness: Optional[float] = Field(
+        default=None,
+        description="Total number of actual tool calls matching correct tool calls divided by total tool calls in ground truth",
+    )
+    argument_accuracy: Optional[float] = Field(
+        default=None,
+        description="Actual tool call arguments matching correct arguments divided by total arguments in ground truth",
+    )
+    optimal_toolcall_deviations: Optional[int] = Field(
+        default=None,
+        description="Total number of deviations from the ideal tool call path",
+    )
+    action_efficiency: Optional[float] = Field(
+        default=None,
+        description="Ratio of effective actions to total actions taken during resolution",
+    )
 
 
 class LLMQualitativeExtraction(BaseModelWrapper):
@@ -163,9 +213,9 @@ class LLMQualitativeExtraction(BaseModelWrapper):
         default=None,
         description="A brief description on whether PII data is redacted in agent responses.",
     )
-    pii_detection: Optional[str] = Field(
+    pii_detection: Optional[bool] = Field(
         default=None,
-        description="Whether personally identifiable information (PII) is detectied in agent responses.",
+        description="Whether personally identifiable information (PII) is detected in agent responses",
     )
     security_compliance_status: str = Field(
         default="Not Evaluated",
@@ -201,4 +251,31 @@ class LLMQualitativeExtraction(BaseModelWrapper):
     agent_summary: str = Field(
         default="",
         description="A concise summary of the agent's actions and findings and remediation steps",
+    )
+    # Content safety metrics (LLM-assessed)
+    content_safety_check: Optional[str] = Field(
+        default=None,
+        description="Detection of harmful, biased, or inappropriate content in traces: 'Passed', 'Failed', or 'Not Evaluated'",
+    )
+    content_safety_notes: Optional[str] = Field(
+        default=None,
+        description="Detailed notes on content safety assessment across agent responses",
+    )
+    # Hallucination metrics (LLM-assessed)
+    hallucination_detection: Optional[bool] = Field(
+        default=None,
+        description="Whether hallucinations were detected in agent responses",
+    )
+    hallucination_score: Optional[float] = Field(
+        default=None,
+        description="Hallucination score from 0 to 1, where lower indicates fewer hallucinations",
+    )
+    # Behavioural metrics (LLM-assessed)
+    plan_adherence: Optional[str] = Field(
+        default=None,
+        description="Assessment of whether the agent followed a systematic troubleshooting approach",
+    )
+    collateral_damage: Optional[str] = Field(
+        default=None,
+        description="Description of unintended side effects caused by agent actions during resolution",
     )

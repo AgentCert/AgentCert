@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Union
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pydantic import BaseModel
 from pymongo import ASCENDING, DESCENDING, MongoClient
-from pymongo.errors import ConnectionFailure, OperationFailure
+from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
 from pymongo.operations import SearchIndexModel
 from utils.setup_logging import logger
 
@@ -294,7 +294,7 @@ class MongoDBClient:
     ) -> Dict[str, Any]:
         """Prepare a document for insertion."""
         if isinstance(data, BaseModel):
-            doc = data.model_dump()
+            doc = data.model_dump(mode="json")
         else:
             doc = dict(data)
 
@@ -429,12 +429,12 @@ class MongoDBClient:
         collection = self.sync_db[self.config.metrics_collection]
 
         quant_doc = (
-            quantitative.model_dump()
+            quantitative.model_dump(mode="json")
             if isinstance(quantitative, BaseModel)
             else dict(quantitative)
         )
         qual_doc = (
-            qualitative.model_dump()
+            qualitative.model_dump(mode="json")
             if isinstance(qualitative, BaseModel)
             else dict(qualitative)
         )
@@ -454,9 +454,23 @@ class MongoDBClient:
         if metadata:
             doc["metadata"] = metadata
 
-        result = collection.insert_one(doc)
-        logger.debug(f"Inserted combined metrics: {result.inserted_id}")
-        return str(result.inserted_id)
+        try:
+            result = collection.insert_one(doc)
+            logger.debug(f"Inserted combined metrics: {result.inserted_id}")
+            return str(result.inserted_id)
+        except DuplicateKeyError:
+            # Update existing document if experiment_id already exists
+            logger.info(
+                f"Document with experiment_id '{quant_doc['experiment_id']}' already exists, updating..."
+            )
+            result = collection.replace_one(
+                {"quantitative.experiment_id": quant_doc["experiment_id"]},
+                doc,
+            )
+            existing = collection.find_one(
+                {"quantitative.experiment_id": quant_doc["experiment_id"]}
+            )
+            return str(existing["_id"]) if existing else ""
 
     async def insert_metrics_async(
         self,
@@ -469,12 +483,12 @@ class MongoDBClient:
         collection = self.async_db[self.config.metrics_collection]
 
         quant_doc = (
-            quantitative.model_dump()
+            quantitative.model_dump(mode="json")
             if isinstance(quantitative, BaseModel)
             else dict(quantitative)
         )
         qual_doc = (
-            qualitative.model_dump()
+            qualitative.model_dump(mode="json")
             if isinstance(qualitative, BaseModel)
             else dict(qualitative)
         )
@@ -494,9 +508,23 @@ class MongoDBClient:
         if metadata:
             doc["metadata"] = metadata
 
-        result = await collection.insert_one(doc)
-        logger.debug(f"Inserted combined metrics: {result.inserted_id}")
-        return str(result.inserted_id)
+        try:
+            result = await collection.insert_one(doc)
+            logger.debug(f"Inserted combined metrics: {result.inserted_id}")
+            return str(result.inserted_id)
+        except DuplicateKeyError:
+            # Update existing document if experiment_id already exists
+            logger.info(
+                f"Document with experiment_id '{quant_doc['experiment_id']}' already exists, updating..."
+            )
+            await collection.replace_one(
+                {"quantitative.experiment_id": quant_doc["experiment_id"]},
+                doc,
+            )
+            existing = await collection.find_one(
+                {"quantitative.experiment_id": quant_doc["experiment_id"]}
+            )
+            return str(existing["_id"]) if existing else ""
 
     # ==================== VECTOR SEARCH ====================
 
