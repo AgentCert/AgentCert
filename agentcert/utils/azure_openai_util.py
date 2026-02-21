@@ -206,15 +206,27 @@ class AzureLLMClient:
             chat_messages = self._convert_messages_to_chat_messages(messages)
 
             # Run the agent
-            result = await agent.run(messages=str(messages))
+            result = await agent.run(messages=chat_messages)
 
             # Try to parse as JSON, otherwise return as text
             try:
-                response_content = json.loads(result.text)
+                response_text = result.text
+                # Strip markdown code fences if present
+                if response_text.startswith("```json"):
+                    response_text = response_text[7:]
+                if response_text.startswith("```"):
+                    response_text = response_text[3:]
+                if response_text.endswith("```"):
+                    response_text = response_text[:-3]
+                response_content = json.loads(response_text.strip())
             except json.JSONDecodeError:
                 response_content = {"response": result.text}
 
-            return response_content, 0.0
+            return response_content, {
+                "input_tokens": result.usage_details.input_token_count,
+                "output_tokens": result.usage_details.output_token_count,
+                "total_tokens": result.usage_details.total_token_count,
+            }
 
         except custom_errors.MyCustomError as specific_error:
             raise specific_error
@@ -297,7 +309,11 @@ class AzureLLMClient:
                 )
                 structured_response = {"response": result.text}
 
-            return structured_response, 0.0
+            return structured_response, {
+                "input_tokens": result.usage_details.input_token_count,
+                "output_tokens": result.usage_details.output_token_count,
+                "total_tokens": result.usage_details.total_token_count,
+            }
 
         except custom_errors.MyCustomError as specific_error:
             raise specific_error
@@ -373,6 +389,11 @@ class AzureLLMClient:
                 "agent": agent_name,
                 "response": result.text,
                 "success": True,
+                "usage": {
+                    "input_tokens": result.usage_details.input_token_count,
+                    "output_tokens": result.usage_details.output_token_count,
+                    "total_tokens": result.usage_details.total_token_count,
+                },
             }
 
         except Exception as e:

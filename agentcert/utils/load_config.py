@@ -4,7 +4,6 @@ This module is used to load environment variables from the system.
 
 import json
 import os
-from logging import config
 from pathlib import Path
 
 

@@ -5,6 +5,7 @@ Provides async/sync MongoDB client with Atlas Vector Search support.
 
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
@@ -198,14 +199,14 @@ class MongoDBClient:
         try:
             collection = self.sync_db[self.config.metrics_collection]
 
-            # Create indexes
+            # Create indexes aligned with LLMQuantitativeExtraction / LLMQualitativeExtraction fields
             collection.create_index(
-                [("session_id", ASCENDING)], unique=True, sparse=True
+                [("quantitative.experiment_id", ASCENDING)], unique=True, sparse=True
             )
             collection.create_index(
                 [
-                    ("quantitative.namespace", ASCENDING),
-                    ("quantitative.deployment_name", ASCENDING),
+                    ("quantitative.fault_namespace", ASCENDING),
+                    ("quantitative.fault_target_service", ASCENDING),
                 ]
             )
             collection.create_index([("quantitative.fault_type", ASCENDING)])
@@ -214,6 +215,10 @@ class MongoDBClient:
             collection.create_index(
                 [("qualitative.acceptance_criteria_met", ASCENDING)]
             )
+            collection.create_index(
+                [("qualitative.security_compliance_status", ASCENDING)]
+            )
+            collection.create_index([("extraction_timestamp", DESCENDING)])
 
             logger.info(f"Initialized collection: {self.config.metrics_collection}")
             return True
@@ -251,11 +256,11 @@ class MongoDBClient:
                         },
                         {
                             "type": "filter",
-                            "path": "namespace",
+                            "path": "quantitative.fault_namespace",
                         },
                         {
                             "type": "filter",
-                            "path": "detection_accuracy",
+                            "path": "quantitative.fault_type",
                         },
                     ]
                 },
@@ -337,17 +342,19 @@ class MongoDBClient:
         logger.debug(f"Inserted quantitative extraction: {result.inserted_id}")
         return str(result.inserted_id)
 
-    def find_quantitative_by_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Find quantitative extraction by session ID."""
-        collection = self.sync_db[self.config.quantitative_collection]
-        return collection.find_one({"session_id": session_id})
-
-    async def find_quantitative_by_session_async(
-        self, session_id: str
+    def find_quantitative_by_experiment_id(
+        self, experiment_id: str
     ) -> Optional[Dict[str, Any]]:
-        """Find quantitative extraction by session ID (async)."""
+        """Find quantitative extraction by experiment ID."""
+        collection = self.sync_db[self.config.quantitative_collection]
+        return collection.find_one({"experiment_id": experiment_id})
+
+    async def find_quantitative_by_experiment_id_async(
+        self, experiment_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Find quantitative extraction by experiment ID (async)."""
         collection = self.async_db[self.config.quantitative_collection]
-        return await collection.find_one({"session_id": session_id})
+        return await collection.find_one({"experiment_id": experiment_id})
 
     # --- Qualitative Extraction ---
 
@@ -384,17 +391,19 @@ class MongoDBClient:
         logger.debug(f"Inserted qualitative extraction: {result.inserted_id}")
         return str(result.inserted_id)
 
-    def find_qualitative_by_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Find qualitative extraction by session ID."""
-        collection = self.sync_db[self.config.qualitative_collection]
-        return collection.find_one({"session_id": session_id})
-
-    async def find_qualitative_by_session_async(
-        self, session_id: str
+    def find_metrics_by_experiment_id(
+        self, experiment_id: str
     ) -> Optional[Dict[str, Any]]:
-        """Find qualitative extraction by session ID (async)."""
-        collection = self.async_db[self.config.qualitative_collection]
-        return await collection.find_one({"session_id": session_id})
+        """Find combined metrics by experiment ID in the metrics collection."""
+        collection = self.sync_db[self.config.metrics_collection]
+        return collection.find_one({"quantitative.experiment_id": experiment_id})
+
+    async def find_metrics_by_experiment_id_async(
+        self, experiment_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Find combined metrics by experiment ID (async)."""
+        collection = self.async_db[self.config.metrics_collection]
+        return await collection.find_one({"quantitative.experiment_id": experiment_id})
 
     # --- Combined Metrics ---
 
@@ -402,7 +411,6 @@ class MongoDBClient:
         self,
         quantitative: Union[BaseModel, Dict[str, Any]],
         qualitative: Union[BaseModel, Dict[str, Any]],
-        session_id: Optional[str] = None,
         embedding: Optional[List[float]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
@@ -412,7 +420,6 @@ class MongoDBClient:
         Args:
             quantitative: Quantitative metrics data.
             qualitative: Qualitative metrics data.
-            session_id: Optional session identifier.
             embedding: Optional vector embedding.
             metadata: Optional additional metadata.
 
@@ -432,11 +439,13 @@ class MongoDBClient:
             else dict(qualitative)
         )
 
+        if not quant_doc.get("experiment_id"):
+            quant_doc["experiment_id"] = str(uuid.uuid4())
+
         doc = {
-            "session_id": session_id,
             "quantitative": quant_doc,
             "qualitative": qual_doc,
-            "extraction_timestamp": datetime.utcnow(),
+            "extraction_timestamp": datetime.now(timezone.utc),
         }
 
         if embedding:
@@ -453,7 +462,6 @@ class MongoDBClient:
         self,
         quantitative: Union[BaseModel, Dict[str, Any]],
         qualitative: Union[BaseModel, Dict[str, Any]],
-        session_id: Optional[str] = None,
         embedding: Optional[List[float]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
@@ -471,11 +479,13 @@ class MongoDBClient:
             else dict(qualitative)
         )
 
+        if not quant_doc.get("experiment_id"):
+            quant_doc["experiment_id"] = str(uuid.uuid4())
+
         doc = {
-            "session_id": session_id,
             "quantitative": quant_doc,
             "qualitative": qual_doc,
-            "extraction_timestamp": datetime.utcnow(),
+            "extraction_timestamp": datetime.now(timezone.utc),
         }
 
         if embedding:
@@ -583,18 +593,16 @@ class MongoDBClient:
 
     # ==================== QUERY OPERATIONS ====================
 
-    def find_by_accuracy(
+    def find_by_fault_type(
         self,
-        detection_accuracy: str,
-        collection_name: Optional[str] = None,
+        fault_type: str,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
-        """Find metrics by detection accuracy."""
-        collection_name = collection_name or self.config.quantitative_collection
-        collection = self.sync_db[collection_name]
+        """Find metrics by fault type in the combined metrics collection."""
+        collection = self.sync_db[self.config.metrics_collection]
 
         cursor = (
-            collection.find({"detection_accuracy": detection_accuracy})
+            collection.find({"quantitative.fault_type": fault_type})
             .sort("extraction_timestamp", DESCENDING)
             .limit(limit)
         )
@@ -602,14 +610,13 @@ class MongoDBClient:
         return list(cursor)
 
     def find_by_namespace(
-        self, namespace: str, collection_name: Optional[str] = None, limit: int = 100
+        self, namespace: str, limit: int = 100
     ) -> List[Dict[str, Any]]:
-        """Find metrics by Kubernetes namespace."""
-        collection_name = collection_name or self.config.quantitative_collection
-        collection = self.sync_db[collection_name]
+        """Find metrics by Kubernetes namespace in the combined metrics collection."""
+        collection = self.sync_db[self.config.metrics_collection]
 
         cursor = (
-            collection.find({"namespace": namespace})
+            collection.find({"quantitative.fault_namespace": namespace})
             .sort("extraction_timestamp", DESCENDING)
             .limit(limit)
         )
@@ -697,51 +704,77 @@ if __name__ == "__main__":
         # Create sample metrics data
         print("\n📝 Creating sample metrics document...")
 
-        session_id = (
-            f"test_session_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        experiment_id = (
+            f"exp_test_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         )
 
         quantitative_data = {
-            "namespace": "production",
-            "deployment_name": "api-gateway-v1",
-            "detection_accuracy": "HIGH",
+            "experiment_id": experiment_id,
+            "fault_injection_time": "2026-02-15T10:00:00Z",
+            "agent_fault_detection_time": "2026-02-15T10:00:15Z",
+            "agent_fault_mitigation_time": "2026-02-15T10:01:30Z",
+            "time_to_detect": 15.0,
+            "time_to_mitigate": 90.0,
+            "framework_overhead_seconds": 2.5,
+            "fault_detected": "Misconfig",
+            "trajectory_steps": 12,
+            "input_tokens": 5000,
+            "output_tokens": 1500,
+            "fault_type": "Misconfig",
             "fault_target_service": "payment-service",
-            "submission_status": "SUCCESS",
-            "chaos_experiment_name": "pod-delete-test",
-            "hypothesis_validation": "VALIDATED",
+            "fault_namespace": "production",
+            "tool_calls": [
+                {
+                    "tool_name": "get_logs",
+                    "arguments": {"service": "payment-service"},
+                    "was_successful": True,
+                    "response_summary": "Retrieved logs",
+                    "timestamp": "2026-02-15T10:00:10Z",
+                }
+            ],
         }
 
         qualitative_data = {
-            "rai_check_status": "PASS",
-            "security_compliance_status": "COMPLIANT",
-            "reasoning_score": 0.92,
-            "trajectory_efficiency_score": 0.87,
-            "observability_score": 0.89,
-            "error_handling_quality": "EXCELLENT",
+            "rai_check_status": "Passed",
+            "rai_check_notes": "No harmful content detected",
+            "trajectory_efficiency_score": 8.5,
+            "trajectory_efficiency_notes": "Efficient diagnostic path",
+            "security_compliance_status": "Compliant",
+            "security_compliance_notes": "No credentials exposed",
+            "acceptance_criteria_met": True,
+            "acceptance_criteria_notes": "Fault correctly detected and mitigated",
+            "response_quality_score": 9.0,
+            "response_quality_notes": "Clear and accurate reasoning",
+            "reasoning_score": 8,
+            "reasoning_judgement": "Strong diagnostic reasoning",
+            "known_limitations": ["Could have checked more services"],
+            "recommendations": ["Add broader health checks"],
+            "agent_summary": "Agent detected misconfig in payment-service and remediated it.",
         }
 
         metadata = {
-            "agent_version": "1.0.0",
-            "environment": "test",
-            "test_duration_seconds": 45,
-            "operator": "test_script",
+            "trace_file": "test_trace.json",
+            "total_spans": 12,
+            "extraction_token_usage": {
+                "input_tokens": 3000,
+                "output_tokens": 800,
+                "total_tokens": 3800,
+            },
         }
 
         # Insert the metrics document
         doc_id = client.insert_metrics(
             quantitative=quantitative_data,
             qualitative=qualitative_data,
-            session_id=session_id,
             metadata=metadata,
         )
 
         print(f"✅ Inserted metrics document with ID: {doc_id}")
-        print(f"   Session ID: {session_id}")
+        print(f"   Experiment ID: {experiment_id}")
 
-        # Verify the document was inserted
+        # Verify the document was inserted using experiment_id lookup
         print("\n🔍 Verifying document insertion...")
-        collection = client.sync_db[client.config.metrics_collection]
-        inserted_doc = collection.find_one({"session_id": session_id})
+        inserted_doc = client.find_metrics_by_experiment_id(experiment_id)
 
         if inserted_doc:
             print(f"✅ Document found in database")
@@ -761,8 +794,11 @@ if __name__ == "__main__":
                 print(f"   {key}: {value}")
 
         # Delete the test document
-        print(f"\n🗑️  Deleting test document (session_id: {session_id})...")
-        delete_result = collection.delete_one({"session_id": session_id})
+        print(f"\n🗑️  Deleting test document (experiment_id: {experiment_id})...")
+        collection = client.sync_db[client.config.metrics_collection]
+        delete_result = collection.delete_one(
+            {"quantitative.experiment_id": experiment_id}
+        )
 
         if delete_result.deleted_count > 0:
             print(
@@ -773,7 +809,7 @@ if __name__ == "__main__":
 
         # Verify deletion
         print("\n🔍 Verifying document deletion...")
-        deleted_doc = collection.find_one({"session_id": session_id})
+        deleted_doc = client.find_metrics_by_experiment_id(experiment_id)
 
         if deleted_doc is None:
             print("✅ Document successfully removed from database")

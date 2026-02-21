@@ -94,12 +94,8 @@ class MetricsExtractionResult(BaseModelWrapper):
 class LLMQuantitativeExtraction(BaseModelWrapper):
     """Model for LLM to extract quantitative metrics."""
 
-    session_id: Optional[str] = Field(
-        default=None, description="Session ID (UUID format)"
-    )
-    namespace: Optional[str] = Field(default=None, description="Kubernetes namespace")
-    deployment_name: Optional[str] = Field(
-        default=None, description="Deployment/application name"
+    experiment_id: Optional[str] = Field(
+        default=None, description="Experiment id if available"
     )
     fault_injection_time: Optional[str] = Field(
         default=None, description="Time of fault injection in seconds"
@@ -109,6 +105,14 @@ class LLMQuantitativeExtraction(BaseModelWrapper):
     )
     agent_fault_mitigation_time: Optional[str] = Field(
         default=None, description="timestamp when the agent mitigated the fault"
+    )
+    time_to_detect: Optional[float] = Field(
+        default=None,
+        description="Time taken by the agent to detect the fault in seconds, if available",
+    )
+    time_to_mitigate: Optional[float] = Field(
+        default=None,
+        description="Time taken by the agent to mitigate the fault in seconds, if available",
     )
     framework_overhead_seconds: Optional[float] = Field(
         default=None, description="Framework overhead in seconds"
@@ -154,6 +158,14 @@ class LLMQualitativeExtraction(BaseModelWrapper):
     )
     trajectory_efficiency_notes: Optional[str] = Field(
         default=None, description="Efficiency assessment"
+    )
+    Anonymization_implementation: Optional[str] = Field(
+        default=None,
+        description="A brief description on whether PII data is redacted in agent responses.",
+    )
+    pii_detection: Optional[str] = Field(
+        default=None,
+        description="Whether personally identifiable information (PII) is detectied in agent responses.",
     )
     security_compliance_status: str = Field(
         default="Not Evaluated",
