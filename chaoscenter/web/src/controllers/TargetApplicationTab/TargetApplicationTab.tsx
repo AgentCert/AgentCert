@@ -17,7 +17,7 @@ export default function TargetApplicationTabController({
   setFaultData
 }: TargetApplicationControllerProps): React.ReactElement {
   const [namespaceData, setNamespaceData] = React.useState<string[]>([]);
-  const [appInfoData, setAppInfoData] = React.useState<AppInfoData>({ appLabel: [] });
+  const [appInfoData, setAppInfoData] = React.useState<AppInfoData>({ appLabels: [] });
   const [targetApp, setTargetApp] = React.useState<TargetApplicationData>({
     ...engineCR?.spec?.appinfo
   });
@@ -62,13 +62,25 @@ export default function TargetApplicationTabController({
 
   React.useEffect(() => {
     if (resultObject?.getKubeObject) {
-      const applabels: string[] = [];
-      resultObject.getKubeObject.kubeObj.data.forEach(objData => {
-        if (objData.labels) {
-          applabels.push(...objData.labels);
+      const preferredKeys = ['app.kubernetes.io/instance', 'app.kubernetes.io/name', 'app', 'name'];
+      const appLabels = resultObject.getKubeObject.kubeObj.data.map(objData => {
+        const labels = objData.labels ?? [];
+        let selectedLabel = labels.find(label => label.endsWith(`=${objData.name}`)) ?? '';
+        if (!selectedLabel) {
+          for (const key of preferredKeys) {
+            const match = labels.find(label => label.startsWith(`${key}=`));
+            if (match) {
+              selectedLabel = match;
+              break;
+            }
+          }
         }
+        if (!selectedLabel) {
+          selectedLabel = `app.kubernetes.io/instance=${objData.name}`;
+        }
+        return { name: objData.name, label: selectedLabel };
       });
-      const appInfo: AppInfoData = { appLabel: applabels };
+      const appInfo: AppInfoData = { appLabels };
       setAppInfoData(appInfo);
     }
   }, [resultObject?.getKubeObject, targetApp?.appns]);

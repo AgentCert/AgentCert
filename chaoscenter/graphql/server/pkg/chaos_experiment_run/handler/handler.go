@@ -21,6 +21,7 @@ import (
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -665,6 +666,185 @@ func (c *ChaosExperimentRunHandler) ListExperimentRun(projectID string, request 
 	return &output, nil
 }
 
+// traceExperimentExecution logs fault execution to observability backend (Langfuse, AI_Ops, etc.)
+// This function can be easily replaced with alternative observers (AI_Ops, Prometheus, etc.)
+func traceExperimentExecution(ctx context.Context, notifyID string, experimentID string, experimentName string, infra dbChaosInfra.ChaosInfra, projectID string) error {
+	tracer := observability.GetLangfuseTracer()
+	namespace := ""
+	if infra.InfraNamespace != nil {
+		namespace = *infra.InfraNamespace
+	}
+	return tracer.TraceExperimentExecution(ctx, &observability.ExperimentExecutionDetails{
+		TraceID:        notifyID,
+		ExperimentID:   experimentID,
+		ExperimentName: experimentName,
+		FaultName:      "chaos-workflow",
+		SessionID:      notifyID,
+		AgentID:        infra.InfraID,
+		ProjectID:      projectID,
+		Namespace:      namespace,
+		Phase:          "injection",
+		Priority:       "high",
+	})
+}
+
+// completeExperimentExecution logs fault execution completion to observability backend
+// This function can be easily replaced with alternative observers (AI_Ops, Prometheus, etc.)
+func completeExperimentExecution(ctx context.Context, notifyID string, experimentID string, experimentName string, status string, result string) error {
+	tracer := observability.GetLangfuseTracer()
+	return tracer.CompleteExperimentExecution(ctx, notifyID, &observability.ExperimentCompletionDetails{
+		ExperimentID:   experimentID,
+		ExperimentName: experimentName,
+		Status:         status,
+		Result:         result,
+	})
+}
+
+// traceExperimentObservation logs continuous workflow events to Langfuse.
+func traceExperimentObservation(ctx context.Context, traceID string, event model.ExperimentRunRequest, executionData types.ExecutionData, metrics *types.ExperimentRunMetrics) {
+	if traceID == "" {
+		return
+	}
+	tracer := observability.GetLangfuseTracer()
+
+	input := map[string]interface{}{
+		"experimentID":   event.ExperimentID,
+		"experimentRunID": event.ExperimentRunID,
+		"experimentName": event.ExperimentName,
+		"revisionID":     event.RevisionID,
+		"completed":      event.Completed,
+	}
+	if event.NotifyID != nil {
+		input["notifyID"] = *event.NotifyID
+	}
+
+	output := map[string]interface{}{
+		"executionData": executionData,
+	}
+	if metrics != nil {
+		output["metrics"] = metrics
+	}
+
+	metadata := map[string]interface{}{
+		"eventType": executionData.EventType,
+		"phase":     executionData.Phase,
+		"message":   executionData.Message,
+	}
+
+	// Create unique observation name based on phase and event type
+	observationName := fmt.Sprintf("workflow-event: %s (%s)", executionData.Phase, executionData.EventType)
+	if executionData.Phase == "" && executionData.EventType == "" {
+		observationName = "workflow-event"
+	}
+
+	logrus.Infof("[Tracing] Creating observation: %s for trace: %s", observationName, traceID)
+
+	// Set start and end time for observation in ISO 8601 format
+	now := time.Now()
+	
+	_ = tracer.TraceExperimentObservation(ctx, &observability.ExperimentObservationDetails{
+		TraceID:   traceID,
+		Name:      observationName,
+		Type:      "EVENT",
+		StartTime: now.Format(time.RFC3339),
+		EndTime:   now.Format(time.RFC3339), // Same as start for instantaneous events
+		Input:     input,
+		Output:    output,
+		Metadata:  metadata,
+	})
+}
+
+// scoreExperimentRun logs resiliency scores and fault metrics to Langfuse after completion.
+func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.ExperimentRunMetrics, status string) {
+	if traceID == "" || metrics == nil {
+		return
+	}
+	tracer := observability.GetLangfuseTracer()
+
+	// Score 1: Resiliency Score
+	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
+		TraceID: traceID,
+		Name:    "resiliency_score",
+		Value:   metrics.ResiliencyScore,
+		Comment: fmt.Sprintf("Overall resiliency score (0-100 scale) for experiment phase: %s", status),
+		Source:  "API",
+	})
+
+	// Score 2: Experiments Passed
+	passedScore := float64(metrics.ExperimentsPassed) / float64(metrics.TotalExperiments) * 100
+	if metrics.TotalExperiments == 0 {
+		passedScore = 0
+	}
+	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
+		TraceID: traceID,
+		Name:    "experiments_passed_percentage",
+		Value:   passedScore,
+		Comment: fmt.Sprintf("Percentage of experiments passed: %d/%d", metrics.ExperimentsPassed, metrics.TotalExperiments),
+		Source:  "API",
+	})
+
+	// Score 3: Experiments Failed
+	failedScore := float64(metrics.ExperimentsFailed) / float64(metrics.TotalExperiments) * 100
+	if metrics.TotalExperiments == 0 {
+		failedScore = 0
+	}
+	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
+		TraceID: traceID,
+		Name:    "experiments_failed_percentage",
+		Value:   failedScore,
+		Comment: fmt.Sprintf("Percentage of experiments failed: %d/%d", metrics.ExperimentsFailed, metrics.TotalExperiments),
+		Source:  "API",
+	})
+
+	// Score 4: Experiments Awaited
+	awaitedScore := float64(metrics.ExperimentsAwaited) / float64(metrics.TotalExperiments) * 100
+	if metrics.TotalExperiments == 0 {
+		awaitedScore = 0
+	}
+	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
+		TraceID: traceID,
+		Name:    "experiments_awaited_percentage",
+		Value:   awaitedScore,
+		Comment: fmt.Sprintf("Percentage of experiments awaited: %d/%d", metrics.ExperimentsAwaited, metrics.TotalExperiments),
+		Source:  "API",
+	})
+
+	// Score 5: Experiments Stopped
+	stoppedScore := float64(metrics.ExperimentsStopped) / float64(metrics.TotalExperiments) * 100
+	if metrics.TotalExperiments == 0 {
+		stoppedScore = 0
+	}
+	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
+		TraceID: traceID,
+		Name:    "experiments_stopped_percentage",
+		Value:   stoppedScore,
+		Comment: fmt.Sprintf("Percentage of experiments stopped: %d/%d", metrics.ExperimentsStopped, metrics.TotalExperiments),
+		Source:  "API",
+	})
+
+	// Score 6: Experiments Not Applicable
+	naScore := float64(metrics.ExperimentsNA) / float64(metrics.TotalExperiments) * 100
+	if metrics.TotalExperiments == 0 {
+		naScore = 0
+	}
+	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
+		TraceID: traceID,
+		Name:    "experiments_na_percentage",
+		Value:   naScore,
+		Comment: fmt.Sprintf("Percentage of experiments not applicable: %d/%d", metrics.ExperimentsNA, metrics.TotalExperiments),
+		Source:  "API",
+	})
+
+	// Score 7: Total Experiments Count
+	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
+		TraceID: traceID,
+		Name:    "total_experiments_count",
+		Value:   float64(metrics.TotalExperiments),
+		Comment: fmt.Sprintf("Total number of experiments executed"),
+		Source:  "API",
+	})
+}
+
 // RunChaosWorkFlow sends workflow run request(single run workflow only) to chaos_infra on workflow re-run request
 func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData) (*model.RunChaosExperimentResponse, error) {
 	var notifyID string
@@ -681,6 +861,10 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	)
 
 	currentTime := time.Now().UnixMilli()
+	notifyID = uuid.New().String()
+
+	// Trace experiment execution start to observability backend
+	traceExperimentExecution(ctx, notifyID, workflow.ExperimentID, workflow.Name, infra, projectID)
 
 	if len(workflow.Revision) == 0 {
 		return nil, errors.New("no revisions found")
@@ -694,7 +878,6 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	if strings.ToLower(resKind) == "cronworkflow" {
 		return &model.RunChaosExperimentResponse{NotifyID: notifyID}, c.RunCronExperiment(ctx, projectID, workflow, r)
 	}
-	notifyID = uuid.New().String()
 
 	err = json.Unmarshal([]byte(workflow.Revision[0].ExperimentManifest), &workflowManifest)
 	if err != nil {
@@ -943,6 +1126,10 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 			InfraID:            workflow.InfraID,
 		}, &username, nil, "create", r)
 	}
+
+	// Trace experiment execution completion to observability backend
+	completeExperimentExecution(ctx, notifyID, workflow.ExperimentID, workflow.Name, "PASS", "Experiment workflow submitted successfully to infrastructure")
+
 	return &model.RunChaosExperimentResponse{
 		NotifyID: notifyID,
 	}, nil
@@ -1143,14 +1330,52 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	}
 
 	var workflowRunMetrics types.ExperimentRunMetrics
+	phaseLower := strings.ToLower(executionData.Phase)
+	isCompleted := event.Completed || strings.Contains(phaseLower, "completed") || strings.Contains(phaseLower, "succeeded") || strings.Contains(phaseLower, "failed") || strings.Contains(phaseLower, "error")
+	logrus.WithFields(logFields).Infof("[Tracing] Phase='%s' (lower='%s'), event.Completed=%v, isCompleted=%v", executionData.Phase, phaseLower, event.Completed, isCompleted)
 	// Resiliency Score will be calculated only if workflow execution is completed
-	if event.Completed {
+	if isCompleted {
 		workflowRunMetrics, err = c.chaosExperimentRunService.ProcessCompletedExperimentRun(executionData, event.ExperimentID, event.ExperimentRunID)
 		if err != nil {
 			logrus.WithFields(logFields).Errorf("failed to process completed workflow run %v", err)
 			return "", err
 		}
 
+	}
+
+	traceID := event.ExperimentRunID
+	logrus.WithFields(logFields).Infof("[Tracing] Initial traceID from event.ExperimentRunID: %s", traceID)
+	
+	if event.NotifyID != nil && *event.NotifyID != "" {
+		traceID = *event.NotifyID
+		logrus.WithFields(logFields).Infof("[Tracing] Using NotifyID from event: %s", traceID)
+	} else {
+		logrus.WithFields(logFields).Warn("[Tracing] No NotifyID in event, attempting database lookup")
+		// Fallback: try to get NotifyID from database if event doesn't have it
+		experimentRun, dbErr := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{
+			{"experiment_run_id", event.ExperimentRunID},
+		})
+		if dbErr == nil && experimentRun.ExperimentRunID != "" {
+			if experimentRun.NotifyID != nil && *experimentRun.NotifyID != "" {
+				traceID = *experimentRun.NotifyID
+				logrus.WithFields(logFields).Infof("[Tracing] Found NotifyID from database: %s", traceID)
+			} else {
+				logrus.WithFields(logFields).Warn("[Tracing] Database query succeeded but NotifyID is empty")
+			}
+		} else {
+			logrus.WithFields(logFields).Warnf("[Tracing] Database query failed or returned nil: %v", dbErr)
+		}
+	}
+	logrus.WithFields(logFields).Infof("[Tracing] Final traceID to use: %s", traceID)
+
+	var metricsPtr *types.ExperimentRunMetrics
+	if isCompleted {
+		metricsPtr = &workflowRunMetrics
+	}
+
+	traceExperimentObservation(ctx, traceID, event, executionData, metricsPtr)
+	if isCompleted {
+		scoreExperimentRun(ctx, traceID, metricsPtr, executionData.Phase)
 	}
 
 	//TODO check for mongo transaction

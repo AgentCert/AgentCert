@@ -1,0 +1,45 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: kubernetes
+  version: 0.1.0
+  annotations:
+    categories: Kubernetes
+    chartDescription: Injects kubernetes chaos experiment
+    executionPlane: "kubernetes"
+spec:
+  displayName: Kubernetes
+  categoryDescription: >
+    Kubernetes is an open-source system for automating deployment, scaling, and management of
+    containerized applications. It groups containers that make up an application into
+    logical units for easier management and discovery. It will install all the
+    experiments which can be used to inject chaos into containerized applications.
+  faults:
+    - name: pod-delete
+      description: It injects pod-delete chaos in a Kubernetes pod.
+      displayName: "Pod Delete"
+    - name: container-kill
+      description: It injects container-kill chaos in a Kubernetes pod .
+      displayName: "Container Kill"
+    - name: docker-service-kill
+      description: It injects docker-service-kill chaos in a Kubernetes node.
+      displayName: "Docker Service Kill"
+  keywords:
+    - Kubernetes
+  maintainers:
+    - name: ksatchit
+      email: karthik.s@harness.io
+  minKubeVersion: 1.12.0
+  links:
+    - name: Kubernetes Website
+      url: https://kubernetes.io
+    - name: Source Code
+      url: https://github.com/kubernetes/kubernetes
+    - name: Kubernetes Slack
+      url: https://slack.kubernetes.io/
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents/#kubernetes
+  icon:
+    - url: https://github.com/litmuschaos/chaos-charts/blob/master/faults/kubernetes/icons/kubernetes.png
+      mediatype: image/png

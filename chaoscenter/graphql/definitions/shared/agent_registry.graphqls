@@ -1,6 +1,20 @@
 # Agent Registry GraphQL Schema
 
 """
+EnvironmentVariable represents a key-value environment variable for agent deployment
+"""
+type EnvironmentVariable {
+  """Name of the environment variable"""
+  name: String!
+  
+  """Value of the environment variable"""
+  value: String!
+  
+  """Indicates if the value is sensitive (e.g., API keys) and should be masked in UI"""
+  isSensitive: Boolean
+}
+
+"""
 Agent represents a registered AI agent in the system with its metadata,
 capabilities, and configuration.
 """
@@ -34,6 +48,9 @@ type Agent {
   
   """Kubernetes namespace where the agent is deployed"""
   namespace: String!
+  
+  """Helm release name for Helm-deployed agents"""
+  helmReleaseName: String
   
   """Endpoint configuration for communicating with the agent"""
   endpoint: AgentEndpoint!
@@ -227,6 +244,9 @@ input RegisterAgentInput {
   
   """Optional metadata"""
   metadata: AgentMetadataInput
+  
+  """Helm release name for Helm-deployed agents"""
+  helmReleaseName: String
 }
 
 """
@@ -498,8 +518,59 @@ input DeployAgentWithHelmRequest {
   """YAML content for Helm values"""
   valuesYaml: String
   
+  """Base64-encoded Helm chart .tgz file data"""
+  chartData: String
+  
   """Kubeconfig for cluster access (optional)"""
   kubeconfig: String
+  
+  """Azure OpenAI API Key"""
+  azureOpenAIKey: String
+  
+  """Azure OpenAI Endpoint URL"""
+  azureOpenAIEndpoint: String
+  
+  """Azure OpenAI Deployment Model Name"""
+  azureOpenAIDeployment: String
+  
+  """Azure OpenAI API Version"""
+  azureOpenAIAPIVersion: String
+  
+  """Azure OpenAI Embedding Deployment Name"""
+  azureOpenAIEmbeddingDeployment: String
+}
+
+"""
+HelmValidationResponse returned from Helm deployment validation.
+Shows the merged configuration that will be deployed.
+"""
+type HelmValidationResponse {
+  """Whether the Helm chart is valid and ready to deploy"""
+  valid: Boolean!
+  
+  """Validation errors if any"""
+  errors: [String!]
+  
+  """Validation warnings (non-blocking)"""
+  warnings: [String!]
+  
+  """Merged Helm values that will be deployed"""
+  mergedValues: String
+  
+  """Release name that will be used"""
+  releaseName: String!
+  
+  """Namespace where will be deployed"""
+  namespace: String!
+  
+  """Chart path or name"""
+  chartPath: String
+  
+  """Environment variables that will be injected"""
+  environmentVariables: [EnvVariable!]
+  
+  """Validation message"""
+  message: String
 }
 
 """
@@ -519,7 +590,42 @@ type DeployAgentWithHelmResponse {
   helmReleaseName: String
   
   """Helm chart version used"""
-  helmChartVersion: String
+  helmChartVersion: String  
+  """Deployment configuration including environment variables"""
+  deploymentConfig: DeploymentConfig
+}
+
+"""Helm deployment configuration details including environment variables."""
+type DeploymentConfig {
+  """Namespace where agent is deployed"""
+  namespace: String!
+  
+  """Helm release name"""
+  releaseName: String!
+  
+  """Chart path or name"""
+  chartPath: String
+  
+  """Chart version"""
+  chartVersion: String
+  
+  """Environment variables injected into the deployment"""
+  environmentVariables: [EnvVariable!]
+  
+  """Deployment timestamp (ISO 8601 format)"""
+  deployedAt: String
+}
+
+"""Environment variable for Helm deployment."""
+type EnvVariable {
+  """Variable name"""
+  name: String!
+  
+  """Variable value (masked for sensitive values)"""
+  value: String!
+  
+  """Whether this is a sensitive value that should be masked"""
+  isSensitive: Boolean
 }
 
 """
@@ -573,6 +679,12 @@ extend type Query {
   
   """Get the taxonomy of available agent capabilities"""
   getAgentCapabilitiesTaxonomy: [CapabilityDefinition!]!
+  
+  """Get available Kubernetes namespaces for agent deployment"""
+  getKubernetesNamespaces: [String!]!
+  
+  """Get pre-populated environment variables from backend configuration (e.g., .env file)"""
+  getEnvironmentVariables: [EnvironmentVariable!]!
 }
 
 # Mutations
@@ -580,6 +692,12 @@ extend type Query {
 extend type Mutation {
   """Register a new agent in the system"""
   registerAgent(input: RegisterAgentInput!): RegisterAgentResponse!
+  
+  """Validate Helm deployment configuration before deploying"""
+  validateHelmDeployment(
+    projectID: ID!
+    request: DeployAgentWithHelmRequest!
+  ): HelmValidationResponse!
   
   """Deploy an agent using Helm chart"""
   deployAgentWithHelm(

@@ -18,13 +18,17 @@ import (
 )
 
 func AddKubernetesHTTPProbeProperties(newProbe *dbSchemaProbe.Probe, request model.ProbeRequest) *dbSchemaProbe.Probe {
+	url := ""
+	if request.KubernetesHTTPProperties.URL != nil {
+		url = *request.KubernetesHTTPProperties.URL
+	}
 	newProbe.KubernetesHTTPProperties = &dbSchemaProbe.KubernetesHTTPProbe{
 		// Common Probe Properties
 		ProbeTimeout:      request.KubernetesHTTPProperties.ProbeTimeout,
 		Interval:          request.KubernetesHTTPProperties.Interval,
 		EvaluationTimeout: request.KubernetesHTTPProperties.EvaluationTimeout,
 		// Unique Properties for HTTP Probe
-		URL:    request.KubernetesHTTPProperties.URL,
+		URL:    url,
 		Method: dbSchemaProbe.Method{},
 	}
 	// HTTP Probe -> Attempt
@@ -50,14 +54,30 @@ func AddKubernetesHTTPProbeProperties(newProbe *dbSchemaProbe.Probe, request mod
 
 	// HTTP Probe -> Method [GET or POST]
 	if request.KubernetesHTTPProperties.Method.Get != nil {
+		criteria := request.KubernetesHTTPProperties.Method.Get.Criteria
+		responseCode := request.KubernetesHTTPProperties.Method.Get.ResponseCode
+		if strings.TrimSpace(criteria) == "" {
+			criteria = "oneOf"
+		}
+		if strings.TrimSpace(responseCode) == "" {
+			responseCode = "200"
+		}
 		newProbe.KubernetesHTTPProperties.Method.GET = &dbSchemaProbe.GET{
-			Criteria:     request.KubernetesHTTPProperties.Method.Get.Criteria,
-			ResponseCode: request.KubernetesHTTPProperties.Method.Get.ResponseCode,
+			Criteria:     criteria,
+			ResponseCode: responseCode,
 		}
 	} else if request.KubernetesHTTPProperties.Method.Post != nil {
+		criteria := request.KubernetesHTTPProperties.Method.Post.Criteria
+		responseCode := request.KubernetesHTTPProperties.Method.Post.ResponseCode
+		if strings.TrimSpace(criteria) == "" {
+			criteria = "oneOf"
+		}
+		if strings.TrimSpace(responseCode) == "" {
+			responseCode = "200"
+		}
 		newProbe.KubernetesHTTPProperties.Method.POST = &dbSchemaProbe.POST{
-			Criteria:     request.KubernetesHTTPProperties.Method.Post.Criteria,
-			ResponseCode: request.KubernetesHTTPProperties.Method.Post.ResponseCode,
+			Criteria:     criteria,
+			ResponseCode: responseCode,
 		}
 
 		newProbe.KubernetesHTTPProperties.Method.POST.ContentType = request.KubernetesHTTPProperties.Method.Post.ContentType
@@ -483,14 +503,30 @@ func ProbeInputsToProbeRequestConverter(probeInputs v1alpha1.ProbeAttributes) (m
 	case model.ProbeTypeHTTPProbe:
 		method := &model.MethodRequest{}
 		if probeInputs.HTTPProbeInputs.Method.Get != nil {
+			criteria := probeInputs.HTTPProbeInputs.Method.Get.Criteria
+			responseCode := probeInputs.HTTPProbeInputs.Method.Get.ResponseCode
+			if strings.TrimSpace(criteria) == "" {
+				criteria = "oneOf"
+			}
+			if strings.TrimSpace(responseCode) == "" {
+				responseCode = "200"
+			}
 			method.Get = &model.GETRequest{
-				Criteria:     probeInputs.HTTPProbeInputs.Method.Get.Criteria,
-				ResponseCode: probeInputs.HTTPProbeInputs.Method.Get.ResponseCode,
+				Criteria:     criteria,
+				ResponseCode: responseCode,
 			}
 		} else if probeInputs.HTTPProbeInputs.Method.Post != nil {
+			criteria := probeInputs.HTTPProbeInputs.Method.Post.Criteria
+			responseCode := probeInputs.HTTPProbeInputs.Method.Post.ResponseCode
+			if strings.TrimSpace(criteria) == "" {
+				criteria = "oneOf"
+			}
+			if strings.TrimSpace(responseCode) == "" {
+				responseCode = "200"
+			}
 			method.Post = &model.POSTRequest{
-				Criteria:     probeInputs.HTTPProbeInputs.Method.Post.Criteria,
-				ResponseCode: probeInputs.HTTPProbeInputs.Method.Post.ResponseCode,
+				Criteria:     criteria,
+				ResponseCode: responseCode,
 			}
 			method.Post.ContentType = &probeInputs.HTTPProbeInputs.Method.Post.ContentType
 			method.Post.Body = &probeInputs.HTTPProbeInputs.Method.Post.Body
@@ -498,13 +534,10 @@ func ProbeInputsToProbeRequestConverter(probeInputs v1alpha1.ProbeAttributes) (m
 		} else {
 			return model.ProbeRequest{}, errors.New("GET/POST method not specified")
 		}
-		if probeInputs.HTTPProbeInputs.URL == "" {
-			return model.ProbeRequest{}, errors.New("URL not specified")
-		}
 		kubernetesHTTPProperties = &model.KubernetesHTTPProbeRequest{
 			ProbeTimeout:       probeInputs.RunProperties.ProbeTimeout,
 			Interval:           probeInputs.RunProperties.Interval,
-			URL:                probeInputs.HTTPProbeInputs.URL,
+			URL:                &probeInputs.HTTPProbeInputs.URL,
 			Method:             method,
 			Attempt:            &probeInputs.RunProperties.Attempt,
 			Retry:              &probeInputs.RunProperties.Retry,

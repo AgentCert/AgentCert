@@ -1,0 +1,46 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChartServiceVersion
+metadata:
+  name: network-policy-misconfig
+  version: 0.1.0
+  annotations:
+    categories: Security
+    vendor: LitmusChaos
+spec:
+  displayName: Network Policy Misconfig
+  categoryDescription: |
+    Network policy misconfig fault injects network policy violations on the target pods in a Kubernetes cluster.
+    - Simulates misconfigured network policies that allow unauthorized traffic
+    - Tests security posture and network access control enforcement
+    - Validates application behavior under network policy violations
+  keywords:
+    - Kubernetes
+    - Security
+    - Network Policy
+    - Chaos
+  platforms:
+    - GKE
+    - Konvoy
+    - Packet(Kubeadm)
+    - Minikube
+    - EKS
+    - AKS
+    - Kind
+    - Rancher
+    - OpenShift(OKD)
+  maintainers:
+    - name: LitmusChaos
+      email: support@litmuschaos.io
+  experiments:
+    - network-policy-misconfig
+  minKubeVersion: 1.12.0
+  labels:
+    app.kubernetes.io/component: chartserviceversion
+    app.kubernetes.io/version: ci
+  links:
+    - name: Documentation
+      url: https://litmuschaos.github.io/litmus/experiments/categories/contents
+  icon:
+    - url: /faults/security/icons/network-policy-misconfig.svg
+      mediatype: image/svg+xml

@@ -325,11 +325,69 @@ type ComplexityRoot struct {
 		Fault  func(childComplexity int) int
 	}
 
+	FaultInjectionConfig struct {
+		Duration       func(childComplexity int) int
+		InjectionType  func(childComplexity int) int
+		Interval       func(childComplexity int) int
+		Schedule       func(childComplexity int) int
+		TargetSelector func(childComplexity int) int
+	}
+
 	FaultList struct {
 		Description func(childComplexity int) int
 		DisplayName func(childComplexity int) int
 		Name        func(childComplexity int) int
 		Plan        func(childComplexity int) int
+	}
+
+	FaultSelection struct {
+		CustomParameters func(childComplexity int) int
+		Description      func(childComplexity int) int
+		DisplayName      func(childComplexity int) int
+		Enabled          func(childComplexity int) int
+		FaultCategory    func(childComplexity int) int
+		FaultName        func(childComplexity int) int
+		InjectionConfig  func(childComplexity int) int
+		Weight           func(childComplexity int) int
+	}
+
+	FaultStudio struct {
+		CreatedAt      func(childComplexity int) int
+		CreatedBy      func(childComplexity int) int
+		Description    func(childComplexity int) int
+		EnabledFaults  func(childComplexity int) int
+		ID             func(childComplexity int) int
+		IsActive       func(childComplexity int) int
+		IsRemoved      func(childComplexity int) int
+		Name           func(childComplexity int) int
+		ProjectID      func(childComplexity int) int
+		SelectedFaults func(childComplexity int) int
+		SourceHubID    func(childComplexity int) int
+		SourceHubName  func(childComplexity int) int
+		Tags           func(childComplexity int) int
+		TotalFaults    func(childComplexity int) int
+		UpdatedAt      func(childComplexity int) int
+		UpdatedBy      func(childComplexity int) int
+	}
+
+	FaultStudioStatsResponse struct {
+		ActiveFaultStudios    func(childComplexity int) int
+		TotalFaultStudios     func(childComplexity int) int
+		TotalFaultsConfigured func(childComplexity int) int
+	}
+
+	FaultStudioSummary struct {
+		CreatedAt     func(childComplexity int) int
+		Description   func(childComplexity int) int
+		EnabledFaults func(childComplexity int) int
+		ID            func(childComplexity int) int
+		IsActive      func(childComplexity int) int
+		Name          func(childComplexity int) int
+		ProjectID     func(childComplexity int) int
+		SourceHubID   func(childComplexity int) int
+		SourceHubName func(childComplexity int) int
+		TotalFaults   func(childComplexity int) int
+		UpdatedAt     func(childComplexity int) int
 	}
 
 	GET struct {
@@ -567,6 +625,11 @@ type ComplexityRoot struct {
 		TotalNoOfExperimentRuns func(childComplexity int) int
 	}
 
+	ListFaultStudioResponse struct {
+		FaultStudios func(childComplexity int) int
+		TotalCount   func(childComplexity int) int
+	}
+
 	ListInfraResponse struct {
 		Infras          func(childComplexity int) int
 		TotalNoOfInfras func(childComplexity int) int
@@ -590,17 +653,20 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AddChaosHub               func(childComplexity int, projectID string, request model.CreateChaosHubRequest) int
+		AddFaultToStudio          func(childComplexity int, projectID string, studioID string, fault model.FaultSelectionInput) int
 		AddProbe                  func(childComplexity int, request model.ProbeRequest, projectID string) int
 		AddRemoteChaosHub         func(childComplexity int, projectID string, request model.CreateRemoteChaosHub) int
 		ChaosExperimentRun        func(childComplexity int, request model.ExperimentRunRequest) int
 		ConfirmInfraRegistration  func(childComplexity int, request model.InfraIdentity) int
 		CreateChaosExperiment     func(childComplexity int, request model.ChaosExperimentRequest, projectID string) int
 		CreateEnvironment         func(childComplexity int, projectID string, request *model.CreateEnvironmentRequest) int
+		CreateFaultStudio         func(childComplexity int, projectID string, request model.CreateFaultStudioRequest) int
 		CreateImageRegistry       func(childComplexity int, projectID string, imageRegistryInfo model.ImageRegistryInput) int
 		DeleteAgent               func(childComplexity int, agentID string, hardDelete *bool) int
 		DeleteChaosExperiment     func(childComplexity int, experimentID string, experimentRunID *string, projectID string) int
 		DeleteChaosHub            func(childComplexity int, projectID string, hubID string) int
 		DeleteEnvironment         func(childComplexity int, projectID string, environmentID string) int
+		DeleteFaultStudio         func(childComplexity int, projectID string, studioID string) int
 		DeleteImageRegistry       func(childComplexity int, imageRegistryID string, projectID string) int
 		DeleteInfra               func(childComplexity int, projectID string, infraID string) int
 		DeleteProbe               func(childComplexity int, probeName string, projectID string) int
@@ -615,17 +681,22 @@ type ComplexityRoot struct {
 		PodLog                    func(childComplexity int, request model.PodLog) int
 		RegisterAgent             func(childComplexity int, input model.RegisterAgentInput) int
 		RegisterInfra             func(childComplexity int, projectID string, request model.RegisterInfraRequest) int
+		RemoveFaultFromStudio     func(childComplexity int, projectID string, studioID string, faultName string) int
 		RunChaosExperiment        func(childComplexity int, experimentID string, projectID string) int
 		SaveChaosExperiment       func(childComplexity int, request model.SaveChaosExperimentRequest, projectID string) int
 		SaveChaosHub              func(childComplexity int, projectID string, request model.CreateChaosHubRequest) int
+		SetFaultStudioActive      func(childComplexity int, projectID string, studioID string, isActive bool) int
 		StopExperimentRuns        func(childComplexity int, projectID string, experimentID string, experimentRunID *string, notifyID *string) int
 		SyncAgentToLangfuse       func(childComplexity int, agentID string) int
 		SyncChaosHub              func(childComplexity int, id string, projectID string) int
+		ToggleFaultInStudio       func(childComplexity int, projectID string, studioID string, faultName string, enabled bool) int
 		UpdateAgent               func(childComplexity int, agentID string, input model.UpdateAgentInput) int
 		UpdateChaosExperiment     func(childComplexity int, request model.ChaosExperimentRequest, projectID string) int
 		UpdateChaosHub            func(childComplexity int, projectID string, request model.UpdateChaosHubRequest) int
 		UpdateCronExperimentState func(childComplexity int, experimentID string, disable bool, projectID string) int
 		UpdateEnvironment         func(childComplexity int, projectID string, request *model.UpdateEnvironmentRequest) int
+		UpdateFaultInStudio       func(childComplexity int, projectID string, studioID string, faultName string, fault model.FaultSelectionInput) int
+		UpdateFaultStudio         func(childComplexity int, projectID string, studioID string, request model.UpdateFaultStudioRequest) int
 		UpdateGitOps              func(childComplexity int, projectID string, configurations model.GitConfig) int
 		UpdateImageRegistry       func(childComplexity int, imageRegistryID string, projectID string, imageRegistryInfo model.ImageRegistryInput) int
 		UpdateProbe               func(childComplexity int, request model.ProbeRequest, projectID string) int
@@ -720,6 +791,8 @@ type ComplexityRoot struct {
 		GetExperimentRun             func(childComplexity int, projectID string, experimentRunID *string, notifyID *string) int
 		GetExperimentRunStats        func(childComplexity int, projectID string) int
 		GetExperimentStats           func(childComplexity int, projectID string) int
+		GetFaultStudio               func(childComplexity int, projectID string, studioID string) int
+		GetFaultStudioStats          func(childComplexity int, projectID string) int
 		GetGitOpsDetails             func(childComplexity int, projectID string) int
 		GetImageRegistry             func(childComplexity int, projectID string) int
 		GetInfra                     func(childComplexity int, projectID string, infraID string) int
@@ -733,12 +806,15 @@ type ComplexityRoot struct {
 		GetProbesInExperimentRun     func(childComplexity int, projectID string, experimentRunID string, faultName string) int
 		GetServerVersion             func(childComplexity int) int
 		GetVersionDetails            func(childComplexity int, projectID string) int
+		IsFaultStudioNameAvailable   func(childComplexity int, projectID string, name string, excludeStudioID *string) int
 		ListAgents                   func(childComplexity int, filter *model.ListAgentsFilter, pagination model.PaginationInput) int
+		ListAvailableFaultsForStudio func(childComplexity int, projectID string, hubID string) int
 		ListChaosFaults              func(childComplexity int, hubID string, projectID string) int
 		ListChaosHub                 func(childComplexity int, projectID string, request *model.ListChaosHubRequest) int
 		ListEnvironments             func(childComplexity int, projectID string, request *model.ListEnvironmentRequest) int
 		ListExperiment               func(childComplexity int, projectID string, request model.ListExperimentRequest) int
 		ListExperimentRun            func(childComplexity int, projectID string, request model.ListExperimentRunRequest) int
+		ListFaultStudios             func(childComplexity int, projectID string, request *model.ListFaultStudioRequest) int
 		ListImageRegistry            func(childComplexity int, projectID string) int
 		ListInfras                   func(childComplexity int, projectID string, request *model.ListInfraRequest) int
 		ListPredefinedExperiments    func(childComplexity int, hubID string, projectID string) int
@@ -835,6 +911,12 @@ type ComplexityRoot struct {
 		SyncedAt func(childComplexity int) int
 	}
 
+	ToggleFaultResponse struct {
+		FaultStudio func(childComplexity int) int
+		Message     func(childComplexity int) int
+		Success     func(childComplexity int) int
+	}
+
 	UserDetails struct {
 		Email    func(childComplexity int) int
 		UserID   func(childComplexity int) int
@@ -879,6 +961,14 @@ type MutationResolver interface {
 	CreateEnvironment(ctx context.Context, projectID string, request *model.CreateEnvironmentRequest) (*model.Environment, error)
 	UpdateEnvironment(ctx context.Context, projectID string, request *model.UpdateEnvironmentRequest) (string, error)
 	DeleteEnvironment(ctx context.Context, projectID string, environmentID string) (string, error)
+	CreateFaultStudio(ctx context.Context, projectID string, request model.CreateFaultStudioRequest) (*model.FaultStudio, error)
+	UpdateFaultStudio(ctx context.Context, projectID string, studioID string, request model.UpdateFaultStudioRequest) (*model.FaultStudio, error)
+	DeleteFaultStudio(ctx context.Context, projectID string, studioID string) (bool, error)
+	ToggleFaultInStudio(ctx context.Context, projectID string, studioID string, faultName string, enabled bool) (*model.ToggleFaultResponse, error)
+	SetFaultStudioActive(ctx context.Context, projectID string, studioID string, isActive bool) (*model.FaultStudio, error)
+	AddFaultToStudio(ctx context.Context, projectID string, studioID string, fault model.FaultSelectionInput) (*model.FaultStudio, error)
+	RemoveFaultFromStudio(ctx context.Context, projectID string, studioID string, faultName string) (*model.FaultStudio, error)
+	UpdateFaultInStudio(ctx context.Context, projectID string, studioID string, faultName string, fault model.FaultSelectionInput) (*model.FaultStudio, error)
 	GitopsNotifier(ctx context.Context, clusterInfo model.InfraIdentity, experimentID string) (string, error)
 	EnableGitOps(ctx context.Context, projectID string, configurations model.GitConfig) (bool, error)
 	DisableGitOps(ctx context.Context, projectID string) (bool, error)
@@ -918,6 +1008,11 @@ type QueryResolver interface {
 	GetChaosHubStats(ctx context.Context, projectID string) (*model.GetChaosHubStatsResponse, error)
 	GetEnvironment(ctx context.Context, projectID string, environmentID string) (*model.Environment, error)
 	ListEnvironments(ctx context.Context, projectID string, request *model.ListEnvironmentRequest) (*model.ListEnvironmentResponse, error)
+	ListFaultStudios(ctx context.Context, projectID string, request *model.ListFaultStudioRequest) (*model.ListFaultStudioResponse, error)
+	GetFaultStudio(ctx context.Context, projectID string, studioID string) (*model.FaultStudio, error)
+	ListAvailableFaultsForStudio(ctx context.Context, projectID string, hubID string) ([]*model.Chart, error)
+	GetFaultStudioStats(ctx context.Context, projectID string) (*model.FaultStudioStatsResponse, error)
+	IsFaultStudioNameAvailable(ctx context.Context, projectID string, name string, excludeStudioID *string) (bool, error)
 	GetGitOpsDetails(ctx context.Context, projectID string) (*model.GitConfigResponse, error)
 	ListImageRegistry(ctx context.Context, projectID string) ([]*model.ImageRegistryResponse, error)
 	GetImageRegistry(ctx context.Context, projectID string) (*model.ImageRegistryResponse, error)
@@ -2341,6 +2436,41 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.FaultDetails.Fault(childComplexity), true
 
+	case "FaultInjectionConfig.duration":
+		if e.complexity.FaultInjectionConfig.Duration == nil {
+			break
+		}
+
+		return e.complexity.FaultInjectionConfig.Duration(childComplexity), true
+
+	case "FaultInjectionConfig.injectionType":
+		if e.complexity.FaultInjectionConfig.InjectionType == nil {
+			break
+		}
+
+		return e.complexity.FaultInjectionConfig.InjectionType(childComplexity), true
+
+	case "FaultInjectionConfig.interval":
+		if e.complexity.FaultInjectionConfig.Interval == nil {
+			break
+		}
+
+		return e.complexity.FaultInjectionConfig.Interval(childComplexity), true
+
+	case "FaultInjectionConfig.schedule":
+		if e.complexity.FaultInjectionConfig.Schedule == nil {
+			break
+		}
+
+		return e.complexity.FaultInjectionConfig.Schedule(childComplexity), true
+
+	case "FaultInjectionConfig.targetSelector":
+		if e.complexity.FaultInjectionConfig.TargetSelector == nil {
+			break
+		}
+
+		return e.complexity.FaultInjectionConfig.TargetSelector(childComplexity), true
+
 	case "FaultList.description":
 		if e.complexity.FaultList.Description == nil {
 			break
@@ -2368,6 +2498,272 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.FaultList.Plan(childComplexity), true
+
+	case "FaultSelection.customParameters":
+		if e.complexity.FaultSelection.CustomParameters == nil {
+			break
+		}
+
+		return e.complexity.FaultSelection.CustomParameters(childComplexity), true
+
+	case "FaultSelection.description":
+		if e.complexity.FaultSelection.Description == nil {
+			break
+		}
+
+		return e.complexity.FaultSelection.Description(childComplexity), true
+
+	case "FaultSelection.displayName":
+		if e.complexity.FaultSelection.DisplayName == nil {
+			break
+		}
+
+		return e.complexity.FaultSelection.DisplayName(childComplexity), true
+
+	case "FaultSelection.enabled":
+		if e.complexity.FaultSelection.Enabled == nil {
+			break
+		}
+
+		return e.complexity.FaultSelection.Enabled(childComplexity), true
+
+	case "FaultSelection.faultCategory":
+		if e.complexity.FaultSelection.FaultCategory == nil {
+			break
+		}
+
+		return e.complexity.FaultSelection.FaultCategory(childComplexity), true
+
+	case "FaultSelection.faultName":
+		if e.complexity.FaultSelection.FaultName == nil {
+			break
+		}
+
+		return e.complexity.FaultSelection.FaultName(childComplexity), true
+
+	case "FaultSelection.injectionConfig":
+		if e.complexity.FaultSelection.InjectionConfig == nil {
+			break
+		}
+
+		return e.complexity.FaultSelection.InjectionConfig(childComplexity), true
+
+	case "FaultSelection.weight":
+		if e.complexity.FaultSelection.Weight == nil {
+			break
+		}
+
+		return e.complexity.FaultSelection.Weight(childComplexity), true
+
+	case "FaultStudio.createdAt":
+		if e.complexity.FaultStudio.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.CreatedAt(childComplexity), true
+
+	case "FaultStudio.createdBy":
+		if e.complexity.FaultStudio.CreatedBy == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.CreatedBy(childComplexity), true
+
+	case "FaultStudio.description":
+		if e.complexity.FaultStudio.Description == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.Description(childComplexity), true
+
+	case "FaultStudio.enabledFaults":
+		if e.complexity.FaultStudio.EnabledFaults == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.EnabledFaults(childComplexity), true
+
+	case "FaultStudio.id":
+		if e.complexity.FaultStudio.ID == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.ID(childComplexity), true
+
+	case "FaultStudio.isActive":
+		if e.complexity.FaultStudio.IsActive == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.IsActive(childComplexity), true
+
+	case "FaultStudio.isRemoved":
+		if e.complexity.FaultStudio.IsRemoved == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.IsRemoved(childComplexity), true
+
+	case "FaultStudio.name":
+		if e.complexity.FaultStudio.Name == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.Name(childComplexity), true
+
+	case "FaultStudio.projectId":
+		if e.complexity.FaultStudio.ProjectID == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.ProjectID(childComplexity), true
+
+	case "FaultStudio.selectedFaults":
+		if e.complexity.FaultStudio.SelectedFaults == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.SelectedFaults(childComplexity), true
+
+	case "FaultStudio.sourceHubId":
+		if e.complexity.FaultStudio.SourceHubID == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.SourceHubID(childComplexity), true
+
+	case "FaultStudio.sourceHubName":
+		if e.complexity.FaultStudio.SourceHubName == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.SourceHubName(childComplexity), true
+
+	case "FaultStudio.tags":
+		if e.complexity.FaultStudio.Tags == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.Tags(childComplexity), true
+
+	case "FaultStudio.totalFaults":
+		if e.complexity.FaultStudio.TotalFaults == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.TotalFaults(childComplexity), true
+
+	case "FaultStudio.updatedAt":
+		if e.complexity.FaultStudio.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.UpdatedAt(childComplexity), true
+
+	case "FaultStudio.updatedBy":
+		if e.complexity.FaultStudio.UpdatedBy == nil {
+			break
+		}
+
+		return e.complexity.FaultStudio.UpdatedBy(childComplexity), true
+
+	case "FaultStudioStatsResponse.activeFaultStudios":
+		if e.complexity.FaultStudioStatsResponse.ActiveFaultStudios == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioStatsResponse.ActiveFaultStudios(childComplexity), true
+
+	case "FaultStudioStatsResponse.totalFaultStudios":
+		if e.complexity.FaultStudioStatsResponse.TotalFaultStudios == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioStatsResponse.TotalFaultStudios(childComplexity), true
+
+	case "FaultStudioStatsResponse.totalFaultsConfigured":
+		if e.complexity.FaultStudioStatsResponse.TotalFaultsConfigured == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioStatsResponse.TotalFaultsConfigured(childComplexity), true
+
+	case "FaultStudioSummary.createdAt":
+		if e.complexity.FaultStudioSummary.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.CreatedAt(childComplexity), true
+
+	case "FaultStudioSummary.description":
+		if e.complexity.FaultStudioSummary.Description == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.Description(childComplexity), true
+
+	case "FaultStudioSummary.enabledFaults":
+		if e.complexity.FaultStudioSummary.EnabledFaults == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.EnabledFaults(childComplexity), true
+
+	case "FaultStudioSummary.id":
+		if e.complexity.FaultStudioSummary.ID == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.ID(childComplexity), true
+
+	case "FaultStudioSummary.isActive":
+		if e.complexity.FaultStudioSummary.IsActive == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.IsActive(childComplexity), true
+
+	case "FaultStudioSummary.name":
+		if e.complexity.FaultStudioSummary.Name == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.Name(childComplexity), true
+
+	case "FaultStudioSummary.projectId":
+		if e.complexity.FaultStudioSummary.ProjectID == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.ProjectID(childComplexity), true
+
+	case "FaultStudioSummary.sourceHubId":
+		if e.complexity.FaultStudioSummary.SourceHubID == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.SourceHubID(childComplexity), true
+
+	case "FaultStudioSummary.sourceHubName":
+		if e.complexity.FaultStudioSummary.SourceHubName == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.SourceHubName(childComplexity), true
+
+	case "FaultStudioSummary.totalFaults":
+		if e.complexity.FaultStudioSummary.TotalFaults == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.TotalFaults(childComplexity), true
+
+	case "FaultStudioSummary.updatedAt":
+		if e.complexity.FaultStudioSummary.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.FaultStudioSummary.UpdatedAt(childComplexity), true
 
 	case "GET.criteria":
 		if e.complexity.GET.Criteria == nil {
@@ -3405,6 +3801,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ListExperimentRunResponse.TotalNoOfExperimentRuns(childComplexity), true
 
+	case "ListFaultStudioResponse.faultStudios":
+		if e.complexity.ListFaultStudioResponse.FaultStudios == nil {
+			break
+		}
+
+		return e.complexity.ListFaultStudioResponse.FaultStudios(childComplexity), true
+
+	case "ListFaultStudioResponse.totalCount":
+		if e.complexity.ListFaultStudioResponse.TotalCount == nil {
+			break
+		}
+
+		return e.complexity.ListFaultStudioResponse.TotalCount(childComplexity), true
+
 	case "ListInfraResponse.infras":
 		if e.complexity.ListInfraResponse.Infras == nil {
 			break
@@ -3480,6 +3890,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.AddChaosHub(childComplexity, args["projectID"].(string), args["request"].(model.CreateChaosHubRequest)), true
 
+	case "Mutation.addFaultToStudio":
+		if e.complexity.Mutation.AddFaultToStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addFaultToStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AddFaultToStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["fault"].(model.FaultSelectionInput)), true
+
 	case "Mutation.addProbe":
 		if e.complexity.Mutation.AddProbe == nil {
 			break
@@ -3552,6 +3974,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.CreateEnvironment(childComplexity, args["projectID"].(string), args["request"].(*model.CreateEnvironmentRequest)), true
 
+	case "Mutation.createFaultStudio":
+		if e.complexity.Mutation.CreateFaultStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createFaultStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.CreateFaultStudio(childComplexity, args["projectID"].(string), args["request"].(model.CreateFaultStudioRequest)), true
+
 	case "Mutation.createImageRegistry":
 		if e.complexity.Mutation.CreateImageRegistry == nil {
 			break
@@ -3611,6 +4045,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.DeleteEnvironment(childComplexity, args["projectID"].(string), args["environmentID"].(string)), true
+
+	case "Mutation.deleteFaultStudio":
+		if e.complexity.Mutation.DeleteFaultStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteFaultStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteFaultStudio(childComplexity, args["projectID"].(string), args["studioID"].(string)), true
 
 	case "Mutation.deleteImageRegistry":
 		if e.complexity.Mutation.DeleteImageRegistry == nil {
@@ -3775,6 +4221,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.RegisterInfra(childComplexity, args["projectID"].(string), args["request"].(model.RegisterInfraRequest)), true
 
+	case "Mutation.removeFaultFromStudio":
+		if e.complexity.Mutation.RemoveFaultFromStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_removeFaultFromStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RemoveFaultFromStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["faultName"].(string)), true
+
 	case "Mutation.runChaosExperiment":
 		if e.complexity.Mutation.RunChaosExperiment == nil {
 			break
@@ -3811,6 +4269,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.SaveChaosHub(childComplexity, args["projectID"].(string), args["request"].(model.CreateChaosHubRequest)), true
 
+	case "Mutation.setFaultStudioActive":
+		if e.complexity.Mutation.SetFaultStudioActive == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setFaultStudioActive_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.SetFaultStudioActive(childComplexity, args["projectID"].(string), args["studioID"].(string), args["isActive"].(bool)), true
+
 	case "Mutation.stopExperimentRuns":
 		if e.complexity.Mutation.StopExperimentRuns == nil {
 			break
@@ -3846,6 +4316,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.SyncChaosHub(childComplexity, args["id"].(string), args["projectID"].(string)), true
+
+	case "Mutation.toggleFaultInStudio":
+		if e.complexity.Mutation.ToggleFaultInStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_toggleFaultInStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.ToggleFaultInStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["faultName"].(string), args["enabled"].(bool)), true
 
 	case "Mutation.updateAgent":
 		if e.complexity.Mutation.UpdateAgent == nil {
@@ -3906,6 +4388,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.UpdateEnvironment(childComplexity, args["projectID"].(string), args["request"].(*model.UpdateEnvironmentRequest)), true
+
+	case "Mutation.updateFaultInStudio":
+		if e.complexity.Mutation.UpdateFaultInStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateFaultInStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpdateFaultInStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["faultName"].(string), args["fault"].(model.FaultSelectionInput)), true
+
+	case "Mutation.updateFaultStudio":
+		if e.complexity.Mutation.UpdateFaultStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateFaultStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpdateFaultStudio(childComplexity, args["projectID"].(string), args["studioID"].(string), args["request"].(model.UpdateFaultStudioRequest)), true
 
 	case "Mutation.updateGitOps":
 		if e.complexity.Mutation.UpdateGitOps == nil {
@@ -4430,6 +4936,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.GetExperimentStats(childComplexity, args["projectID"].(string)), true
 
+	case "Query.getFaultStudio":
+		if e.complexity.Query.GetFaultStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getFaultStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetFaultStudio(childComplexity, args["projectID"].(string), args["studioID"].(string)), true
+
+	case "Query.getFaultStudioStats":
+		if e.complexity.Query.GetFaultStudioStats == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getFaultStudioStats_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetFaultStudioStats(childComplexity, args["projectID"].(string)), true
+
 	case "Query.getGitOpsDetails":
 		if e.complexity.Query.GetGitOpsDetails == nil {
 			break
@@ -4581,6 +5111,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.GetVersionDetails(childComplexity, args["projectID"].(string)), true
 
+	case "Query.isFaultStudioNameAvailable":
+		if e.complexity.Query.IsFaultStudioNameAvailable == nil {
+			break
+		}
+
+		args, err := ec.field_Query_isFaultStudioNameAvailable_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.IsFaultStudioNameAvailable(childComplexity, args["projectID"].(string), args["name"].(string), args["excludeStudioID"].(*string)), true
+
 	case "Query.listAgents":
 		if e.complexity.Query.ListAgents == nil {
 			break
@@ -4592,6 +5134,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.ListAgents(childComplexity, args["filter"].(*model.ListAgentsFilter), args["pagination"].(model.PaginationInput)), true
+
+	case "Query.listAvailableFaultsForStudio":
+		if e.complexity.Query.ListAvailableFaultsForStudio == nil {
+			break
+		}
+
+		args, err := ec.field_Query_listAvailableFaultsForStudio_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.ListAvailableFaultsForStudio(childComplexity, args["projectID"].(string), args["hubId"].(string)), true
 
 	case "Query.listChaosFaults":
 		if e.complexity.Query.ListChaosFaults == nil {
@@ -4652,6 +5206,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.ListExperimentRun(childComplexity, args["projectID"].(string), args["request"].(model.ListExperimentRunRequest)), true
+
+	case "Query.listFaultStudios":
+		if e.complexity.Query.ListFaultStudios == nil {
+			break
+		}
+
+		args, err := ec.field_Query_listFaultStudios_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.ListFaultStudios(childComplexity, args["projectID"].(string), args["request"].(*model.ListFaultStudioRequest)), true
 
 	case "Query.listImageRegistry":
 		if e.complexity.Query.ListImageRegistry == nil {
@@ -5088,6 +5654,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.SyncResponse.SyncedAt(childComplexity), true
 
+	case "ToggleFaultResponse.faultStudio":
+		if e.complexity.ToggleFaultResponse.FaultStudio == nil {
+			break
+		}
+
+		return e.complexity.ToggleFaultResponse.FaultStudio(childComplexity), true
+
+	case "ToggleFaultResponse.message":
+		if e.complexity.ToggleFaultResponse.Message == nil {
+			break
+		}
+
+		return e.complexity.ToggleFaultResponse.Message(childComplexity), true
+
+	case "ToggleFaultResponse.success":
+		if e.complexity.ToggleFaultResponse.Success == nil {
+			break
+		}
+
+		return e.complexity.ToggleFaultResponse.Success(childComplexity), true
+
 	case "UserDetails.email":
 		if e.complexity.UserDetails.Email == nil {
 			break
@@ -5141,6 +5728,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputContainerImageInput,
 		ec.unmarshalInputCreateChaosHubRequest,
 		ec.unmarshalInputCreateEnvironmentRequest,
+		ec.unmarshalInputCreateFaultStudioRequest,
 		ec.unmarshalInputCreateRemoteChaosHub,
 		ec.unmarshalInputDateRange,
 		ec.unmarshalInputDeployAgentWithHelmRequest,
@@ -5152,6 +5740,9 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputExperimentRunRequest,
 		ec.unmarshalInputExperimentRunSortInput,
 		ec.unmarshalInputExperimentSortInput,
+		ec.unmarshalInputFaultInjectionConfigInput,
+		ec.unmarshalInputFaultSelectionInput,
+		ec.unmarshalInputFaultStudioFilterInput,
 		ec.unmarshalInputGETRequest,
 		ec.unmarshalInputGetProbeYAMLRequest,
 		ec.unmarshalInputGitConfig,
@@ -5174,6 +5765,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputListEnvironmentRequest,
 		ec.unmarshalInputListExperimentRequest,
 		ec.unmarshalInputListExperimentRunRequest,
+		ec.unmarshalInputListFaultStudioRequest,
 		ec.unmarshalInputListInfraRequest,
 		ec.unmarshalInputMethodRequest,
 		ec.unmarshalInputNewInfraEventRequest,
@@ -5192,6 +5784,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputUpdateAgentInput,
 		ec.unmarshalInputUpdateChaosHubRequest,
 		ec.unmarshalInputUpdateEnvironmentRequest,
+		ec.unmarshalInputUpdateFaultStudioRequest,
 		ec.unmarshalInputWeightagesInput,
 		ec.unmarshalInputWorkload,
 	)
@@ -8291,6 +8884,454 @@ extend type Mutation{
     updateEnvironment( projectID:ID!,request:UpdateEnvironmentRequest): String! @authorized
     deleteEnvironment(projectID:ID!,environmentID: ID!): String! @authorized
 }`, BuiltIn: false},
+	{Name: "../../../definitions/shared/fault_studio.graphqls", Input: `# Fault Studio GraphQL Schema
+# Fault Studio enables configuration of fault categories and types for AI agent testing
+
+"""
+InjectionType represents how a fault should be injected during agent testing.
+"""
+enum InjectionType {
+  """Fault is injected based on a cron schedule"""
+  SCHEDULED
+  
+  """Fault is injected manually on demand"""
+  ON_DEMAND
+  
+  """Fault is continuously active during the test"""
+  CONTINUOUS
+}
+
+"""
+FaultInjectionConfig contains configuration for how and when a fault should be injected.
+"""
+type FaultInjectionConfig {
+  """Type of injection timing"""
+  injectionType: InjectionType!
+  
+  """Cron expression for scheduled injection (e.g., '0 */5 * * *')"""
+  schedule: String
+  
+  """Duration of the fault injection (e.g., '30s', '5m')"""
+  duration: String
+  
+  """Kubernetes selector for targeting specific pods/nodes"""
+  targetSelector: String
+  
+  """Interval between repeated injections"""
+  interval: String
+}
+
+"""
+FaultInjectionConfigInput is the input type for FaultInjectionConfig.
+"""
+input FaultInjectionConfigInput {
+  """Type of injection timing"""
+  injectionType: InjectionType!
+  
+  """Cron expression for scheduled injection"""
+  schedule: String
+  
+  """Duration of the fault injection"""
+  duration: String
+  
+  """Kubernetes selector for targeting"""
+  targetSelector: String
+  
+  """Interval between injections"""
+  interval: String
+}
+
+"""
+FaultSelection represents a single fault selected from a ChaosHub for inclusion in a Fault Studio.
+"""
+type FaultSelection {
+  "Category of the fault (e.g., 'kubernetes', 'aws', 'azure', 'gcp', 'network')"
+  faultCategory: String!
+  
+  """Internal name of the fault"""
+  faultName: String!
+  
+  """Human-readable display name"""
+  displayName: String!
+  
+  """Description of what the fault does"""
+  description: String
+  
+  """Whether this fault is currently enabled in the studio"""
+  enabled: Boolean!
+  
+  """Configuration for how the fault should be injected"""
+  injectionConfig: FaultInjectionConfig
+  
+  """Custom parameters to override default fault settings (JSON string)"""
+  customParameters: String
+  
+  """Priority/weight for fault selection (higher = more likely)"""
+  weight: Int!
+}
+
+"""
+FaultSelectionInput is the input type for creating/updating fault selections.
+"""
+input FaultSelectionInput {
+  """Category of the fault (e.g., 'kubernetes', 'aws', 'azure', 'gcp', 'network')"""
+  faultCategory: String!
+  
+  """Internal name of the fault"""
+  faultName: String!
+  
+  """Human-readable display name"""
+  displayName: String!
+  
+  """Description of what the fault does"""
+  description: String
+  
+  """Whether this fault is enabled"""
+  enabled: Boolean!
+  
+  """Injection configuration"""
+  injectionConfig: FaultInjectionConfigInput
+  
+  """Custom parameters as JSON string"""
+  customParameters: String
+  
+  """Priority/weight for fault selection"""
+  weight: Int
+}
+
+"""
+FaultStudio represents a configured collection of faults from a ChaosHub
+that can be used for AI agent testing and benchmarking.
+"""
+type FaultStudio implements ResourceDetails & Audit {
+  """Unique identifier for the fault studio"""
+  id: ID!
+  
+  """Name of the fault studio"""
+  name: String!
+  
+  """Description of the fault studio's purpose"""
+  description: String
+  
+  """Tags for categorization"""
+  tags: [String!]
+  
+  """Project ID that owns this fault studio"""
+  projectId: ID!
+  
+  """ID of the source ChaosHub from which faults are selected"""
+  sourceHubId: ID!
+  
+  """Name of the source ChaosHub (cached for display)"""
+  sourceHubName: String!
+  
+  """List of selected and configured faults"""
+  selectedFaults: [FaultSelection!]!
+  
+  """Whether the fault studio is currently active"""
+  isActive: Boolean!
+  
+  """Total number of faults in the studio"""
+  totalFaults: Int!
+  
+  """Number of enabled faults"""
+  enabledFaults: Int!
+  
+  """Whether the fault studio has been deleted (soft delete)"""
+  isRemoved: Boolean!
+  
+  """Timestamp when the fault studio was created"""
+  createdAt: String!
+  
+  """Timestamp when the fault studio was last updated"""
+  updatedAt: String!
+  
+  """User who created the fault studio"""
+  createdBy: UserDetails
+  
+  """User who last updated the fault studio"""
+  updatedBy: UserDetails
+}
+
+"""
+FaultStudioSummary is a lightweight view of a fault studio for list operations.
+"""
+type FaultStudioSummary {
+  """Unique identifier"""
+  id: ID!
+  
+  """Name of the fault studio"""
+  name: String!
+  
+  """Description"""
+  description: String
+  
+  """Project ID"""
+  projectId: ID!
+  
+  """Source ChaosHub ID"""
+  sourceHubId: ID!
+  
+  """Source ChaosHub name"""
+  sourceHubName: String!
+  
+  """Total number of faults"""
+  totalFaults: Int!
+  
+  """Number of enabled faults"""
+  enabledFaults: Int!
+  
+  """Whether the studio is active"""
+  isActive: Boolean!
+  
+  """Creation timestamp"""
+  createdAt: String!
+  
+  """Last update timestamp"""
+  updatedAt: String!
+}
+
+"""
+CreateFaultStudioRequest contains the data needed to create a new fault studio.
+"""
+input CreateFaultStudioRequest {
+  """Name of the fault studio (must be unique within project)"""
+  name: String!
+  
+  """Optional description"""
+  description: String
+  
+  """Tags for categorization"""
+  tags: [String!]
+  
+  """ID of the source ChaosHub"""
+  sourceHubId: ID!
+  
+  """Initial list of selected faults"""
+  selectedFaults: [FaultSelectionInput!]!
+  
+  """Whether the studio should be active upon creation"""
+  isActive: Boolean
+}
+
+"""
+UpdateFaultStudioRequest contains the data for updating an existing fault studio.
+"""
+input UpdateFaultStudioRequest {
+  """Updated name (optional)"""
+  name: String
+  
+  """Updated description (optional)"""
+  description: String
+  
+  """Updated tags (optional)"""
+  tags: [String!]
+  
+  """Updated list of selected faults (optional - replaces entire list)"""
+  selectedFaults: [FaultSelectionInput!]
+  
+  """Updated active status (optional)"""
+  isActive: Boolean
+}
+
+"""
+FaultStudioFilterInput provides filtering options for listing fault studios.
+"""
+input FaultStudioFilterInput {
+  """Filter by fault studio name (partial match)"""
+  name: String
+  
+  """Filter by source ChaosHub ID"""
+  sourceHubId: ID
+  
+  """Filter by active status"""
+  isActive: Boolean
+  
+  """Filter by tags (match any)"""
+  tags: [String!]
+}
+
+"""
+ListFaultStudioRequest contains parameters for listing fault studios.
+"""
+input ListFaultStudioRequest {
+  """Optional list of specific studio IDs to retrieve"""
+  studioIds: [ID!]
+  
+  """Filter options"""
+  filter: FaultStudioFilterInput
+  
+  """Pagination: number of items to return"""
+  limit: Int
+  
+  """Pagination: number of items to skip"""
+  offset: Int
+}
+
+"""
+ListFaultStudioResponse contains the paginated list of fault studios.
+"""
+type ListFaultStudioResponse {
+  """Total count of fault studios matching the filter"""
+  totalCount: Int!
+  
+  """List of fault studio summaries"""
+  faultStudios: [FaultStudioSummary!]!
+}
+
+"""
+FaultStudioStatsResponse contains statistics about fault studios in a project.
+"""
+type FaultStudioStatsResponse {
+  """Total number of fault studios"""
+  totalFaultStudios: Int!
+  
+  """Number of active fault studios"""
+  activeFaultStudios: Int!
+  
+  """Total number of faults across all studios"""
+  totalFaultsConfigured: Int!
+}
+
+"""
+ToggleFaultResponse is returned after enabling/disabling a fault in a studio.
+"""
+type ToggleFaultResponse {
+  """The updated fault studio"""
+  faultStudio: FaultStudio!
+  
+  """Whether the operation was successful"""
+  success: Boolean!
+  
+  """Optional message about the operation"""
+  message: String
+}
+
+# ================== QUERIES ==================
+
+extend type Query {
+  # FAULT STUDIO OPERATIONS
+  
+  """
+  List all fault studios for a project with optional filtering and pagination.
+  """
+  listFaultStudios(
+    projectID: ID!
+    request: ListFaultStudioRequest
+  ): ListFaultStudioResponse! @authorized
+  
+  """
+  Get a single fault studio by its ID.
+  """
+  getFaultStudio(
+    projectID: ID!
+    studioID: ID!
+  ): FaultStudio! @authorized
+  
+  """
+  List available faults from a ChaosHub that can be added to a fault studio.
+  This reuses the existing ChaosHub listChaosFaults query internally.
+  """
+  listAvailableFaultsForStudio(
+    projectID: ID!
+    hubId: ID!
+  ): [Chart!]! @authorized
+  
+  """
+  Get statistics about fault studios in a project.
+  """
+  getFaultStudioStats(
+    projectID: ID!
+  ): FaultStudioStatsResponse! @authorized
+  
+  """
+  Check if a fault studio name is available (unique within project).
+  """
+  isFaultStudioNameAvailable(
+    projectID: ID!
+    name: String!
+    excludeStudioID: ID
+  ): Boolean! @authorized
+}
+
+# ================== MUTATIONS ==================
+
+extend type Mutation {
+  # FAULT STUDIO OPERATIONS
+  
+  """
+  Create a new fault studio with selected faults from a ChaosHub.
+  """
+  createFaultStudio(
+    projectID: ID!
+    request: CreateFaultStudioRequest!
+  ): FaultStudio! @authorized
+  
+  """
+  Update an existing fault studio's configuration.
+  """
+  updateFaultStudio(
+    projectID: ID!
+    studioID: ID!
+    request: UpdateFaultStudioRequest!
+  ): FaultStudio! @authorized
+  
+  """
+  Delete a fault studio (soft delete).
+  """
+  deleteFaultStudio(
+    projectID: ID!
+    studioID: ID!
+  ): Boolean! @authorized
+  
+  """
+  Toggle the enabled status of a specific fault within a studio.
+  """
+  toggleFaultInStudio(
+    projectID: ID!
+    studioID: ID!
+    faultName: String!
+    enabled: Boolean!
+  ): ToggleFaultResponse! @authorized
+  
+  """
+  Activate or deactivate an entire fault studio.
+  """
+  setFaultStudioActive(
+    projectID: ID!
+    studioID: ID!
+    isActive: Boolean!
+  ): FaultStudio! @authorized
+  
+  """
+  Add a new fault to an existing fault studio.
+  """
+  addFaultToStudio(
+    projectID: ID!
+    studioID: ID!
+    fault: FaultSelectionInput!
+  ): FaultStudio! @authorized
+  
+  """
+  Remove a fault from a fault studio.
+  """
+  removeFaultFromStudio(
+    projectID: ID!
+    studioID: ID!
+    faultName: String!
+  ): FaultStudio! @authorized
+  
+  """
+  Update configuration for a specific fault within a studio.
+  """
+  updateFaultInStudio(
+    projectID: ID!
+    studioID: ID!
+    faultName: String!
+    fault: FaultSelectionInput!
+  ): FaultStudio! @authorized
+}
+`, BuiltIn: false},
 	{Name: "../../../definitions/shared/gitops.graphqls", Input: `
 """
 Defines the SSHKey details
@@ -9718,6 +10759,39 @@ func (ec *executionContext) field_Mutation_addChaosHub_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_addFaultToStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["studioID"] = arg1
+	var arg2 model.FaultSelectionInput
+	if tmp, ok := rawArgs["fault"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fault"))
+		arg2, err = ec.unmarshalNFaultSelectionInput2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInput(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["fault"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_addProbe_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -9836,6 +10910,30 @@ func (ec *executionContext) field_Mutation_createEnvironment_args(ctx context.Co
 	if tmp, ok := rawArgs["request"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("request"))
 		arg1, err = ec.unmarshalOCreateEnvironmentRequest2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCreateEnvironmentRequest(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["request"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createFaultStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 model.CreateFaultStudioRequest
+	if tmp, ok := rawArgs["request"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("request"))
+		arg1, err = ec.unmarshalNCreateFaultStudioRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCreateFaultStudioRequest(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -9970,6 +11068,30 @@ func (ec *executionContext) field_Mutation_deleteEnvironment_args(ctx context.Co
 		}
 	}
 	args["environmentID"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteFaultStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["studioID"] = arg1
 	return args, nil
 }
 
@@ -10249,6 +11371,39 @@ func (ec *executionContext) field_Mutation_registerInfra_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_removeFaultFromStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["studioID"] = arg1
+	var arg2 string
+	if tmp, ok := rawArgs["faultName"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("faultName"))
+		arg2, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["faultName"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_runChaosExperiment_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -10318,6 +11473,39 @@ func (ec *executionContext) field_Mutation_saveChaosHub_args(ctx context.Context
 		}
 	}
 	args["request"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setFaultStudioActive_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["studioID"] = arg1
+	var arg2 bool
+	if tmp, ok := rawArgs["isActive"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("isActive"))
+		arg2, err = ec.unmarshalNBoolean2bool(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["isActive"] = arg2
 	return args, nil
 }
 
@@ -10399,6 +11587,48 @@ func (ec *executionContext) field_Mutation_syncChaosHub_args(ctx context.Context
 		}
 	}
 	args["projectID"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_toggleFaultInStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["studioID"] = arg1
+	var arg2 string
+	if tmp, ok := rawArgs["faultName"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("faultName"))
+		arg2, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["faultName"] = arg2
+	var arg3 bool
+	if tmp, ok := rawArgs["enabled"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("enabled"))
+		arg3, err = ec.unmarshalNBoolean2bool(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["enabled"] = arg3
 	return args, nil
 }
 
@@ -10528,6 +11758,81 @@ func (ec *executionContext) field_Mutation_updateEnvironment_args(ctx context.Co
 		}
 	}
 	args["request"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateFaultInStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["studioID"] = arg1
+	var arg2 string
+	if tmp, ok := rawArgs["faultName"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("faultName"))
+		arg2, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["faultName"] = arg2
+	var arg3 model.FaultSelectionInput
+	if tmp, ok := rawArgs["fault"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("fault"))
+		arg3, err = ec.unmarshalNFaultSelectionInput2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInput(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["fault"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateFaultStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["studioID"] = arg1
+	var arg2 model.UpdateFaultStudioRequest
+	if tmp, ok := rawArgs["request"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("request"))
+		arg2, err = ec.unmarshalNUpdateFaultStudioRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUpdateFaultStudioRequest(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["request"] = arg2
 	return args, nil
 }
 
@@ -10870,6 +12175,45 @@ func (ec *executionContext) field_Query_getExperiment_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_getFaultStudioStats_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getFaultStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["studioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioID"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["studioID"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_getGitOpsDetails_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -11149,6 +12493,39 @@ func (ec *executionContext) field_Query_getVersionDetails_args(ctx context.Conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_isFaultStudioNameAvailable_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["name"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["name"] = arg1
+	var arg2 *string
+	if tmp, ok := rawArgs["excludeStudioID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("excludeStudioID"))
+		arg2, err = ec.unmarshalOID2ᚖstring(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["excludeStudioID"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_listAgents_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -11170,6 +12547,30 @@ func (ec *executionContext) field_Query_listAgents_args(ctx context.Context, raw
 		}
 	}
 	args["pagination"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_listAvailableFaultsForStudio_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["hubId"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("hubId"))
+		arg1, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["hubId"] = arg1
 	return args, nil
 }
 
@@ -11285,6 +12686,30 @@ func (ec *executionContext) field_Query_listExperiment_args(ctx context.Context,
 	if tmp, ok := rawArgs["request"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("request"))
 		arg1, err = ec.unmarshalNListExperimentRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListExperimentRequest(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["request"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_listFaultStudios_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 *model.ListFaultStudioRequest
+	if tmp, ok := rawArgs["request"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("request"))
+		arg1, err = ec.unmarshalOListFaultStudioRequest2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListFaultStudioRequest(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -20458,6 +21883,214 @@ func (ec *executionContext) fieldContext_FaultDetails_csv(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _FaultInjectionConfig_injectionType(ctx context.Context, field graphql.CollectedField, obj *model.FaultInjectionConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultInjectionConfig_injectionType(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.InjectionType, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.InjectionType)
+	fc.Result = res
+	return ec.marshalNInjectionType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐInjectionType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultInjectionConfig_injectionType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultInjectionConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type InjectionType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultInjectionConfig_schedule(ctx context.Context, field graphql.CollectedField, obj *model.FaultInjectionConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultInjectionConfig_schedule(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Schedule, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultInjectionConfig_schedule(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultInjectionConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultInjectionConfig_duration(ctx context.Context, field graphql.CollectedField, obj *model.FaultInjectionConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultInjectionConfig_duration(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Duration, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultInjectionConfig_duration(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultInjectionConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultInjectionConfig_targetSelector(ctx context.Context, field graphql.CollectedField, obj *model.FaultInjectionConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultInjectionConfig_targetSelector(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TargetSelector, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultInjectionConfig_targetSelector(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultInjectionConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultInjectionConfig_interval(ctx context.Context, field graphql.CollectedField, obj *model.FaultInjectionConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultInjectionConfig_interval(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Interval, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultInjectionConfig_interval(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultInjectionConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _FaultList_name(ctx context.Context, field graphql.CollectedField, obj *model.FaultList) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_FaultList_name(ctx, field)
 	if err != nil {
@@ -20621,6 +22254,1700 @@ func (ec *executionContext) _FaultList_plan(ctx context.Context, field graphql.C
 func (ec *executionContext) fieldContext_FaultList_plan(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "FaultList",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultSelection_faultCategory(ctx context.Context, field graphql.CollectedField, obj *model.FaultSelection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultSelection_faultCategory(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FaultCategory, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultSelection_faultCategory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultSelection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultSelection_faultName(ctx context.Context, field graphql.CollectedField, obj *model.FaultSelection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultSelection_faultName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FaultName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultSelection_faultName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultSelection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultSelection_displayName(ctx context.Context, field graphql.CollectedField, obj *model.FaultSelection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultSelection_displayName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DisplayName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultSelection_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultSelection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultSelection_description(ctx context.Context, field graphql.CollectedField, obj *model.FaultSelection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultSelection_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultSelection_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultSelection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultSelection_enabled(ctx context.Context, field graphql.CollectedField, obj *model.FaultSelection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultSelection_enabled(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Enabled, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultSelection_enabled(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultSelection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultSelection_injectionConfig(ctx context.Context, field graphql.CollectedField, obj *model.FaultSelection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultSelection_injectionConfig(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.InjectionConfig, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultInjectionConfig)
+	fc.Result = res
+	return ec.marshalOFaultInjectionConfig2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultInjectionConfig(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultSelection_injectionConfig(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultSelection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "injectionType":
+				return ec.fieldContext_FaultInjectionConfig_injectionType(ctx, field)
+			case "schedule":
+				return ec.fieldContext_FaultInjectionConfig_schedule(ctx, field)
+			case "duration":
+				return ec.fieldContext_FaultInjectionConfig_duration(ctx, field)
+			case "targetSelector":
+				return ec.fieldContext_FaultInjectionConfig_targetSelector(ctx, field)
+			case "interval":
+				return ec.fieldContext_FaultInjectionConfig_interval(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultInjectionConfig", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultSelection_customParameters(ctx context.Context, field graphql.CollectedField, obj *model.FaultSelection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultSelection_customParameters(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CustomParameters, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultSelection_customParameters(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultSelection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultSelection_weight(ctx context.Context, field graphql.CollectedField, obj *model.FaultSelection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultSelection_weight(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Weight, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultSelection_weight(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultSelection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_id(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_name(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_description(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_tags(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_tags(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Tags, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_tags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_projectId(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_projectId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ProjectID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_projectId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_sourceHubId(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SourceHubID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_sourceHubId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_sourceHubName(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SourceHubName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_sourceHubName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_selectedFaults(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SelectedFaults, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.FaultSelection)
+	fc.Result = res
+	return ec.marshalNFaultSelection2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_selectedFaults(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "faultCategory":
+				return ec.fieldContext_FaultSelection_faultCategory(ctx, field)
+			case "faultName":
+				return ec.fieldContext_FaultSelection_faultName(ctx, field)
+			case "displayName":
+				return ec.fieldContext_FaultSelection_displayName(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultSelection_description(ctx, field)
+			case "enabled":
+				return ec.fieldContext_FaultSelection_enabled(ctx, field)
+			case "injectionConfig":
+				return ec.fieldContext_FaultSelection_injectionConfig(ctx, field)
+			case "customParameters":
+				return ec.fieldContext_FaultSelection_customParameters(ctx, field)
+			case "weight":
+				return ec.fieldContext_FaultSelection_weight(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultSelection", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_isActive(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_isActive(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsActive, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_isActive(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_totalFaults(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalFaults, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_totalFaults(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_enabledFaults(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.EnabledFaults, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_enabledFaults(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_isRemoved(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsRemoved, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_isRemoved(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_createdBy(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_createdBy(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedBy, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.UserDetails)
+	fc.Result = res
+	return ec.marshalOUserDetails2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUserDetails(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "userID":
+				return ec.fieldContext_UserDetails_userID(ctx, field)
+			case "username":
+				return ec.fieldContext_UserDetails_username(ctx, field)
+			case "email":
+				return ec.fieldContext_UserDetails_email(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserDetails", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudio_updatedBy(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudio) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedBy, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.UserDetails)
+	fc.Result = res
+	return ec.marshalOUserDetails2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUserDetails(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudio_updatedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudio",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "userID":
+				return ec.fieldContext_UserDetails_userID(ctx, field)
+			case "username":
+				return ec.fieldContext_UserDetails_username(ctx, field)
+			case "email":
+				return ec.fieldContext_UserDetails_email(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserDetails", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioStatsResponse_totalFaultStudios(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioStatsResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioStatsResponse_totalFaultStudios(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalFaultStudios, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioStatsResponse_totalFaultStudios(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioStatsResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioStatsResponse_activeFaultStudios(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioStatsResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioStatsResponse_activeFaultStudios(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ActiveFaultStudios, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioStatsResponse_activeFaultStudios(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioStatsResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioStatsResponse_totalFaultsConfigured(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioStatsResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioStatsResponse_totalFaultsConfigured(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalFaultsConfigured, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioStatsResponse_totalFaultsConfigured(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioStatsResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_id(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_name(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_description(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_projectId(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_projectId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ProjectID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_projectId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_sourceHubId(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_sourceHubId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SourceHubID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_sourceHubId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_sourceHubName(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_sourceHubName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SourceHubName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_sourceHubName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_totalFaults(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_totalFaults(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalFaults, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_totalFaults(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_enabledFaults(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_enabledFaults(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.EnabledFaults, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_enabledFaults(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_isActive(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_isActive(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsActive, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_isActive(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultStudioSummary_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.FaultStudioSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultStudioSummary_updatedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultStudioSummary_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultStudioSummary",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -27322,6 +30649,118 @@ func (ec *executionContext) fieldContext_ListExperimentRunResponse_experimentRun
 	return fc, nil
 }
 
+func (ec *executionContext) _ListFaultStudioResponse_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.ListFaultStudioResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ListFaultStudioResponse_totalCount(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalCount, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ListFaultStudioResponse_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ListFaultStudioResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ListFaultStudioResponse_faultStudios(ctx context.Context, field graphql.CollectedField, obj *model.ListFaultStudioResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ListFaultStudioResponse_faultStudios(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FaultStudios, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.FaultStudioSummary)
+	fc.Result = res
+	return ec.marshalNFaultStudioSummary2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioSummaryᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ListFaultStudioResponse_faultStudios(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ListFaultStudioResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudioSummary_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudioSummary_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudioSummary_description(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudioSummary_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudioSummary_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudioSummary_sourceHubName(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudioSummary_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudioSummary_enabledFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudioSummary_isActive(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudioSummary_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudioSummary_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudioSummary", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ListInfraResponse_totalNoOfInfras(ctx context.Context, field graphql.CollectedField, obj *model.ListInfraResponse) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ListInfraResponse_totalNoOfInfras(ctx, field)
 	if err != nil {
@@ -30093,6 +33532,818 @@ func (ec *executionContext) fieldContext_Mutation_deleteEnvironment(ctx context.
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteEnvironment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createFaultStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_createFaultStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Mutation().CreateFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["request"].(model.CreateFaultStudioRequest))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultStudio); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultStudio`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudio)
+	fc.Result = res
+	return ec.marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createFaultStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudio_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudio_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudio_description(ctx, field)
+			case "tags":
+				return ec.fieldContext_FaultStudio_tags(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudio_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+			case "selectedFaults":
+				return ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudio_isActive(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+			case "isRemoved":
+				return ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudio_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_FaultStudio_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudio", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createFaultStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateFaultStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_updateFaultStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Mutation().UpdateFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["request"].(model.UpdateFaultStudioRequest))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultStudio); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultStudio`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudio)
+	fc.Result = res
+	return ec.marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateFaultStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudio_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudio_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudio_description(ctx, field)
+			case "tags":
+				return ec.fieldContext_FaultStudio_tags(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudio_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+			case "selectedFaults":
+				return ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudio_isActive(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+			case "isRemoved":
+				return ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudio_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_FaultStudio_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudio", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateFaultStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteFaultStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_deleteFaultStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Mutation().DeleteFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(bool); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be bool`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteFaultStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteFaultStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_toggleFaultInStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_toggleFaultInStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Mutation().ToggleFaultInStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["faultName"].(string), fc.Args["enabled"].(bool))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.ToggleFaultResponse); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.ToggleFaultResponse`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.ToggleFaultResponse)
+	fc.Result = res
+	return ec.marshalNToggleFaultResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐToggleFaultResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_toggleFaultInStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "faultStudio":
+				return ec.fieldContext_ToggleFaultResponse_faultStudio(ctx, field)
+			case "success":
+				return ec.fieldContext_ToggleFaultResponse_success(ctx, field)
+			case "message":
+				return ec.fieldContext_ToggleFaultResponse_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ToggleFaultResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_toggleFaultInStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setFaultStudioActive(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_setFaultStudioActive(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Mutation().SetFaultStudioActive(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["isActive"].(bool))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultStudio); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultStudio`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudio)
+	fc.Result = res
+	return ec.marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setFaultStudioActive(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudio_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudio_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudio_description(ctx, field)
+			case "tags":
+				return ec.fieldContext_FaultStudio_tags(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudio_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+			case "selectedFaults":
+				return ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudio_isActive(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+			case "isRemoved":
+				return ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudio_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_FaultStudio_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudio", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setFaultStudioActive_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addFaultToStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_addFaultToStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Mutation().AddFaultToStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["fault"].(model.FaultSelectionInput))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultStudio); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultStudio`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudio)
+	fc.Result = res
+	return ec.marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addFaultToStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudio_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudio_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudio_description(ctx, field)
+			case "tags":
+				return ec.fieldContext_FaultStudio_tags(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudio_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+			case "selectedFaults":
+				return ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudio_isActive(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+			case "isRemoved":
+				return ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudio_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_FaultStudio_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudio", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addFaultToStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_removeFaultFromStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_removeFaultFromStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Mutation().RemoveFaultFromStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["faultName"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultStudio); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultStudio`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudio)
+	fc.Result = res
+	return ec.marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_removeFaultFromStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudio_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudio_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudio_description(ctx, field)
+			case "tags":
+				return ec.fieldContext_FaultStudio_tags(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudio_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+			case "selectedFaults":
+				return ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudio_isActive(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+			case "isRemoved":
+				return ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudio_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_FaultStudio_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudio", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_removeFaultFromStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateFaultInStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_updateFaultInStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Mutation().UpdateFaultInStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string), fc.Args["faultName"].(string), fc.Args["fault"].(model.FaultSelectionInput))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultStudio); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultStudio`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudio)
+	fc.Result = res
+	return ec.marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateFaultInStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudio_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudio_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudio_description(ctx, field)
+			case "tags":
+				return ec.fieldContext_FaultStudio_tags(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudio_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+			case "selectedFaults":
+				return ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudio_isActive(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+			case "isRemoved":
+				return ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudio_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_FaultStudio_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudio", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateFaultInStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -35376,6 +39627,441 @@ func (ec *executionContext) fieldContext_Query_listEnvironments(ctx context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_listFaultStudios(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_listFaultStudios(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().ListFaultStudios(rctx, fc.Args["projectID"].(string), fc.Args["request"].(*model.ListFaultStudioRequest))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.ListFaultStudioResponse); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.ListFaultStudioResponse`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.ListFaultStudioResponse)
+	fc.Result = res
+	return ec.marshalNListFaultStudioResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListFaultStudioResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_listFaultStudios(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "totalCount":
+				return ec.fieldContext_ListFaultStudioResponse_totalCount(ctx, field)
+			case "faultStudios":
+				return ec.fieldContext_ListFaultStudioResponse_faultStudios(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ListFaultStudioResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_listFaultStudios_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getFaultStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getFaultStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().GetFaultStudio(rctx, fc.Args["projectID"].(string), fc.Args["studioID"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultStudio); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultStudio`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudio)
+	fc.Result = res
+	return ec.marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getFaultStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudio_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudio_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudio_description(ctx, field)
+			case "tags":
+				return ec.fieldContext_FaultStudio_tags(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudio_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+			case "selectedFaults":
+				return ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudio_isActive(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+			case "isRemoved":
+				return ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudio_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_FaultStudio_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudio", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getFaultStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_listAvailableFaultsForStudio(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_listAvailableFaultsForStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().ListAvailableFaultsForStudio(rctx, fc.Args["projectID"].(string), fc.Args["hubId"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.([]*model.Chart); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.Chart`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Chart)
+	fc.Result = res
+	return ec.marshalNChart2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐChartᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_listAvailableFaultsForStudio(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "apiVersion":
+				return ec.fieldContext_Chart_apiVersion(ctx, field)
+			case "kind":
+				return ec.fieldContext_Chart_kind(ctx, field)
+			case "metadata":
+				return ec.fieldContext_Chart_metadata(ctx, field)
+			case "spec":
+				return ec.fieldContext_Chart_spec(ctx, field)
+			case "packageInfo":
+				return ec.fieldContext_Chart_packageInfo(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Chart", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_listAvailableFaultsForStudio_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getFaultStudioStats(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getFaultStudioStats(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().GetFaultStudioStats(rctx, fc.Args["projectID"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultStudioStatsResponse); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultStudioStatsResponse`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudioStatsResponse)
+	fc.Result = res
+	return ec.marshalNFaultStudioStatsResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioStatsResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getFaultStudioStats(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "totalFaultStudios":
+				return ec.fieldContext_FaultStudioStatsResponse_totalFaultStudios(ctx, field)
+			case "activeFaultStudios":
+				return ec.fieldContext_FaultStudioStatsResponse_activeFaultStudios(ctx, field)
+			case "totalFaultsConfigured":
+				return ec.fieldContext_FaultStudioStatsResponse_totalFaultsConfigured(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudioStatsResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getFaultStudioStats_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_isFaultStudioNameAvailable(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_isFaultStudioNameAvailable(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().IsFaultStudioNameAvailable(rctx, fc.Args["projectID"].(string), fc.Args["name"].(string), fc.Args["excludeStudioID"].(*string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(bool); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be bool`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_isFaultStudioNameAvailable(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_isFaultStudioNameAvailable_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_getGitOpsDetails(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_getGitOpsDetails(ctx, field)
 	if err != nil {
@@ -38768,6 +43454,169 @@ func (ec *executionContext) fieldContext_SyncResponse_message(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _ToggleFaultResponse_faultStudio(ctx context.Context, field graphql.CollectedField, obj *model.ToggleFaultResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToggleFaultResponse_faultStudio(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FaultStudio, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultStudio)
+	fc.Result = res
+	return ec.marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToggleFaultResponse_faultStudio(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToggleFaultResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FaultStudio_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FaultStudio_name(ctx, field)
+			case "description":
+				return ec.fieldContext_FaultStudio_description(ctx, field)
+			case "tags":
+				return ec.fieldContext_FaultStudio_tags(ctx, field)
+			case "projectId":
+				return ec.fieldContext_FaultStudio_projectId(ctx, field)
+			case "sourceHubId":
+				return ec.fieldContext_FaultStudio_sourceHubId(ctx, field)
+			case "sourceHubName":
+				return ec.fieldContext_FaultStudio_sourceHubName(ctx, field)
+			case "selectedFaults":
+				return ec.fieldContext_FaultStudio_selectedFaults(ctx, field)
+			case "isActive":
+				return ec.fieldContext_FaultStudio_isActive(ctx, field)
+			case "totalFaults":
+				return ec.fieldContext_FaultStudio_totalFaults(ctx, field)
+			case "enabledFaults":
+				return ec.fieldContext_FaultStudio_enabledFaults(ctx, field)
+			case "isRemoved":
+				return ec.fieldContext_FaultStudio_isRemoved(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_FaultStudio_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_FaultStudio_updatedAt(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_FaultStudio_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_FaultStudio_updatedBy(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultStudio", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToggleFaultResponse_success(ctx context.Context, field graphql.CollectedField, obj *model.ToggleFaultResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToggleFaultResponse_success(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Success, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToggleFaultResponse_success(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToggleFaultResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToggleFaultResponse_message(ctx context.Context, field graphql.CollectedField, obj *model.ToggleFaultResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToggleFaultResponse_message(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Message, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToggleFaultResponse_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToggleFaultResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _UserDetails_userID(ctx context.Context, field graphql.CollectedField, obj *model.UserDetails) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_UserDetails_userID(ctx, field)
 	if err != nil {
@@ -41423,6 +46272,68 @@ func (ec *executionContext) unmarshalInputCreateEnvironmentRequest(ctx context.C
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCreateFaultStudioRequest(ctx context.Context, obj interface{}) (model.CreateFaultStudioRequest, error) {
+	var it model.CreateFaultStudioRequest
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "description", "tags", "sourceHubId", "selectedFaults", "isActive"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		case "tags":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tags"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Tags = data
+		case "sourceHubId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sourceHubId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SourceHubID = data
+		case "selectedFaults":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("selectedFaults"))
+			data, err := ec.unmarshalNFaultSelectionInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SelectedFaults = data
+		case "isActive":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("isActive"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IsActive = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateRemoteChaosHub(ctx context.Context, obj interface{}) (model.CreateRemoteChaosHub, error) {
 	var it model.CreateRemoteChaosHub
 	asMap := map[string]interface{}{}
@@ -42029,6 +46940,185 @@ func (ec *executionContext) unmarshalInputExperimentSortInput(ctx context.Contex
 				return it, err
 			}
 			it.Ascending = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputFaultInjectionConfigInput(ctx context.Context, obj interface{}) (model.FaultInjectionConfigInput, error) {
+	var it model.FaultInjectionConfigInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"injectionType", "schedule", "duration", "targetSelector", "interval"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "injectionType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("injectionType"))
+			data, err := ec.unmarshalNInjectionType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐInjectionType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InjectionType = data
+		case "schedule":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("schedule"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Schedule = data
+		case "duration":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("duration"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Duration = data
+		case "targetSelector":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("targetSelector"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TargetSelector = data
+		case "interval":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("interval"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Interval = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputFaultSelectionInput(ctx context.Context, obj interface{}) (model.FaultSelectionInput, error) {
+	var it model.FaultSelectionInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"faultCategory", "faultName", "displayName", "description", "enabled", "injectionConfig", "customParameters", "weight"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "faultCategory":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("faultCategory"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FaultCategory = data
+		case "faultName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("faultName"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FaultName = data
+		case "displayName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("displayName"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DisplayName = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		case "enabled":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("enabled"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Enabled = data
+		case "injectionConfig":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("injectionConfig"))
+			data, err := ec.unmarshalOFaultInjectionConfigInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultInjectionConfigInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.InjectionConfig = data
+		case "customParameters":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("customParameters"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CustomParameters = data
+		case "weight":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("weight"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Weight = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputFaultStudioFilterInput(ctx context.Context, obj interface{}) (model.FaultStudioFilterInput, error) {
+	var it model.FaultStudioFilterInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "sourceHubId", "isActive", "tags"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "sourceHubId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sourceHubId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SourceHubID = data
+		case "isActive":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("isActive"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IsActive = data
+		case "tags":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tags"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Tags = data
 		}
 	}
 
@@ -43287,6 +48377,54 @@ func (ec *executionContext) unmarshalInputListExperimentRunRequest(ctx context.C
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputListFaultStudioRequest(ctx context.Context, obj interface{}) (model.ListFaultStudioRequest, error) {
+	var it model.ListFaultStudioRequest
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"studioIds", "filter", "limit", "offset"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "studioIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("studioIds"))
+			data, err := ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.StudioIds = data
+		case "filter":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+			data, err := ec.unmarshalOFaultStudioFilterInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioFilterInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Filter = data
+		case "limit":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Limit = data
+		case "offset":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Offset = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputListInfraRequest(ctx context.Context, obj interface{}) (model.ListInfraRequest, error) {
 	var it model.ListInfraRequest
 	asMap := map[string]interface{}{}
@@ -44529,6 +49667,61 @@ func (ec *executionContext) unmarshalInputUpdateEnvironmentRequest(ctx context.C
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputUpdateFaultStudioRequest(ctx context.Context, obj interface{}) (model.UpdateFaultStudioRequest, error) {
+	var it model.UpdateFaultStudioRequest
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "description", "tags", "selectedFaults", "isActive"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		case "tags":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tags"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Tags = data
+		case "selectedFaults":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("selectedFaults"))
+			data, err := ec.unmarshalOFaultSelectionInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.SelectedFaults = data
+		case "isActive":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("isActive"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.IsActive = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputWeightagesInput(ctx context.Context, obj interface{}) (model.WeightagesInput, error) {
 	var it model.WeightagesInput
 	asMap := map[string]interface{}{}
@@ -44647,6 +49840,13 @@ func (ec *executionContext) _Audit(ctx context.Context, sel ast.SelectionSet, ob
 			return graphql.Null
 		}
 		return ec._Environment(ctx, sel, obj)
+	case model.FaultStudio:
+		return ec._FaultStudio(ctx, sel, &obj)
+	case *model.FaultStudio:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._FaultStudio(ctx, sel, obj)
 	case model.Probe:
 		return ec._Probe(ctx, sel, &obj)
 	case *model.Probe:
@@ -44756,6 +49956,13 @@ func (ec *executionContext) _ResourceDetails(ctx context.Context, sel ast.Select
 			return graphql.Null
 		}
 		return ec._Environment(ctx, sel, obj)
+	case model.FaultStudio:
+		return ec._FaultStudio(ctx, sel, &obj)
+	case *model.FaultStudio:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._FaultStudio(ctx, sel, obj)
 	case model.Probe:
 		return ec._Probe(ctx, sel, &obj)
 	case *model.Probe:
@@ -46469,6 +51676,53 @@ func (ec *executionContext) _FaultDetails(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var faultInjectionConfigImplementors = []string{"FaultInjectionConfig"}
+
+func (ec *executionContext) _FaultInjectionConfig(ctx context.Context, sel ast.SelectionSet, obj *model.FaultInjectionConfig) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faultInjectionConfigImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaultInjectionConfig")
+		case "injectionType":
+			out.Values[i] = ec._FaultInjectionConfig_injectionType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "schedule":
+			out.Values[i] = ec._FaultInjectionConfig_schedule(ctx, field, obj)
+		case "duration":
+			out.Values[i] = ec._FaultInjectionConfig_duration(ctx, field, obj)
+		case "targetSelector":
+			out.Values[i] = ec._FaultInjectionConfig_targetSelector(ctx, field, obj)
+		case "interval":
+			out.Values[i] = ec._FaultInjectionConfig_interval(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var faultListImplementors = []string{"FaultList"}
 
 func (ec *executionContext) _FaultList(ctx context.Context, sel ast.SelectionSet, obj *model.FaultList) graphql.Marshaler {
@@ -46497,6 +51751,308 @@ func (ec *executionContext) _FaultList(ctx context.Context, sel ast.SelectionSet
 			}
 		case "plan":
 			out.Values[i] = ec._FaultList_plan(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var faultSelectionImplementors = []string{"FaultSelection"}
+
+func (ec *executionContext) _FaultSelection(ctx context.Context, sel ast.SelectionSet, obj *model.FaultSelection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faultSelectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaultSelection")
+		case "faultCategory":
+			out.Values[i] = ec._FaultSelection_faultCategory(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "faultName":
+			out.Values[i] = ec._FaultSelection_faultName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "displayName":
+			out.Values[i] = ec._FaultSelection_displayName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._FaultSelection_description(ctx, field, obj)
+		case "enabled":
+			out.Values[i] = ec._FaultSelection_enabled(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "injectionConfig":
+			out.Values[i] = ec._FaultSelection_injectionConfig(ctx, field, obj)
+		case "customParameters":
+			out.Values[i] = ec._FaultSelection_customParameters(ctx, field, obj)
+		case "weight":
+			out.Values[i] = ec._FaultSelection_weight(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var faultStudioImplementors = []string{"FaultStudio", "ResourceDetails", "Audit"}
+
+func (ec *executionContext) _FaultStudio(ctx context.Context, sel ast.SelectionSet, obj *model.FaultStudio) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faultStudioImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaultStudio")
+		case "id":
+			out.Values[i] = ec._FaultStudio_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._FaultStudio_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._FaultStudio_description(ctx, field, obj)
+		case "tags":
+			out.Values[i] = ec._FaultStudio_tags(ctx, field, obj)
+		case "projectId":
+			out.Values[i] = ec._FaultStudio_projectId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceHubId":
+			out.Values[i] = ec._FaultStudio_sourceHubId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceHubName":
+			out.Values[i] = ec._FaultStudio_sourceHubName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "selectedFaults":
+			out.Values[i] = ec._FaultStudio_selectedFaults(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isActive":
+			out.Values[i] = ec._FaultStudio_isActive(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalFaults":
+			out.Values[i] = ec._FaultStudio_totalFaults(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "enabledFaults":
+			out.Values[i] = ec._FaultStudio_enabledFaults(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isRemoved":
+			out.Values[i] = ec._FaultStudio_isRemoved(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._FaultStudio_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._FaultStudio_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdBy":
+			out.Values[i] = ec._FaultStudio_createdBy(ctx, field, obj)
+		case "updatedBy":
+			out.Values[i] = ec._FaultStudio_updatedBy(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var faultStudioStatsResponseImplementors = []string{"FaultStudioStatsResponse"}
+
+func (ec *executionContext) _FaultStudioStatsResponse(ctx context.Context, sel ast.SelectionSet, obj *model.FaultStudioStatsResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faultStudioStatsResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaultStudioStatsResponse")
+		case "totalFaultStudios":
+			out.Values[i] = ec._FaultStudioStatsResponse_totalFaultStudios(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "activeFaultStudios":
+			out.Values[i] = ec._FaultStudioStatsResponse_activeFaultStudios(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalFaultsConfigured":
+			out.Values[i] = ec._FaultStudioStatsResponse_totalFaultsConfigured(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var faultStudioSummaryImplementors = []string{"FaultStudioSummary"}
+
+func (ec *executionContext) _FaultStudioSummary(ctx context.Context, sel ast.SelectionSet, obj *model.FaultStudioSummary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faultStudioSummaryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaultStudioSummary")
+		case "id":
+			out.Values[i] = ec._FaultStudioSummary_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._FaultStudioSummary_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._FaultStudioSummary_description(ctx, field, obj)
+		case "projectId":
+			out.Values[i] = ec._FaultStudioSummary_projectId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceHubId":
+			out.Values[i] = ec._FaultStudioSummary_sourceHubId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sourceHubName":
+			out.Values[i] = ec._FaultStudioSummary_sourceHubName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalFaults":
+			out.Values[i] = ec._FaultStudioSummary_totalFaults(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "enabledFaults":
+			out.Values[i] = ec._FaultStudioSummary_enabledFaults(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isActive":
+			out.Values[i] = ec._FaultStudioSummary_isActive(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._FaultStudioSummary_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._FaultStudioSummary_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -48075,6 +53631,50 @@ func (ec *executionContext) _ListExperimentRunResponse(ctx context.Context, sel 
 	return out
 }
 
+var listFaultStudioResponseImplementors = []string{"ListFaultStudioResponse"}
+
+func (ec *executionContext) _ListFaultStudioResponse(ctx context.Context, sel ast.SelectionSet, obj *model.ListFaultStudioResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, listFaultStudioResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ListFaultStudioResponse")
+		case "totalCount":
+			out.Values[i] = ec._ListFaultStudioResponse_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "faultStudios":
+			out.Values[i] = ec._ListFaultStudioResponse_faultStudios(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var listInfraResponseImplementors = []string{"ListInfraResponse"}
 
 func (ec *executionContext) _ListInfraResponse(ctx context.Context, sel ast.SelectionSet, obj *model.ListInfraResponse) graphql.Marshaler {
@@ -48479,6 +54079,62 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteEnvironment":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteEnvironment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createFaultStudio":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createFaultStudio(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateFaultStudio":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateFaultStudio(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteFaultStudio":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteFaultStudio(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "toggleFaultInStudio":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_toggleFaultInStudio(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setFaultStudioActive":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setFaultStudioActive(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addFaultToStudio":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addFaultToStudio(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "removeFaultFromStudio":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_removeFaultFromStudio(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateFaultInStudio":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateFaultInStudio(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -49663,6 +55319,116 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "listFaultStudios":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_listFaultStudios(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getFaultStudio":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getFaultStudio(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "listAvailableFaultsForStudio":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_listAvailableFaultsForStudio(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getFaultStudioStats":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getFaultStudioStats(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "isFaultStudioNameAvailable":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_isFaultStudioNameAvailable(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "getGitOpsDetails":
 			field := field
 
@@ -50526,6 +56292,52 @@ func (ec *executionContext) _SyncResponse(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var toggleFaultResponseImplementors = []string{"ToggleFaultResponse"}
+
+func (ec *executionContext) _ToggleFaultResponse(ctx context.Context, sel ast.SelectionSet, obj *model.ToggleFaultResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, toggleFaultResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ToggleFaultResponse")
+		case "faultStudio":
+			out.Values[i] = ec._ToggleFaultResponse_faultStudio(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "success":
+			out.Values[i] = ec._ToggleFaultResponse_success(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._ToggleFaultResponse_message(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var userDetailsImplementors = []string{"UserDetails"}
 
 func (ec *executionContext) _UserDetails(ctx context.Context, sel ast.SelectionSet, obj *model.UserDetails) graphql.Marshaler {
@@ -51348,6 +57160,11 @@ func (ec *executionContext) unmarshalNCreateChaosHubRequest2githubᚗcomᚋlitmu
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNCreateFaultStudioRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCreateFaultStudioRequest(ctx context.Context, v interface{}) (model.CreateFaultStudioRequest, error) {
+	res, err := ec.unmarshalInputCreateFaultStudioRequest(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNCreateRemoteChaosHub2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCreateRemoteChaosHub(ctx context.Context, v interface{}) (model.CreateRemoteChaosHub, error) {
 	res, err := ec.unmarshalInputCreateRemoteChaosHub(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -51742,6 +57559,169 @@ func (ec *executionContext) marshalNFaultList2ᚖgithubᚗcomᚋlitmuschaosᚋli
 	return ec._FaultList(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNFaultSelection2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.FaultSelection) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNFaultSelection2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelection(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFaultSelection2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelection(ctx context.Context, sel ast.SelectionSet, v *model.FaultSelection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FaultSelection(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNFaultSelectionInput2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInput(ctx context.Context, v interface{}) (model.FaultSelectionInput, error) {
+	res, err := ec.unmarshalInputFaultSelectionInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNFaultSelectionInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInputᚄ(ctx context.Context, v interface{}) ([]*model.FaultSelectionInput, error) {
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]*model.FaultSelectionInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNFaultSelectionInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNFaultSelectionInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInput(ctx context.Context, v interface{}) (*model.FaultSelectionInput, error) {
+	res, err := ec.unmarshalInputFaultSelectionInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFaultStudio2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx context.Context, sel ast.SelectionSet, v model.FaultStudio) graphql.Marshaler {
+	return ec._FaultStudio(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFaultStudio2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudio(ctx context.Context, sel ast.SelectionSet, v *model.FaultStudio) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FaultStudio(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFaultStudioStatsResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioStatsResponse(ctx context.Context, sel ast.SelectionSet, v model.FaultStudioStatsResponse) graphql.Marshaler {
+	return ec._FaultStudioStatsResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFaultStudioStatsResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioStatsResponse(ctx context.Context, sel ast.SelectionSet, v *model.FaultStudioStatsResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FaultStudioStatsResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFaultStudioSummary2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioSummaryᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.FaultStudioSummary) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNFaultStudioSummary2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioSummary(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFaultStudioSummary2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioSummary(ctx context.Context, sel ast.SelectionSet, v *model.FaultStudioSummary) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FaultStudioSummary(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNGetChaosHubStatsResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐGetChaosHubStatsResponse(ctx context.Context, sel ast.SelectionSet, v model.GetChaosHubStatsResponse) graphql.Marshaler {
 	return ec._GetChaosHubStatsResponse(ctx, sel, &v)
 }
@@ -52046,6 +58026,16 @@ func (ec *executionContext) marshalNInfrastructureType2githubᚗcomᚋlitmuschao
 	return v
 }
 
+func (ec *executionContext) unmarshalNInjectionType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐInjectionType(ctx context.Context, v interface{}) (model.InjectionType, error) {
+	var res model.InjectionType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInjectionType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐInjectionType(ctx context.Context, sel ast.SelectionSet, v model.InjectionType) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
 	res, err := graphql.UnmarshalInt(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -52262,6 +58252,20 @@ func (ec *executionContext) marshalNListExperimentRunResponse2ᚖgithubᚗcomᚋ
 		return graphql.Null
 	}
 	return ec._ListExperimentRunResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNListFaultStudioResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListFaultStudioResponse(ctx context.Context, sel ast.SelectionSet, v model.ListFaultStudioResponse) graphql.Marshaler {
+	return ec._ListFaultStudioResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNListFaultStudioResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListFaultStudioResponse(ctx context.Context, sel ast.SelectionSet, v *model.ListFaultStudioResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ListFaultStudioResponse(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNListInfraResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListInfraResponse(ctx context.Context, sel ast.SelectionSet, v model.ListInfraResponse) graphql.Marshaler {
@@ -52847,6 +58851,20 @@ func (ec *executionContext) marshalNSyncStatus2githubᚗcomᚋlitmuschaosᚋlitm
 	return v
 }
 
+func (ec *executionContext) marshalNToggleFaultResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐToggleFaultResponse(ctx context.Context, sel ast.SelectionSet, v model.ToggleFaultResponse) graphql.Marshaler {
+	return ec._ToggleFaultResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNToggleFaultResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐToggleFaultResponse(ctx context.Context, sel ast.SelectionSet, v *model.ToggleFaultResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ToggleFaultResponse(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNUpdateAgentInput2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUpdateAgentInput(ctx context.Context, v interface{}) (model.UpdateAgentInput, error) {
 	res, err := ec.unmarshalInputUpdateAgentInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -52854,6 +58872,11 @@ func (ec *executionContext) unmarshalNUpdateAgentInput2githubᚗcomᚋlitmuschao
 
 func (ec *executionContext) unmarshalNUpdateChaosHubRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUpdateChaosHubRequest(ctx context.Context, v interface{}) (model.UpdateChaosHubRequest, error) {
 	res, err := ec.unmarshalInputUpdateChaosHubRequest(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNUpdateFaultStudioRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐUpdateFaultStudioRequest(ctx context.Context, v interface{}) (model.UpdateFaultStudioRequest, error) {
+	res, err := ec.unmarshalInputUpdateFaultStudioRequest(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -53474,6 +59497,49 @@ func (ec *executionContext) marshalOExperimentType2ᚖgithubᚗcomᚋlitmuschaos
 	return v
 }
 
+func (ec *executionContext) marshalOFaultInjectionConfig2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultInjectionConfig(ctx context.Context, sel ast.SelectionSet, v *model.FaultInjectionConfig) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._FaultInjectionConfig(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOFaultInjectionConfigInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultInjectionConfigInput(ctx context.Context, v interface{}) (*model.FaultInjectionConfigInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputFaultInjectionConfigInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOFaultSelectionInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInputᚄ(ctx context.Context, v interface{}) ([]*model.FaultSelectionInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]*model.FaultSelectionInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNFaultSelectionInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultSelectionInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalOFaultStudioFilterInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultStudioFilterInput(ctx context.Context, v interface{}) (*model.FaultStudioFilterInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputFaultStudioFilterInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v interface{}) (*float64, error) {
 	if v == nil {
 		return nil, nil
@@ -53954,6 +60020,14 @@ func (ec *executionContext) marshalOListEnvironmentResponse2ᚖgithubᚗcomᚋli
 		return graphql.Null
 	}
 	return ec._ListEnvironmentResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOListFaultStudioRequest2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListFaultStudioRequest(ctx context.Context, v interface{}) (*model.ListFaultStudioRequest, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputListFaultStudioRequest(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalOListInfraRequest2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐListInfraRequest(ctx context.Context, v interface{}) (*model.ListInfraRequest, error) {

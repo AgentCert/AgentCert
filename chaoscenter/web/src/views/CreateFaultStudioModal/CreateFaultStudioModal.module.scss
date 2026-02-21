@@ -1,0 +1,18 @@
+.modal {
+  width: 600px !important;
+  
+  :global(.bp3-dialog-header) {
+    display: none;
+  }
+}
+
+.modalContent {
+  background: var(--white);
+  border-radius: 8px;
+}
+
+.noHubsMessage {
+  background: var(--orange-50);
+  border: 1px solid var(--orange-200);
+  border-radius: 4px;
+}

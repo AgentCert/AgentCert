@@ -1,0 +1,13 @@
+# Ignore LitmusChaos test/monitoring files with hardcoded test credentials
+# These are from the original LitmusChaos repo and contain test data only
+
+# Monitoring test files
+monitoring/**
+litmus/monitoring/**
+
+# Sample application test files
+**/sample-application-under-test/**
+**/percona/**
+
+# Any other test credential files
+**/test-credentials/**

@@ -1,0 +1,447 @@
+# Fault Studio GraphQL Schema
+# Fault Studio enables configuration of fault categories and types for AI agent testing
+
+"""
+InjectionType represents how a fault should be injected during agent testing.
+"""
+enum InjectionType {
+  """Fault is injected based on a cron schedule"""
+  SCHEDULED
+  
+  """Fault is injected manually on demand"""
+  ON_DEMAND
+  
+  """Fault is continuously active during the test"""
+  CONTINUOUS
+}
+
+"""
+FaultInjectionConfig contains configuration for how and when a fault should be injected.
+"""
+type FaultInjectionConfig {
+  """Type of injection timing"""
+  injectionType: InjectionType!
+  
+  """Cron expression for scheduled injection (e.g., '0 */5 * * *')"""
+  schedule: String
+  
+  """Duration of the fault injection (e.g., '30s', '5m')"""
+  duration: String
+  
+  """Kubernetes selector for targeting specific pods/nodes"""
+  targetSelector: String
+  
+  """Interval between repeated injections"""
+  interval: String
+}
+
+"""
+FaultInjectionConfigInput is the input type for FaultInjectionConfig.
+"""
+input FaultInjectionConfigInput {
+  """Type of injection timing"""
+  injectionType: InjectionType!
+  
+  """Cron expression for scheduled injection"""
+  schedule: String
+  
+  """Duration of the fault injection"""
+  duration: String
+  
+  """Kubernetes selector for targeting"""
+  targetSelector: String
+  
+  """Interval between injections"""
+  interval: String
+}
+
+"""
+FaultSelection represents a single fault selected from a ChaosHub for inclusion in a Fault Studio.
+"""
+type FaultSelection {
+  "Category of the fault (e.g., 'kubernetes', 'aws', 'azure', 'gcp', 'network')"
+  faultCategory: String!
+  
+  """Internal name of the fault"""
+  faultName: String!
+  
+  """Human-readable display name"""
+  displayName: String!
+  
+  """Description of what the fault does"""
+  description: String
+  
+  """Whether this fault is currently enabled in the studio"""
+  enabled: Boolean!
+  
+  """Configuration for how the fault should be injected"""
+  injectionConfig: FaultInjectionConfig
+  
+  """Custom parameters to override default fault settings (JSON string)"""
+  customParameters: String
+  
+  """Priority/weight for fault selection (higher = more likely)"""
+  weight: Int!
+}
+
+"""
+FaultSelectionInput is the input type for creating/updating fault selections.
+"""
+input FaultSelectionInput {
+  """Category of the fault (e.g., 'kubernetes', 'aws', 'azure', 'gcp', 'network')"""
+  faultCategory: String!
+  
+  """Internal name of the fault"""
+  faultName: String!
+  
+  """Human-readable display name"""
+  displayName: String!
+  
+  """Description of what the fault does"""
+  description: String
+  
+  """Whether this fault is enabled"""
+  enabled: Boolean!
+  
+  """Injection configuration"""
+  injectionConfig: FaultInjectionConfigInput
+  
+  """Custom parameters as JSON string"""
+  customParameters: String
+  
+  """Priority/weight for fault selection"""
+  weight: Int
+}
+
+"""
+FaultStudio represents a configured collection of faults from a ChaosHub
+that can be used for AI agent testing and benchmarking.
+"""
+type FaultStudio implements ResourceDetails & Audit {
+  """Unique identifier for the fault studio"""
+  id: ID!
+  
+  """Name of the fault studio"""
+  name: String!
+  
+  """Description of the fault studio's purpose"""
+  description: String
+  
+  """Tags for categorization"""
+  tags: [String!]
+  
+  """Project ID that owns this fault studio"""
+  projectId: ID!
+  
+  """ID of the source ChaosHub from which faults are selected"""
+  sourceHubId: ID!
+  
+  """Name of the source ChaosHub (cached for display)"""
+  sourceHubName: String!
+  
+  """List of selected and configured faults"""
+  selectedFaults: [FaultSelection!]!
+  
+  """Whether the fault studio is currently active"""
+  isActive: Boolean!
+  
+  """Total number of faults in the studio"""
+  totalFaults: Int!
+  
+  """Number of enabled faults"""
+  enabledFaults: Int!
+  
+  """Whether the fault studio has been deleted (soft delete)"""
+  isRemoved: Boolean!
+  
+  """Timestamp when the fault studio was created"""
+  createdAt: String!
+  
+  """Timestamp when the fault studio was last updated"""
+  updatedAt: String!
+  
+  """User who created the fault studio"""
+  createdBy: UserDetails
+  
+  """User who last updated the fault studio"""
+  updatedBy: UserDetails
+}
+
+"""
+FaultStudioSummary is a lightweight view of a fault studio for list operations.
+"""
+type FaultStudioSummary {
+  """Unique identifier"""
+  id: ID!
+  
+  """Name of the fault studio"""
+  name: String!
+  
+  """Description"""
+  description: String
+  
+  """Project ID"""
+  projectId: ID!
+  
+  """Source ChaosHub ID"""
+  sourceHubId: ID!
+  
+  """Source ChaosHub name"""
+  sourceHubName: String!
+  
+  """Total number of faults"""
+  totalFaults: Int!
+  
+  """Number of enabled faults"""
+  enabledFaults: Int!
+  
+  """Whether the studio is active"""
+  isActive: Boolean!
+  
+  """Creation timestamp"""
+  createdAt: String!
+  
+  """Last update timestamp"""
+  updatedAt: String!
+}
+
+"""
+CreateFaultStudioRequest contains the data needed to create a new fault studio.
+"""
+input CreateFaultStudioRequest {
+  """Name of the fault studio (must be unique within project)"""
+  name: String!
+  
+  """Optional description"""
+  description: String
+  
+  """Tags for categorization"""
+  tags: [String!]
+  
+  """ID of the source ChaosHub"""
+  sourceHubId: ID!
+  
+  """Initial list of selected faults"""
+  selectedFaults: [FaultSelectionInput!]!
+  
+  """Whether the studio should be active upon creation"""
+  isActive: Boolean
+}
+
+"""
+UpdateFaultStudioRequest contains the data for updating an existing fault studio.
+"""
+input UpdateFaultStudioRequest {
+  """Updated name (optional)"""
+  name: String
+  
+  """Updated description (optional)"""
+  description: String
+  
+  """Updated tags (optional)"""
+  tags: [String!]
+  
+  """Updated list of selected faults (optional - replaces entire list)"""
+  selectedFaults: [FaultSelectionInput!]
+  
+  """Updated active status (optional)"""
+  isActive: Boolean
+}
+
+"""
+FaultStudioFilterInput provides filtering options for listing fault studios.
+"""
+input FaultStudioFilterInput {
+  """Filter by fault studio name (partial match)"""
+  name: String
+  
+  """Filter by source ChaosHub ID"""
+  sourceHubId: ID
+  
+  """Filter by active status"""
+  isActive: Boolean
+  
+  """Filter by tags (match any)"""
+  tags: [String!]
+}
+
+"""
+ListFaultStudioRequest contains parameters for listing fault studios.
+"""
+input ListFaultStudioRequest {
+  """Optional list of specific studio IDs to retrieve"""
+  studioIds: [ID!]
+  
+  """Filter options"""
+  filter: FaultStudioFilterInput
+  
+  """Pagination: number of items to return"""
+  limit: Int
+  
+  """Pagination: number of items to skip"""
+  offset: Int
+}
+
+"""
+ListFaultStudioResponse contains the paginated list of fault studios.
+"""
+type ListFaultStudioResponse {
+  """Total count of fault studios matching the filter"""
+  totalCount: Int!
+  
+  """List of fault studio summaries"""
+  faultStudios: [FaultStudioSummary!]!
+}
+
+"""
+FaultStudioStatsResponse contains statistics about fault studios in a project.
+"""
+type FaultStudioStatsResponse {
+  """Total number of fault studios"""
+  totalFaultStudios: Int!
+  
+  """Number of active fault studios"""
+  activeFaultStudios: Int!
+  
+  """Total number of faults across all studios"""
+  totalFaultsConfigured: Int!
+}
+
+"""
+ToggleFaultResponse is returned after enabling/disabling a fault in a studio.
+"""
+type ToggleFaultResponse {
+  """The updated fault studio"""
+  faultStudio: FaultStudio!
+  
+  """Whether the operation was successful"""
+  success: Boolean!
+  
+  """Optional message about the operation"""
+  message: String
+}
+
+# ================== QUERIES ==================
+
+extend type Query {
+  # FAULT STUDIO OPERATIONS
+  
+  """
+  List all fault studios for a project with optional filtering and pagination.
+  """
+  listFaultStudios(
+    projectID: ID!
+    request: ListFaultStudioRequest
+  ): ListFaultStudioResponse! @authorized
+  
+  """
+  Get a single fault studio by its ID.
+  """
+  getFaultStudio(
+    projectID: ID!
+    studioID: ID!
+  ): FaultStudio! @authorized
+  
+  """
+  List available faults from a ChaosHub that can be added to a fault studio.
+  This reuses the existing ChaosHub listChaosFaults query internally.
+  """
+  listAvailableFaultsForStudio(
+    projectID: ID!
+    hubId: ID!
+  ): [Chart!]! @authorized
+  
+  """
+  Get statistics about fault studios in a project.
+  """
+  getFaultStudioStats(
+    projectID: ID!
+  ): FaultStudioStatsResponse! @authorized
+  
+  """
+  Check if a fault studio name is available (unique within project).
+  """
+  isFaultStudioNameAvailable(
+    projectID: ID!
+    name: String!
+    excludeStudioID: ID
+  ): Boolean! @authorized
+}
+
+# ================== MUTATIONS ==================
+
+extend type Mutation {
+  # FAULT STUDIO OPERATIONS
+  
+  """
+  Create a new fault studio with selected faults from a ChaosHub.
+  """
+  createFaultStudio(
+    projectID: ID!
+    request: CreateFaultStudioRequest!
+  ): FaultStudio! @authorized
+  
+  """
+  Update an existing fault studio's configuration.
+  """
+  updateFaultStudio(
+    projectID: ID!
+    studioID: ID!
+    request: UpdateFaultStudioRequest!
+  ): FaultStudio! @authorized
+  
+  """
+  Delete a fault studio (soft delete).
+  """
+  deleteFaultStudio(
+    projectID: ID!
+    studioID: ID!
+  ): Boolean! @authorized
+  
+  """
+  Toggle the enabled status of a specific fault within a studio.
+  """
+  toggleFaultInStudio(
+    projectID: ID!
+    studioID: ID!
+    faultName: String!
+    enabled: Boolean!
+  ): ToggleFaultResponse! @authorized
+  
+  """
+  Activate or deactivate an entire fault studio.
+  """
+  setFaultStudioActive(
+    projectID: ID!
+    studioID: ID!
+    isActive: Boolean!
+  ): FaultStudio! @authorized
+  
+  """
+  Add a new fault to an existing fault studio.
+  """
+  addFaultToStudio(
+    projectID: ID!
+    studioID: ID!
+    fault: FaultSelectionInput!
+  ): FaultStudio! @authorized
+  
+  """
+  Remove a fault from a fault studio.
+  """
+  removeFaultFromStudio(
+    projectID: ID!
+    studioID: ID!
+    faultName: String!
+  ): FaultStudio! @authorized
+  
+  """
+  Update configuration for a specific fault within a studio.
+  """
+  updateFaultInStudio(
+    projectID: ID!
+    studioID: ID!
+    faultName: String!
+    fault: FaultSelectionInput!
+  ): FaultStudio! @authorized
+}

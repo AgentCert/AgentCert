@@ -275,9 +275,9 @@ input KubernetesHTTPProbeRequest {
   """
   stopOnFailure: Boolean
   """
-  URL of the Probe
+  URL of the Probe (optional - will be auto-injected from experiment target at runtime)
   """
-  url: String!
+  url: String
   """
   HTTP method of the Probe
   """

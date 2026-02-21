@@ -1,0 +1,30 @@
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: tls-expiry-chaos
+  namespace: default
+spec:
+  appinfo:
+    appns: ''
+    applabel: ''
+    appkind: ''
+  # It can be active/stop
+  engineState: 'active'
+  chaosServiceAccount: tls-expiry-sa
+  experiments:
+    - name: tls-expiry
+      spec:
+        components:
+          env:
+            # set chaos duration (in sec) as desired
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+
+            # Certificate name to expire
+            - name: CERT_NAME
+              value: ''
+
+            ## percentage of total pods to target
+            - name: PODS_AFFECTED_PERC
+              value: ''

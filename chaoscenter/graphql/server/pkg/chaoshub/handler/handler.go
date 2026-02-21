@@ -300,6 +300,7 @@ func SyncRemoteRepo(hubData model.CloningInput, projectID string) error {
 func ValidateLocalRepository(hub chaos_hub.ChaosHub) (bool, error) {
 	var repoPath string
 	if hub.IsDefault {
+		// Default hub clones from git, use dynamic path
 		repoPath = DefaultPath + "default/" + hub.Name
 	} else {
 		repoPath = DefaultPath + hub.ProjectID + "/" + hub.Name

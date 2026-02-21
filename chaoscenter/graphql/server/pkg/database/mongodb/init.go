@@ -28,6 +28,7 @@ const (
 	EnvironmentCollection
 	ChaosProbeCollection
 	AgentRegistryCollection
+	FaultStudioCollection
 )
 
 // MongoInterface requires a MongoClient that implements the Initialize method to create the Mongo DB client
@@ -53,6 +54,7 @@ type MongoClient struct {
 	EnvironmentCollection         *mongo.Collection
 	ChaosProbeCollection          *mongo.Collection
 	AgentRegistryCollection       *mongo.Collection
+	FaultStudioCollection         *mongo.Collection
 }
 
 var (
@@ -71,6 +73,7 @@ var (
 		ProjectCollection:             "project",
 		EnvironmentCollection:         "environment",
 		AgentRegistryCollection:       "agentRegistry",
+		FaultStudioCollection:         "faultStudios",
 	}
 
 	DbName            = "litmus"
@@ -359,5 +362,33 @@ func (m *MongoClient) initAllCollection() {
 	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to create indexes for agentRegistry collection")
+	}
+
+	// Fault Studio Collection
+	err = m.Database.CreateCollection(backgroundContext, Collections[FaultStudioCollection], nil)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			logrus.Info(Collections[FaultStudioCollection] + "'s collection already exists, continuing with the existing mongo collection")
+		} else {
+			logrus.WithError(err).Error("failed to create faultStudios collection")
+		}
+	}
+
+	m.FaultStudioCollection = m.Database.Collection(Collections[FaultStudioCollection])
+	_, err = m.FaultStudioCollection.Indexes().CreateMany(backgroundContext, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "studio_id", Value: 1},
+			},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "project_id", Value: 1},
+			},
+		},
+	})
+	if err != nil {
+		logrus.WithError(err).Error("failed to create indexes for faultStudios collection")
 	}
 }
