@@ -163,19 +163,55 @@ jobs:
           minikube image load agentcert-dex-server:latest
           minikube image load agentcert-frontend:latest
 
+      - name: Deploy to Kubernetes
+        run: |
+          echo "🚀 Deploying AgentCert services to Kubernetes..."
+          
+          # Update deployments with new images (using :latest tag for Minikube compatibility)
+          kubectl set image deployment/litmusportal-server graphql-server=agentcert-server:latest -n litmus
+          kubectl set image deployment/litmusportal-auth-server auth-server=agentcert-auth-server:latest -n litmus
+          kubectl set image deployment/subscriber subscriber=agentcert-subscriber:latest -n litmus
+          kubectl set image deployment/event-tracker event-tracker=agentcert-event-tracker:latest -n litmus
+          kubectl set image deployment/litmusportal-frontend litmusportal-frontend=agentcert-frontend:latest -n litmus
+          
+          # Set ImagePullPolicy to Never for Minikube (uses local images)
+          kubectl patch deployment litmusportal-server -n litmus -p '{"spec":{"template":{"spec":{"containers":[{"name":"graphql-server","imagePullPolicy":"Never"}]}}}}'
+          kubectl patch deployment litmusportal-auth-server -n litmus -p '{"spec":{"template":{"spec":{"containers":[{"name":"auth-server","imagePullPolicy":"Never"}]}}}}'
+          kubectl patch deployment subscriber -n litmus -p '{"spec":{"template":{"spec":{"containers":[{"name":"subscriber","imagePullPolicy":"Never"}]}}}}'
+          kubectl patch deployment event-tracker -n litmus -p '{"spec":{"template":{"spec":{"containers":[{"name":"event-tracker","imagePullPolicy":"Never"}]}}}}'
+          kubectl patch deployment litmusportal-frontend -n litmus -p '{"spec":{"template":{"spec":{"containers":[{"name":"litmusportal-frontend","imagePullPolicy":"Never"}]}}}}'
+          
+          echo "⏳ Waiting for deployments to roll out..."
+          
+      - name: Wait for deployment rollout
+        run: |
+          echo "Waiting for deployments to be ready..."
+          kubectl rollout status deployment/litmusportal-server -n litmus --timeout=300s
+          kubectl rollout status deployment/litmusportal-auth-server -n litmus --timeout=300s
+          kubectl rollout status deployment/subscriber -n litmus --timeout=300s
+          kubectl rollout status deployment/event-tracker -n litmus --timeout=300s
+          kubectl rollout status deployment/litmusportal-frontend -n litmus --timeout=300s
+          
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying deployments..."
+          kubectl get pods -n litmus -o wide
+          
+          echo ""
+          echo "📊 Deployment Images:"
+          kubectl get deployments -n litmus -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].image}{"\n"}{end}' | grep -E "(litmusportal|subscriber|event-tracker)"
+          
       - name: Deployment summary
         run: |
           echo "=================================="
           echo "✅ AgentCert Deployment Complete!"
           echo "=================================="
-          echo "Images built and loaded to Minikube:"
+          echo "Images built, loaded, and deployed:"
           echo "  • agentcert-server:${{ steps.vars.outputs.IMG_TAG }}"
           echo "  • agentcert-auth-server:${{ steps.vars.outputs.IMG_TAG }}"
           echo "  • agentcert-subscriber:${{ steps.vars.outputs.IMG_TAG }}"
           echo "  • agentcert-event-tracker:${{ steps.vars.outputs.IMG_TAG }}"
-          echo "  • agentcert-dex-server:${{ steps.vars.outputs.IMG_TAG }}"
           echo "  • agentcert-frontend:${{ steps.vars.outputs.IMG_TAG }}"
           echo "=================================="
-          echo "Next steps:"
-          echo "  kubectl apply -f chaoscenter/manifests/"
+          echo "All pods are running with new images!"
           echo "=================================="
