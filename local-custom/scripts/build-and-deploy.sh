@@ -95,30 +95,30 @@ NC='\033[0m'
 
 print_header() {
     echo ""
-    echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║ ${CYAN}$1${BLUE}${NC}"
-    echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
+    echo -e "${BLUE}â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—${NC}"
+    echo -e "${BLUE}â•‘ ${CYAN}$1${BLUE}${NC}"
+    echo -e "${BLUE}â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•${NC}"
     echo ""
 }
 
 print_section() {
-    echo -e "${CYAN}→ $1${NC}"
+    echo -e "${CYAN}â†’ $1${NC}"
 }
 
 print_success() {
-    echo -e "${GREEN}✓ $1${NC}"
+    echo -e "${GREEN}âœ“ $1${NC}"
 }
 
 print_info() {
-    echo -e "${BLUE}ℹ $1${NC}"
+    echo -e "${BLUE}â„¹ $1${NC}"
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠ $1${NC}"
+    echo -e "${YELLOW}âš  $1${NC}"
 }
 
 print_error() {
-    echo -e "${RED}✗ $1${NC}"
+    echo -e "${RED}âœ— $1${NC}"
 }
 
 log_to_file() {
@@ -685,7 +685,7 @@ main() {
     display_info
     display_next
     
-    print_header "✓ Pipeline Complete!"
+    print_header "âœ“ Pipeline Complete!"
     log_to_file "========== Build Completed =========="
 }
 

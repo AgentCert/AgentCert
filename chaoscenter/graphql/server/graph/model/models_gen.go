@@ -76,6 +76,8 @@ type Agent struct {
 	ContainerImage *ContainerImage `json:"containerImage"`
 	// Kubernetes namespace where the agent is deployed
 	Namespace string `json:"namespace"`
+	// Helm release name for Helm-deployed agents
+	HelmReleaseName *string `json:"helmReleaseName,omitempty"`
 	// Endpoint configuration for communicating with the agent
 	Endpoint *AgentEndpoint `json:"endpoint"`
 	// Langfuse integration configuration for observability
@@ -596,8 +598,20 @@ type DeployAgentWithHelmRequest struct {
 	HelmChartVersion string `json:"helmChartVersion"`
 	// YAML content for Helm values
 	ValuesYaml *string `json:"valuesYaml,omitempty"`
+	// Base64-encoded Helm chart .tgz file data
+	ChartData *string `json:"chartData,omitempty"`
 	// Kubeconfig for cluster access (optional)
 	Kubeconfig *string `json:"kubeconfig,omitempty"`
+	// Azure OpenAI API Key
+	AzureOpenAIKey *string `json:"azureOpenAIKey,omitempty"`
+	// Azure OpenAI Endpoint URL
+	AzureOpenAIEndpoint *string `json:"azureOpenAIEndpoint,omitempty"`
+	// Azure OpenAI Deployment Model Name
+	AzureOpenAIDeployment *string `json:"azureOpenAIDeployment,omitempty"`
+	// Azure OpenAI API Version
+	AzureOpenAIAPIVersion *string `json:"azureOpenAIAPIVersion,omitempty"`
+	// Azure OpenAI Embedding Deployment Name
+	AzureOpenAIEmbeddingDeployment *string `json:"azureOpenAIEmbeddingDeployment,omitempty"`
 }
 
 // DeployAgentWithHelmResponse returned after successful Helm deployment.
@@ -612,6 +626,34 @@ type DeployAgentWithHelmResponse struct {
 	HelmReleaseName *string `json:"helmReleaseName,omitempty"`
 	// Helm chart version used
 	HelmChartVersion *string `json:"helmChartVersion,omitempty"`
+	// Deployment configuration including environment variables
+	DeploymentConfig *DeploymentConfig `json:"deploymentConfig,omitempty"`
+}
+
+// Helm deployment configuration details including environment variables.
+type DeploymentConfig struct {
+	// Namespace where agent is deployed
+	Namespace string `json:"namespace"`
+	// Helm release name
+	ReleaseName string `json:"releaseName"`
+	// Chart path or name
+	ChartPath *string `json:"chartPath,omitempty"`
+	// Chart version
+	ChartVersion *string `json:"chartVersion,omitempty"`
+	// Environment variables injected into the deployment
+	EnvironmentVariables []*EnvVariable `json:"environmentVariables,omitempty"`
+	// Deployment timestamp (ISO 8601 format)
+	DeployedAt *string `json:"deployedAt,omitempty"`
+}
+
+// Environment variable for Helm deployment.
+type EnvVariable struct {
+	// Variable name
+	Name string `json:"name"`
+	// Variable value (masked for sensitive values)
+	Value string `json:"value"`
+	// Whether this is a sensitive value that should be masked
+	IsSensitive *bool `json:"isSensitive,omitempty"`
 }
 
 type Environment struct {
@@ -667,6 +709,16 @@ type EnvironmentSortInput struct {
 	Field EnvironmentSortingField `json:"field"`
 	// Bool value indicating whether the sorting will be done in ascending order
 	Ascending *bool `json:"ascending,omitempty"`
+}
+
+// EnvironmentVariable represents a key-value environment variable for agent deployment
+type EnvironmentVariable struct {
+	// Name of the environment variable
+	Name string `json:"name"`
+	// Value of the environment variable
+	Value string `json:"value"`
+	// Indicates if the value is sensitive (e.g., API keys) and should be masked in UI
+	IsSensitive *bool `json:"isSensitive,omitempty"`
 }
 
 // Defines the Executed by which experiment details for Probes
@@ -1271,6 +1323,29 @@ type HealthCheckResult struct {
 	CheckedAt string `json:"checkedAt"`
 }
 
+// HelmValidationResponse returned from Helm deployment validation.
+// Shows the merged configuration that will be deployed.
+type HelmValidationResponse struct {
+	// Whether the Helm chart is valid and ready to deploy
+	Valid bool `json:"valid"`
+	// Validation errors if any
+	Errors []string `json:"errors,omitempty"`
+	// Validation warnings (non-blocking)
+	Warnings []string `json:"warnings,omitempty"`
+	// Merged Helm values that will be deployed
+	MergedValues *string `json:"mergedValues,omitempty"`
+	// Release name that will be used
+	ReleaseName string `json:"releaseName"`
+	// Namespace where will be deployed
+	Namespace string `json:"namespace"`
+	// Chart path or name
+	ChartPath *string `json:"chartPath,omitempty"`
+	// Environment variables that will be injected
+	EnvironmentVariables []*EnvVariable `json:"environmentVariables,omitempty"`
+	// Validation message
+	Message *string `json:"message,omitempty"`
+}
+
 // Defines details for image registry
 type ImageRegistry struct {
 	// Bool value indicating if the image registry is default or not; by default workflow uses LitmusChaos registry
@@ -1793,8 +1868,8 @@ type KubernetesHTTPProbeRequest struct {
 	EvaluationTimeout *string `json:"evaluationTimeout,omitempty"`
 	// Is stop on failure enabled in the Probe
 	StopOnFailure *bool `json:"stopOnFailure,omitempty"`
-	// URL of the Probe
-	URL string `json:"url"`
+	// URL of the Probe (optional - will be auto-injected from experiment target at runtime)
+	URL *string `json:"url,omitempty"`
 	// HTTP method of the Probe
 	Method *MethodRequest `json:"method"`
 	// If Insecure HTTP verification should  be skipped
@@ -2346,6 +2421,8 @@ type RegisterAgentInput struct {
 	LangfuseConfig *LangfuseConfigInput `json:"langfuseConfig,omitempty"`
 	// Optional metadata
 	Metadata *AgentMetadataInput `json:"metadata,omitempty"`
+	// Helm release name for Helm-deployed agents
+	HelmReleaseName *string `json:"helmReleaseName,omitempty"`
 }
 
 // RegisterAgentResponse returned after successful agent registration.
