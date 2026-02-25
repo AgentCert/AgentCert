@@ -4397,10 +4397,10 @@ spec:
           image: quay.io/containers/kubernetes_mcp_server:latest
           args:
             - "--port"
-            - "8080"
+            - "8081"
             - "--stateless"
           ports:
-            - containerPort: 8080
+            - containerPort: 8081
               name: http
               protocol: TCP
           livenessProbe:
@@ -4442,7 +4442,205 @@ spec:
   selector:
     app: kubernetes-mcp-server
   ports:
-    - port: 8080
+    - port: 8081
+      targetPort: http
+      protocol: TCP
+      name: http
+
+# ==============================================================================
+# PROMETHEUS MCP SERVER
+# ==============================================================================
+# The following resources deploy a Prometheus MCP server that provides AI/LLM
+# agents with access to Prometheus metrics via the Model Context Protocol.
+# It enables tools like MCP Inspector or VS Code Copilot to execute PromQL
+# queries, list metrics, get target info, and check Prometheus health.
+#
+# Image: ghcr.io/pab1it0/prometheus-mcp-server:latest
+# Port:  9090 (Streamable HTTP transport on /mcp)
+#
+# Resources added:
+#   1. ServiceAccount     – prometheus-mcp-server
+#   2. ConfigMap           – prometheus-mcp-config (env-var based configuration)
+#   3. Secret              – prometheus-mcp-secret (auth credentials placeholder)
+#   4. ClusterRole         – prometheus-mcp-server-role (read-only K8s + Litmus)
+#   5. ClusterRoleBinding  – prometheus-mcp-server-role-binding
+#   6. Deployment          – prometheus-mcp-server
+#   7. Service             – prometheus-mcp-server (ClusterIP on port 9090)
+# ==============================================================================
+
+---
+# --- ServiceAccount for Prometheus MCP Server ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-mcp-server
+  namespace: litmus
+
+---
+# --- ConfigMap for Prometheus MCP Server configuration ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-mcp-config
+  namespace: litmus
+data:
+  # URL of the Prometheus server (update this to match your deployment)
+  # Examples:
+  #   In-cluster:  http://prometheus.monitoring.svc.cluster.local:9090
+  #   Minikube:    http://host.minikube.internal:9090
+  #   External:    https://prometheus.example.com
+  PROMETHEUS_URL: "http://prometheus.monitoring.svc.cluster.local:9090"
+
+  # Transport mode: stdio, http, or sse
+  PROMETHEUS_MCP_SERVER_TRANSPORT: "http"
+
+  # Bind host — 0.0.0.0 so the pod accepts traffic from the Service
+  PROMETHEUS_MCP_BIND_HOST: "0.0.0.0"
+
+  # Bind port
+  PROMETHEUS_MCP_BIND_PORT: "9090"
+
+  # Request timeout in seconds (DDoS protection)
+  PROMETHEUS_REQUEST_TIMEOUT: "30"
+
+  # Set to "true" to disable SSL verification (for self-signed certs)
+  PROMETHEUS_URL_SSL_VERIFY: "true"
+
+  # Set to "true" to disable Prometheus UI links in query results (saves tokens)
+  PROMETHEUS_DISABLE_LINKS: "false"
+
+---
+# --- Secret for Prometheus authentication (optional) ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-mcp-secret
+  namespace: litmus
+type: Opaque
+stringData:
+  # Uncomment and set values if your Prometheus requires authentication
+  # Basic auth
+  # PROMETHEUS_USERNAME: "admin"
+  # PROMETHEUS_PASSWORD: "changeme"
+  # Bearer token auth (alternative to basic auth)
+  # PROMETHEUS_TOKEN: "your-bearer-token"
+  # Org ID for multi-tenant setups (e.g., Cortex, Mimir, Thanos)
+  # ORG_ID: "your-org-id"
+  PLACEHOLDER: "unused"
+
+---
+# --- ClusterRole with read access to Kubernetes resources (for context) ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-mcp-server-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+
+  # Litmus Chaos CRDs (read-only for observing chaos experiment metrics)
+  - apiGroups: ["litmuschaos.io"]
+    resources: ["chaosengines", "chaosexperiments", "chaosresults"]
+    verbs: ["get", "list", "watch"]
+
+  # Argo Workflow CRDs (read-only)
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "cronworkflows"]
+    verbs: ["get", "list", "watch"]
+
+---
+# --- Bind the ClusterRole to the Prometheus MCP ServiceAccount ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-mcp-server-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-mcp-server-role
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-mcp-server
+    namespace: litmus
+
+---
+# --- Prometheus MCP Server Deployment ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-mcp-server
+  namespace: litmus
+  labels:
+    app: prometheus-mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-mcp-server
+  template:
+    metadata:
+      labels:
+        app: prometheus-mcp-server
+    spec:
+      serviceAccountName: prometheus-mcp-server
+      containers:
+        - name: prometheus-mcp-server
+          image: ghcr.io/pab1it0/prometheus-mcp-server:latest
+          envFrom:
+            - configMapRef:
+                name: prometheus-mcp-config
+            - secretRef:
+                name: prometheus-mcp-secret
+          ports:
+            - containerPort: 9090
+              name: http
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 5
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+              ephemeral-storage: "200Mi"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+              ephemeral-storage: "500Mi"
+          securityContext:
+            runAsUser: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+
+---
+# --- Service to expose Prometheus MCP Server within the cluster ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-mcp-server
+  namespace: litmus
+  labels:
+    app: prometheus-mcp-server
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus-mcp-server
+  ports:
+    - port: 9090
       targetPort: http
       protocol: TCP
       name: http
