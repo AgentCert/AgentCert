@@ -59,21 +59,22 @@ type ComplexityRoot struct {
 	}
 
 	Agent struct {
-		AgentID        func(childComplexity int) int
-		AuditInfo      func(childComplexity int) int
-		Capabilities   func(childComplexity int) int
-		ContainerImage func(childComplexity int) int
-		Description    func(childComplexity int) int
-		Endpoint       func(childComplexity int) int
-		LangfuseConfig func(childComplexity int) int
-		Metadata       func(childComplexity int) int
-		Name           func(childComplexity int) int
-		Namespace      func(childComplexity int) int
-		ProjectID      func(childComplexity int) int
-		Status         func(childComplexity int) int
-		Tags           func(childComplexity int) int
-		Vendor         func(childComplexity int) int
-		Version        func(childComplexity int) int
+		AgentID         func(childComplexity int) int
+		AuditInfo       func(childComplexity int) int
+		Capabilities    func(childComplexity int) int
+		ContainerImage  func(childComplexity int) int
+		Description     func(childComplexity int) int
+		Endpoint        func(childComplexity int) int
+		HelmReleaseName func(childComplexity int) int
+		LangfuseConfig  func(childComplexity int) int
+		Metadata        func(childComplexity int) int
+		Name            func(childComplexity int) int
+		Namespace       func(childComplexity int) int
+		ProjectID       func(childComplexity int) int
+		Status          func(childComplexity int) int
+		Tags            func(childComplexity int) int
+		Vendor          func(childComplexity int) int
+		Version         func(childComplexity int) int
 	}
 
 	AgentEndpoint struct {
@@ -226,10 +227,26 @@ type ComplexityRoot struct {
 
 	DeployAgentWithHelmResponse struct {
 		AgentID          func(childComplexity int) int
+		DeploymentConfig func(childComplexity int) int
 		HelmChartVersion func(childComplexity int) int
 		HelmReleaseName  func(childComplexity int) int
 		Name             func(childComplexity int) int
 		Status           func(childComplexity int) int
+	}
+
+	DeploymentConfig struct {
+		ChartPath            func(childComplexity int) int
+		ChartVersion         func(childComplexity int) int
+		DeployedAt           func(childComplexity int) int
+		EnvironmentVariables func(childComplexity int) int
+		Namespace            func(childComplexity int) int
+		ReleaseName          func(childComplexity int) int
+	}
+
+	EnvVariable struct {
+		IsSensitive func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Value       func(childComplexity int) int
 	}
 
 	Environment struct {
@@ -245,6 +262,12 @@ type ComplexityRoot struct {
 		Type          func(childComplexity int) int
 		UpdatedAt     func(childComplexity int) int
 		UpdatedBy     func(childComplexity int) int
+	}
+
+	EnvironmentVariable struct {
+		IsSensitive func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Value       func(childComplexity int) int
 	}
 
 	ExecutedByExperiment struct {
@@ -456,6 +479,18 @@ type ComplexityRoot struct {
 		Healthy      func(childComplexity int) int
 		Message      func(childComplexity int) int
 		ResponseTime func(childComplexity int) int
+	}
+
+	HelmValidationResponse struct {
+		ChartPath            func(childComplexity int) int
+		EnvironmentVariables func(childComplexity int) int
+		Errors               func(childComplexity int) int
+		MergedValues         func(childComplexity int) int
+		Message              func(childComplexity int) int
+		Namespace            func(childComplexity int) int
+		ReleaseName          func(childComplexity int) int
+		Valid                func(childComplexity int) int
+		Warnings             func(childComplexity int) int
 	}
 
 	ImageRegistry struct {
@@ -701,6 +736,7 @@ type ComplexityRoot struct {
 		UpdateImageRegistry       func(childComplexity int, imageRegistryID string, projectID string, imageRegistryInfo model.ImageRegistryInput) int
 		UpdateProbe               func(childComplexity int, request model.ProbeRequest, projectID string) int
 		ValidateAgentHealth       func(childComplexity int, agentID string) int
+		ValidateHelmDeployment    func(childComplexity int, projectID string, request model.DeployAgentWithHelmRequest) int
 	}
 
 	ObjectData struct {
@@ -787,6 +823,7 @@ type ComplexityRoot struct {
 		GetChaosHub                  func(childComplexity int, projectID string, chaosHubID string) int
 		GetChaosHubStats             func(childComplexity int, projectID string) int
 		GetEnvironment               func(childComplexity int, projectID string, environmentID string) int
+		GetEnvironmentVariables      func(childComplexity int) int
 		GetExperiment                func(childComplexity int, projectID string, experimentID string) int
 		GetExperimentRun             func(childComplexity int, projectID string, experimentRunID *string, notifyID *string) int
 		GetExperimentRunStats        func(childComplexity int, projectID string) int
@@ -799,6 +836,7 @@ type ComplexityRoot struct {
 		GetInfraDetails              func(childComplexity int, infraID string, projectID string) int
 		GetInfraManifest             func(childComplexity int, infraID string, upgrade bool, projectID string) int
 		GetInfraStats                func(childComplexity int, projectID string) int
+		GetKubernetesNamespaces      func(childComplexity int) int
 		GetPredefinedExperiment      func(childComplexity int, hubID string, experimentName []string, projectID string) int
 		GetProbe                     func(childComplexity int, projectID string, probeName string) int
 		GetProbeReference            func(childComplexity int, projectID string, probeName string) int
@@ -936,6 +974,7 @@ type MutationResolver interface {
 	DeleteChaosExperiment(ctx context.Context, experimentID string, experimentRunID *string, projectID string) (bool, error)
 	UpdateCronExperimentState(ctx context.Context, experimentID string, disable bool, projectID string) (bool, error)
 	RegisterAgent(ctx context.Context, input model.RegisterAgentInput) (*model.RegisterAgentResponse, error)
+	ValidateHelmDeployment(ctx context.Context, projectID string, request model.DeployAgentWithHelmRequest) (*model.HelmValidationResponse, error)
 	DeployAgentWithHelm(ctx context.Context, projectID string, request model.DeployAgentWithHelmRequest) (*model.DeployAgentWithHelmResponse, error)
 	UpdateAgent(ctx context.Context, agentID string, input model.UpdateAgentInput) (*model.Agent, error)
 	DeleteAgent(ctx context.Context, agentID string, hardDelete *bool) (*model.DeleteAgentResponse, error)
@@ -989,6 +1028,8 @@ type QueryResolver interface {
 	GetAgentsByCapabilities(ctx context.Context, projectID string, capabilities []string) ([]*model.Agent, error)
 	GetAgentStatus(ctx context.Context, agentID string) (*model.AgentStatusResponse, error)
 	GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*model.CapabilityDefinition, error)
+	GetKubernetesNamespaces(ctx context.Context) ([]string, error)
+	GetEnvironmentVariables(ctx context.Context) ([]*model.EnvironmentVariable, error)
 	GetExperimentRun(ctx context.Context, projectID string, experimentRunID *string, notifyID *string) (*model.ExperimentRun, error)
 	ListExperimentRun(ctx context.Context, projectID string, request model.ListExperimentRunRequest) (*model.ListExperimentRunResponse, error)
 	GetExperimentRunStats(ctx context.Context, projectID string) (*model.GetExperimentRunStatsResponse, error)
@@ -1133,6 +1174,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Agent.Endpoint(childComplexity), true
+
+	case "Agent.helmReleaseName":
+		if e.complexity.Agent.HelmReleaseName == nil {
+			break
+		}
+
+		return e.complexity.Agent.HelmReleaseName(childComplexity), true
 
 	case "Agent.langfuseConfig":
 		if e.complexity.Agent.LangfuseConfig == nil {
@@ -1925,6 +1973,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.DeployAgentWithHelmResponse.AgentID(childComplexity), true
 
+	case "DeployAgentWithHelmResponse.deploymentConfig":
+		if e.complexity.DeployAgentWithHelmResponse.DeploymentConfig == nil {
+			break
+		}
+
+		return e.complexity.DeployAgentWithHelmResponse.DeploymentConfig(childComplexity), true
+
 	case "DeployAgentWithHelmResponse.helmChartVersion":
 		if e.complexity.DeployAgentWithHelmResponse.HelmChartVersion == nil {
 			break
@@ -1952,6 +2007,69 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.DeployAgentWithHelmResponse.Status(childComplexity), true
+
+	case "DeploymentConfig.chartPath":
+		if e.complexity.DeploymentConfig.ChartPath == nil {
+			break
+		}
+
+		return e.complexity.DeploymentConfig.ChartPath(childComplexity), true
+
+	case "DeploymentConfig.chartVersion":
+		if e.complexity.DeploymentConfig.ChartVersion == nil {
+			break
+		}
+
+		return e.complexity.DeploymentConfig.ChartVersion(childComplexity), true
+
+	case "DeploymentConfig.deployedAt":
+		if e.complexity.DeploymentConfig.DeployedAt == nil {
+			break
+		}
+
+		return e.complexity.DeploymentConfig.DeployedAt(childComplexity), true
+
+	case "DeploymentConfig.environmentVariables":
+		if e.complexity.DeploymentConfig.EnvironmentVariables == nil {
+			break
+		}
+
+		return e.complexity.DeploymentConfig.EnvironmentVariables(childComplexity), true
+
+	case "DeploymentConfig.namespace":
+		if e.complexity.DeploymentConfig.Namespace == nil {
+			break
+		}
+
+		return e.complexity.DeploymentConfig.Namespace(childComplexity), true
+
+	case "DeploymentConfig.releaseName":
+		if e.complexity.DeploymentConfig.ReleaseName == nil {
+			break
+		}
+
+		return e.complexity.DeploymentConfig.ReleaseName(childComplexity), true
+
+	case "EnvVariable.isSensitive":
+		if e.complexity.EnvVariable.IsSensitive == nil {
+			break
+		}
+
+		return e.complexity.EnvVariable.IsSensitive(childComplexity), true
+
+	case "EnvVariable.name":
+		if e.complexity.EnvVariable.Name == nil {
+			break
+		}
+
+		return e.complexity.EnvVariable.Name(childComplexity), true
+
+	case "EnvVariable.value":
+		if e.complexity.EnvVariable.Value == nil {
+			break
+		}
+
+		return e.complexity.EnvVariable.Value(childComplexity), true
 
 	case "Environment.createdAt":
 		if e.complexity.Environment.CreatedAt == nil {
@@ -2036,6 +2154,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Environment.UpdatedBy(childComplexity), true
+
+	case "EnvironmentVariable.isSensitive":
+		if e.complexity.EnvironmentVariable.IsSensitive == nil {
+			break
+		}
+
+		return e.complexity.EnvironmentVariable.IsSensitive(childComplexity), true
+
+	case "EnvironmentVariable.name":
+		if e.complexity.EnvironmentVariable.Name == nil {
+			break
+		}
+
+		return e.complexity.EnvironmentVariable.Name(childComplexity), true
+
+	case "EnvironmentVariable.value":
+		if e.complexity.EnvironmentVariable.Value == nil {
+			break
+		}
+
+		return e.complexity.EnvironmentVariable.Value(childComplexity), true
 
 	case "ExecutedByExperiment.experimentID":
 		if e.complexity.ExecutedByExperiment.ExperimentID == nil {
@@ -3030,6 +3169,69 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.HealthCheckResult.ResponseTime(childComplexity), true
+
+	case "HelmValidationResponse.chartPath":
+		if e.complexity.HelmValidationResponse.ChartPath == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.ChartPath(childComplexity), true
+
+	case "HelmValidationResponse.environmentVariables":
+		if e.complexity.HelmValidationResponse.EnvironmentVariables == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.EnvironmentVariables(childComplexity), true
+
+	case "HelmValidationResponse.errors":
+		if e.complexity.HelmValidationResponse.Errors == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.Errors(childComplexity), true
+
+	case "HelmValidationResponse.mergedValues":
+		if e.complexity.HelmValidationResponse.MergedValues == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.MergedValues(childComplexity), true
+
+	case "HelmValidationResponse.message":
+		if e.complexity.HelmValidationResponse.Message == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.Message(childComplexity), true
+
+	case "HelmValidationResponse.namespace":
+		if e.complexity.HelmValidationResponse.Namespace == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.Namespace(childComplexity), true
+
+	case "HelmValidationResponse.releaseName":
+		if e.complexity.HelmValidationResponse.ReleaseName == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.ReleaseName(childComplexity), true
+
+	case "HelmValidationResponse.valid":
+		if e.complexity.HelmValidationResponse.Valid == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.Valid(childComplexity), true
+
+	case "HelmValidationResponse.warnings":
+		if e.complexity.HelmValidationResponse.Warnings == nil {
+			break
+		}
+
+		return e.complexity.HelmValidationResponse.Warnings(childComplexity), true
 
 	case "ImageRegistry.enableRegistry":
 		if e.complexity.ImageRegistry.EnableRegistry == nil {
@@ -4461,6 +4663,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.ValidateAgentHealth(childComplexity, args["agentID"].(string)), true
 
+	case "Mutation.validateHelmDeployment":
+		if e.complexity.Mutation.ValidateHelmDeployment == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_validateHelmDeployment_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.ValidateHelmDeployment(childComplexity, args["projectID"].(string), args["request"].(model.DeployAgentWithHelmRequest)), true
+
 	case "ObjectData.labels":
 		if e.complexity.ObjectData.Labels == nil {
 			break
@@ -4888,6 +5102,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.GetEnvironment(childComplexity, args["projectID"].(string), args["environmentID"].(string)), true
 
+	case "Query.getEnvironmentVariables":
+		if e.complexity.Query.GetEnvironmentVariables == nil {
+			break
+		}
+
+		return e.complexity.Query.GetEnvironmentVariables(childComplexity), true
+
 	case "Query.getExperiment":
 		if e.complexity.Query.GetExperiment == nil {
 			break
@@ -5031,6 +5252,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.GetInfraStats(childComplexity, args["projectID"].(string)), true
+
+	case "Query.getKubernetesNamespaces":
+		if e.complexity.Query.GetKubernetesNamespaces == nil {
+			break
+		}
+
+		return e.complexity.Query.GetKubernetesNamespaces(childComplexity), true
 
 	case "Query.getPredefinedExperiment":
 		if e.complexity.Query.GetPredefinedExperiment == nil {
@@ -5904,6 +6132,20 @@ var sources = []*ast.Source{
 	{Name: "../../../definitions/shared/agent_registry.graphqls", Input: `# Agent Registry GraphQL Schema
 
 """
+EnvironmentVariable represents a key-value environment variable for agent deployment
+"""
+type EnvironmentVariable {
+  """Name of the environment variable"""
+  name: String!
+  
+  """Value of the environment variable"""
+  value: String!
+  
+  """Indicates if the value is sensitive (e.g., API keys) and should be masked in UI"""
+  isSensitive: Boolean
+}
+
+"""
 Agent represents a registered AI agent in the system with its metadata,
 capabilities, and configuration.
 """
@@ -5937,6 +6179,9 @@ type Agent {
   
   """Kubernetes namespace where the agent is deployed"""
   namespace: String!
+  
+  """Helm release name for Helm-deployed agents"""
+  helmReleaseName: String
   
   """Endpoint configuration for communicating with the agent"""
   endpoint: AgentEndpoint!
@@ -6130,6 +6375,9 @@ input RegisterAgentInput {
   
   """Optional metadata"""
   metadata: AgentMetadataInput
+  
+  """Helm release name for Helm-deployed agents"""
+  helmReleaseName: String
 }
 
 """
@@ -6401,8 +6649,59 @@ input DeployAgentWithHelmRequest {
   """YAML content for Helm values"""
   valuesYaml: String
   
+  """Base64-encoded Helm chart .tgz file data"""
+  chartData: String
+  
   """Kubeconfig for cluster access (optional)"""
   kubeconfig: String
+  
+  """Azure OpenAI API Key"""
+  azureOpenAIKey: String
+  
+  """Azure OpenAI Endpoint URL"""
+  azureOpenAIEndpoint: String
+  
+  """Azure OpenAI Deployment Model Name"""
+  azureOpenAIDeployment: String
+  
+  """Azure OpenAI API Version"""
+  azureOpenAIAPIVersion: String
+  
+  """Azure OpenAI Embedding Deployment Name"""
+  azureOpenAIEmbeddingDeployment: String
+}
+
+"""
+HelmValidationResponse returned from Helm deployment validation.
+Shows the merged configuration that will be deployed.
+"""
+type HelmValidationResponse {
+  """Whether the Helm chart is valid and ready to deploy"""
+  valid: Boolean!
+  
+  """Validation errors if any"""
+  errors: [String!]
+  
+  """Validation warnings (non-blocking)"""
+  warnings: [String!]
+  
+  """Merged Helm values that will be deployed"""
+  mergedValues: String
+  
+  """Release name that will be used"""
+  releaseName: String!
+  
+  """Namespace where will be deployed"""
+  namespace: String!
+  
+  """Chart path or name"""
+  chartPath: String
+  
+  """Environment variables that will be injected"""
+  environmentVariables: [EnvVariable!]
+  
+  """Validation message"""
+  message: String
 }
 
 """
@@ -6422,7 +6721,42 @@ type DeployAgentWithHelmResponse {
   helmReleaseName: String
   
   """Helm chart version used"""
-  helmChartVersion: String
+  helmChartVersion: String  
+  """Deployment configuration including environment variables"""
+  deploymentConfig: DeploymentConfig
+}
+
+"""Helm deployment configuration details including environment variables."""
+type DeploymentConfig {
+  """Namespace where agent is deployed"""
+  namespace: String!
+  
+  """Helm release name"""
+  releaseName: String!
+  
+  """Chart path or name"""
+  chartPath: String
+  
+  """Chart version"""
+  chartVersion: String
+  
+  """Environment variables injected into the deployment"""
+  environmentVariables: [EnvVariable!]
+  
+  """Deployment timestamp (ISO 8601 format)"""
+  deployedAt: String
+}
+
+"""Environment variable for Helm deployment."""
+type EnvVariable {
+  """Variable name"""
+  name: String!
+  
+  """Variable value (masked for sensitive values)"""
+  value: String!
+  
+  """Whether this is a sensitive value that should be masked"""
+  isSensitive: Boolean
 }
 
 """
@@ -6476,6 +6810,12 @@ extend type Query {
   
   """Get the taxonomy of available agent capabilities"""
   getAgentCapabilitiesTaxonomy: [CapabilityDefinition!]!
+  
+  """Get available Kubernetes namespaces for agent deployment"""
+  getKubernetesNamespaces: [String!]!
+  
+  """Get pre-populated environment variables from backend configuration (e.g., .env file)"""
+  getEnvironmentVariables: [EnvironmentVariable!]!
 }
 
 # Mutations
@@ -6483,6 +6823,12 @@ extend type Query {
 extend type Mutation {
   """Register a new agent in the system"""
   registerAgent(input: RegisterAgentInput!): RegisterAgentResponse!
+  
+  """Validate Helm deployment configuration before deploying"""
+  validateHelmDeployment(
+    projectID: ID!
+    request: DeployAgentWithHelmRequest!
+  ): HelmValidationResponse!
   
   """Deploy an agent using Helm chart"""
   deployAgentWithHelm(
@@ -9875,9 +10221,9 @@ input KubernetesHTTPProbeRequest {
   """
   stopOnFailure: Boolean
   """
-  URL of the Probe
+  URL of the Probe (optional - will be auto-injected from experiment target at runtime)
   """
-  url: String!
+  url: String
   """
   HTTP method of the Probe
   """
@@ -11932,6 +12278,30 @@ func (ec *executionContext) field_Mutation_validateAgentHealth_args(ctx context.
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_validateHelmDeployment_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 model.DeployAgentWithHelmRequest
+	if tmp, ok := rawArgs["request"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("request"))
+		arg1, err = ec.unmarshalNDeployAgentWithHelmRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐDeployAgentWithHelmRequest(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["request"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -13660,6 +14030,47 @@ func (ec *executionContext) fieldContext_Agent_namespace(_ context.Context, fiel
 	return fc, nil
 }
 
+func (ec *executionContext) _Agent_helmReleaseName(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Agent_helmReleaseName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.HelmReleaseName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Agent_helmReleaseName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Agent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Agent_endpoint(ctx context.Context, field graphql.CollectedField, obj *model.Agent) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Agent_endpoint(ctx, field)
 	if err != nil {
@@ -14191,6 +14602,8 @@ func (ec *executionContext) fieldContext_AgentListResponse_agents(_ context.Cont
 				return ec.fieldContext_Agent_containerImage(ctx, field)
 			case "namespace":
 				return ec.fieldContext_Agent_namespace(ctx, field)
+			case "helmReleaseName":
+				return ec.fieldContext_Agent_helmReleaseName(ctx, field)
 			case "endpoint":
 				return ec.fieldContext_Agent_endpoint(ctx, field)
 			case "langfuseConfig":
@@ -18708,6 +19121,450 @@ func (ec *executionContext) fieldContext_DeployAgentWithHelmResponse_helmChartVe
 	return fc, nil
 }
 
+func (ec *executionContext) _DeployAgentWithHelmResponse_deploymentConfig(ctx context.Context, field graphql.CollectedField, obj *model.DeployAgentWithHelmResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeployAgentWithHelmResponse_deploymentConfig(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DeploymentConfig, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.DeploymentConfig)
+	fc.Result = res
+	return ec.marshalODeploymentConfig2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐDeploymentConfig(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeployAgentWithHelmResponse_deploymentConfig(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeployAgentWithHelmResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "namespace":
+				return ec.fieldContext_DeploymentConfig_namespace(ctx, field)
+			case "releaseName":
+				return ec.fieldContext_DeploymentConfig_releaseName(ctx, field)
+			case "chartPath":
+				return ec.fieldContext_DeploymentConfig_chartPath(ctx, field)
+			case "chartVersion":
+				return ec.fieldContext_DeploymentConfig_chartVersion(ctx, field)
+			case "environmentVariables":
+				return ec.fieldContext_DeploymentConfig_environmentVariables(ctx, field)
+			case "deployedAt":
+				return ec.fieldContext_DeploymentConfig_deployedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DeploymentConfig", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeploymentConfig_namespace(ctx context.Context, field graphql.CollectedField, obj *model.DeploymentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeploymentConfig_namespace(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Namespace, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeploymentConfig_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeploymentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeploymentConfig_releaseName(ctx context.Context, field graphql.CollectedField, obj *model.DeploymentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeploymentConfig_releaseName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReleaseName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeploymentConfig_releaseName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeploymentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeploymentConfig_chartPath(ctx context.Context, field graphql.CollectedField, obj *model.DeploymentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeploymentConfig_chartPath(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ChartPath, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeploymentConfig_chartPath(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeploymentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeploymentConfig_chartVersion(ctx context.Context, field graphql.CollectedField, obj *model.DeploymentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeploymentConfig_chartVersion(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ChartVersion, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeploymentConfig_chartVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeploymentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeploymentConfig_environmentVariables(ctx context.Context, field graphql.CollectedField, obj *model.DeploymentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeploymentConfig_environmentVariables(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.EnvironmentVariables, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.EnvVariable)
+	fc.Result = res
+	return ec.marshalOEnvVariable2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvVariableᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeploymentConfig_environmentVariables(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeploymentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_EnvVariable_name(ctx, field)
+			case "value":
+				return ec.fieldContext_EnvVariable_value(ctx, field)
+			case "isSensitive":
+				return ec.fieldContext_EnvVariable_isSensitive(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type EnvVariable", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeploymentConfig_deployedAt(ctx context.Context, field graphql.CollectedField, obj *model.DeploymentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeploymentConfig_deployedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DeployedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeploymentConfig_deployedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeploymentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EnvVariable_name(ctx context.Context, field graphql.CollectedField, obj *model.EnvVariable) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_EnvVariable_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_EnvVariable_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EnvVariable",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EnvVariable_value(ctx context.Context, field graphql.CollectedField, obj *model.EnvVariable) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_EnvVariable_value(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Value, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_EnvVariable_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EnvVariable",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EnvVariable_isSensitive(ctx context.Context, field graphql.CollectedField, obj *model.EnvVariable) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_EnvVariable_isSensitive(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsSensitive, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_EnvVariable_isSensitive(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EnvVariable",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Environment_projectID(ctx context.Context, field graphql.CollectedField, obj *model.Environment) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Environment_projectID(ctx, field)
 	if err != nil {
@@ -19229,6 +20086,135 @@ func (ec *executionContext) fieldContext_Environment_infraIDs(_ context.Context,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EnvironmentVariable_name(ctx context.Context, field graphql.CollectedField, obj *model.EnvironmentVariable) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_EnvironmentVariable_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_EnvironmentVariable_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EnvironmentVariable",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EnvironmentVariable_value(ctx context.Context, field graphql.CollectedField, obj *model.EnvironmentVariable) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_EnvironmentVariable_value(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Value, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_EnvironmentVariable_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EnvironmentVariable",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EnvironmentVariable_isSensitive(ctx context.Context, field graphql.CollectedField, obj *model.EnvironmentVariable) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_EnvironmentVariable_isSensitive(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsSensitive, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_EnvironmentVariable_isSensitive(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EnvironmentVariable",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -25696,6 +26682,392 @@ func (ec *executionContext) fieldContext_HealthCheckResult_checkedAt(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _HelmValidationResponse_valid(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_valid(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Valid, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_valid(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HelmValidationResponse_errors(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_errors(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Errors, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_errors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HelmValidationResponse_warnings(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_warnings(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Warnings, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_warnings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HelmValidationResponse_mergedValues(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_mergedValues(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.MergedValues, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_mergedValues(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HelmValidationResponse_releaseName(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_releaseName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReleaseName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_releaseName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HelmValidationResponse_namespace(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_namespace(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Namespace, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HelmValidationResponse_chartPath(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_chartPath(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ChartPath, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_chartPath(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HelmValidationResponse_environmentVariables(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_environmentVariables(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.EnvironmentVariables, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.EnvVariable)
+	fc.Result = res
+	return ec.marshalOEnvVariable2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvVariableᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_environmentVariables(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_EnvVariable_name(ctx, field)
+			case "value":
+				return ec.fieldContext_EnvVariable_value(ctx, field)
+			case "isSensitive":
+				return ec.fieldContext_EnvVariable_isSensitive(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type EnvVariable", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HelmValidationResponse_message(ctx context.Context, field graphql.CollectedField, obj *model.HelmValidationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_HelmValidationResponse_message(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Message, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_HelmValidationResponse_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HelmValidationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ImageRegistry_isDefault(ctx context.Context, field graphql.CollectedField, obj *model.ImageRegistry) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ImageRegistry_isDefault(ctx, field)
 	if err != nil {
@@ -31627,6 +32999,81 @@ func (ec *executionContext) fieldContext_Mutation_registerAgent(ctx context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_validateHelmDeployment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_validateHelmDeployment(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().ValidateHelmDeployment(rctx, fc.Args["projectID"].(string), fc.Args["request"].(model.DeployAgentWithHelmRequest))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.HelmValidationResponse)
+	fc.Result = res
+	return ec.marshalNHelmValidationResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmValidationResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_validateHelmDeployment(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "valid":
+				return ec.fieldContext_HelmValidationResponse_valid(ctx, field)
+			case "errors":
+				return ec.fieldContext_HelmValidationResponse_errors(ctx, field)
+			case "warnings":
+				return ec.fieldContext_HelmValidationResponse_warnings(ctx, field)
+			case "mergedValues":
+				return ec.fieldContext_HelmValidationResponse_mergedValues(ctx, field)
+			case "releaseName":
+				return ec.fieldContext_HelmValidationResponse_releaseName(ctx, field)
+			case "namespace":
+				return ec.fieldContext_HelmValidationResponse_namespace(ctx, field)
+			case "chartPath":
+				return ec.fieldContext_HelmValidationResponse_chartPath(ctx, field)
+			case "environmentVariables":
+				return ec.fieldContext_HelmValidationResponse_environmentVariables(ctx, field)
+			case "message":
+				return ec.fieldContext_HelmValidationResponse_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type HelmValidationResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_validateHelmDeployment_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_deployAgentWithHelm(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Mutation_deployAgentWithHelm(ctx, field)
 	if err != nil {
@@ -31676,6 +33123,8 @@ func (ec *executionContext) fieldContext_Mutation_deployAgentWithHelm(ctx contex
 				return ec.fieldContext_DeployAgentWithHelmResponse_helmReleaseName(ctx, field)
 			case "helmChartVersion":
 				return ec.fieldContext_DeployAgentWithHelmResponse_helmChartVersion(ctx, field)
+			case "deploymentConfig":
+				return ec.fieldContext_DeployAgentWithHelmResponse_deploymentConfig(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type DeployAgentWithHelmResponse", field.Name)
 		},
@@ -31753,6 +33202,8 @@ func (ec *executionContext) fieldContext_Mutation_updateAgent(ctx context.Contex
 				return ec.fieldContext_Agent_containerImage(ctx, field)
 			case "namespace":
 				return ec.fieldContext_Agent_namespace(ctx, field)
+			case "helmReleaseName":
+				return ec.fieldContext_Agent_helmReleaseName(ctx, field)
 			case "endpoint":
 				return ec.fieldContext_Agent_endpoint(ctx, field)
 			case "langfuseConfig":
@@ -37606,6 +39057,8 @@ func (ec *executionContext) fieldContext_Query_getAgent(ctx context.Context, fie
 				return ec.fieldContext_Agent_containerImage(ctx, field)
 			case "namespace":
 				return ec.fieldContext_Agent_namespace(ctx, field)
+			case "helmReleaseName":
+				return ec.fieldContext_Agent_helmReleaseName(ctx, field)
 			case "endpoint":
 				return ec.fieldContext_Agent_endpoint(ctx, field)
 			case "langfuseConfig":
@@ -37760,6 +39213,8 @@ func (ec *executionContext) fieldContext_Query_getAgentsByCapabilities(ctx conte
 				return ec.fieldContext_Agent_containerImage(ctx, field)
 			case "namespace":
 				return ec.fieldContext_Agent_namespace(ctx, field)
+			case "helmReleaseName":
+				return ec.fieldContext_Agent_helmReleaseName(ctx, field)
 			case "endpoint":
 				return ec.fieldContext_Agent_endpoint(ctx, field)
 			case "langfuseConfig":
@@ -37906,6 +39361,102 @@ func (ec *executionContext) fieldContext_Query_getAgentCapabilitiesTaxonomy(_ co
 				return ec.fieldContext_CapabilityDefinition_category(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type CapabilityDefinition", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getKubernetesNamespaces(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getKubernetesNamespaces(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GetKubernetesNamespaces(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getKubernetesNamespaces(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getEnvironmentVariables(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getEnvironmentVariables(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GetEnvironmentVariables(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.EnvironmentVariable)
+	fc.Result = res
+	return ec.marshalNEnvironmentVariable2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvironmentVariableᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getEnvironmentVariables(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_EnvironmentVariable_name(ctx, field)
+			case "value":
+				return ec.fieldContext_EnvironmentVariable_value(ctx, field)
+			case "isSensitive":
+				return ec.fieldContext_EnvironmentVariable_isSensitive(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type EnvironmentVariable", field.Name)
 		},
 	}
 	return fc, nil
@@ -41569,6 +43120,8 @@ func (ec *executionContext) fieldContext_RegisterAgentResponse_agent(_ context.C
 				return ec.fieldContext_Agent_containerImage(ctx, field)
 			case "namespace":
 				return ec.fieldContext_Agent_namespace(ctx, field)
+			case "helmReleaseName":
+				return ec.fieldContext_Agent_helmReleaseName(ctx, field)
 			case "endpoint":
 				return ec.fieldContext_Agent_endpoint(ctx, field)
 			case "langfuseConfig":
@@ -46430,7 +47983,7 @@ func (ec *executionContext) unmarshalInputDeployAgentWithHelmRequest(ctx context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "namespace", "clusterName", "capabilities", "version", "helmReleaseName", "helmChartVersion", "valuesYaml", "kubeconfig"}
+	fieldsInOrder := [...]string{"name", "description", "namespace", "clusterName", "capabilities", "version", "helmReleaseName", "helmChartVersion", "valuesYaml", "chartData", "kubeconfig", "azureOpenAIKey", "azureOpenAIEndpoint", "azureOpenAIDeployment", "azureOpenAIAPIVersion", "azureOpenAIEmbeddingDeployment"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -46500,6 +48053,13 @@ func (ec *executionContext) unmarshalInputDeployAgentWithHelmRequest(ctx context
 				return it, err
 			}
 			it.ValuesYaml = data
+		case "chartData":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("chartData"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ChartData = data
 		case "kubeconfig":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kubeconfig"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -46507,6 +48067,41 @@ func (ec *executionContext) unmarshalInputDeployAgentWithHelmRequest(ctx context
 				return it, err
 			}
 			it.Kubeconfig = data
+		case "azureOpenAIKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIKey"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AzureOpenAIKey = data
+		case "azureOpenAIEndpoint":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIEndpoint"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AzureOpenAIEndpoint = data
+		case "azureOpenAIDeployment":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIDeployment"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AzureOpenAIDeployment = data
+		case "azureOpenAIAPIVersion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIAPIVersion"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AzureOpenAIAPIVersion = data
+		case "azureOpenAIEmbeddingDeployment":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIEmbeddingDeployment"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AzureOpenAIEmbeddingDeployment = data
 		}
 	}
 
@@ -48078,7 +49673,7 @@ func (ec *executionContext) unmarshalInputKubernetesHTTPProbeRequest(ctx context
 			it.StopOnFailure = data
 		case "url":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("url"))
-			data, err := ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -49051,7 +50646,7 @@ func (ec *executionContext) unmarshalInputRegisterAgentInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"projectID", "name", "description", "tags", "version", "vendor", "capabilities", "containerImage", "namespace", "endpoint", "langfuseConfig", "metadata"}
+	fieldsInOrder := [...]string{"projectID", "name", "description", "tags", "version", "vendor", "capabilities", "containerImage", "namespace", "endpoint", "langfuseConfig", "metadata", "helmReleaseName"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -49142,6 +50737,13 @@ func (ec *executionContext) unmarshalInputRegisterAgentInput(ctx context.Context
 				return it, err
 			}
 			it.Metadata = data
+		case "helmReleaseName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("helmReleaseName"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.HelmReleaseName = data
 		}
 	}
 
@@ -50092,6 +51694,8 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "helmReleaseName":
+			out.Values[i] = ec._Agent_helmReleaseName(ctx, field, obj)
 		case "endpoint":
 			out.Values[i] = ec._Agent_endpoint(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -51111,6 +52715,106 @@ func (ec *executionContext) _DeployAgentWithHelmResponse(ctx context.Context, se
 			out.Values[i] = ec._DeployAgentWithHelmResponse_helmReleaseName(ctx, field, obj)
 		case "helmChartVersion":
 			out.Values[i] = ec._DeployAgentWithHelmResponse_helmChartVersion(ctx, field, obj)
+		case "deploymentConfig":
+			out.Values[i] = ec._DeployAgentWithHelmResponse_deploymentConfig(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var deploymentConfigImplementors = []string{"DeploymentConfig"}
+
+func (ec *executionContext) _DeploymentConfig(ctx context.Context, sel ast.SelectionSet, obj *model.DeploymentConfig) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, deploymentConfigImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DeploymentConfig")
+		case "namespace":
+			out.Values[i] = ec._DeploymentConfig_namespace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "releaseName":
+			out.Values[i] = ec._DeploymentConfig_releaseName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "chartPath":
+			out.Values[i] = ec._DeploymentConfig_chartPath(ctx, field, obj)
+		case "chartVersion":
+			out.Values[i] = ec._DeploymentConfig_chartVersion(ctx, field, obj)
+		case "environmentVariables":
+			out.Values[i] = ec._DeploymentConfig_environmentVariables(ctx, field, obj)
+		case "deployedAt":
+			out.Values[i] = ec._DeploymentConfig_deployedAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var envVariableImplementors = []string{"EnvVariable"}
+
+func (ec *executionContext) _EnvVariable(ctx context.Context, sel ast.SelectionSet, obj *model.EnvVariable) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, envVariableImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EnvVariable")
+		case "name":
+			out.Values[i] = ec._EnvVariable_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value":
+			out.Values[i] = ec._EnvVariable_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isSensitive":
+			out.Values[i] = ec._EnvVariable_isSensitive(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -51187,6 +52891,52 @@ func (ec *executionContext) _Environment(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._Environment_isRemoved(ctx, field, obj)
 		case "infraIDs":
 			out.Values[i] = ec._Environment_infraIDs(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var environmentVariableImplementors = []string{"EnvironmentVariable"}
+
+func (ec *executionContext) _EnvironmentVariable(ctx context.Context, sel ast.SelectionSet, obj *model.EnvironmentVariable) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, environmentVariableImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EnvironmentVariable")
+		case "name":
+			out.Values[i] = ec._EnvironmentVariable_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "value":
+			out.Values[i] = ec._EnvironmentVariable_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isSensitive":
+			out.Values[i] = ec._EnvironmentVariable_isSensitive(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -52582,6 +54332,67 @@ func (ec *executionContext) _HealthCheckResult(ctx context.Context, sel ast.Sele
 	return out
 }
 
+var helmValidationResponseImplementors = []string{"HelmValidationResponse"}
+
+func (ec *executionContext) _HelmValidationResponse(ctx context.Context, sel ast.SelectionSet, obj *model.HelmValidationResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, helmValidationResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("HelmValidationResponse")
+		case "valid":
+			out.Values[i] = ec._HelmValidationResponse_valid(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "errors":
+			out.Values[i] = ec._HelmValidationResponse_errors(ctx, field, obj)
+		case "warnings":
+			out.Values[i] = ec._HelmValidationResponse_warnings(ctx, field, obj)
+		case "mergedValues":
+			out.Values[i] = ec._HelmValidationResponse_mergedValues(ctx, field, obj)
+		case "releaseName":
+			out.Values[i] = ec._HelmValidationResponse_releaseName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "namespace":
+			out.Values[i] = ec._HelmValidationResponse_namespace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "chartPath":
+			out.Values[i] = ec._HelmValidationResponse_chartPath(ctx, field, obj)
+		case "environmentVariables":
+			out.Values[i] = ec._HelmValidationResponse_environmentVariables(ctx, field, obj)
+		case "message":
+			out.Values[i] = ec._HelmValidationResponse_message(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var imageRegistryImplementors = []string{"ImageRegistry"}
 
 func (ec *executionContext) _ImageRegistry(ctx context.Context, sel ast.SelectionSet, obj *model.ImageRegistry) graphql.Marshaler {
@@ -53911,6 +55722,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "validateHelmDeployment":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_validateHelmDeployment(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "deployAgentWithHelm":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deployAgentWithHelm(ctx, field)
@@ -54895,6 +56713,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_getAgentCapabilitiesTaxonomy(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getKubernetesNamespaces":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getKubernetesNamespaces(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getEnvironmentVariables":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getEnvironmentVariables(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -57223,6 +59085,16 @@ func (ec *executionContext) marshalNEndpointType2githubᚗcomᚋlitmuschaosᚋli
 	return v
 }
 
+func (ec *executionContext) marshalNEnvVariable2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvVariable(ctx context.Context, sel ast.SelectionSet, v *model.EnvVariable) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._EnvVariable(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNEnvironmentSortingField2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvironmentSortingField(ctx context.Context, v interface{}) (model.EnvironmentSortingField, error) {
 	var res model.EnvironmentSortingField
 	err := res.UnmarshalGQL(v)
@@ -57241,6 +59113,60 @@ func (ec *executionContext) unmarshalNEnvironmentType2githubᚗcomᚋlitmuschaos
 
 func (ec *executionContext) marshalNEnvironmentType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvironmentType(ctx context.Context, sel ast.SelectionSet, v model.EnvironmentType) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNEnvironmentVariable2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvironmentVariableᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.EnvironmentVariable) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNEnvironmentVariable2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvironmentVariable(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNEnvironmentVariable2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvironmentVariable(ctx context.Context, sel ast.SelectionSet, v *model.EnvironmentVariable) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._EnvironmentVariable(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNExecutedByExperiment2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐExecutedByExperiment(ctx context.Context, sel ast.SelectionSet, v *model.ExecutedByExperiment) graphql.Marshaler {
@@ -57866,6 +59792,20 @@ func (ec *executionContext) marshalNGitConfigResponse2ᚖgithubᚗcomᚋlitmusch
 		return graphql.Null
 	}
 	return ec._GitConfigResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNHelmValidationResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmValidationResponse(ctx context.Context, sel ast.SelectionSet, v model.HelmValidationResponse) graphql.Marshaler {
+	return ec._HelmValidationResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNHelmValidationResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmValidationResponse(ctx context.Context, sel ast.SelectionSet, v *model.HelmValidationResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._HelmValidationResponse(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNHubType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHubType(ctx context.Context, v interface{}) (model.HubType, error) {
@@ -59337,6 +61277,60 @@ func (ec *executionContext) unmarshalODateRange2ᚖgithubᚗcomᚋlitmuschaosᚋ
 	}
 	res, err := ec.unmarshalInputDateRange(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalODeploymentConfig2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐDeploymentConfig(ctx context.Context, sel ast.SelectionSet, v *model.DeploymentConfig) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._DeploymentConfig(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOEnvVariable2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvVariableᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.EnvVariable) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNEnvVariable2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvVariable(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalOEnvironment2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐEnvironment(ctx context.Context, sel ast.SelectionSet, v []*model.Environment) graphql.Marshaler {

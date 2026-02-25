@@ -54,7 +54,7 @@ const devConfig = {
         target: process.env.CHAOS_MANAGER
           ? process.env.CHAOS_MANAGER
           : targetLocalHost
-          ? 'http://localhost:3030'
+          ? 'http://localhost:3000'
           : `${baseUrl}/auth`,
         secure: false,
         changeOrigin: true,

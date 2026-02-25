@@ -1,3 +1,4 @@
+````markdown
 # MongoDB Single-Node Replica Set Setup Instructions
 
 This guide outlines the steps to deploy a MongoDB 5.0 container configured as a single-node replica set with admin authentication.
@@ -164,3 +165,74 @@ kubectl create clusterrolebinding argo-chaos-cluster-admin \
 
 
 
+## LiteLLM Setup
+
+LiteLLM provides a unified Python SDK and AI Gateway (proxy) to call 100+ LLMs (OpenAI, Anthropic, Azure, etc.) with an OpenAI-compatible API. Complete docs: https://docs.litellm.ai/
+
+### 1. Install LiteLLM
+
+```bash
+pip install 'litellm[proxy]'
+```
+
+### 2. Start LiteLLM Proxy (OpenAI-compatible endpoint on port 4000) 
+
+```bash
+# Start proxy with a default model
+litellm --model gpt-4o --port 4000
+```
+
+### 3. Verify LiteLLM is Running
+
+```bash
+curl http://localhost:4000/v1/models
+```
+
+### 4. Test with Python
+
+```python
+from litellm import completion
+import os
+os.environ['OPENAI_API_KEY'] = 'your-openai-key'
+response = completion(
+    model='gpt-4o',
+    messages=[{'role': 'user', 'content': 'Hello!'}],
+    api_base='http://localhost:4000'
+)
+print(response['choices'][0]['message']['content'])
+```
+
+---
+
+## Langfuse Setup
+
+Langfuse is an open-source LLM observability platform. Docs: https://docs.langfuse.com/
+
+### Option 1: Langfuse Cloud (Quick Start)
+
+1. Go to https://cloud.langfuse.com
+2. Sign up and create a project
+3. Get API keys from Settings > API Keys
+
+```bash
+export LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx
+export LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
+export LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+
+## Complete Environment Variables
+
+```bash
+# LiteLLM
+export LITELLM_URL=http://localhost:4000
+export MODEL_ALIAS=gpt-4o
+export OPENAI_API_KEY=your-openai-key
+
+# Langfuse
+export LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx
+export LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
+export LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+````
