@@ -69,9 +69,11 @@ const LoginController: React.FC = () => {
         if (response.isInitialLogin) {
           history.push(`/account/${userDetails.accountID}/settings/password-reset`);
         } else {
-          history.push(
-            normalizePath(`/account/${userDetails.accountID}/project/${userDetails.projectID ?? ''}/dashboard`)
-          );
+          if (userDetails.projectID) {
+            history.push(normalizePath(`/account/${userDetails.accountID}/project/${userDetails.projectID}/dashboard`));
+          } else {
+            history.push(normalizePath(`/account/${userDetails.accountID}/projects`));
+          }
         }
       }
     }

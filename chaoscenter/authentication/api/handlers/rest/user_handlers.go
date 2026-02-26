@@ -340,7 +340,7 @@ func LoginUser(service services.ApplicationService) gin.HandlerFunc {
 
 		if len(ownerProjects) > 0 {
 			defaultProject = ownerProjects[0].ID
-		} else if !user.IsInitialLogin {
+		} else {
 			// Adding user as project owner in project's member list
 			newMember := &entities.Member{
 				UserID:     user.ID,
