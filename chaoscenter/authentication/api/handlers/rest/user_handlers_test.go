@@ -423,6 +423,30 @@ func TestLoginUser(t *testing.T) {
 			expectedCode: http.StatusOK,
 		},
 		{
+			name: "Successfully login user and create project when none exists",
+			input: entities.User{
+				Username: "newLoginUser",
+				Password: "testPassword",
+			},
+			given: func() {
+				userFromDB := &entities.User{
+					ID:             "newLoginUserID",
+					Username:       "newLoginUser",
+					Password:       "hashedPassword",
+					Email:          "newlogin@example.com",
+					IsInitialLogin: true,
+				}
+				service.On("GetConfig", "salt").Return(&authConfig.AuthConfig{}, nil)
+				service.On("FindUserByUsername", "newLoginUser").Return(userFromDB, nil)
+				service.On("CheckPasswordHash", "hashedPassword", "testPassword").Return(nil)
+				service.On("UpdateUserByQuery", mock.Anything, mock.Anything).Return(nil)
+				service.On("GetSignedJWT", userFromDB, mock.Anything).Return("someJWTToken", nil)
+				service.On("GetOwnerProjectIDs", mock.Anything, "newLoginUserID").Return([]*entities.Project{}, nil)
+				service.On("CreateProject", mock.AnythingOfType("*entities.Project")).Return(nil)
+			},
+			expectedCode: http.StatusOK,
+		},
+		{
 			name:         "Invalid JSON body",
 			given:        func() {},
 			expectedCode: utils.ErrorStatusCodes[utils.ErrInvalidRequest],

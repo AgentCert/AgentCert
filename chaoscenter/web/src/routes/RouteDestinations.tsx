@@ -148,7 +148,11 @@ export function RoutesWithoutAuthentication(): React.ReactElement {
 
   React.useEffect(() => {
     if (token && isUserAuthenticated()) {
-      history.push(`/account/${accountID}/project/${projectID}${renderPaths.toDashboard()}`);
+      if (projectID) {
+        history.push(`/account/${accountID}/project/${projectID}${renderPaths.toDashboard()}`);
+      } else {
+        history.push(`/account/${accountID}${renderPaths.toProjects()}`);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectID, token]);
