@@ -84,7 +84,7 @@ export INFRA_COMPATIBLE_VERSIONS='["0.2.0", "0.1.0","ci"]'
 export DEFAULT_HUB_BRANCH_NAME=master
 export REST_PORT=3000                              
 export GRPC_PORT=3030
-export ALLOWED_ORIGINS="*" 
+export ALLOWED_ORIGINS=".*" 
 ```
 
 ### Run the service
