@@ -203,6 +203,7 @@ LiteLLM provides a unified Python SDK and AI Gateway (proxy) to call 100+ LLMs (
 pip install 'litellm[proxy]'
 pip install prisma
 pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp
+pip install langfuse
 prisma generate --schema <PATH>/.venv/lib/python3.10/site-packages/litellm/proxy/schema.prismaa
 ```
 
