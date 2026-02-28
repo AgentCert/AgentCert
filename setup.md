@@ -167,12 +167,42 @@ kubectl create clusterrolebinding argo-chaos-cluster-admin \
 
 ## LiteLLM Setup
 
+### Postgres Container: This container will use port 5433 on your host.
+```
+docker run --name litellm-postgres \
+  -e POSTGRES_USER=litellm_user \
+  -e POSTGRES_PASSWORD=litellm_pass \
+  -e POSTGRES_DB=litellm_db \
+  -p 5433:5432 \
+  -d postgres:17
+```
+
+### Update your litellm-config.yaml
+```
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: gpt-4o
+
+litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+
+general_settings:
+  port: 4000
+  database_url: "postgresql://litellm_user:litellm_pass@localhost:5433/litellm_db"
+  master_key: sk-1234
+  ui_username: admin
+```
+
 LiteLLM provides a unified Python SDK and AI Gateway (proxy) to call 100+ LLMs (OpenAI, Anthropic, Azure, etc.) with an OpenAI-compatible API. Complete docs: https://docs.litellm.ai/
 
 ### 1. Install LiteLLM
 
 ```bash
 pip install 'litellm[proxy]'
+pip install prisma
+prisma generate --schema <PATH>/.venv/lib/python3.10/site-packages/litellm/proxy/schema.prismaa
 ```
 
 ### 2. Start LiteLLM Proxy (OpenAI-compatible endpoint on port 4000) 
