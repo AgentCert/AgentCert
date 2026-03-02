@@ -26,3 +26,27 @@ litmus-portal/graphql-server/server
 data/*
 # Setup scripts for local development
 setup/
+
+# Compiled Go binaries
+*.exe
+*.log
+
+# AgentCert runtime files (PID files, launcher scripts)
+.agentcert-*.pid
+.agentcert-pids.json
+.auth-launcher.ps1
+.graphql-launcher.ps1
+
+# Helm chart packages
+*.tgz
+
+# Build output
+build-output.log
+server_console.log
+server_errors.log
+
+# Environment files
+.env.*
+
+# Output artifacts
+output/

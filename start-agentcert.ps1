@@ -30,7 +30,7 @@ Write-Host ""
 # ============================================================================
 Write-Status "Checking for port conflicts..."
 
-$ports = @(3001, 3030, 8080)
+$ports = @(2001, 3030, 8080)
 $portsInUse = @()
 
 foreach ($port in $ports) {
@@ -282,11 +282,11 @@ $frontendProcess = Start-Process -FilePath "powershell" -ArgumentList "-NoExit",
 $frontendProcess.Id | Out-File -FilePath (Join-Path $ProjectRoot ".agentcert-frontend.pid") -Force
 
 # Wait for frontend to be ready
-Write-Wait "Waiting for Frontend to be ready on port 3001..."
+Write-Wait "Waiting for Frontend to be ready on port 2001..."
 $maxRetries = 60
 $retry = 0
 while ($retry -lt $maxRetries) {
-    $listening = Get-NetTCPConnection -LocalPort 3001 -State Listen -ErrorAction SilentlyContinue
+    $listening = Get-NetTCPConnection -LocalPort 2001 -State Listen -ErrorAction SilentlyContinue
     if ($listening) {
         Write-Success "Frontend is ready (PID: $($frontendProcess.Id))"
         break
@@ -312,7 +312,7 @@ Write-Host "Services:" -ForegroundColor White
 Write-Host "  - MongoDB:        localhost:27017" -ForegroundColor Gray
 Write-Host "  - Auth Service:   localhost:3030 (gRPC)" -ForegroundColor Gray
 Write-Host "  - GraphQL Server: http://localhost:8080" -ForegroundColor Gray
-Write-Host "  - Frontend:       https://localhost:3001" -ForegroundColor Gray
+Write-Host "  - Frontend:       https://localhost:2001" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Default Credentials:" -ForegroundColor White
 Write-Host "  - Username: admin" -ForegroundColor Gray
