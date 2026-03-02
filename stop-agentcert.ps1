@@ -126,7 +126,7 @@ if (Test-Path $pidFile) {
 }
 
 # ============================================================================
-# Step 2: Stop Frontend (Port 3001)
+# Step 2: Stop Frontend (Port 2001)
 # ============================================================================
 Write-Status "Stopping Frontend..."
 
@@ -137,9 +137,9 @@ if ($savedPids -and $savedPids.Frontend) {
     $frontendStopped = Stop-ServiceGracefully -ProcessId $savedPids.Frontend -ServiceName "Frontend"
 }
 
-# Also check for any node processes on port 3001
+# Also check for any node processes on port 2001
 if (-not $frontendStopped) {
-    $frontendStopped = Stop-ProcessByPort -Port 3001 -ServiceName "Frontend"
+    $frontendStopped = Stop-ProcessByPort -Port 2001 -ServiceName "Frontend"
 }
 
 # Kill any remaining node processes that might be webpack-dev-server
@@ -206,7 +206,7 @@ foreach ($proc in $authProcesses) {
 # ============================================================================
 Write-Status "Waiting for ports to be released..."
 
-$ports = @(3001, 3030, 8080)
+$ports = @(2001, 3030, 8080)
 $maxWait = 10
 $waited = 0
 
