@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -91,13 +90,19 @@ func (ev *subscriberEvents) CheckChaosData(nodeStatus v1alpha13.NodeStatus, work
 		if nodeStatus.Phase != "Pending" {
 			name := obj.GetName()
 			if obj.GetGenerateName() != "" {
-				log, err := ev.subscriberK8s.GetLogs(nodeStatus.ID, workflowNS, "main")
-				if err != nil {
-					return nodeType, nil, err
+				// Try log-based lookup first
+				log, logErr := ev.subscriberK8s.GetLogs(nodeStatus.ID, workflowNS, "main")
+				if logErr == nil {
+					name = getNameFromLog(log)
 				}
-				name = getNameFromLog(log)
+				// Fallback: query ChaosEngines by label if log-based lookup failed
 				if name == "" {
-					return nodeType, nil, errors.New("Chaos-Engine Generated Name couldn't be retrieved")
+					logrus.Infof("Log-based ChaosEngine name lookup failed for generateName=%s, trying label-based fallback", obj.GetGenerateName())
+					name, err = ev.findChaosEngineByLabel(obj.GetGenerateName(), obj.GetNamespace(), obj.GetLabels(), chaosClient)
+					if err != nil || name == "" {
+						return nodeType, nil, fmt.Errorf("Chaos-Engine Generated Name couldn't be retrieved (generateName=%s): log parse failed, label fallback failed: %v", obj.GetGenerateName(), err)
+					}
+					logrus.Infof("Found ChaosEngine via label fallback: %s", name)
 				}
 			}
 			cd, err = ev.getChaosData(nodeStatus, name, obj.GetNamespace(), chaosClient)
@@ -105,6 +110,52 @@ func (ev *subscriberEvents) CheckChaosData(nodeStatus v1alpha13.NodeStatus, work
 		}
 	}
 	return nodeType, nil, nil
+}
+
+// findChaosEngineByLabel looks up ChaosEngines by workflow_run_id label and generateName prefix
+func (ev *subscriberEvents) findChaosEngineByLabel(generateName, namespace string, labels map[string]string, chaosClient *v1alpha12.LitmuschaosV1alpha1Client) (string, error) {
+	ctx := context.Background()
+
+	// Try workflow_run_id label first (most specific)
+	if wfRunID, ok := labels["workflow_run_id"]; ok && wfRunID != "" {
+		engines, err := chaosClient.ChaosEngines(namespace).List(ctx, v1.ListOptions{
+			LabelSelector: fmt.Sprintf("workflow_run_id=%s", wfRunID),
+		})
+		if err == nil && engines != nil {
+			for _, engine := range engines.Items {
+				if strings.HasPrefix(engine.Name, generateName) {
+					return engine.Name, nil
+				}
+			}
+		}
+	}
+
+	// Try workflow_name label as broader fallback
+	if wfName, ok := labels["workflow_name"]; ok && wfName != "" {
+		engines, err := chaosClient.ChaosEngines(namespace).List(ctx, v1.ListOptions{
+			LabelSelector: fmt.Sprintf("workflow_name=%s", wfName),
+		})
+		if err == nil && engines != nil {
+			for _, engine := range engines.Items {
+				if strings.HasPrefix(engine.Name, generateName) {
+					return engine.Name, nil
+				}
+			}
+		}
+	}
+
+	// Last resort: list all ChaosEngines in namespace and match by prefix
+	engines, err := chaosClient.ChaosEngines(namespace).List(ctx, v1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to list ChaosEngines: %v", err)
+	}
+	for _, engine := range engines.Items {
+		if strings.HasPrefix(engine.Name, generateName) {
+			return engine.Name, nil
+		}
+	}
+
+	return "", fmt.Errorf("no ChaosEngine found with generateName prefix %s in namespace %s", generateName, namespace)
 }
 
 func getNameFromLog(log string) string {

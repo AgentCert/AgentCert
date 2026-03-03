@@ -4219,7 +4219,7 @@ spec:
       #{NODE_SELECTOR}
       containers:
         - name: subscriber
-          image: litmuschaos/litmusportal-subscriber:3.0.0
+          image: agentcert/litmusportal-subscriber:3.0.0
           imagePullPolicy: Always
           securityContext:
             runAsUser: 2000
