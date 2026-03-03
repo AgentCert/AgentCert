@@ -16,6 +16,8 @@ jobs:
      matrix:
        sanitizer: [address]
    steps:
+   - name: Checkout
+     uses: actions/checkout@v4
    - name: Build Fuzzers (${{ matrix.sanitizer }})
      id: build
      uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
@@ -23,6 +25,7 @@ jobs:
        oss-fuzz-project-name: 'litmuschaos'
        language: go
        sanitizer: ${{ matrix.sanitizer }}
+       project-src-path: ${{ github.workspace }}
    - name: Run Fuzzers (${{ matrix.sanitizer }})
      uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
      with:
