@@ -85,6 +85,37 @@ type ComplexityRoot struct {
 		URL           func(childComplexity int) int
 	}
 
+	AgentHubCategory struct {
+		Agents              func(childComplexity int) int
+		CategoryDescription func(childComplexity int) int
+		DisplayName         func(childComplexity int) int
+	}
+
+	AgentHubEntry struct {
+		AgentID          func(childComplexity int) int
+		Capabilities     func(childComplexity int) int
+		DeploymentStatus func(childComplexity int) int
+		Description      func(childComplexity int) int
+		DisplayName      func(childComplexity int) int
+		HelmReleaseName  func(childComplexity int) int
+		IsDeployed       func(childComplexity int) int
+		Name             func(childComplexity int) int
+		Namespace        func(childComplexity int) int
+		Version          func(childComplexity int) int
+	}
+
+	AgentHubStatus struct {
+		DeployedAgents func(childComplexity int) int
+		ID             func(childComplexity int) int
+		IsAvailable    func(childComplexity int) int
+		IsDefault      func(childComplexity int) int
+		LastSyncedAt   func(childComplexity int) int
+		Name           func(childComplexity int) int
+		RepoBranch     func(childComplexity int) int
+		RepoURL        func(childComplexity int) int
+		TotalAgents    func(childComplexity int) int
+	}
+
 	AgentListResponse struct {
 		Agents      func(childComplexity int) int
 		CurrentPage func(childComplexity int) int
@@ -114,6 +145,36 @@ type ComplexityRoot struct {
 		Repository       func(childComplexity int) int
 		Support          func(childComplexity int) int
 		Vendor           func(childComplexity int) int
+	}
+
+	AppHubCategory struct {
+		Applications        func(childComplexity int) int
+		CategoryDescription func(childComplexity int) int
+		DisplayName         func(childComplexity int) int
+	}
+
+	AppHubEntry struct {
+		Description     func(childComplexity int) int
+		DisplayName     func(childComplexity int) int
+		HelmReleaseName func(childComplexity int) int
+		IsDeployed      func(childComplexity int) int
+		Microservices   func(childComplexity int) int
+		Name            func(childComplexity int) int
+		Namespace       func(childComplexity int) int
+		RunningServices func(childComplexity int) int
+		Version         func(childComplexity int) int
+	}
+
+	AppHubStatus struct {
+		DeployedApps func(childComplexity int) int
+		ID           func(childComplexity int) int
+		IsAvailable  func(childComplexity int) int
+		IsDefault    func(childComplexity int) int
+		LastSyncedAt func(childComplexity int) int
+		Name         func(childComplexity int) int
+		RepoBranch   func(childComplexity int) int
+		RepoURL      func(childComplexity int) int
+		TotalApps    func(childComplexity int) int
 	}
 
 	AuditInfo struct {
@@ -686,6 +747,14 @@ type ComplexityRoot struct {
 		Post func(childComplexity int) int
 	}
 
+	Microservice struct {
+		Description     func(childComplexity int) int
+		DesiredReplicas func(childComplexity int) int
+		IsRunning       func(childComplexity int) int
+		Name            func(childComplexity int) int
+		ReadyReplicas   func(childComplexity int) int
+	}
+
 	Mutation struct {
 		AddChaosHub               func(childComplexity int, projectID string, request model.CreateChaosHubRequest) int
 		AddFaultToStudio          func(childComplexity int, projectID string, studioID string, fault model.FaultSelectionInput) int
@@ -817,8 +886,10 @@ type ComplexityRoot struct {
 	Query struct {
 		GetAgent                     func(childComplexity int, agentID string) int
 		GetAgentCapabilitiesTaxonomy func(childComplexity int) int
+		GetAgentHubStatus            func(childComplexity int, projectID string) int
 		GetAgentStatus               func(childComplexity int, agentID string) int
 		GetAgentsByCapabilities      func(childComplexity int, projectID string, capabilities []string) int
+		GetAppHubStatus              func(childComplexity int, projectID string) int
 		GetChaosFault                func(childComplexity int, projectID string, request model.ExperimentRequest) int
 		GetChaosHub                  func(childComplexity int, projectID string, chaosHubID string) int
 		GetChaosHubStats             func(childComplexity int, projectID string) int
@@ -845,7 +916,9 @@ type ComplexityRoot struct {
 		GetServerVersion             func(childComplexity int) int
 		GetVersionDetails            func(childComplexity int, projectID string) int
 		IsFaultStudioNameAvailable   func(childComplexity int, projectID string, name string, excludeStudioID *string) int
+		ListAgentHubCategories       func(childComplexity int, projectID string) int
 		ListAgents                   func(childComplexity int, filter *model.ListAgentsFilter, pagination model.PaginationInput) int
+		ListAppHubCategories         func(childComplexity int, projectID string) int
 		ListAvailableFaultsForStudio func(childComplexity int, projectID string, hubID string) int
 		ListChaosFaults              func(childComplexity int, hubID string, projectID string) int
 		ListChaosHub                 func(childComplexity int, projectID string, request *model.ListChaosHubRequest) int
@@ -1055,6 +1128,10 @@ type QueryResolver interface {
 	GetFaultStudioStats(ctx context.Context, projectID string) (*model.FaultStudioStatsResponse, error)
 	IsFaultStudioNameAvailable(ctx context.Context, projectID string, name string, excludeStudioID *string) (bool, error)
 	GetGitOpsDetails(ctx context.Context, projectID string) (*model.GitConfigResponse, error)
+	ListAgentHubCategories(ctx context.Context, projectID string) ([]*model.AgentHubCategory, error)
+	GetAgentHubStatus(ctx context.Context, projectID string) (*model.AgentHubStatus, error)
+	ListAppHubCategories(ctx context.Context, projectID string) ([]*model.AppHubCategory, error)
+	GetAppHubStatus(ctx context.Context, projectID string) (*model.AppHubStatus, error)
 	ListImageRegistry(ctx context.Context, projectID string) ([]*model.ImageRegistryResponse, error)
 	GetImageRegistry(ctx context.Context, projectID string) (*model.ImageRegistryResponse, error)
 	ListProbes(ctx context.Context, projectID string, infrastructureType *model.InfrastructureType, probeNames []string, filter *model.ProbeFilterInput) ([]*model.Probe, error)
@@ -1280,6 +1357,160 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.AgentEndpoint.URL(childComplexity), true
 
+	case "AgentHubCategory.agents":
+		if e.complexity.AgentHubCategory.Agents == nil {
+			break
+		}
+
+		return e.complexity.AgentHubCategory.Agents(childComplexity), true
+
+	case "AgentHubCategory.categoryDescription":
+		if e.complexity.AgentHubCategory.CategoryDescription == nil {
+			break
+		}
+
+		return e.complexity.AgentHubCategory.CategoryDescription(childComplexity), true
+
+	case "AgentHubCategory.displayName":
+		if e.complexity.AgentHubCategory.DisplayName == nil {
+			break
+		}
+
+		return e.complexity.AgentHubCategory.DisplayName(childComplexity), true
+
+	case "AgentHubEntry.agentID":
+		if e.complexity.AgentHubEntry.AgentID == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.AgentID(childComplexity), true
+
+	case "AgentHubEntry.capabilities":
+		if e.complexity.AgentHubEntry.Capabilities == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.Capabilities(childComplexity), true
+
+	case "AgentHubEntry.deploymentStatus":
+		if e.complexity.AgentHubEntry.DeploymentStatus == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.DeploymentStatus(childComplexity), true
+
+	case "AgentHubEntry.description":
+		if e.complexity.AgentHubEntry.Description == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.Description(childComplexity), true
+
+	case "AgentHubEntry.displayName":
+		if e.complexity.AgentHubEntry.DisplayName == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.DisplayName(childComplexity), true
+
+	case "AgentHubEntry.helmReleaseName":
+		if e.complexity.AgentHubEntry.HelmReleaseName == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.HelmReleaseName(childComplexity), true
+
+	case "AgentHubEntry.isDeployed":
+		if e.complexity.AgentHubEntry.IsDeployed == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.IsDeployed(childComplexity), true
+
+	case "AgentHubEntry.name":
+		if e.complexity.AgentHubEntry.Name == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.Name(childComplexity), true
+
+	case "AgentHubEntry.namespace":
+		if e.complexity.AgentHubEntry.Namespace == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.Namespace(childComplexity), true
+
+	case "AgentHubEntry.version":
+		if e.complexity.AgentHubEntry.Version == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.Version(childComplexity), true
+
+	case "AgentHubStatus.deployedAgents":
+		if e.complexity.AgentHubStatus.DeployedAgents == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.DeployedAgents(childComplexity), true
+
+	case "AgentHubStatus.id":
+		if e.complexity.AgentHubStatus.ID == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.ID(childComplexity), true
+
+	case "AgentHubStatus.isAvailable":
+		if e.complexity.AgentHubStatus.IsAvailable == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.IsAvailable(childComplexity), true
+
+	case "AgentHubStatus.isDefault":
+		if e.complexity.AgentHubStatus.IsDefault == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.IsDefault(childComplexity), true
+
+	case "AgentHubStatus.lastSyncedAt":
+		if e.complexity.AgentHubStatus.LastSyncedAt == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.LastSyncedAt(childComplexity), true
+
+	case "AgentHubStatus.name":
+		if e.complexity.AgentHubStatus.Name == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.Name(childComplexity), true
+
+	case "AgentHubStatus.repoBranch":
+		if e.complexity.AgentHubStatus.RepoBranch == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.RepoBranch(childComplexity), true
+
+	case "AgentHubStatus.repoURL":
+		if e.complexity.AgentHubStatus.RepoURL == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.RepoURL(childComplexity), true
+
+	case "AgentHubStatus.totalAgents":
+		if e.complexity.AgentHubStatus.TotalAgents == nil {
+			break
+		}
+
+		return e.complexity.AgentHubStatus.TotalAgents(childComplexity), true
+
 	case "AgentListResponse.agents":
 		if e.complexity.AgentListResponse.Agents == nil {
 			break
@@ -1412,6 +1643,153 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Annotation.Vendor(childComplexity), true
+
+	case "AppHubCategory.applications":
+		if e.complexity.AppHubCategory.Applications == nil {
+			break
+		}
+
+		return e.complexity.AppHubCategory.Applications(childComplexity), true
+
+	case "AppHubCategory.categoryDescription":
+		if e.complexity.AppHubCategory.CategoryDescription == nil {
+			break
+		}
+
+		return e.complexity.AppHubCategory.CategoryDescription(childComplexity), true
+
+	case "AppHubCategory.displayName":
+		if e.complexity.AppHubCategory.DisplayName == nil {
+			break
+		}
+
+		return e.complexity.AppHubCategory.DisplayName(childComplexity), true
+
+	case "AppHubEntry.description":
+		if e.complexity.AppHubEntry.Description == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.Description(childComplexity), true
+
+	case "AppHubEntry.displayName":
+		if e.complexity.AppHubEntry.DisplayName == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.DisplayName(childComplexity), true
+
+	case "AppHubEntry.helmReleaseName":
+		if e.complexity.AppHubEntry.HelmReleaseName == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.HelmReleaseName(childComplexity), true
+
+	case "AppHubEntry.isDeployed":
+		if e.complexity.AppHubEntry.IsDeployed == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.IsDeployed(childComplexity), true
+
+	case "AppHubEntry.microservices":
+		if e.complexity.AppHubEntry.Microservices == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.Microservices(childComplexity), true
+
+	case "AppHubEntry.name":
+		if e.complexity.AppHubEntry.Name == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.Name(childComplexity), true
+
+	case "AppHubEntry.namespace":
+		if e.complexity.AppHubEntry.Namespace == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.Namespace(childComplexity), true
+
+	case "AppHubEntry.runningServices":
+		if e.complexity.AppHubEntry.RunningServices == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.RunningServices(childComplexity), true
+
+	case "AppHubEntry.version":
+		if e.complexity.AppHubEntry.Version == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.Version(childComplexity), true
+
+	case "AppHubStatus.deployedApps":
+		if e.complexity.AppHubStatus.DeployedApps == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.DeployedApps(childComplexity), true
+
+	case "AppHubStatus.id":
+		if e.complexity.AppHubStatus.ID == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.ID(childComplexity), true
+
+	case "AppHubStatus.isAvailable":
+		if e.complexity.AppHubStatus.IsAvailable == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.IsAvailable(childComplexity), true
+
+	case "AppHubStatus.isDefault":
+		if e.complexity.AppHubStatus.IsDefault == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.IsDefault(childComplexity), true
+
+	case "AppHubStatus.lastSyncedAt":
+		if e.complexity.AppHubStatus.LastSyncedAt == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.LastSyncedAt(childComplexity), true
+
+	case "AppHubStatus.name":
+		if e.complexity.AppHubStatus.Name == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.Name(childComplexity), true
+
+	case "AppHubStatus.repoBranch":
+		if e.complexity.AppHubStatus.RepoBranch == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.RepoBranch(childComplexity), true
+
+	case "AppHubStatus.repoURL":
+		if e.complexity.AppHubStatus.RepoURL == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.RepoURL(childComplexity), true
+
+	case "AppHubStatus.totalApps":
+		if e.complexity.AppHubStatus.TotalApps == nil {
+			break
+		}
+
+		return e.complexity.AppHubStatus.TotalApps(childComplexity), true
 
 	case "AuditInfo.createdAt":
 		if e.complexity.AuditInfo.CreatedAt == nil {
@@ -4080,6 +4458,41 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Method.Post(childComplexity), true
 
+	case "Microservice.description":
+		if e.complexity.Microservice.Description == nil {
+			break
+		}
+
+		return e.complexity.Microservice.Description(childComplexity), true
+
+	case "Microservice.desiredReplicas":
+		if e.complexity.Microservice.DesiredReplicas == nil {
+			break
+		}
+
+		return e.complexity.Microservice.DesiredReplicas(childComplexity), true
+
+	case "Microservice.isRunning":
+		if e.complexity.Microservice.IsRunning == nil {
+			break
+		}
+
+		return e.complexity.Microservice.IsRunning(childComplexity), true
+
+	case "Microservice.name":
+		if e.complexity.Microservice.Name == nil {
+			break
+		}
+
+		return e.complexity.Microservice.Name(childComplexity), true
+
+	case "Microservice.readyReplicas":
+		if e.complexity.Microservice.ReadyReplicas == nil {
+			break
+		}
+
+		return e.complexity.Microservice.ReadyReplicas(childComplexity), true
+
 	case "Mutation.addChaosHub":
 		if e.complexity.Mutation.AddChaosHub == nil {
 			break
@@ -5030,6 +5443,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.GetAgentCapabilitiesTaxonomy(childComplexity), true
 
+	case "Query.getAgentHubStatus":
+		if e.complexity.Query.GetAgentHubStatus == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getAgentHubStatus_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetAgentHubStatus(childComplexity, args["projectID"].(string)), true
+
 	case "Query.getAgentStatus":
 		if e.complexity.Query.GetAgentStatus == nil {
 			break
@@ -5053,6 +5478,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.GetAgentsByCapabilities(childComplexity, args["projectID"].(string), args["capabilities"].([]string)), true
+
+	case "Query.getAppHubStatus":
+		if e.complexity.Query.GetAppHubStatus == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getAppHubStatus_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetAppHubStatus(childComplexity, args["projectID"].(string)), true
 
 	case "Query.getChaosFault":
 		if e.complexity.Query.GetChaosFault == nil {
@@ -5351,6 +5788,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.IsFaultStudioNameAvailable(childComplexity, args["projectID"].(string), args["name"].(string), args["excludeStudioID"].(*string)), true
 
+	case "Query.listAgentHubCategories":
+		if e.complexity.Query.ListAgentHubCategories == nil {
+			break
+		}
+
+		args, err := ec.field_Query_listAgentHubCategories_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.ListAgentHubCategories(childComplexity, args["projectID"].(string)), true
+
 	case "Query.listAgents":
 		if e.complexity.Query.ListAgents == nil {
 			break
@@ -5362,6 +5811,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.ListAgents(childComplexity, args["filter"].(*model.ListAgentsFilter), args["pagination"].(model.PaginationInput)), true
+
+	case "Query.listAppHubCategories":
+		if e.complexity.Query.ListAppHubCategories == nil {
+			break
+		}
+
+		args, err := ec.field_Query_listAppHubCategories_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.ListAppHubCategories(childComplexity, args["projectID"].(string)), true
 
 	case "Query.listAvailableFaultsForStudio":
 		if e.complexity.Query.ListAvailableFaultsForStudio == nil {
@@ -9800,6 +10261,177 @@ extend type Mutation {
     """
     updateGitOps(projectID: ID!,configurations: GitConfig!): Boolean! @authorized
 }`, BuiltIn: false},
+	{Name: "../../../definitions/shared/hubs.graphqls", Input: `# AgentHub & AppsHub GraphQL Schema
+# Extends the ChaosHub pattern for agent and application catalogues
+
+# ──────────────────────────────────────────────────
+# AgentHub Types
+# ──────────────────────────────────────────────────
+
+"""
+Represents a single agent entry in the AgentHub catalogue.
+Combines static chart metadata with live deployment status.
+"""
+type AgentHubEntry {
+  """Agent identifier (folder name in agent-charts repo)"""
+  name: String!
+  """Human-readable name"""
+  displayName: String!
+  """One-liner description shown on the card"""
+  description: String!
+  """Semantic version from chart"""
+  version: String!
+  """List of capabilities this agent supports"""
+  capabilities: [String!]!
+  """Whether this agent is currently deployed in the cluster"""
+  isDeployed: Boolean!
+  """Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)"""
+  deploymentStatus: String
+  """Agent ID in the registry (if deployed)"""
+  agentID: ID
+  """Namespace where the agent is deployed"""
+  namespace: String
+  """Helm release name (if deployed via Helm)"""
+  helmReleaseName: String
+}
+
+"""
+A category of agents in the AgentHub (e.g., "AI Agents").
+"""
+type AgentHubCategory {
+  """Category name"""
+  displayName: String!
+  """Category-level description"""
+  categoryDescription: String!
+  """Agents in this category"""
+  agents: [AgentHubEntry!]!
+}
+
+"""
+Status of an AgentHub, analogous to ChaosHubStatus.
+"""
+type AgentHubStatus {
+  """Hub ID"""
+  id: ID!
+  """Hub name"""
+  name: String!
+  """Git repo URL"""
+  repoURL: String!
+  """Git branch"""
+  repoBranch: String!
+  """Whether the hub is synced and available"""
+  isAvailable: Boolean!
+  """Total number of agents defined in the hub"""
+  totalAgents: Int!
+  """Number of agents currently deployed"""
+  deployedAgents: Int!
+  """Whether this is the default hub"""
+  isDefault: Boolean!
+  """Last synced timestamp"""
+  lastSyncedAt: String!
+}
+
+# ──────────────────────────────────────────────────
+# AppsHub Types
+# ──────────────────────────────────────────────────
+
+"""
+A microservice within an application.
+"""
+type Microservice {
+  """Microservice name (e.g., "carts")"""
+  name: String!
+  """One-liner description"""
+  description: String!
+  """Whether this microservice pod is currently running"""
+  isRunning: Boolean
+  """Number of ready replicas"""
+  readyReplicas: Int
+  """Number of desired replicas"""
+  desiredReplicas: Int
+}
+
+"""
+Represents a single application entry in the AppsHub catalogue.
+Combines static chart metadata with live deployment status.
+"""
+type AppHubEntry {
+  """Application identifier (folder name in app-charts repo)"""
+  name: String!
+  """Human-readable name"""
+  displayName: String!
+  """One-liner description shown on the card"""
+  description: String!
+  """Semantic version from chart"""
+  version: String!
+  """Target namespace for deployment"""
+  namespace: String!
+  """Microservices that comprise this application"""
+  microservices: [Microservice!]!
+  """Whether this application is currently deployed in the cluster"""
+  isDeployed: Boolean!
+  """Number of microservices running vs total (e.g., "11/13")"""
+  runningServices: String
+  """Helm release name (if deployed via Helm)"""
+  helmReleaseName: String
+}
+
+"""
+A category of applications in the AppsHub (e.g., "Target Applications").
+"""
+type AppHubCategory {
+  """Category name"""
+  displayName: String!
+  """Category-level description"""
+  categoryDescription: String!
+  """Applications in this category"""
+  applications: [AppHubEntry!]!
+}
+
+"""
+Status of an AppsHub, analogous to ChaosHubStatus.
+"""
+type AppHubStatus {
+  """Hub ID"""
+  id: ID!
+  """Hub name"""
+  name: String!
+  """Git repo URL"""
+  repoURL: String!
+  """Git branch"""
+  repoBranch: String!
+  """Whether the hub is synced and available"""
+  isAvailable: Boolean!
+  """Total number of applications defined in the hub"""
+  totalApps: Int!
+  """Number of applications currently deployed"""
+  deployedApps: Int!
+  """Whether this is the default hub"""
+  isDefault: Boolean!
+  """Last synced timestamp"""
+  lastSyncedAt: String!
+}
+
+# ──────────────────────────────────────────────────
+# Queries
+# ──────────────────────────────────────────────────
+
+extend type Query {
+  # AgentHub Queries
+  """List all agent hub categories with their agents and deployment status"""
+  listAgentHubCategories(projectID: ID!): [AgentHubCategory!]! @authorized
+
+  """Get the AgentHub status (sync state, counts)"""
+  getAgentHubStatus(projectID: ID!): AgentHubStatus! @authorized
+
+  # AppsHub Queries
+  """List all app hub categories with their applications and deployment status"""
+  listAppHubCategories(projectID: ID!): [AppHubCategory!]! @authorized
+
+  """Get the AppsHub status (sync state, counts)"""
+  getAppHubStatus(projectID: ID!): AppHubStatus! @authorized
+}
+`, BuiltIn: false},
 	{Name: "../../../definitions/shared/image_registry.graphqls", Input: `"""
 Defines details for image registry
 """
@@ -12317,6 +12949,21 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_getAgentHubStatus_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_getAgentStatus_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -12368,6 +13015,21 @@ func (ec *executionContext) field_Query_getAgentsByCapabilities_args(ctx context
 		}
 	}
 	args["capabilities"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getAppHubStatus_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
 	return args, nil
 }
 
@@ -12896,6 +13558,21 @@ func (ec *executionContext) field_Query_isFaultStudioNameAvailable_args(ctx cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_listAgentHubCategories_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_listAgents_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -12917,6 +13594,21 @@ func (ec *executionContext) field_Query_listAgents_args(ctx context.Context, raw
 		}
 	}
 	args["pagination"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_listAppHubCategories_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
 	return args, nil
 }
 
@@ -14543,6 +15235,984 @@ func (ec *executionContext) fieldContext_AgentEndpoint_readyPath(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _AgentHubCategory_displayName(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubCategory) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubCategory_displayName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DisplayName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubCategory_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubCategory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubCategory_categoryDescription(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubCategory) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubCategory_categoryDescription(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CategoryDescription, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubCategory_categoryDescription(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubCategory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubCategory_agents(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubCategory) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubCategory_agents(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Agents, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.AgentHubEntry)
+	fc.Result = res
+	return ec.marshalNAgentHubEntry2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubEntryᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubCategory_agents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubCategory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_AgentHubEntry_name(ctx, field)
+			case "displayName":
+				return ec.fieldContext_AgentHubEntry_displayName(ctx, field)
+			case "description":
+				return ec.fieldContext_AgentHubEntry_description(ctx, field)
+			case "version":
+				return ec.fieldContext_AgentHubEntry_version(ctx, field)
+			case "capabilities":
+				return ec.fieldContext_AgentHubEntry_capabilities(ctx, field)
+			case "isDeployed":
+				return ec.fieldContext_AgentHubEntry_isDeployed(ctx, field)
+			case "deploymentStatus":
+				return ec.fieldContext_AgentHubEntry_deploymentStatus(ctx, field)
+			case "agentID":
+				return ec.fieldContext_AgentHubEntry_agentID(ctx, field)
+			case "namespace":
+				return ec.fieldContext_AgentHubEntry_namespace(ctx, field)
+			case "helmReleaseName":
+				return ec.fieldContext_AgentHubEntry_helmReleaseName(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AgentHubEntry", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_name(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_displayName(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_displayName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DisplayName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_description(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_version(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_version(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Version, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_capabilities(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_capabilities(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Capabilities, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_capabilities(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_isDeployed(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_isDeployed(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDeployed, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_isDeployed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_deploymentStatus(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_deploymentStatus(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DeploymentStatus, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_deploymentStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_agentID(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_agentID(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AgentID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOID2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_agentID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_namespace(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_namespace(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Namespace, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_helmReleaseName(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_helmReleaseName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.HelmReleaseName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_helmReleaseName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_id(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_name(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_repoURL(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_repoURL(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.RepoURL, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_repoURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_repoBranch(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_repoBranch(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.RepoBranch, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_repoBranch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_isAvailable(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_isAvailable(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsAvailable, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_isAvailable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_totalAgents(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_totalAgents(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalAgents, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_totalAgents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_deployedAgents(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_deployedAgents(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DeployedAgents, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_deployedAgents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_isDefault(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_isDefault(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDefault, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_isDefault(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubStatus_lastSyncedAt(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubStatus_lastSyncedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastSyncedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubStatus_lastSyncedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _AgentListResponse_agents(ctx context.Context, field graphql.CollectedField, obj *model.AgentListResponse) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_AgentListResponse_agents(ctx, field)
 	if err != nil {
@@ -15410,6 +17080,956 @@ func (ec *executionContext) _Annotation_chartDescription(ctx context.Context, fi
 func (ec *executionContext) fieldContext_Annotation_chartDescription(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Annotation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubCategory_displayName(ctx context.Context, field graphql.CollectedField, obj *model.AppHubCategory) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubCategory_displayName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DisplayName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubCategory_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubCategory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubCategory_categoryDescription(ctx context.Context, field graphql.CollectedField, obj *model.AppHubCategory) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubCategory_categoryDescription(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CategoryDescription, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubCategory_categoryDescription(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubCategory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubCategory_applications(ctx context.Context, field graphql.CollectedField, obj *model.AppHubCategory) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubCategory_applications(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Applications, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.AppHubEntry)
+	fc.Result = res
+	return ec.marshalNAppHubEntry2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubEntryᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubCategory_applications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubCategory",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_AppHubEntry_name(ctx, field)
+			case "displayName":
+				return ec.fieldContext_AppHubEntry_displayName(ctx, field)
+			case "description":
+				return ec.fieldContext_AppHubEntry_description(ctx, field)
+			case "version":
+				return ec.fieldContext_AppHubEntry_version(ctx, field)
+			case "namespace":
+				return ec.fieldContext_AppHubEntry_namespace(ctx, field)
+			case "microservices":
+				return ec.fieldContext_AppHubEntry_microservices(ctx, field)
+			case "isDeployed":
+				return ec.fieldContext_AppHubEntry_isDeployed(ctx, field)
+			case "runningServices":
+				return ec.fieldContext_AppHubEntry_runningServices(ctx, field)
+			case "helmReleaseName":
+				return ec.fieldContext_AppHubEntry_helmReleaseName(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AppHubEntry", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_name(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_displayName(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_displayName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DisplayName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_description(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_version(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_version(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Version, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_namespace(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_namespace(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Namespace, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_microservices(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_microservices(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Microservices, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Microservice)
+	fc.Result = res
+	return ec.marshalNMicroservice2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐMicroserviceᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_microservices(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_Microservice_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Microservice_description(ctx, field)
+			case "isRunning":
+				return ec.fieldContext_Microservice_isRunning(ctx, field)
+			case "readyReplicas":
+				return ec.fieldContext_Microservice_readyReplicas(ctx, field)
+			case "desiredReplicas":
+				return ec.fieldContext_Microservice_desiredReplicas(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Microservice", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_isDeployed(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_isDeployed(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDeployed, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_isDeployed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_runningServices(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_runningServices(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.RunningServices, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_runningServices(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_helmReleaseName(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_helmReleaseName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.HelmReleaseName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_helmReleaseName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_id(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_name(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_repoURL(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_repoURL(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.RepoURL, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_repoURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_repoBranch(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_repoBranch(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.RepoBranch, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_repoBranch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_isAvailable(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_isAvailable(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsAvailable, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_isAvailable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_totalApps(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_totalApps(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalApps, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_totalApps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_deployedApps(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_deployedApps(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DeployedApps, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_deployedApps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_isDefault(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_isDefault(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDefault, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_isDefault(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubStatus_lastSyncedAt(ctx context.Context, field graphql.CollectedField, obj *model.AppHubStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubStatus_lastSyncedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastSyncedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubStatus_lastSyncedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubStatus",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -32611,6 +35231,217 @@ func (ec *executionContext) fieldContext_Method_post(_ context.Context, field gr
 	return fc, nil
 }
 
+func (ec *executionContext) _Microservice_name(ctx context.Context, field graphql.CollectedField, obj *model.Microservice) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Microservice_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Microservice_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Microservice",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Microservice_description(ctx context.Context, field graphql.CollectedField, obj *model.Microservice) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Microservice_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Microservice_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Microservice",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Microservice_isRunning(ctx context.Context, field graphql.CollectedField, obj *model.Microservice) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Microservice_isRunning(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsRunning, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Microservice_isRunning(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Microservice",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Microservice_readyReplicas(ctx context.Context, field graphql.CollectedField, obj *model.Microservice) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Microservice_readyReplicas(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReadyReplicas, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int)
+	fc.Result = res
+	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Microservice_readyReplicas(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Microservice",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Microservice_desiredReplicas(ctx context.Context, field graphql.CollectedField, obj *model.Microservice) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Microservice_desiredReplicas(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DesiredReplicas, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int)
+	fc.Result = res
+	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Microservice_desiredReplicas(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Microservice",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createChaosExperiment(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Mutation_createChaosExperiment(ctx, field)
 	if err != nil {
@@ -41702,6 +44533,362 @@ func (ec *executionContext) fieldContext_Query_getGitOpsDetails(ctx context.Cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_getGitOpsDetails_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_listAgentHubCategories(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_listAgentHubCategories(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().ListAgentHubCategories(rctx, fc.Args["projectID"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.([]*model.AgentHubCategory); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.AgentHubCategory`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.AgentHubCategory)
+	fc.Result = res
+	return ec.marshalNAgentHubCategory2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubCategoryᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_listAgentHubCategories(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "displayName":
+				return ec.fieldContext_AgentHubCategory_displayName(ctx, field)
+			case "categoryDescription":
+				return ec.fieldContext_AgentHubCategory_categoryDescription(ctx, field)
+			case "agents":
+				return ec.fieldContext_AgentHubCategory_agents(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AgentHubCategory", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_listAgentHubCategories_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getAgentHubStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getAgentHubStatus(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().GetAgentHubStatus(rctx, fc.Args["projectID"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.AgentHubStatus); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.AgentHubStatus`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.AgentHubStatus)
+	fc.Result = res
+	return ec.marshalNAgentHubStatus2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubStatus(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getAgentHubStatus(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_AgentHubStatus_id(ctx, field)
+			case "name":
+				return ec.fieldContext_AgentHubStatus_name(ctx, field)
+			case "repoURL":
+				return ec.fieldContext_AgentHubStatus_repoURL(ctx, field)
+			case "repoBranch":
+				return ec.fieldContext_AgentHubStatus_repoBranch(ctx, field)
+			case "isAvailable":
+				return ec.fieldContext_AgentHubStatus_isAvailable(ctx, field)
+			case "totalAgents":
+				return ec.fieldContext_AgentHubStatus_totalAgents(ctx, field)
+			case "deployedAgents":
+				return ec.fieldContext_AgentHubStatus_deployedAgents(ctx, field)
+			case "isDefault":
+				return ec.fieldContext_AgentHubStatus_isDefault(ctx, field)
+			case "lastSyncedAt":
+				return ec.fieldContext_AgentHubStatus_lastSyncedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AgentHubStatus", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getAgentHubStatus_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_listAppHubCategories(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_listAppHubCategories(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().ListAppHubCategories(rctx, fc.Args["projectID"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.([]*model.AppHubCategory); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be []*github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.AppHubCategory`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.AppHubCategory)
+	fc.Result = res
+	return ec.marshalNAppHubCategory2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubCategoryᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_listAppHubCategories(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "displayName":
+				return ec.fieldContext_AppHubCategory_displayName(ctx, field)
+			case "categoryDescription":
+				return ec.fieldContext_AppHubCategory_categoryDescription(ctx, field)
+			case "applications":
+				return ec.fieldContext_AppHubCategory_applications(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AppHubCategory", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_listAppHubCategories_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getAppHubStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getAppHubStatus(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().GetAppHubStatus(rctx, fc.Args["projectID"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.AppHubStatus); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.AppHubStatus`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.AppHubStatus)
+	fc.Result = res
+	return ec.marshalNAppHubStatus2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubStatus(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getAppHubStatus(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_AppHubStatus_id(ctx, field)
+			case "name":
+				return ec.fieldContext_AppHubStatus_name(ctx, field)
+			case "repoURL":
+				return ec.fieldContext_AppHubStatus_repoURL(ctx, field)
+			case "repoBranch":
+				return ec.fieldContext_AppHubStatus_repoBranch(ctx, field)
+			case "isAvailable":
+				return ec.fieldContext_AppHubStatus_isAvailable(ctx, field)
+			case "totalApps":
+				return ec.fieldContext_AppHubStatus_totalApps(ctx, field)
+			case "deployedApps":
+				return ec.fieldContext_AppHubStatus_deployedApps(ctx, field)
+			case "isDefault":
+				return ec.fieldContext_AppHubStatus_isDefault(ctx, field)
+			case "lastSyncedAt":
+				return ec.fieldContext_AppHubStatus_lastSyncedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AppHubStatus", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getAppHubStatus_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -51797,6 +54984,206 @@ func (ec *executionContext) _AgentEndpoint(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var agentHubCategoryImplementors = []string{"AgentHubCategory"}
+
+func (ec *executionContext) _AgentHubCategory(ctx context.Context, sel ast.SelectionSet, obj *model.AgentHubCategory) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, agentHubCategoryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentHubCategory")
+		case "displayName":
+			out.Values[i] = ec._AgentHubCategory_displayName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "categoryDescription":
+			out.Values[i] = ec._AgentHubCategory_categoryDescription(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agents":
+			out.Values[i] = ec._AgentHubCategory_agents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var agentHubEntryImplementors = []string{"AgentHubEntry"}
+
+func (ec *executionContext) _AgentHubEntry(ctx context.Context, sel ast.SelectionSet, obj *model.AgentHubEntry) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, agentHubEntryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentHubEntry")
+		case "name":
+			out.Values[i] = ec._AgentHubEntry_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "displayName":
+			out.Values[i] = ec._AgentHubEntry_displayName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._AgentHubEntry_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._AgentHubEntry_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "capabilities":
+			out.Values[i] = ec._AgentHubEntry_capabilities(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDeployed":
+			out.Values[i] = ec._AgentHubEntry_isDeployed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deploymentStatus":
+			out.Values[i] = ec._AgentHubEntry_deploymentStatus(ctx, field, obj)
+		case "agentID":
+			out.Values[i] = ec._AgentHubEntry_agentID(ctx, field, obj)
+		case "namespace":
+			out.Values[i] = ec._AgentHubEntry_namespace(ctx, field, obj)
+		case "helmReleaseName":
+			out.Values[i] = ec._AgentHubEntry_helmReleaseName(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var agentHubStatusImplementors = []string{"AgentHubStatus"}
+
+func (ec *executionContext) _AgentHubStatus(ctx context.Context, sel ast.SelectionSet, obj *model.AgentHubStatus) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, agentHubStatusImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentHubStatus")
+		case "id":
+			out.Values[i] = ec._AgentHubStatus_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._AgentHubStatus_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "repoURL":
+			out.Values[i] = ec._AgentHubStatus_repoURL(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "repoBranch":
+			out.Values[i] = ec._AgentHubStatus_repoBranch(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isAvailable":
+			out.Values[i] = ec._AgentHubStatus_isAvailable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalAgents":
+			out.Values[i] = ec._AgentHubStatus_totalAgents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deployedAgents":
+			out.Values[i] = ec._AgentHubStatus_deployedAgents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDefault":
+			out.Values[i] = ec._AgentHubStatus_isDefault(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastSyncedAt":
+			out.Values[i] = ec._AgentHubStatus_lastSyncedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var agentListResponseImplementors = []string{"AgentListResponse"}
 
 func (ec *executionContext) _AgentListResponse(ctx context.Context, sel ast.SelectionSet, obj *model.AgentListResponse) graphql.Marshaler {
@@ -51987,6 +55374,207 @@ func (ec *executionContext) _Annotation(ctx context.Context, sel ast.SelectionSe
 			}
 		case "chartDescription":
 			out.Values[i] = ec._Annotation_chartDescription(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var appHubCategoryImplementors = []string{"AppHubCategory"}
+
+func (ec *executionContext) _AppHubCategory(ctx context.Context, sel ast.SelectionSet, obj *model.AppHubCategory) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, appHubCategoryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AppHubCategory")
+		case "displayName":
+			out.Values[i] = ec._AppHubCategory_displayName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "categoryDescription":
+			out.Values[i] = ec._AppHubCategory_categoryDescription(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "applications":
+			out.Values[i] = ec._AppHubCategory_applications(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var appHubEntryImplementors = []string{"AppHubEntry"}
+
+func (ec *executionContext) _AppHubEntry(ctx context.Context, sel ast.SelectionSet, obj *model.AppHubEntry) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, appHubEntryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AppHubEntry")
+		case "name":
+			out.Values[i] = ec._AppHubEntry_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "displayName":
+			out.Values[i] = ec._AppHubEntry_displayName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._AppHubEntry_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._AppHubEntry_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "namespace":
+			out.Values[i] = ec._AppHubEntry_namespace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "microservices":
+			out.Values[i] = ec._AppHubEntry_microservices(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDeployed":
+			out.Values[i] = ec._AppHubEntry_isDeployed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "runningServices":
+			out.Values[i] = ec._AppHubEntry_runningServices(ctx, field, obj)
+		case "helmReleaseName":
+			out.Values[i] = ec._AppHubEntry_helmReleaseName(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var appHubStatusImplementors = []string{"AppHubStatus"}
+
+func (ec *executionContext) _AppHubStatus(ctx context.Context, sel ast.SelectionSet, obj *model.AppHubStatus) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, appHubStatusImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AppHubStatus")
+		case "id":
+			out.Values[i] = ec._AppHubStatus_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._AppHubStatus_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "repoURL":
+			out.Values[i] = ec._AppHubStatus_repoURL(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "repoBranch":
+			out.Values[i] = ec._AppHubStatus_repoBranch(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isAvailable":
+			out.Values[i] = ec._AppHubStatus_isAvailable(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalApps":
+			out.Values[i] = ec._AppHubStatus_totalApps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deployedApps":
+			out.Values[i] = ec._AppHubStatus_deployedApps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDefault":
+			out.Values[i] = ec._AppHubStatus_isDefault(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastSyncedAt":
+			out.Values[i] = ec._AppHubStatus_lastSyncedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -55661,6 +59249,56 @@ func (ec *executionContext) _Method(ctx context.Context, sel ast.SelectionSet, o
 	return out
 }
 
+var microserviceImplementors = []string{"Microservice"}
+
+func (ec *executionContext) _Microservice(ctx context.Context, sel ast.SelectionSet, obj *model.Microservice) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, microserviceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Microservice")
+		case "name":
+			out.Values[i] = ec._Microservice_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._Microservice_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isRunning":
+			out.Values[i] = ec._Microservice_isRunning(ctx, field, obj)
+		case "readyReplicas":
+			out.Values[i] = ec._Microservice_readyReplicas(ctx, field, obj)
+		case "desiredReplicas":
+			out.Values[i] = ec._Microservice_desiredReplicas(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -57313,6 +60951,94 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "listAgentHubCategories":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_listAgentHubCategories(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getAgentHubStatus":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getAgentHubStatus(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "listAppHubCategories":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_listAppHubCategories(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getAppHubStatus":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getAppHubStatus(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "listImageRegistry":
 			field := field
 
@@ -58697,6 +62423,128 @@ func (ec *executionContext) marshalNAgentEndpoint2ᚖgithubᚗcomᚋlitmuschaos�
 	return ec._AgentEndpoint(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNAgentHubCategory2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubCategoryᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AgentHubCategory) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNAgentHubCategory2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubCategory(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAgentHubCategory2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubCategory(ctx context.Context, sel ast.SelectionSet, v *model.AgentHubCategory) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AgentHubCategory(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAgentHubEntry2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AgentHubEntry) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNAgentHubEntry2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubEntry(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAgentHubEntry2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubEntry(ctx context.Context, sel ast.SelectionSet, v *model.AgentHubEntry) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AgentHubEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAgentHubStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubStatus(ctx context.Context, sel ast.SelectionSet, v model.AgentHubStatus) graphql.Marshaler {
+	return ec._AgentHubStatus(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAgentHubStatus2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentHubStatus(ctx context.Context, sel ast.SelectionSet, v *model.AgentHubStatus) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AgentHubStatus(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNAgentListResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentListResponse(ctx context.Context, sel ast.SelectionSet, v model.AgentListResponse) graphql.Marshaler {
 	return ec._AgentListResponse(ctx, sel, &v)
 }
@@ -58743,6 +62591,128 @@ func (ec *executionContext) marshalNAnnotation2ᚖgithubᚗcomᚋlitmuschaosᚋl
 		return graphql.Null
 	}
 	return ec._Annotation(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAppHubCategory2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubCategoryᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AppHubCategory) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNAppHubCategory2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubCategory(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAppHubCategory2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubCategory(ctx context.Context, sel ast.SelectionSet, v *model.AppHubCategory) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AppHubCategory(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAppHubEntry2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AppHubEntry) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNAppHubEntry2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubEntry(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAppHubEntry2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubEntry(ctx context.Context, sel ast.SelectionSet, v *model.AppHubEntry) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AppHubEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAppHubStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubStatus(ctx context.Context, sel ast.SelectionSet, v model.AppHubStatus) graphql.Marshaler {
+	return ec._AppHubStatus(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAppHubStatus2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAppHubStatus(ctx context.Context, sel ast.SelectionSet, v *model.AppHubStatus) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AppHubStatus(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNAuditInfo2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAuditInfo(ctx context.Context, sel ast.SelectionSet, v *model.AuditInfo) graphql.Marshaler {
@@ -60299,6 +64269,60 @@ func (ec *executionContext) marshalNMethod2ᚖgithubᚗcomᚋlitmuschaosᚋlitmu
 func (ec *executionContext) unmarshalNMethodRequest2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐMethodRequest(ctx context.Context, v interface{}) (*model.MethodRequest, error) {
 	res, err := ec.unmarshalInputMethodRequest(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNMicroservice2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐMicroserviceᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Microservice) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNMicroservice2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐMicroservice(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMicroservice2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐMicroservice(ctx context.Context, sel ast.SelectionSet, v *model.Microservice) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Microservice(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNMode2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐMode(ctx context.Context, v interface{}) (model.Mode, error) {

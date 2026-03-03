@@ -160,6 +160,12 @@ $commonEnv = @"
 `$env:LITMUS_CHAOS_EXPORTER_IMAGE = "litmuschaos/chaos-exporter:3.0.0"
 `$env:CONTAINER_RUNTIME_EXECUTOR = "k8sapi"
 `$env:WORKFLOW_HELPER_IMAGE_VERSION = "3.0.0"
+`$env:DEFAULT_AGENT_HUB_GIT_URL = "https://github.com/agentcert/agent-charts"
+`$env:DEFAULT_AGENT_HUB_BRANCH_NAME = "main"
+`$env:DEFAULT_AGENT_HUB_PATH = "/tmp/default-agents/"
+`$env:DEFAULT_APP_HUB_GIT_URL = "https://github.com/agentcert/app-charts"
+`$env:DEFAULT_APP_HUB_BRANCH_NAME = "main"
+`$env:DEFAULT_APP_HUB_PATH = "/tmp/default-apps/"
 "@
 
 # Auth launcher script

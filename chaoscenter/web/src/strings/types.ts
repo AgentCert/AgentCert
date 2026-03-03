@@ -47,6 +47,11 @@ export interface StringsMap {
   'addtoHubLoading': unknown
   'advanced': unknown
   'advancedOptions': unknown
+  'agentCapabilities': unknown
+  'agentDeployed': unknown
+  'agentHub': unknown
+  'agentHubDescription': unknown
+  'agentNotDeployed': unknown
   'agentOnboarding': unknown
   'all': unknown
   'allChaosEnabled': unknown
@@ -56,13 +61,17 @@ export interface StringsMap {
   'alreadyExists': PrimitiveObject<'value'>
   'alreadyExistsID': PrimitiveObject<'value'>
   'apiTokens': unknown
+  'appDeployed': unknown
   'appKind': unknown
   'appKindName': unknown
   'appLabel': unknown
   'appLabelName': unknown
   'appNameSpace': unknown
+  'appNotDeployed': unknown
   'apply': unknown
   'applyChanges': unknown
+  'appsHub': unknown
+  'appsHubDescription': unknown
   'appsOnboarding': unknown
   'at': unknown
   'atAGlance': unknown
@@ -227,6 +236,8 @@ export interface StringsMap {
   'deployChaosInfrastructure': unknown
   'deployProbe': unknown
   'deploySetup': unknown
+  'deployedAgents': unknown
+  'deployedApps': unknown
   'deployedOn': unknown
   'description': unknown
   'descriptionOptional': unknown
@@ -841,6 +852,7 @@ export interface StringsMap {
   'runOnSpecificDay': unknown
   'runOnSpecificDayMonth': unknown
   'running': unknown
+  'runningServices': unknown
   'runs': unknown
   'save': unknown
   'saveAndContinue': unknown
@@ -977,6 +989,8 @@ export interface StringsMap {
   'tolerationText': unknown
   'topology': unknown
   'total': unknown
+  'totalAgents': unknown
+  'totalApps': unknown
   'totalChaosHubs': unknown
   'totalChaosInfrastructures': unknown
   'totalEnvironments': unknown

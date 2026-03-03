@@ -15,6 +15,8 @@ import (
 	chaos_experiment_run2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment_run"
 	runHandler "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment_run/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment"
@@ -50,6 +52,8 @@ type Resolver struct {
 	probeService               probe.Service
 	agentRegistryService       agent_registry.Service
 	faultStudioService         fault_studio.Service
+	agentHubService            agenthub.Service
+	appHubService              apphub.Service
 }
 
 func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
@@ -83,6 +87,10 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	langfuseClient := agent_registry.NewLangfuseClient("", "", "") // Empty config - disabled
 	agentRegistryService := agent_registry.NewService(agentRegistryOperator, agentRegistryValidator, langfuseClient, nil)
 
+	// Initialize AgentHub and AppsHub services
+	agentHubService := agenthub.NewService(agentRegistryService)
+	appHubService := apphub.NewService()
+
 	//handler
 	chaosExperimentHandler := handler.NewChaosExperimentHandler(chaosExperimentService, chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
 	choasExperimentRunHandler := runHandler.NewChaosExperimentRunHandler(chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
@@ -101,6 +109,8 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 			probeService:               probeService,
 			agentRegistryService:       agentRegistryService,
 			faultStudioService:         faultStudioService,
+			agentHubService:            agentHubService,
+			appHubService:              appHubService,
 		}}
 
 	config.Directives.Authorized = func(ctx context.Context, obj interface{}, next graphql.Resolver) (interface{}, error) {

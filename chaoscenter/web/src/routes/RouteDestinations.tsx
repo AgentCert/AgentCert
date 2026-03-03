@@ -29,6 +29,8 @@ import ProjectDashboardController from '@controllers/ProjectDashboard';
 import PasswordResetController from '@controllers/PasswordReset';
 import AgentOnboardingController from '@controllers/AgentOnboarding';
 import AppsOnboardingController from '@controllers/AppsOnboarding';
+import AgentHubController from '@controllers/AgentHub';
+import AppsHubController from '@controllers/AppsHub';
 
 const experimentID = ':experimentID';
 const runID = ':runID';
@@ -111,6 +113,10 @@ export function RoutesWithAuthentication(): React.ReactElement {
       <Route exact path={projectMatchPaths.toAgentOnboarding()} component={AgentOnboardingController} />
       {/* Apps Onboarding */}
       <Route exact path={projectMatchPaths.toAppsOnboarding()} component={AppsOnboardingController} />
+      {/* Agent Hub */}
+      <Route exact path={projectMatchPaths.toAgentHub()} component={AgentHubController} />
+      {/* Apps Hub */}
+      <Route exact path={projectMatchPaths.toAppsHub()} component={AppsHubController} />
       {/*Environments */}
       <Route exact path={projectMatchPaths.toEnvironments()} component={EnvironmentController} />
       {/* Kubernetes Chaos Infrastructure */}

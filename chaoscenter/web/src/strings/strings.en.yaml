@@ -122,12 +122,26 @@ chaosStudio: Chaos Studio
 chaoshubDisconnectedWillSync: ChaosHub is disconnected, will attempt to sync
 chaoshubs: ChaosHubs
 agentOnboarding: Agents
+agentHub: Agent Hub
+agentHubDescription: Browse and manage available agents from the Agent Hub catalog
+totalAgents: Total Agents
+deployedAgents: Deployed Agents
+agentCapabilities: Capabilities
+agentDeployed: Deployed
+agentNotDeployed: Not Deployed
 newAgent: New Agent
 onboardedAgents: List of Onboarded Agents
 deleteAgent: Delete Agent
 onboardedApplications: List of Onboarded Applications
 actions: Actions
 appsOnboarding: Applications
+appsHub: Apps Hub
+appsHubDescription: Browse and manage available applications from the Apps Hub catalog
+totalApps: Total Applications
+deployedApps: Deployed Applications
+runningServices: Running Services
+appDeployed: Deployed
+appNotDeployed: Not Deployed
 newApplication: New Application
 onboardYourApp: Onboard Your Application
 onboardAppUsingKubernetesManifest: Onboard app using Kubernetes Manifest

@@ -6,3 +6,5 @@ export * from './probe';
 export * from './stats';
 export * from './checkResourceID';
 export * from './agents';
+export * from './agenthub';
+export * from './apphub';

@@ -27,6 +27,8 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
 	handler2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub/handler"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/config"
@@ -163,6 +165,10 @@ func main() {
 	// go routine for syncing chaos hubs
 	go chaoshub.NewService(dbSchemaChaosHub.NewChaosHubOperator(mongodbOperator)).RecurringHubSync()
 	go chaoshub.NewService(dbSchemaChaosHub.NewChaosHubOperator(mongodbOperator)).SyncDefaultChaosHubs()
+
+	// go routine for syncing agent hub and app hub
+	go agenthub.NewService(nil).SyncDefaultAgentHub()
+	go apphub.NewService().SyncDefaultAppHub()
 
 	// routers
 	router.GET("/", handlers.PlaygroundHandler())

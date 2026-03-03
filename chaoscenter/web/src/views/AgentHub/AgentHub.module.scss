@@ -1,0 +1,27 @@
+.agentGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-medium);
+}
+
+.agentCard {
+  width: 320px;
+  min-height: 160px;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.capabilities {
+  flex-wrap: wrap;
+}
+
+.capabilityTag {
+  background-color: var(--grey-100);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--grey-600);
+}

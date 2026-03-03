@@ -117,6 +117,63 @@ type AgentEndpointInput struct {
 	ReadyPath *string `json:"readyPath,omitempty"`
 }
 
+// A category of agents in the AgentHub (e.g., "AI Agents").
+type AgentHubCategory struct {
+	// Category name
+	DisplayName string `json:"displayName"`
+	// Category-level description
+	CategoryDescription string `json:"categoryDescription"`
+	// Agents in this category
+	Agents []*AgentHubEntry `json:"agents"`
+}
+
+// Represents a single agent entry in the AgentHub catalogue.
+// Combines static chart metadata with live deployment status.
+type AgentHubEntry struct {
+	// Agent identifier (folder name in agent-charts repo)
+	Name string `json:"name"`
+	// Human-readable name
+	DisplayName string `json:"displayName"`
+	// One-liner description shown on the card
+	Description string `json:"description"`
+	// Semantic version from chart
+	Version string `json:"version"`
+	// List of capabilities this agent supports
+	Capabilities []string `json:"capabilities"`
+	// Whether this agent is currently deployed in the cluster
+	IsDeployed bool `json:"isDeployed"`
+	// Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)
+	DeploymentStatus *string `json:"deploymentStatus,omitempty"`
+	// Agent ID in the registry (if deployed)
+	AgentID *string `json:"agentID,omitempty"`
+	// Namespace where the agent is deployed
+	Namespace *string `json:"namespace,omitempty"`
+	// Helm release name (if deployed via Helm)
+	HelmReleaseName *string `json:"helmReleaseName,omitempty"`
+}
+
+// Status of an AgentHub, analogous to ChaosHubStatus.
+type AgentHubStatus struct {
+	// Hub ID
+	ID string `json:"id"`
+	// Hub name
+	Name string `json:"name"`
+	// Git repo URL
+	RepoURL string `json:"repoURL"`
+	// Git branch
+	RepoBranch string `json:"repoBranch"`
+	// Whether the hub is synced and available
+	IsAvailable bool `json:"isAvailable"`
+	// Total number of agents defined in the hub
+	TotalAgents int `json:"totalAgents"`
+	// Number of agents currently deployed
+	DeployedAgents int `json:"deployedAgents"`
+	// Whether this is the default hub
+	IsDefault bool `json:"isDefault"`
+	// Last synced timestamp
+	LastSyncedAt string `json:"lastSyncedAt"`
+}
+
 // AgentListResponse returned from list queries with pagination info.
 type AgentListResponse struct {
 	// List of agents matching the filter
@@ -170,6 +227,61 @@ type Annotation struct {
 	Repository       string `json:"repository"`
 	Support          string `json:"support"`
 	ChartDescription string `json:"chartDescription"`
+}
+
+// A category of applications in the AppsHub (e.g., "Target Applications").
+type AppHubCategory struct {
+	// Category name
+	DisplayName string `json:"displayName"`
+	// Category-level description
+	CategoryDescription string `json:"categoryDescription"`
+	// Applications in this category
+	Applications []*AppHubEntry `json:"applications"`
+}
+
+// Represents a single application entry in the AppsHub catalogue.
+// Combines static chart metadata with live deployment status.
+type AppHubEntry struct {
+	// Application identifier (folder name in app-charts repo)
+	Name string `json:"name"`
+	// Human-readable name
+	DisplayName string `json:"displayName"`
+	// One-liner description shown on the card
+	Description string `json:"description"`
+	// Semantic version from chart
+	Version string `json:"version"`
+	// Target namespace for deployment
+	Namespace string `json:"namespace"`
+	// Microservices that comprise this application
+	Microservices []*Microservice `json:"microservices"`
+	// Whether this application is currently deployed in the cluster
+	IsDeployed bool `json:"isDeployed"`
+	// Number of microservices running vs total (e.g., "11/13")
+	RunningServices *string `json:"runningServices,omitempty"`
+	// Helm release name (if deployed via Helm)
+	HelmReleaseName *string `json:"helmReleaseName,omitempty"`
+}
+
+// Status of an AppsHub, analogous to ChaosHubStatus.
+type AppHubStatus struct {
+	// Hub ID
+	ID string `json:"id"`
+	// Hub name
+	Name string `json:"name"`
+	// Git repo URL
+	RepoURL string `json:"repoURL"`
+	// Git branch
+	RepoBranch string `json:"repoBranch"`
+	// Whether the hub is synced and available
+	IsAvailable bool `json:"isAvailable"`
+	// Total number of applications defined in the hub
+	TotalApps int `json:"totalApps"`
+	// Number of applications currently deployed
+	DeployedApps int `json:"deployedApps"`
+	// Whether this is the default hub
+	IsDefault bool `json:"isDefault"`
+	// Last synced timestamp
+	LastSyncedAt string `json:"lastSyncedAt"`
 }
 
 // AuditInfo tracks creation and modification information for the agent.
@@ -2048,6 +2160,20 @@ type MethodRequest struct {
 	Get *GETRequest `json:"get,omitempty"`
 	// A POST request
 	Post *POSTRequest `json:"post,omitempty"`
+}
+
+// A microservice within an application.
+type Microservice struct {
+	// Microservice name (e.g., "carts")
+	Name string `json:"name"`
+	// One-liner description
+	Description string `json:"description"`
+	// Whether this microservice pod is currently running
+	IsRunning *bool `json:"isRunning,omitempty"`
+	// Number of ready replicas
+	ReadyReplicas *int `json:"readyReplicas,omitempty"`
+	// Number of desired replicas
+	DesiredReplicas *int `json:"desiredReplicas,omitempty"`
 }
 
 type Mutation struct {
