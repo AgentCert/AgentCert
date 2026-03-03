@@ -19,19 +19,23 @@ jobs:
    steps:
    - name: Checkout
      uses: actions/checkout@v4
+     with:
+       fetch-depth: 0
    - name: Build Fuzzers (${{ matrix.sanitizer }})
      id: build
-     uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
+     uses: google/clusterfuzzlite/actions/build_fuzzers@v1
      with:
        language: go
        sanitizer: ${{ matrix.sanitizer }}
+       github-token: ${{ secrets.GITHUB_TOKEN }}
    - name: Run Fuzzers (${{ matrix.sanitizer }})
-     uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
+     uses: google/clusterfuzzlite/actions/run_fuzzers@v1
      with:
        language: go
        fuzz-seconds: 120
        sanitizer: ${{ matrix.sanitizer }}
-       output-sarif: true
+       mode: 'code-change'
+       github-token: ${{ secrets.GITHUB_TOKEN }}
    - name: Upload Crash
      uses: actions/upload-artifact@v4
      if: failure() && steps.build.outcome == 'success'
