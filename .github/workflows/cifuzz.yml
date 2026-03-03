@@ -23,14 +23,11 @@ jobs:
      id: build
      uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
      with:
-       oss-fuzz-project-name: 'litmuschaos'
        language: go
        sanitizer: ${{ matrix.sanitizer }}
-       project-src-path: ${{ github.workspace }}
    - name: Run Fuzzers (${{ matrix.sanitizer }})
      uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
      with:
-       oss-fuzz-project-name: 'litmuschaos'
        language: go
        fuzz-seconds: 120
        sanitizer: ${{ matrix.sanitizer }}
