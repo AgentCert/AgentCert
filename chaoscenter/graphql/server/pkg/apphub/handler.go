@@ -3,6 +3,7 @@ package apphub
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 	log "github.com/sirupsen/logrus"
@@ -111,14 +112,14 @@ func findCSVFiles(chartsPath string) ([]string, error) {
 	var csvFiles []string
 	for _, entry := range entries {
 		if !entry.IsDir() && isCSVFile(entry.Name()) {
-			csvFiles = append(csvFiles, chartsPath+"/"+entry.Name())
+			csvFiles = append(csvFiles, filepath.Join(chartsPath, entry.Name()))
 		}
 	}
 
 	// Also check subdirectories for CSV files
 	for _, entry := range entries {
 		if entry.IsDir() {
-			subCSV := chartsPath + "/" + entry.Name() + "/" + entry.Name() + ".chartserviceversion.yaml"
+			subCSV := filepath.Join(chartsPath, entry.Name(), entry.Name()+".chartserviceversion.yaml")
 			if _, err := os.Stat(subCSV); err == nil {
 				csvFiles = append(csvFiles, subCSV)
 			}

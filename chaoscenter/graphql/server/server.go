@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
@@ -18,6 +19,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -133,6 +135,16 @@ func main() {
 	}
 
 	srv := handler.New(generated.NewExecutableSchema(graph.NewConfig(mongodbOperator)))
+
+	// Pass through actual error messages instead of generic "internal system error"
+	srv.SetErrorPresenter(func(ctx context.Context, e error) *gqlerror.Error {
+		err := graphql.DefaultErrorPresenter(ctx, e)
+		return err
+	})
+	srv.SetRecoverFunc(func(ctx context.Context, err interface{}) error {
+		log.Errorf("PANIC in GraphQL resolver: %v", err)
+		return fmt.Errorf("panic: %v", err)
+	})
 	srv.AddTransport(transport.POST{})
 	srv.AddTransport(transport.GET{})
 	srv.AddTransport(transport.Websocket{

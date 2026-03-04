@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
@@ -55,22 +57,32 @@ func getAgentHubBranch() string {
 	return branch
 }
 
+// getDefaultBasePath returns the OS-appropriate base path for default hub clones.
+// On Windows it uses os.TempDir(), on Linux/Mac it uses /tmp.
+func getDefaultBasePath() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.TempDir(), "default")
+	}
+	return "/tmp/default"
+}
+
 // getAgentChartsPath returns the filesystem path where agent charts are cloned.
+// Aligns with GetClonePath in chaoshub/ops which clones default hubs to {basePath}/{HubName}.
 func getAgentChartsPath() string {
 	path := utils.Config.DefaultAgentHubPath
 	if path == "" {
-		path = "/tmp/default-agents/"
+		path = getDefaultBasePath()
 	}
-	return path + DefaultAgentHubName + "/charts/"
+	return filepath.Join(path, DefaultAgentHubName, "charts")
 }
 
 // getAgentClonePath returns the filesystem path for the agent hub clone.
 func getAgentClonePath() string {
 	path := utils.Config.DefaultAgentHubPath
 	if path == "" {
-		path = "/tmp/default-agents/"
+		path = getDefaultBasePath()
 	}
-	return path + DefaultAgentHubName
+	return filepath.Join(path, DefaultAgentHubName)
 }
 
 // ListAgentHubCategories reads agent charts from the filesystem and enriches
@@ -182,18 +194,9 @@ func (s *agentHubService) SyncDefaultAgentHub() {
 	for {
 		repoURL := getAgentHubGitURL()
 		branch := getAgentHubBranch()
-
-		chartsInput := model.CloningInput{
-			Name:       DefaultAgentHubName,
-			RepoURL:    repoURL,
-			RepoBranch: branch,
-			IsDefault:  true,
-		}
-
-		// Reuse the same git ops as ChaosHub, but clone to a different path.
-		// We override the clone path by using a custom hub name that maps to our path.
 		clonePath := getAgentClonePath()
-		if err := syncHub(chartsInput, clonePath, repoURL, branch); err != nil {
+
+		if err := syncHub(clonePath, repoURL, branch); err != nil {
 			log.WithFields(log.Fields{
 				"repoUrl":  repoURL,
 				"branch":   branch,
@@ -211,24 +214,29 @@ func (s *agentHubService) SyncDefaultAgentHub() {
 }
 
 // syncHub clones or pulls a git repo to the given path.
-func syncHub(chartsInput model.CloningInput, clonePath string, repoURL string, branch string) error {
-	// Check if already cloned
-	if _, err := os.Stat(clonePath); os.IsNotExist(err) {
-		// Clone fresh
-		gitConfig := chaosHubOps.ChaosHubConfig{
-			HubName:       chartsInput.Name,
-			RepositoryURL: repoURL,
-			Branch:        branch,
-			RemoteName:    "origin",
-			IsDefault:     true,
-			AuthType:      model.AuthTypeNone,
-		}
-		_ = gitConfig // We'll use GitSyncDefaultHub which handles clone-or-pull
-		return chaosHubOps.GitSyncDefaultHub(chartsInput)
+func syncHub(clonePath string, repoURL string, branch string) error {
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(clonePath), 0755); err != nil {
+		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
-	// Already exists, just sync
-	return chaosHubOps.GitSyncDefaultHub(chartsInput)
+	// Check if already cloned
+	if _, err := os.Stat(filepath.Join(clonePath, ".git")); os.IsNotExist(err) {
+		// Clone fresh using go-git directly
+		log.WithFields(log.Fields{
+			"repoURL":   repoURL,
+			"branch":    branch,
+			"clonePath": clonePath,
+		}).Info("cloning agent/app hub repo")
+		return chaosHubOps.ClonePublicRepoToPath(repoURL, branch, clonePath)
+	}
+
+	// Already exists, pull latest
+	log.WithFields(log.Fields{
+		"clonePath": clonePath,
+		"branch":    branch,
+	}).Info("pulling latest for agent/app hub repo")
+	return chaosHubOps.PullRepoAtPath(clonePath, branch)
 }
 
 func derefStr(s *string) string {

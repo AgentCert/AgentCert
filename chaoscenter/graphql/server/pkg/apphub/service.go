@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
@@ -54,22 +56,31 @@ func getAppHubBranch() string {
 	return branch
 }
 
+// getDefaultBasePath returns the OS-appropriate base path for default hub clones.
+func getDefaultBasePath() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.TempDir(), "default")
+	}
+	return "/tmp/default"
+}
+
 // getAppChartsPath returns the filesystem path where app charts are cloned.
+// Aligns with GetClonePath in chaoshub/ops which clones default hubs to {basePath}/{HubName}.
 func getAppChartsPath() string {
 	path := utils.Config.DefaultAppHubPath
 	if path == "" {
-		path = "/tmp/default-apps/"
+		path = getDefaultBasePath()
 	}
-	return path + DefaultAppHubName + "/charts/"
+	return filepath.Join(path, DefaultAppHubName, "charts")
 }
 
 // getAppClonePath returns the filesystem path for the app hub clone.
 func getAppClonePath() string {
 	path := utils.Config.DefaultAppHubPath
 	if path == "" {
-		path = "/tmp/default-apps/"
+		path = getDefaultBasePath()
 	}
-	return path + DefaultAppHubName
+	return filepath.Join(path, DefaultAppHubName)
 }
 
 // ListAppHubCategories reads app charts from the filesystem and enriches
@@ -191,14 +202,32 @@ func (s *appHubService) SyncDefaultAppHub() {
 		repoURL := getAppHubGitURL()
 		branch := getAppHubBranch()
 
-		chartsInput := model.CloningInput{
-			Name:       DefaultAppHubName,
-			RepoURL:    repoURL,
-			RepoBranch: branch,
-			IsDefault:  true,
+		clonePath := getAppClonePath()
+
+		// Ensure parent directory exists
+		if err := os.MkdirAll(filepath.Dir(clonePath), 0755); err != nil {
+			log.WithError(err).Error("failed to create parent directory for app hub")
+			time.Sleep(DefaultAppHubSyncInterval)
+			continue
 		}
 
-		if err := chaosHubOps.GitSyncDefaultHub(chartsInput); err != nil {
+		var err error
+		if _, statErr := os.Stat(filepath.Join(clonePath, ".git")); os.IsNotExist(statErr) {
+			log.WithFields(log.Fields{
+				"repoURL":   repoURL,
+				"branch":    branch,
+				"clonePath": clonePath,
+			}).Info("cloning app hub repo")
+			err = chaosHubOps.ClonePublicRepoToPath(repoURL, branch, clonePath)
+		} else {
+			log.WithFields(log.Fields{
+				"clonePath": clonePath,
+				"branch":    branch,
+			}).Info("pulling latest for app hub repo")
+			err = chaosHubOps.PullRepoAtPath(clonePath, branch)
+		}
+
+		if err != nil {
 			log.WithFields(log.Fields{
 				"repoUrl": repoURL,
 				"branch":  branch,
