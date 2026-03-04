@@ -97,9 +97,9 @@ export default function AgentHubView({
           {categories && categories.length > 0 ? (
             <Layout.Vertical spacing="xlarge">
               {categories.map(category => (
-                <Layout.Vertical key={category.categoryName} spacing="medium">
+                <Layout.Vertical key={category.displayName} spacing="medium">
                   <Text font={{ variation: FontVariation.H4 }} color={Color.GREY_800}>
-                    {category.categoryName}
+                    {category.displayName}
                   </Text>
                   <Layout.Horizontal spacing="medium" className={css.agentGrid}>
                     {category.agents.map(agent => (

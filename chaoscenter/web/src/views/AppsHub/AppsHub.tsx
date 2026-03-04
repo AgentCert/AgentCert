@@ -19,7 +19,7 @@ interface AppsHubViewProps {
   ) => Promise<ApolloQueryResult<ListAppHubCategoriesResponse>>;
 }
 
-function DeploymentStatusBadge({ isDeployed, runningServices, totalServices }: { isDeployed: boolean; runningServices: number; totalServices: number }): React.ReactElement {
+function DeploymentStatusBadge({ isDeployed, runningServices }: { isDeployed: boolean; runningServices?: string }): React.ReactElement {
   const { getString } = useStrings();
   return (
     <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
@@ -27,7 +27,7 @@ function DeploymentStatusBadge({ isDeployed, runningServices, totalServices }: {
         <circle cx="4" cy="4" r="4" fill={isDeployed ? '#0AB000' : '#999999'} />
       </svg>
       <Text font={{ variation: FontVariation.SMALL }} color={isDeployed ? Color.GREEN_700 : Color.GREY_500}>
-        {isDeployed ? `${runningServices}/${totalServices} ${getString('runningServices')}` : getString('appNotDeployed')}
+        {isDeployed ? `${runningServices ?? '0/0'} ${getString('runningServices')}` : getString('appNotDeployed')}
       </Text>
     </Layout.Horizontal>
   );
@@ -71,7 +71,6 @@ function AppCard({ app }: { app: AppHubEntry }): React.ReactElement {
           <DeploymentStatusBadge
             isDeployed={app.isDeployed}
             runningServices={app.runningServices}
-            totalServices={app.microservices?.length ?? 0}
           />
         </Layout.Horizontal>
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_600} lineClamp={2}>
@@ -133,9 +132,9 @@ export default function AppsHubView({
           {categories && categories.length > 0 ? (
             <Layout.Vertical spacing="xlarge">
               {categories.map(category => (
-                <Layout.Vertical key={category.categoryName} spacing="medium">
+                <Layout.Vertical key={category.displayName} spacing="medium">
                   <Text font={{ variation: FontVariation.H4 }} color={Color.GREY_800}>
-                    {category.categoryName}
+                    {category.displayName}
                   </Text>
                   <Layout.Horizontal spacing="medium" className={css.appGrid}>
                     {category.applications.map(app => (

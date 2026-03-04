@@ -21,7 +21,8 @@ export function listAppHubCategories({
     gql`
       query listAppHubCategories($projectID: ID!) {
         listAppHubCategories(projectID: $projectID) {
-          categoryName
+          displayName
+          categoryDescription
           applications {
             name
             displayName

@@ -21,7 +21,8 @@ export function listAgentHubCategories({
     gql`
       query listAgentHubCategories($projectID: ID!) {
         listAgentHubCategories(projectID: $projectID) {
-          categoryName
+          displayName
+          categoryDescription
           agents {
             name
             displayName

@@ -8,17 +8,24 @@ export interface AppHubEntry {
   namespace?: string;
   microservices: Microservice[];
   isDeployed: boolean;
-  runningServices: number;
+  runningServices?: string;
   helmReleaseName?: string;
 }
 
 export interface AppHubCategory {
-  categoryName: string;
+  displayName: string;
+  categoryDescription: string;
   applications: AppHubEntry[];
 }
 
 export interface AppHubStatus {
+  id: string;
+  name: string;
+  repoURL: string;
+  repoBranch: string;
+  isAvailable: boolean;
   totalApps: number;
   deployedApps: number;
-  categories: AppHubCategory[];
+  isDefault: boolean;
+  lastSyncedAt: string;
 }

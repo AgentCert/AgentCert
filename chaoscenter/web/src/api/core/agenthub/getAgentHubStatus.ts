@@ -21,23 +21,15 @@ export function getAgentHubStatus({
     gql`
       query getAgentHubStatus($projectID: ID!) {
         getAgentHubStatus(projectID: $projectID) {
+          id
+          name
+          repoURL
+          repoBranch
+          isAvailable
           totalAgents
           deployedAgents
-          categories {
-            categoryName
-            agents {
-              name
-              displayName
-              description
-              version
-              capabilities
-              isDeployed
-              deploymentStatus
-              agentID
-              namespace
-              helmReleaseName
-            }
-          }
+          isDefault
+          lastSyncedAt
         }
       }
     `,

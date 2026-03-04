@@ -21,28 +21,15 @@ export function getAppHubStatus({
     gql`
       query getAppHubStatus($projectID: ID!) {
         getAppHubStatus(projectID: $projectID) {
+          id
+          name
+          repoURL
+          repoBranch
+          isAvailable
           totalApps
           deployedApps
-          categories {
-            categoryName
-            applications {
-              name
-              displayName
-              description
-              version
-              namespace
-              isDeployed
-              runningServices
-              helmReleaseName
-              microservices {
-                name
-                description
-                isRunning
-                readyReplicas
-                desiredReplicas
-              }
-            }
-          }
+          isDefault
+          lastSyncedAt
         }
       }
     `,

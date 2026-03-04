@@ -12,14 +12,21 @@ export interface AgentHubEntry {
 }
 
 export interface AgentHubCategory {
-  categoryName: string;
+  displayName: string;
+  categoryDescription: string;
   agents: AgentHubEntry[];
 }
 
 export interface AgentHubStatus {
+  id: string;
+  name: string;
+  repoURL: string;
+  repoBranch: string;
+  isAvailable: boolean;
   totalAgents: number;
   deployedAgents: number;
-  categories: AgentHubCategory[];
+  isDefault: boolean;
+  lastSyncedAt: string;
 }
 
 export interface Microservice {
