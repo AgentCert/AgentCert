@@ -1,0 +1,93 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-server
+  namespace: #{INFRA_NAMESPACE}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-server-role
+  namespace: #{INFRA_NAMESPACE}
+rules:
+  # Standard Kubernetes resources (read-only, namespace-scoped)
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "configmaps", "secrets", "events", "replicationcontrollers", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "list", "watch"]
+  # Litmus Chaos CRDs
+  - apiGroups: ["litmuschaos.io"]
+    resources: ["chaosengines", "chaosexperiments", "chaosresults"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Litmus EventTracker CRDs
+  - apiGroups: ["eventtracker.litmuschaos.io"]
+    resources: ["eventtrackerpolicies"]
+    verbs: ["get", "list", "watch"]
+  # Argo Workflow CRDs (used by Litmus)
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "cronworkflows", "workflowtemplates", "workflowtasksets", "workflowtaskresults"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-server-role-binding
+  namespace: #{INFRA_NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mcp-server-role
+subjects:
+  - kind: ServiceAccount
+    name: mcp-server
+    namespace: #{INFRA_NAMESPACE}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-mcp-server
+  namespace: #{INFRA_NAMESPACE}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-mcp-server-role
+  namespace: #{INFRA_NAMESPACE}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  # Litmus Chaos CRDs (read-only for observing chaos experiment metrics)
+  - apiGroups: ["litmuschaos.io"]
+    resources: ["chaosengines", "chaosexperiments", "chaosresults"]
+    verbs: ["get", "list", "watch"]
+  # Argo Workflow CRDs (read-only)
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "cronworkflows"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-mcp-server-role-binding
+  namespace: #{INFRA_NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus-mcp-server-role
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-mcp-server
+    namespace: #{INFRA_NAMESPACE}

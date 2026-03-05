@@ -255,7 +255,7 @@ spec:
             - name: ENABLE_GQL_INTROSPECTION
               value: "false"
             - name: INFRA_DEPLOYMENTS
-              value: '["app=chaos-exporter", "name=chaos-operator", "app=workflow-controller", "app=event-tracker"]'
+              value: '["app=chaos-exporter", "name=chaos-operator", "app=workflow-controller", "app=event-tracker", "app=kubernetes-mcp-server", "app=prometheus-mcp-server"]'
             - name: CHAOS_CENTER_UI_ENDPOINT
               value: ""
             - name: SUBSCRIBER_IMAGE
@@ -274,6 +274,12 @@ spec:
               value: "litmuschaos/chaos-exporter:ci"
             - name: CONTAINER_RUNTIME_EXECUTOR
               value: "k8sapi"
+            - name: KUBERNETES_MCP_SERVER_IMAGE
+              value: "quay.io/containers/kubernetes_mcp_server:latest"
+            - name: PROMETHEUS_MCP_SERVER_IMAGE
+              value: "ghcr.io/pab1it0/prometheus-mcp-server:latest"
+            - name: PROMETHEUS_MCP_URL
+              value: "http://prometheus.monitoring.svc.cluster.local:9090"
             - name: DEFAULT_HUB_BRANCH_NAME
               value: "master"
             - name: LITMUS_AUTH_GRPC_ENDPOINT
