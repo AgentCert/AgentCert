@@ -228,6 +228,49 @@ func GitPlainOpen(repoPath string) error {
 	return nil
 }
 
+// ClonePublicRepoToPath clones a public git repo to the specified path.
+// Unlike GitClone, this does not use GetClonePath — callers control the destination.
+func ClonePublicRepoToPath(repoURL, branch, clonePath string) error {
+	os.RemoveAll(clonePath)
+	_, err := git.PlainClone(clonePath, false, &git.CloneOptions{
+		URL:           repoURL,
+		Progress:      nil,
+		ReferenceName: plumbing.NewBranchReferenceName(branch),
+		SingleBranch:  true,
+	})
+	if err != nil {
+		// Retry with tag reference
+		_, err = git.PlainClone(clonePath, false, &git.CloneOptions{
+			URL:           repoURL,
+			Progress:      nil,
+			ReferenceName: plumbing.NewTagReferenceName(branch),
+			SingleBranch:  true,
+		})
+	}
+	return err
+}
+
+// PullRepoAtPath pulls the latest changes for a repo at the specified path.
+func PullRepoAtPath(clonePath, branch string) error {
+	repository, err := git.PlainOpen(clonePath)
+	if err != nil {
+		return fmt.Errorf("error opening repo at %s: %w", clonePath, err)
+	}
+	workTree, err := repository.Worktree()
+	if err != nil {
+		return fmt.Errorf("error getting worktree: %w", err)
+	}
+	err = workTree.Pull(&git.PullOptions{
+		RemoteName:    "origin",
+		ReferenceName: plumbing.NewBranchReferenceName(branch),
+	})
+	if err == git.NoErrAlreadyUpToDate {
+		log.Info("repo already up-to-date at ", clonePath)
+		return nil
+	}
+	return err
+}
+
 // GitPull updates the repository in provided Path
 func (c ChaosHubConfig) GitPull() error {
 	_, workTree, plumbingRef, err := c.setterRepositoryWorktreeReference()

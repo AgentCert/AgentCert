@@ -1,0 +1,41 @@
+.appGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-medium);
+}
+
+.appCard {
+  width: 360px;
+  min-height: 180px;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.expandToggle {
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.microserviceList {
+  background-color: var(--grey-50);
+  border-radius: 4px;
+  padding: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.microserviceRow {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--grey-100);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}

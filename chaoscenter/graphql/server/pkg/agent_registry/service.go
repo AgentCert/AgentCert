@@ -304,6 +304,11 @@ func (s *serviceImpl) GetAgent(ctx context.Context, id string) (*Agent, error) {
 func (s *serviceImpl) ListAgents(ctx context.Context, filter *AgentFilter, pagination *PaginationInput) (*AgentListResponse, error) {
 	// TODO: Verify user project access from JWT context
 	
+	// Default pagination if nil
+	if pagination == nil {
+		pagination = &PaginationInput{Page: 1, Limit: 100}
+	}
+	
 	// Calculate skip and limit from pagination
 	skip := (pagination.Page - 1) * pagination.Limit
 	limit := pagination.Limit

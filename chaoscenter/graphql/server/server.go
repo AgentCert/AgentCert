@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
@@ -18,6 +19,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	log "github.com/sirupsen/logrus"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -27,6 +29,8 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
 	handler2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub/handler"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/config"
@@ -131,6 +135,16 @@ func main() {
 	}
 
 	srv := handler.New(generated.NewExecutableSchema(graph.NewConfig(mongodbOperator)))
+
+	// Pass through actual error messages instead of generic "internal system error"
+	srv.SetErrorPresenter(func(ctx context.Context, e error) *gqlerror.Error {
+		err := graphql.DefaultErrorPresenter(ctx, e)
+		return err
+	})
+	srv.SetRecoverFunc(func(ctx context.Context, err interface{}) error {
+		log.Errorf("PANIC in GraphQL resolver: %v", err)
+		return fmt.Errorf("panic: %v", err)
+	})
 	srv.AddTransport(transport.POST{})
 	srv.AddTransport(transport.GET{})
 	srv.AddTransport(transport.Websocket{
@@ -163,6 +177,10 @@ func main() {
 	// go routine for syncing chaos hubs
 	go chaoshub.NewService(dbSchemaChaosHub.NewChaosHubOperator(mongodbOperator)).RecurringHubSync()
 	go chaoshub.NewService(dbSchemaChaosHub.NewChaosHubOperator(mongodbOperator)).SyncDefaultChaosHubs()
+
+	// go routine for syncing agent hub and app hub
+	go agenthub.NewService(nil).SyncDefaultAgentHub()
+	go apphub.NewService().SyncDefaultAppHub()
 
 	// routers
 	router.GET("/", handlers.PlaygroundHandler())

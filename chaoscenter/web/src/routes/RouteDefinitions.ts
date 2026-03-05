@@ -16,6 +16,8 @@ export interface UseRouteDefinitionsProps {
   toChaosHubs(): string;
   toAgentOnboarding(): string;
   toAppsOnboarding(): string;
+  toAgentHub(): string;
+  toAppsHub(): string;
   toChaosHub(params: { hubID: string }): string;
   toChaosProbes(): string;
   toChaosProbe(params: { probeName: string }): string;
@@ -54,6 +56,10 @@ export const paths: UseRouteDefinitionsProps = {
   toAgentOnboarding: () => '/agent-onboarding',
   // Apps Onboarding Route
   toAppsOnboarding: () => '/apps-onboarding',
+  // Agent Hub Route
+  toAgentHub: () => '/agent-hub',
+  // Apps Hub Route
+  toAppsHub: () => '/apps-hub',
   toChaosHub: ({ hubID }) => `/chaos-hubs/${hubID}`,
   toPredefinedExperiment: ({ hubID, experimentName }) => `/chaos-hubs/${hubID}/experiment/${experimentName}`,
   toChaosFault: ({ hubID, faultName }) => `/chaos-hubs/${hubID}/fault/${faultName}`,

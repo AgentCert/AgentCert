@@ -43,6 +43,12 @@ type Configuration struct {
 	TlsKeyPath                  string   `split_words:"true"`
 	CaCertTlsPath               string   `split_words:"true"`
 	DefaultAgentChartPath       string   `split_words:"true"`
+	DefaultAgentHubGitURL       string   `split_words:"true" default:"https://github.com/agentcert/agent-charts"`
+	DefaultAgentHubBranchName   string   `split_words:"true" default:"main"`
+	DefaultAgentHubPath         string   `split_words:"true" default:"/tmp/default-agents/"`
+	DefaultAppHubGitURL         string   `split_words:"true" default:"https://github.com/agentcert/app-charts"`
+	DefaultAppHubBranchName     string   `split_words:"true" default:"main"`
+	DefaultAppHubPath           string   `split_words:"true" default:"/tmp/default-apps/"`
 	HelmBinary                  string   `split_words:"true" default:"helm"`
 	HelmTimeout                 string   `split_words:"true" default:"5m"`
 	AllowedOrigins              []string `split_words:"true" default:"^(http://|https://|)litmuschaos.io(:[0-9]+|)?,^(http://|https://|)localhost(:[0-9]+|)"`

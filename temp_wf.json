@@ -1,0 +1,699 @@
+﻿{
+    "apiVersion": "argoproj.io/v1alpha1",
+    "kind": "Workflow",
+    "metadata": {
+        "annotations": {
+            "workflows.argoproj.io/pod-name-format": "v1"
+        },
+        "creationTimestamp": "2026-02-26T12:15:55Z",
+        "generation": 13,
+        "labels": {
+            "infra_id": "dd859ef4-cf22-43ec-b09e-eb59b3fe5f86",
+            "notify_id": "05b052ff-473c-4223-8f9a-5decd213382a",
+            "revision_id": "0a54b64d-fd35-49f6-9cef-01d30f3e367b",
+            "subject": "sock-shop",
+            "updated_by": "YWRtaW4",
+            "workflow_id": "68b120f6-3f22-424d-be0d-e130e7cba702",
+            "workflows.argoproj.io/completed": "true",
+            "workflows.argoproj.io/controller-instanceid": "dd859ef4-cf22-43ec-b09e-eb59b3fe5f86",
+            "workflows.argoproj.io/phase": "Succeeded"
+        },
+        "name": "chaos-sock-shop-resiliency-new-test-1772108154393",
+        "namespace": "litmus",
+        "resourceVersion": "2441695",
+        "uid": "12131d97-91ea-4cd9-a249-b487cf3435b5"
+    },
+    "spec": {
+        "arguments": {
+            "parameters": [
+                {
+                    "name": "adminModeNamespace",
+                    "value": "litmus"
+                },
+                {
+                    "name": "appNamespace",
+                    "value": "sock-shop"
+                }
+            ]
+        },
+        "entrypoint": "argowf-chaos",
+        "securityContext": {
+            "runAsNonRoot": true,
+            "runAsUser": 1000
+        },
+        "serviceAccountName": "argo-chaos",
+        "templates": [
+            {
+                "inputs": {},
+                "metadata": {},
+                "name": "argowf-chaos",
+                "outputs": {},
+                "steps": [
+                    [
+                        {
+                            "arguments": {},
+                            "name": "install-application",
+                            "template": "install-application"
+                        }
+                    ],
+                    [
+                        {
+                            "arguments": {},
+                            "name": "install-agent",
+                            "template": "install-agent"
+                        }
+                    ],
+                    [
+                        {
+                            "arguments": {},
+                            "name": "install-chaos-faults",
+                            "template": "install-chaos-faults"
+                        },
+                        {
+                            "arguments": {},
+                            "name": "load-test",
+                            "template": "load-test"
+                        }
+                    ],
+                    [
+                        {
+                            "arguments": {},
+                            "name": "scale-catalogue",
+                            "template": "scale-catalogue"
+                        }
+                    ],
+                    [
+                        {
+                            "arguments": {},
+                            "name": "pod-delete",
+                            "template": "pod-delete"
+                        }
+                    ],
+                    [
+                        {
+                            "arguments": {},
+                            "name": "cleanup-chaos-resources",
+                            "template": "cleanup-chaos-resources"
+                        },
+                        {
+                            "arguments": {},
+                            "name": "delete-loadtest",
+                            "template": "delete-loadtest"
+                        }
+                    ]
+                ]
+            },
+            {
+                "container": {
+                    "args": [
+                        "-folder=sock-shop",
+                        "-namespace=sock-shop",
+                        "-create-namespace",
+                        "-wait",
+                        "-timeout=5m"
+                    ],
+                    "image": "agentcert/agentcert-install-app:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {},
+                "metadata": {},
+                "name": "install-application",
+                "outputs": {}
+            },
+            {
+                "container": {
+                    "args": [
+                        "-folder=flash-agent",
+                        "-namespace=sock-shop",
+                        "-create-namespace",
+                        "-timeout=10m"
+                    ],
+                    "image": "agentcert/agentcert-install-agent:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {},
+                "metadata": {},
+                "name": "install-agent",
+                "outputs": {}
+            },
+            {
+                "container": {
+                    "args": [
+                        "kubectl apply -f /tmp/ -n {{workflow.parameters.adminModeNamespace}} \u0026\u0026 sleep 30"
+                    ],
+                    "command": [
+                        "sh",
+                        "-c"
+                    ],
+                    "image": "litmuschaos/k8s:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {
+                    "artifacts": [
+                        {
+                            "name": "pod-cpu-hog-2sf",
+                            "path": "/tmp/pod-cpu-hog-2sf.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\ndescription:\n  message: |\n    Injects CPU consumption on pods belonging to an app deployment\nkind: ChaosExperiment\nmetadata:\n  name: pod-cpu-hog\n  labels:\n    name: pod-cpu-hog\n    app.kubernetes.io/part-of: litmus\n    app.kubernetes.io/component: chaosexperiment\n    app.kubernetes.io/version: latest\nspec:\n  definition:\n    scope: Namespaced\n    permissions:\n      # Create and monitor the experiment \u0026 helper pods\n      - apiGroups: [\"\"]\n        resources: [\"pods\"]\n        verbs:\n          [\n            \"create\",\n            \"delete\",\n            \"get\",\n            \"list\",\n            \"patch\",\n            \"update\",\n            \"deletecollection\",\n          ]\n      # Performs CRUD operations on the events inside chaosengine and chaosresult\n      - apiGroups: [\"\"]\n        resources: [\"events\"]\n        verbs: [\"create\", \"get\", \"list\", \"patch\", \"update\"]\n      # Fetch configmaps details and mount it to the experiment pod (if specified)\n      - apiGroups: [\"\"]\n        resources: [\"configmaps\"]\n        verbs: [\"get\", \"list\"]\n      # Track and get the runner, experiment, and helper pods log\n      - apiGroups: [\"\"]\n        resources: [\"pods/log\"]\n        verbs: [\"get\", \"list\", \"watch\"]\n      # for creating and managing to execute commands inside target container\n      - apiGroups: [\"\"]\n        resources: [\"pods/exec\"]\n        verbs: [\"get\", \"list\", \"create\"]\n      # deriving the parent/owner details of the pod(if parent is anyof {deployment, statefulset, daemonsets})\n      - apiGroups: [\"apps\"]\n        resources: [\"deployments\", \"statefulsets\", \"replicasets\", \"daemonsets\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"apps.openshift.io\"]\n        resources: [\"deploymentconfigs\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"\"]\n        resources: [\"replicationcontrollers\"]\n        verbs: [\"get\", \"list\"]\n      # deriving the parent/owner details of the pod(if parent is argo-rollouts)\n      - apiGroups: [\"argoproj.io\"]\n        resources: [\"rollouts\"]\n        verbs: [\"list\", \"get\"]\n      # for configuring and monitor the experiment job by the chaos-runner pod\n      - apiGroups: [\"batch\"]\n        resources: [\"jobs\"]\n        verbs: [\"create\", \"list\", \"get\", \"delete\", \"deletecollection\"]\n      # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow\n      - apiGroups: [\"litmuschaos.io\"]\n        resources: [\"chaosengines\", \"chaosexperiments\", \"chaosresults\"]\n        verbs: [\"create\", \"list\", \"get\", \"patch\", \"update\", \"delete\"]\n    image: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n    imagePullPolicy: Always\n    args:\n      - -c\n      - ./experiments -name pod-cpu-hog\n    command:\n      - /bin/bash\n    env:\n      - name: TOTAL_CHAOS_DURATION\n        value: \"60\"\n\n      ## Number of CPU cores to stress\n      - name: CPU_CORES\n        value: \"1\"\n\n      ## LOAD CPU WITH GIVEN PERCENT LOADING FOR THE CPU STRESS WORKERS.\n      ## 0 IS EFFECTIVELY A SLEEP (NO LOAD) AND 100 IS FULL LOADING\n      - name: CPU_LOAD\n        value: \"100\"\n\n      ## Percentage of total pods to target\n      - name: PODS_AFFECTED_PERC\n        value: \"\"\n\n      ## Period to wait before and after injection of chaos in sec\n      - name: RAMP_TIME\n        value: \"\"\n\n      ## It is used in pumba lib only\n      - name: LIB_IMAGE\n        value: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n\n      ## It is used in pumba lib only\n      - name: STRESS_IMAGE\n        value: \"alexeiled/stress-ng:latest-ubuntu\"\n\n      ## provide the cluster runtime\n      - name: CONTAINER_RUNTIME\n        value: \"containerd\"\n\n      # provide the socket file path\n      - name: SOCKET_PATH\n        value: \"/run/containerd/containerd.sock\"\n\n      - name: TARGET_CONTAINER\n        value: \"\"\n\n      - name: TARGET_PODS\n        value: \"\"\n\n      - name: DEFAULT_HEALTH_CHECK\n        value: \"false\"\n\n      # To select pods on specific node(s)\n      - name: NODE_LABEL\n        value: \"\"\n\n      ## it defines the sequence of chaos execution for multiple target pods\n      ## supported values: serial, parallel\n      - name: SEQUENCE\n        value: \"parallel\"\n\n    labels:\n      name: pod-cpu-hog\n      app.kubernetes.io/part-of: litmus\n      app.kubernetes.io/component: experiment-job\n      app.kubernetes.io/runtime-api-usage: \"true\"\n      app.kubernetes.io/version: latest\n"
+                            }
+                        },
+                        {
+                            "name": "pod-delete-rm5",
+                            "path": "/tmp/pod-delete-rm5.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\ndescription:\n  message: |\n    Deletes a pod belonging to a deployment/statefulset/daemonset\nkind: ChaosExperiment\nmetadata:\n  name: pod-delete\n  labels:\n    name: pod-delete\n    app.kubernetes.io/part-of: litmus\n    app.kubernetes.io/component: chaosexperiment\n    app.kubernetes.io/version: latest\nspec:\n  definition:\n    scope: Namespaced\n    permissions:\n      # Create and monitor the experiment \u0026 helper pods\n      - apiGroups: [\"\"]\n        resources: [\"pods\"]\n        verbs:\n          [\n            \"create\",\n            \"delete\",\n            \"get\",\n            \"list\",\n            \"patch\",\n            \"update\",\n            \"deletecollection\",\n          ]\n      # Performs CRUD operations on the events inside chaosengine and chaosresult\n      - apiGroups: [\"\"]\n        resources: [\"events\"]\n        verbs: [\"create\", \"get\", \"list\", \"patch\", \"update\"]\n      # Fetch configmaps details and mount it to the experiment pod (if specified)\n      - apiGroups: [\"\"]\n        resources: [\"configmaps\"]\n        verbs: [\"get\", \"list\"]\n      # Track and get the runner, experiment, and helper pods log\n      - apiGroups: [\"\"]\n        resources: [\"pods/log\"]\n        verbs: [\"get\", \"list\", \"watch\"]\n      # for creating and managing to execute commands inside target container\n      - apiGroups: [\"\"]\n        resources: [\"pods/exec\"]\n        verbs: [\"get\", \"list\", \"create\"]\n      # deriving the parent/owner details of the pod(if parent is anyof {deployment, statefulset, daemonsets})\n      - apiGroups: [\"apps\"]\n        resources: [\"deployments\", \"statefulsets\", \"replicasets\", \"daemonsets\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"apps.openshift.io\"]\n        resources: [\"deploymentconfigs\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"\"]\n        resources: [\"replicationcontrollers\"]\n        verbs: [\"get\", \"list\"]\n      # deriving the parent/owner details of the pod(if parent is argo-rollouts)\n      - apiGroups: [\"argoproj.io\"]\n        resources: [\"rollouts\"]\n        verbs: [\"list\", \"get\"]\n      # for configuring and monitor the experiment job by the chaos-runner pod\n      - apiGroups: [\"batch\"]\n        resources: [\"jobs\"]\n        verbs: [\"create\", \"list\", \"get\", \"delete\", \"deletecollection\"]\n      # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow\n      - apiGroups: [\"litmuschaos.io\"]\n        resources: [\"chaosengines\", \"chaosexperiments\", \"chaosresults\"]\n        verbs: [\"create\", \"list\", \"get\", \"patch\", \"update\", \"delete\"]\n    image: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n    imagePullPolicy: Always\n    args:\n      - -c\n      - ./experiments -name pod-delete\n    command:\n      - /bin/bash\n    env:\n      - name: TOTAL_CHAOS_DURATION\n        value: \"15\"\n\n      # Period to wait before and after injection of chaos in sec\n      - name: RAMP_TIME\n        value: \"\"\n\n      - name: FORCE\n        value: \"true\"\n\n      - name: CHAOS_INTERVAL\n        value: \"5\"\n\n      ## percentage of total pods to target\n      - name: PODS_AFFECTED_PERC\n        value: \"\"\n\n      - name: TARGET_CONTAINER\n        value: \"\"\n\n      - name: TARGET_PODS\n        value: \"\"\n\n      - name: DEFAULT_HEALTH_CHECK\n        value: \"false\"\n\n      # To select pods on specific node(s)\n      - name: NODE_LABEL\n        value: \"\"\n\n      ## it defines the sequence of chaos execution for multiple target pods\n      ## supported values: serial, parallel\n      - name: SEQUENCE\n        value: \"parallel\"\n\n    labels:\n      name: pod-delete\n      app.kubernetes.io/part-of: litmus\n      app.kubernetes.io/component: experiment-job\n      app.kubernetes.io/version: latest\n"
+                            }
+                        },
+                        {
+                            "name": "pod-network-loss-x1w",
+                            "path": "/tmp/pod-network-loss-x1w.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\ndescription:\n  message: |\n    Injects network packet loss on pods belonging to an app deployment\nkind: ChaosExperiment\nmetadata:\n  name: pod-network-loss\n  labels:\n    name: pod-network-loss\n    app.kubernetes.io/part-of: litmus\n    app.kubernetes.io/component: chaosexperiment\n    app.kubernetes.io/version: latest\nspec:\n  definition:\n    scope: Namespaced\n    permissions:\n      # Create and monitor the experiment \u0026 helper pods\n      - apiGroups: [\"\"]\n        resources: [\"pods\"]\n        verbs:\n          [\n            \"create\",\n            \"delete\",\n            \"get\",\n            \"list\",\n            \"patch\",\n            \"update\",\n            \"deletecollection\",\n          ]\n      # Performs CRUD operations on the events inside chaosengine and chaosresult\n      - apiGroups: [\"\"]\n        resources: [\"events\"]\n        verbs: [\"create\", \"get\", \"list\", \"patch\", \"update\"]\n      # Fetch configmaps details and mount it to the experiment pod (if specified)\n      - apiGroups: [\"\"]\n        resources: [\"configmaps\"]\n        verbs: [\"get\", \"list\"]\n      # Track and get the runner, experiment, and helper pods log\n      - apiGroups: [\"\"]\n        resources: [\"pods/log\"]\n        verbs: [\"get\", \"list\", \"watch\"]\n      # for creating and managing to execute commands inside target container\n      - apiGroups: [\"\"]\n        resources: [\"pods/exec\"]\n        verbs: [\"get\", \"list\", \"create\"]\n      # deriving the parent/owner details of the pod(if parent is anyof {deployment, statefulset, daemonsets})\n      - apiGroups: [\"apps\"]\n        resources: [\"deployments\", \"statefulsets\", \"replicasets\", \"daemonsets\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"apps.openshift.io\"]\n        resources: [\"deploymentconfigs\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"\"]\n        resources: [\"replicationcontrollers\"]\n        verbs: [\"get\", \"list\"]\n      # deriving the parent/owner details of the pod(if parent is argo-rollouts)\n      - apiGroups: [\"argoproj.io\"]\n        resources: [\"rollouts\"]\n        verbs: [\"list\", \"get\"]\n      # for configuring and monitor the experiment job by the chaos-runner pod\n      - apiGroups: [\"batch\"]\n        resources: [\"jobs\"]\n        verbs: [\"create\", \"list\", \"get\", \"delete\", \"deletecollection\"]\n      # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow\n      - apiGroups: [\"litmuschaos.io\"]\n        resources: [\"chaosengines\", \"chaosexperiments\", \"chaosresults\"]\n        verbs: [\"create\", \"list\", \"get\", \"patch\", \"update\", \"delete\"]\n    image: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n    imagePullPolicy: Always\n    args:\n      - -c\n      - ./experiments -name pod-network-loss\n    command:\n      - /bin/bash\n    env:\n      - name: TARGET_CONTAINER\n        value: \"\"\n\n      # provide lib image\n      - name: LIB_IMAGE\n        value: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n\n      - name: NETWORK_INTERFACE\n        value: \"eth0\"\n\n      - name: TC_IMAGE\n        value: \"gaiadocker/iproute2\"\n\n      - name: NETWORK_PACKET_LOSS_PERCENTAGE\n        value: \"100\" #in PERCENTAGE\n\n      - name: TOTAL_CHAOS_DURATION\n        value: \"60\" # in seconds\n\n      # time period to wait before and after injection of chaos in sec\n      - name: RAMP_TIME\n        value: \"\"\n\n      ## percentage of total pods to target\n      - name: PODS_AFFECTED_PERC\n        value: \"\"\n\n      - name: DEFAULT_HEALTH_CHECK\n        value: \"false\"\n\n      - name: TARGET_PODS\n        value: \"\"\n\n      # To select pods on specific node(s)\n      - name: NODE_LABEL\n        value: \"\"\n\n      # provide the name of container runtime\n      # for litmus LIB, it supports docker, containerd, crio\n      # for pumba LIB, it supports docker only\n      - name: CONTAINER_RUNTIME\n        value: \"containerd\"\n\n      # provide the destination ips\n      # chaos injection will be triggered for these destination ips\n      - name: DESTINATION_IPS\n        value: \"\"\n\n      # provide the destination hosts\n      # chaos injection will be triggered for these destination hosts\n      - name: DESTINATION_HOSTS\n        value: \"\"\n\n      # provide the socket file path\n      - name: SOCKET_PATH\n        value: \"/run/containerd/containerd.sock\"\n\n      ## it defines the sequence of chaos execution for multiple target pods\n      ## supported values: serial, parallel\n      - name: SEQUENCE\n        value: \"parallel\"\n\n    labels:\n      name: pod-network-loss\n      app.kubernetes.io/part-of: litmus\n      app.kubernetes.io/component: experiment-job\n      app.kubernetes.io/runtime-api-usage: \"true\"\n      app.kubernetes.io/version: latest\n"
+                            }
+                        },
+                        {
+                            "name": "disk-fill-h7d",
+                            "path": "/tmp/disk-fill-h7d.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\ndescription:\n  message: |\n    Fillup Ephemeral Storage of a Resource\nkind: ChaosExperiment\nmetadata:\n  name: disk-fill\n  labels:\n    name: disk-fill\n    app.kubernetes.io/part-of: litmus\n    app.kubernetes.io/component: chaosexperiment\n    app.kubernetes.io/version: latest\nspec:\n  definition:\n    scope: Namespaced\n    permissions:\n      # Create and monitor the experiment \u0026 helper pods\n      - apiGroups: [\"\"]\n        resources: [\"pods\"]\n        verbs:\n          [\n            \"create\",\n            \"delete\",\n            \"get\",\n            \"list\",\n            \"patch\",\n            \"update\",\n            \"deletecollection\",\n          ]\n      # Performs CRUD operations on the events inside chaosengine and chaosresult\n      - apiGroups: [\"\"]\n        resources: [\"events\"]\n        verbs: [\"create\", \"get\", \"list\", \"patch\", \"update\"]\n      # Fetch configmaps details and mount it to the experiment pod (if specified)\n      - apiGroups: [\"\"]\n        resources: [\"configmaps\"]\n        verbs: [\"get\", \"list\"]\n      # Track and get the runner, experiment, and helper pods log\n      - apiGroups: [\"\"]\n        resources: [\"pods/log\"]\n        verbs: [\"get\", \"list\", \"watch\"]\n      # for creating and managing to execute commands inside target container\n      - apiGroups: [\"\"]\n        resources: [\"pods/exec\"]\n        verbs: [\"get\", \"list\", \"create\"]\n      # deriving the parent/owner details of the pod(if parent is anyof {deployment, statefulset, daemonsets})\n      - apiGroups: [\"apps\"]\n        resources: [\"deployments\", \"statefulsets\", \"replicasets\", \"daemonsets\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"apps.openshift.io\"]\n        resources: [\"deploymentconfigs\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"\"]\n        resources: [\"replicationcontrollers\"]\n        verbs: [\"get\", \"list\"]\n      # deriving the parent/owner details of the pod(if parent is argo-rollouts)\n      - apiGroups: [\"argoproj.io\"]\n        resources: [\"rollouts\"]\n        verbs: [\"list\", \"get\"]\n      # for configuring and monitor the experiment job by the chaos-runner pod\n      - apiGroups: [\"batch\"]\n        resources: [\"jobs\"]\n        verbs: [\"create\", \"list\", \"get\", \"delete\", \"deletecollection\"]\n      # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow\n      - apiGroups: [\"litmuschaos.io\"]\n        resources: [\"chaosengines\", \"chaosexperiments\", \"chaosresults\"]\n        verbs: [\"create\", \"list\", \"get\", \"patch\", \"update\", \"delete\"]\n    image: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n    imagePullPolicy: Always\n    args:\n      - -c\n      - ./experiments -name disk-fill\n    command:\n      - /bin/bash\n    env:\n      - name: TARGET_CONTAINER\n        value: \"\"\n\n      - name: FILL_PERCENTAGE\n        value: \"80\"\n\n      - name: TOTAL_CHAOS_DURATION\n        value: \"60\"\n\n      # Period to wait before and after injection of chaos in sec\n      - name: RAMP_TIME\n        value: \"\"\n\n      # provide the data block size\n      # supported unit is KB\n      - name: DATA_BLOCK_SIZE\n        value: \"256\"\n\n      - name: TARGET_PODS\n        value: \"\"\n\n      - name: EPHEMERAL_STORAGE_MEBIBYTES\n        value: \"\"\n\n      # To select pods on specific node(s)\n      - name: NODE_LABEL\n        value: \"\"\n\n      ## percentage of total pods to target\n      - name: PODS_AFFECTED_PERC\n        value: \"\"\n\n      - name: DEFAULT_HEALTH_CHECK\n        value: \"false\"\n\n      - name: LIB_IMAGE\n        value: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n\n      # Provide the container runtime path\n      # Default set to docker container path\n      - name: CONTAINER_PATH\n        value: \"/var/lib/docker/containers\"\n\n      ## it defines the sequence of chaos execution for multiple target pods\n      ## supported values: serial, parallel\n      - name: SEQUENCE\n        value: \"parallel\"\n\n    labels:\n      name: disk-fill\n      app.kubernetes.io/part-of: litmus\n      app.kubernetes.io/component: experiment-job\n      app.kubernetes.io/host-path-usage: \"true\"\n      app.kubernetes.io/version: latest\n"
+                            }
+                        }
+                    ]
+                },
+                "metadata": {},
+                "name": "install-chaos-faults",
+                "outputs": {}
+            },
+            {
+                "container": {
+                    "args": [
+                        "-file=/tmp/chaosengine.yaml",
+                        "-saveName=/tmp/engine-name"
+                    ],
+                    "image": "litmuschaos/litmus-checker:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {
+                    "artifacts": [
+                        {
+                            "name": "pod-delete",
+                            "path": "/tmp/chaosengine.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n  annotations:\n    probeRef: '[{\"name\":\"check-catalogue-access-url-GG960m0cQVe1XjoKa9SPyQ\",\"mode\":\"Edge\"}]'\n  creationTimestamp: null\n  generateName: pod-delete\n  labels:\n    context: '{{workflow.parameters.appNamespace}}_catalogue'\n    infra_id: dd859ef4-cf22-43ec-b09e-eb59b3fe5f86\n    step_pod_name: '{{pod.name}}'\n    workflow_name: chaos-sock-shop-resiliency-new-test\n    workflow_run_id: '{{workflow.uid}}'\n  namespace: '{{workflow.parameters.adminModeNamespace}}'\nspec:\n  appinfo:\n    appkind: deployment\n    applabel: name=catalogue\n    appns: sock-shop\n  chaosServiceAccount: litmus-admin\n  components:\n    runner:\n      imagePullPolicy: Always\n      resources: {}\n  engineState: active\n  experiments:\n  - name: pod-delete\n    spec:\n      components:\n        env:\n        - name: TOTAL_CHAOS_DURATION\n          value: \"30\"\n        - name: CHAOS_INTERVAL\n          value: \"10\"\n        - name: FORCE\n          value: \"false\"\n        resources: {}\n        statusCheckTimeouts: {}\n      probe:\n      - httpProbe/inputs:\n          method:\n            get:\n              criteria: ==\n              responseCode: \"200\"\n          url: http://front-end.sock-shop.svc.cluster.local:80/catalogue\n        mode: Edge\n        name: check-catalogue-access-url\n        runProperties:\n          attempt: 5\n          initialDelay: 15s\n          interval: 5s\n          probePollingInterval: 1s\n          probeTimeout: 10s\n        type: httpProbe\n      - httpProbe/inputs:\n          method:\n            get:\n              criteria: ==\n              responseCode: \"200\"\n          url: http://front-end.sock-shop.svc.cluster.local:80/catalogue\n        mode: Edge\n        name: check-catalogue-access-url-GG960m0cQVe1XjoKa9SPyQ\n        runProperties:\n          attempt: 5\n          interval: 5s\n          probePollingInterval: 1s\n          probeTimeout: 10s\n          retry: 3\n        type: httpProbe\n  jobCleanUpPolicy: retain\nstatus:\n  engineStatus: \"\"\n  experiments: null\n"
+                            }
+                        }
+                    ]
+                },
+                "metadata": {
+                    "labels": {
+                        "weight": "10"
+                    }
+                },
+                "name": "pod-delete",
+                "outputs": {}
+            },
+            {
+                "container": {
+                    "args": [
+                        "-namespace=sock-shop",
+                        "-typeName=resilient",
+                        "-operation=delete",
+                        "-app=sock-shop"
+                    ],
+                    "image": "litmuschaos/litmus-app-deployer:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {},
+                "metadata": {},
+                "name": "delete-application",
+                "outputs": {}
+            },
+            {
+                "container": {
+                    "args": [
+                        "-namespace=loadtest",
+                        "-app=loadtest"
+                    ],
+                    "image": "litmuschaos/litmus-app-deployer:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {},
+                "metadata": {},
+                "name": "load-test",
+                "outputs": {}
+            },
+            {
+                "container": {
+                    "args": [
+                        "-namespace=loadtest",
+                        "-operation=delete",
+                        "-app=loadtest"
+                    ],
+                    "image": "litmuschaos/litmus-app-deployer:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {},
+                "metadata": {},
+                "name": "delete-loadtest",
+                "outputs": {}
+            },
+            {
+                "container": {
+                    "args": [
+                        "kubectl delete chaosengine -l workflow_run_id={{workflow.uid}} -n {{workflow.parameters.adminModeNamespace}}"
+                    ],
+                    "command": [
+                        "sh",
+                        "-c"
+                    ],
+                    "image": "litmuschaos/k8s:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {},
+                "metadata": {},
+                "name": "cleanup-chaos-resources",
+                "outputs": {}
+            },
+            {
+                "container": {
+                    "args": [
+                        "kubectl scale deployment catalogue -n sock-shop --replicas=2 \u0026\u0026 (kubectl rollout status deployment/catalogue -n sock-shop --timeout=300s || echo 'WARN: rollout slow, continuing') \u0026\u0026 echo 'catalogue scaled'"
+                    ],
+                    "command": [
+                        "sh",
+                        "-c"
+                    ],
+                    "image": "litmuschaos/k8s:latest",
+                    "name": "",
+                    "resources": {}
+                },
+                "inputs": {},
+                "metadata": {},
+                "name": "scale-catalogue",
+                "outputs": {}
+            }
+        ]
+    },
+    "status": {
+        "artifactRepositoryRef": {
+            "artifactRepository": {},
+            "default": true
+        },
+        "conditions": [
+            {
+                "status": "False",
+                "type": "PodRunning"
+            },
+            {
+                "status": "True",
+                "type": "Completed"
+            }
+        ],
+        "finishedAt": "2026-02-26T12:26:52Z",
+        "nodes": {
+            "chaos-sock-shop-resiliency-new-test-1772108154393": {
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1206309283"
+                ],
+                "displayName": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "finishedAt": "2026-02-26T12:26:52Z",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "outboundNodes": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-913466881",
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1567998694"
+                ],
+                "phase": "Succeeded",
+                "progress": "8/8",
+                "resourcesDuration": {
+                    "cpu": 1182,
+                    "memory": 1182
+                },
+                "startedAt": "2026-02-26T12:15:55Z",
+                "templateName": "argowf-chaos",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Steps"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-1205720903": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-2345982474"
+                ],
+                "displayName": "[4]",
+                "finishedAt": "2026-02-26T12:26:01Z",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-1205720903",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[4]",
+                "phase": "Succeeded",
+                "progress": "3/3",
+                "resourcesDuration": {
+                    "cpu": 708,
+                    "memory": 708
+                },
+                "startedAt": "2026-02-26T12:20:33Z",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "StepGroup"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-1206309283": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-3259278561"
+                ],
+                "displayName": "[0]",
+                "finishedAt": "2026-02-26T12:16:15Z",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-1206309283",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[0]",
+                "phase": "Succeeded",
+                "progress": "8/8",
+                "resourcesDuration": {
+                    "cpu": 1182,
+                    "memory": 1182
+                },
+                "startedAt": "2026-02-26T12:15:55Z",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "StepGroup"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-1206853736": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1427845040"
+                ],
+                "displayName": "[3]",
+                "finishedAt": "2026-02-26T12:20:33Z",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-1206853736",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[3]",
+                "phase": "Succeeded",
+                "progress": "4/4",
+                "resourcesDuration": {
+                    "cpu": 1079,
+                    "memory": 1079
+                },
+                "startedAt": "2026-02-26T12:17:15Z",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "StepGroup"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-1272978474": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-913466881",
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1567998694"
+                ],
+                "displayName": "[5]",
+                "finishedAt": "2026-02-26T12:26:52Z",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-1272978474",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[5]",
+                "phase": "Succeeded",
+                "progress": "2/2",
+                "resourcesDuration": {
+                    "cpu": 79,
+                    "memory": 79
+                },
+                "startedAt": "2026-02-26T12:26:01Z",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "StepGroup"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-1273566854": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-2641863911"
+                ],
+                "displayName": "[1]",
+                "finishedAt": "2026-02-26T12:16:27Z",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-1273566854",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[1]",
+                "phase": "Succeeded",
+                "progress": "7/7",
+                "resourcesDuration": {
+                    "cpu": 1162,
+                    "memory": 1162
+                },
+                "startedAt": "2026-02-26T12:16:15Z",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "StepGroup"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-1427845040": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1205720903"
+                ],
+                "displayName": "scale-catalogue",
+                "finishedAt": "2026-02-26T12:20:23Z",
+                "hostNodeName": "kind-worker",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-1427845040",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[3].scale-catalogue",
+                "outputs": {
+                    "exitCode": "0"
+                },
+                "phase": "Succeeded",
+                "progress": "1/1",
+                "resourcesDuration": {
+                    "cpu": 371,
+                    "memory": 371
+                },
+                "startedAt": "2026-02-26T12:17:15Z",
+                "templateName": "scale-catalogue",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Pod"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-1567998694": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "displayName": "delete-loadtest",
+                "finishedAt": "2026-02-26T12:26:42Z",
+                "hostNodeName": "kind-worker",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-1567998694",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[5].delete-loadtest",
+                "outputs": {
+                    "exitCode": "0"
+                },
+                "phase": "Succeeded",
+                "progress": "1/1",
+                "resourcesDuration": {
+                    "cpu": 73,
+                    "memory": 73
+                },
+                "startedAt": "2026-02-26T12:26:01Z",
+                "templateName": "delete-loadtest",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Pod"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-200049501": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-3754429893",
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-2546629468"
+                ],
+                "displayName": "[2]",
+                "finishedAt": "2026-02-26T12:17:15Z",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-200049501",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[2]",
+                "phase": "Succeeded",
+                "progress": "6/6",
+                "resourcesDuration": {
+                    "cpu": 1151,
+                    "memory": 1151
+                },
+                "startedAt": "2026-02-26T12:16:27Z",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "StepGroup"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-2345982474": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1272978474"
+                ],
+                "displayName": "pod-delete",
+                "finishedAt": "2026-02-26T12:25:51Z",
+                "hostNodeName": "kind-worker",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-2345982474",
+                "inputs": {
+                    "artifacts": [
+                        {
+                            "name": "pod-delete",
+                            "path": "/tmp/chaosengine.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n  annotations:\n    probeRef: '[{\"name\":\"check-catalogue-access-url-GG960m0cQVe1XjoKa9SPyQ\",\"mode\":\"Edge\"}]'\n  creationTimestamp: null\n  generateName: pod-delete\n  labels:\n    context: 'sock-shop_catalogue'\n    infra_id: dd859ef4-cf22-43ec-b09e-eb59b3fe5f86\n    step_pod_name: 'chaos-sock-shop-resiliency-new-test-1772108154393-2345982474'\n    workflow_name: chaos-sock-shop-resiliency-new-test\n    workflow_run_id: '12131d97-91ea-4cd9-a249-b487cf3435b5'\n  namespace: 'litmus'\nspec:\n  appinfo:\n    appkind: deployment\n    applabel: name=catalogue\n    appns: sock-shop\n  chaosServiceAccount: litmus-admin\n  components:\n    runner:\n      imagePullPolicy: Always\n      resources: {}\n  engineState: active\n  experiments:\n  - name: pod-delete\n    spec:\n      components:\n        env:\n        - name: TOTAL_CHAOS_DURATION\n          value: \"30\"\n        - name: CHAOS_INTERVAL\n          value: \"10\"\n        - name: FORCE\n          value: \"false\"\n        resources: {}\n        statusCheckTimeouts: {}\n      probe:\n      - httpProbe/inputs:\n          method:\n            get:\n              criteria: ==\n              responseCode: \"200\"\n          url: http://front-end.sock-shop.svc.cluster.local:80/catalogue\n        mode: Edge\n        name: check-catalogue-access-url\n        runProperties:\n          attempt: 5\n          initialDelay: 15s\n          interval: 5s\n          probePollingInterval: 1s\n          probeTimeout: 10s\n        type: httpProbe\n      - httpProbe/inputs:\n          method:\n            get:\n              criteria: ==\n              responseCode: \"200\"\n          url: http://front-end.sock-shop.svc.cluster.local:80/catalogue\n        mode: Edge\n        name: check-catalogue-access-url-GG960m0cQVe1XjoKa9SPyQ\n        runProperties:\n          attempt: 5\n          interval: 5s\n          probePollingInterval: 1s\n          probeTimeout: 10s\n          retry: 3\n        type: httpProbe\n  jobCleanUpPolicy: retain\nstatus:\n  engineStatus: \"\"\n  experiments: null\n"
+                            }
+                        }
+                    ]
+                },
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[4].pod-delete",
+                "outputs": {
+                    "exitCode": "0"
+                },
+                "phase": "Succeeded",
+                "progress": "1/1",
+                "resourcesDuration": {
+                    "cpu": 629,
+                    "memory": 629
+                },
+                "startedAt": "2026-02-26T12:20:33Z",
+                "templateName": "pod-delete",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Pod"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-2546629468": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1206853736"
+                ],
+                "displayName": "load-test",
+                "finishedAt": "2026-02-26T12:16:31Z",
+                "hostNodeName": "kind-worker",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-2546629468",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[2].load-test",
+                "outputs": {
+                    "exitCode": "0"
+                },
+                "phase": "Succeeded",
+                "progress": "1/1",
+                "resourcesDuration": {
+                    "cpu": 4,
+                    "memory": 4
+                },
+                "startedAt": "2026-02-26T12:16:27Z",
+                "templateName": "load-test",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Pod"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-2641863911": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-200049501"
+                ],
+                "displayName": "install-agent",
+                "finishedAt": "2026-02-26T12:16:24Z",
+                "hostNodeName": "kind-worker",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-2641863911",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[1].install-agent",
+                "outputs": {
+                    "exitCode": "0"
+                },
+                "phase": "Succeeded",
+                "progress": "1/1",
+                "resourcesDuration": {
+                    "cpu": 11,
+                    "memory": 11
+                },
+                "startedAt": "2026-02-26T12:16:15Z",
+                "templateName": "install-agent",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Pod"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-3259278561": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1273566854"
+                ],
+                "displayName": "install-application",
+                "finishedAt": "2026-02-26T12:16:07Z",
+                "hostNodeName": "kind-worker",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-3259278561",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[0].install-application",
+                "outputs": {
+                    "exitCode": "0"
+                },
+                "phase": "Succeeded",
+                "progress": "1/1",
+                "resourcesDuration": {
+                    "cpu": 20,
+                    "memory": 20
+                },
+                "startedAt": "2026-02-26T12:15:55Z",
+                "templateName": "install-application",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Pod"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-3754429893": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "children": [
+                    "chaos-sock-shop-resiliency-new-test-1772108154393-1206853736"
+                ],
+                "displayName": "install-chaos-faults",
+                "finishedAt": "2026-02-26T12:17:05Z",
+                "hostNodeName": "kind-worker",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-3754429893",
+                "inputs": {
+                    "artifacts": [
+                        {
+                            "name": "pod-cpu-hog-2sf",
+                            "path": "/tmp/pod-cpu-hog-2sf.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\ndescription:\n  message: |\n    Injects CPU consumption on pods belonging to an app deployment\nkind: ChaosExperiment\nmetadata:\n  name: pod-cpu-hog\n  labels:\n    name: pod-cpu-hog\n    app.kubernetes.io/part-of: litmus\n    app.kubernetes.io/component: chaosexperiment\n    app.kubernetes.io/version: latest\nspec:\n  definition:\n    scope: Namespaced\n    permissions:\n      # Create and monitor the experiment \u0026 helper pods\n      - apiGroups: [\"\"]\n        resources: [\"pods\"]\n        verbs:\n          [\n            \"create\",\n            \"delete\",\n            \"get\",\n            \"list\",\n            \"patch\",\n            \"update\",\n            \"deletecollection\",\n          ]\n      # Performs CRUD operations on the events inside chaosengine and chaosresult\n      - apiGroups: [\"\"]\n        resources: [\"events\"]\n        verbs: [\"create\", \"get\", \"list\", \"patch\", \"update\"]\n      # Fetch configmaps details and mount it to the experiment pod (if specified)\n      - apiGroups: [\"\"]\n        resources: [\"configmaps\"]\n        verbs: [\"get\", \"list\"]\n      # Track and get the runner, experiment, and helper pods log\n      - apiGroups: [\"\"]\n        resources: [\"pods/log\"]\n        verbs: [\"get\", \"list\", \"watch\"]\n      # for creating and managing to execute commands inside target container\n      - apiGroups: [\"\"]\n        resources: [\"pods/exec\"]\n        verbs: [\"get\", \"list\", \"create\"]\n      # deriving the parent/owner details of the pod(if parent is anyof {deployment, statefulset, daemonsets})\n      - apiGroups: [\"apps\"]\n        resources: [\"deployments\", \"statefulsets\", \"replicasets\", \"daemonsets\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"apps.openshift.io\"]\n        resources: [\"deploymentconfigs\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"\"]\n        resources: [\"replicationcontrollers\"]\n        verbs: [\"get\", \"list\"]\n      # deriving the parent/owner details of the pod(if parent is argo-rollouts)\n      - apiGroups: [\"argoproj.io\"]\n        resources: [\"rollouts\"]\n        verbs: [\"list\", \"get\"]\n      # for configuring and monitor the experiment job by the chaos-runner pod\n      - apiGroups: [\"batch\"]\n        resources: [\"jobs\"]\n        verbs: [\"create\", \"list\", \"get\", \"delete\", \"deletecollection\"]\n      # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow\n      - apiGroups: [\"litmuschaos.io\"]\n        resources: [\"chaosengines\", \"chaosexperiments\", \"chaosresults\"]\n        verbs: [\"create\", \"list\", \"get\", \"patch\", \"update\", \"delete\"]\n    image: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n    imagePullPolicy: Always\n    args:\n      - -c\n      - ./experiments -name pod-cpu-hog\n    command:\n      - /bin/bash\n    env:\n      - name: TOTAL_CHAOS_DURATION\n        value: \"60\"\n\n      ## Number of CPU cores to stress\n      - name: CPU_CORES\n        value: \"1\"\n\n      ## LOAD CPU WITH GIVEN PERCENT LOADING FOR THE CPU STRESS WORKERS.\n      ## 0 IS EFFECTIVELY A SLEEP (NO LOAD) AND 100 IS FULL LOADING\n      - name: CPU_LOAD\n        value: \"100\"\n\n      ## Percentage of total pods to target\n      - name: PODS_AFFECTED_PERC\n        value: \"\"\n\n      ## Period to wait before and after injection of chaos in sec\n      - name: RAMP_TIME\n        value: \"\"\n\n      ## It is used in pumba lib only\n      - name: LIB_IMAGE\n        value: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n\n      ## It is used in pumba lib only\n      - name: STRESS_IMAGE\n        value: \"alexeiled/stress-ng:latest-ubuntu\"\n\n      ## provide the cluster runtime\n      - name: CONTAINER_RUNTIME\n        value: \"containerd\"\n\n      # provide the socket file path\n      - name: SOCKET_PATH\n        value: \"/run/containerd/containerd.sock\"\n\n      - name: TARGET_CONTAINER\n        value: \"\"\n\n      - name: TARGET_PODS\n        value: \"\"\n\n      - name: DEFAULT_HEALTH_CHECK\n        value: \"false\"\n\n      # To select pods on specific node(s)\n      - name: NODE_LABEL\n        value: \"\"\n\n      ## it defines the sequence of chaos execution for multiple target pods\n      ## supported values: serial, parallel\n      - name: SEQUENCE\n        value: \"parallel\"\n\n    labels:\n      name: pod-cpu-hog\n      app.kubernetes.io/part-of: litmus\n      app.kubernetes.io/component: experiment-job\n      app.kubernetes.io/runtime-api-usage: \"true\"\n      app.kubernetes.io/version: latest\n"
+                            }
+                        },
+                        {
+                            "name": "pod-delete-rm5",
+                            "path": "/tmp/pod-delete-rm5.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\ndescription:\n  message: |\n    Deletes a pod belonging to a deployment/statefulset/daemonset\nkind: ChaosExperiment\nmetadata:\n  name: pod-delete\n  labels:\n    name: pod-delete\n    app.kubernetes.io/part-of: litmus\n    app.kubernetes.io/component: chaosexperiment\n    app.kubernetes.io/version: latest\nspec:\n  definition:\n    scope: Namespaced\n    permissions:\n      # Create and monitor the experiment \u0026 helper pods\n      - apiGroups: [\"\"]\n        resources: [\"pods\"]\n        verbs:\n          [\n            \"create\",\n            \"delete\",\n            \"get\",\n            \"list\",\n            \"patch\",\n            \"update\",\n            \"deletecollection\",\n          ]\n      # Performs CRUD operations on the events inside chaosengine and chaosresult\n      - apiGroups: [\"\"]\n        resources: [\"events\"]\n        verbs: [\"create\", \"get\", \"list\", \"patch\", \"update\"]\n      # Fetch configmaps details and mount it to the experiment pod (if specified)\n      - apiGroups: [\"\"]\n        resources: [\"configmaps\"]\n        verbs: [\"get\", \"list\"]\n      # Track and get the runner, experiment, and helper pods log\n      - apiGroups: [\"\"]\n        resources: [\"pods/log\"]\n        verbs: [\"get\", \"list\", \"watch\"]\n      # for creating and managing to execute commands inside target container\n      - apiGroups: [\"\"]\n        resources: [\"pods/exec\"]\n        verbs: [\"get\", \"list\", \"create\"]\n      # deriving the parent/owner details of the pod(if parent is anyof {deployment, statefulset, daemonsets})\n      - apiGroups: [\"apps\"]\n        resources: [\"deployments\", \"statefulsets\", \"replicasets\", \"daemonsets\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"apps.openshift.io\"]\n        resources: [\"deploymentconfigs\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"\"]\n        resources: [\"replicationcontrollers\"]\n        verbs: [\"get\", \"list\"]\n      # deriving the parent/owner details of the pod(if parent is argo-rollouts)\n      - apiGroups: [\"argoproj.io\"]\n        resources: [\"rollouts\"]\n        verbs: [\"list\", \"get\"]\n      # for configuring and monitor the experiment job by the chaos-runner pod\n      - apiGroups: [\"batch\"]\n        resources: [\"jobs\"]\n        verbs: [\"create\", \"list\", \"get\", \"delete\", \"deletecollection\"]\n      # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow\n      - apiGroups: [\"litmuschaos.io\"]\n        resources: [\"chaosengines\", \"chaosexperiments\", \"chaosresults\"]\n        verbs: [\"create\", \"list\", \"get\", \"patch\", \"update\", \"delete\"]\n    image: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n    imagePullPolicy: Always\n    args:\n      - -c\n      - ./experiments -name pod-delete\n    command:\n      - /bin/bash\n    env:\n      - name: TOTAL_CHAOS_DURATION\n        value: \"15\"\n\n      # Period to wait before and after injection of chaos in sec\n      - name: RAMP_TIME\n        value: \"\"\n\n      - name: FORCE\n        value: \"true\"\n\n      - name: CHAOS_INTERVAL\n        value: \"5\"\n\n      ## percentage of total pods to target\n      - name: PODS_AFFECTED_PERC\n        value: \"\"\n\n      - name: TARGET_CONTAINER\n        value: \"\"\n\n      - name: TARGET_PODS\n        value: \"\"\n\n      - name: DEFAULT_HEALTH_CHECK\n        value: \"false\"\n\n      # To select pods on specific node(s)\n      - name: NODE_LABEL\n        value: \"\"\n\n      ## it defines the sequence of chaos execution for multiple target pods\n      ## supported values: serial, parallel\n      - name: SEQUENCE\n        value: \"parallel\"\n\n    labels:\n      name: pod-delete\n      app.kubernetes.io/part-of: litmus\n      app.kubernetes.io/component: experiment-job\n      app.kubernetes.io/version: latest\n"
+                            }
+                        },
+                        {
+                            "name": "pod-network-loss-x1w",
+                            "path": "/tmp/pod-network-loss-x1w.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\ndescription:\n  message: |\n    Injects network packet loss on pods belonging to an app deployment\nkind: ChaosExperiment\nmetadata:\n  name: pod-network-loss\n  labels:\n    name: pod-network-loss\n    app.kubernetes.io/part-of: litmus\n    app.kubernetes.io/component: chaosexperiment\n    app.kubernetes.io/version: latest\nspec:\n  definition:\n    scope: Namespaced\n    permissions:\n      # Create and monitor the experiment \u0026 helper pods\n      - apiGroups: [\"\"]\n        resources: [\"pods\"]\n        verbs:\n          [\n            \"create\",\n            \"delete\",\n            \"get\",\n            \"list\",\n            \"patch\",\n            \"update\",\n            \"deletecollection\",\n          ]\n      # Performs CRUD operations on the events inside chaosengine and chaosresult\n      - apiGroups: [\"\"]\n        resources: [\"events\"]\n        verbs: [\"create\", \"get\", \"list\", \"patch\", \"update\"]\n      # Fetch configmaps details and mount it to the experiment pod (if specified)\n      - apiGroups: [\"\"]\n        resources: [\"configmaps\"]\n        verbs: [\"get\", \"list\"]\n      # Track and get the runner, experiment, and helper pods log\n      - apiGroups: [\"\"]\n        resources: [\"pods/log\"]\n        verbs: [\"get\", \"list\", \"watch\"]\n      # for creating and managing to execute commands inside target container\n      - apiGroups: [\"\"]\n        resources: [\"pods/exec\"]\n        verbs: [\"get\", \"list\", \"create\"]\n      # deriving the parent/owner details of the pod(if parent is anyof {deployment, statefulset, daemonsets})\n      - apiGroups: [\"apps\"]\n        resources: [\"deployments\", \"statefulsets\", \"replicasets\", \"daemonsets\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"apps.openshift.io\"]\n        resources: [\"deploymentconfigs\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"\"]\n        resources: [\"replicationcontrollers\"]\n        verbs: [\"get\", \"list\"]\n      # deriving the parent/owner details of the pod(if parent is argo-rollouts)\n      - apiGroups: [\"argoproj.io\"]\n        resources: [\"rollouts\"]\n        verbs: [\"list\", \"get\"]\n      # for configuring and monitor the experiment job by the chaos-runner pod\n      - apiGroups: [\"batch\"]\n        resources: [\"jobs\"]\n        verbs: [\"create\", \"list\", \"get\", \"delete\", \"deletecollection\"]\n      # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow\n      - apiGroups: [\"litmuschaos.io\"]\n        resources: [\"chaosengines\", \"chaosexperiments\", \"chaosresults\"]\n        verbs: [\"create\", \"list\", \"get\", \"patch\", \"update\", \"delete\"]\n    image: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n    imagePullPolicy: Always\n    args:\n      - -c\n      - ./experiments -name pod-network-loss\n    command:\n      - /bin/bash\n    env:\n      - name: TARGET_CONTAINER\n        value: \"\"\n\n      # provide lib image\n      - name: LIB_IMAGE\n        value: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n\n      - name: NETWORK_INTERFACE\n        value: \"eth0\"\n\n      - name: TC_IMAGE\n        value: \"gaiadocker/iproute2\"\n\n      - name: NETWORK_PACKET_LOSS_PERCENTAGE\n        value: \"100\" #in PERCENTAGE\n\n      - name: TOTAL_CHAOS_DURATION\n        value: \"60\" # in seconds\n\n      # time period to wait before and after injection of chaos in sec\n      - name: RAMP_TIME\n        value: \"\"\n\n      ## percentage of total pods to target\n      - name: PODS_AFFECTED_PERC\n        value: \"\"\n\n      - name: DEFAULT_HEALTH_CHECK\n        value: \"false\"\n\n      - name: TARGET_PODS\n        value: \"\"\n\n      # To select pods on specific node(s)\n      - name: NODE_LABEL\n        value: \"\"\n\n      # provide the name of container runtime\n      # for litmus LIB, it supports docker, containerd, crio\n      # for pumba LIB, it supports docker only\n      - name: CONTAINER_RUNTIME\n        value: \"containerd\"\n\n      # provide the destination ips\n      # chaos injection will be triggered for these destination ips\n      - name: DESTINATION_IPS\n        value: \"\"\n\n      # provide the destination hosts\n      # chaos injection will be triggered for these destination hosts\n      - name: DESTINATION_HOSTS\n        value: \"\"\n\n      # provide the socket file path\n      - name: SOCKET_PATH\n        value: \"/run/containerd/containerd.sock\"\n\n      ## it defines the sequence of chaos execution for multiple target pods\n      ## supported values: serial, parallel\n      - name: SEQUENCE\n        value: \"parallel\"\n\n    labels:\n      name: pod-network-loss\n      app.kubernetes.io/part-of: litmus\n      app.kubernetes.io/component: experiment-job\n      app.kubernetes.io/runtime-api-usage: \"true\"\n      app.kubernetes.io/version: latest\n"
+                            }
+                        },
+                        {
+                            "name": "disk-fill-h7d",
+                            "path": "/tmp/disk-fill-h7d.yaml",
+                            "raw": {
+                                "data": "apiVersion: litmuschaos.io/v1alpha1\ndescription:\n  message: |\n    Fillup Ephemeral Storage of a Resource\nkind: ChaosExperiment\nmetadata:\n  name: disk-fill\n  labels:\n    name: disk-fill\n    app.kubernetes.io/part-of: litmus\n    app.kubernetes.io/component: chaosexperiment\n    app.kubernetes.io/version: latest\nspec:\n  definition:\n    scope: Namespaced\n    permissions:\n      # Create and monitor the experiment \u0026 helper pods\n      - apiGroups: [\"\"]\n        resources: [\"pods\"]\n        verbs:\n          [\n            \"create\",\n            \"delete\",\n            \"get\",\n            \"list\",\n            \"patch\",\n            \"update\",\n            \"deletecollection\",\n          ]\n      # Performs CRUD operations on the events inside chaosengine and chaosresult\n      - apiGroups: [\"\"]\n        resources: [\"events\"]\n        verbs: [\"create\", \"get\", \"list\", \"patch\", \"update\"]\n      # Fetch configmaps details and mount it to the experiment pod (if specified)\n      - apiGroups: [\"\"]\n        resources: [\"configmaps\"]\n        verbs: [\"get\", \"list\"]\n      # Track and get the runner, experiment, and helper pods log\n      - apiGroups: [\"\"]\n        resources: [\"pods/log\"]\n        verbs: [\"get\", \"list\", \"watch\"]\n      # for creating and managing to execute commands inside target container\n      - apiGroups: [\"\"]\n        resources: [\"pods/exec\"]\n        verbs: [\"get\", \"list\", \"create\"]\n      # deriving the parent/owner details of the pod(if parent is anyof {deployment, statefulset, daemonsets})\n      - apiGroups: [\"apps\"]\n        resources: [\"deployments\", \"statefulsets\", \"replicasets\", \"daemonsets\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"apps.openshift.io\"]\n        resources: [\"deploymentconfigs\"]\n        verbs: [\"list\", \"get\"]\n      # deriving the parent/owner details of the pod(if parent is deploymentConfig)\n      - apiGroups: [\"\"]\n        resources: [\"replicationcontrollers\"]\n        verbs: [\"get\", \"list\"]\n      # deriving the parent/owner details of the pod(if parent is argo-rollouts)\n      - apiGroups: [\"argoproj.io\"]\n        resources: [\"rollouts\"]\n        verbs: [\"list\", \"get\"]\n      # for configuring and monitor the experiment job by the chaos-runner pod\n      - apiGroups: [\"batch\"]\n        resources: [\"jobs\"]\n        verbs: [\"create\", \"list\", \"get\", \"delete\", \"deletecollection\"]\n      # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow\n      - apiGroups: [\"litmuschaos.io\"]\n        resources: [\"chaosengines\", \"chaosexperiments\", \"chaosresults\"]\n        verbs: [\"create\", \"list\", \"get\", \"patch\", \"update\", \"delete\"]\n    image: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n    imagePullPolicy: Always\n    args:\n      - -c\n      - ./experiments -name disk-fill\n    command:\n      - /bin/bash\n    env:\n      - name: TARGET_CONTAINER\n        value: \"\"\n\n      - name: FILL_PERCENTAGE\n        value: \"80\"\n\n      - name: TOTAL_CHAOS_DURATION\n        value: \"60\"\n\n      # Period to wait before and after injection of chaos in sec\n      - name: RAMP_TIME\n        value: \"\"\n\n      # provide the data block size\n      # supported unit is KB\n      - name: DATA_BLOCK_SIZE\n        value: \"256\"\n\n      - name: TARGET_PODS\n        value: \"\"\n\n      - name: EPHEMERAL_STORAGE_MEBIBYTES\n        value: \"\"\n\n      # To select pods on specific node(s)\n      - name: NODE_LABEL\n        value: \"\"\n\n      ## percentage of total pods to target\n      - name: PODS_AFFECTED_PERC\n        value: \"\"\n\n      - name: DEFAULT_HEALTH_CHECK\n        value: \"false\"\n\n      - name: LIB_IMAGE\n        value: \"litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest\"\n\n      # Provide the container runtime path\n      # Default set to docker container path\n      - name: CONTAINER_PATH\n        value: \"/var/lib/docker/containers\"\n\n      ## it defines the sequence of chaos execution for multiple target pods\n      ## supported values: serial, parallel\n      - name: SEQUENCE\n        value: \"parallel\"\n\n    labels:\n      name: disk-fill\n      app.kubernetes.io/part-of: litmus\n      app.kubernetes.io/component: experiment-job\n      app.kubernetes.io/host-path-usage: \"true\"\n      app.kubernetes.io/version: latest\n"
+                            }
+                        }
+                    ]
+                },
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[2].install-chaos-faults",
+                "outputs": {
+                    "exitCode": "0"
+                },
+                "phase": "Succeeded",
+                "progress": "1/1",
+                "resourcesDuration": {
+                    "cpu": 68,
+                    "memory": 68
+                },
+                "startedAt": "2026-02-26T12:16:27Z",
+                "templateName": "install-chaos-faults",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Pod"
+            },
+            "chaos-sock-shop-resiliency-new-test-1772108154393-913466881": {
+                "boundaryID": "chaos-sock-shop-resiliency-new-test-1772108154393",
+                "displayName": "cleanup-chaos-resources",
+                "finishedAt": "2026-02-26T12:26:08Z",
+                "hostNodeName": "kind-worker",
+                "id": "chaos-sock-shop-resiliency-new-test-1772108154393-913466881",
+                "name": "chaos-sock-shop-resiliency-new-test-1772108154393[5].cleanup-chaos-resources",
+                "outputs": {
+                    "exitCode": "0"
+                },
+                "phase": "Succeeded",
+                "progress": "1/1",
+                "resourcesDuration": {
+                    "cpu": 6,
+                    "memory": 6
+                },
+                "startedAt": "2026-02-26T12:26:01Z",
+                "templateName": "cleanup-chaos-resources",
+                "templateScope": "local/chaos-sock-shop-resiliency-new-test-1772108154393",
+                "type": "Pod"
+            }
+        },
+        "phase": "Succeeded",
+        "progress": "8/8",
+        "resourcesDuration": {
+            "cpu": 1182,
+            "memory": 1182
+        },
+        "startedAt": "2026-02-26T12:15:55Z"
+    }
+}

@@ -1,0 +1,170 @@
+# AgentHub & AppsHub GraphQL Schema
+# Extends the ChaosHub pattern for agent and application catalogues
+
+# ──────────────────────────────────────────────────
+# AgentHub Types
+# ──────────────────────────────────────────────────
+
+"""
+Represents a single agent entry in the AgentHub catalogue.
+Combines static chart metadata with live deployment status.
+"""
+type AgentHubEntry {
+  """Agent identifier (folder name in agent-charts repo)"""
+  name: String!
+  """Human-readable name"""
+  displayName: String!
+  """One-liner description shown on the card"""
+  description: String!
+  """Semantic version from chart"""
+  version: String!
+  """List of capabilities this agent supports"""
+  capabilities: [String!]!
+  """Whether this agent is currently deployed in the cluster"""
+  isDeployed: Boolean!
+  """Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)"""
+  deploymentStatus: String
+  """Agent ID in the registry (if deployed)"""
+  agentID: ID
+  """Namespace where the agent is deployed"""
+  namespace: String
+  """Helm release name (if deployed via Helm)"""
+  helmReleaseName: String
+}
+
+"""
+A category of agents in the AgentHub (e.g., "AI Agents").
+"""
+type AgentHubCategory {
+  """Category name"""
+  displayName: String!
+  """Category-level description"""
+  categoryDescription: String!
+  """Agents in this category"""
+  agents: [AgentHubEntry!]!
+}
+
+"""
+Status of an AgentHub, analogous to ChaosHubStatus.
+"""
+type AgentHubStatus {
+  """Hub ID"""
+  id: ID!
+  """Hub name"""
+  name: String!
+  """Git repo URL"""
+  repoURL: String!
+  """Git branch"""
+  repoBranch: String!
+  """Whether the hub is synced and available"""
+  isAvailable: Boolean!
+  """Total number of agents defined in the hub"""
+  totalAgents: Int!
+  """Number of agents currently deployed"""
+  deployedAgents: Int!
+  """Whether this is the default hub"""
+  isDefault: Boolean!
+  """Last synced timestamp"""
+  lastSyncedAt: String!
+}
+
+# ──────────────────────────────────────────────────
+# AppsHub Types
+# ──────────────────────────────────────────────────
+
+"""
+A microservice within an application.
+"""
+type Microservice {
+  """Microservice name (e.g., "carts")"""
+  name: String!
+  """One-liner description"""
+  description: String!
+  """Whether this microservice pod is currently running"""
+  isRunning: Boolean
+  """Number of ready replicas"""
+  readyReplicas: Int
+  """Number of desired replicas"""
+  desiredReplicas: Int
+}
+
+"""
+Represents a single application entry in the AppsHub catalogue.
+Combines static chart metadata with live deployment status.
+"""
+type AppHubEntry {
+  """Application identifier (folder name in app-charts repo)"""
+  name: String!
+  """Human-readable name"""
+  displayName: String!
+  """One-liner description shown on the card"""
+  description: String!
+  """Semantic version from chart"""
+  version: String!
+  """Target namespace for deployment"""
+  namespace: String!
+  """Microservices that comprise this application"""
+  microservices: [Microservice!]!
+  """Whether this application is currently deployed in the cluster"""
+  isDeployed: Boolean!
+  """Number of microservices running vs total (e.g., "11/13")"""
+  runningServices: String
+  """Helm release name (if deployed via Helm)"""
+  helmReleaseName: String
+}
+
+"""
+A category of applications in the AppsHub (e.g., "Target Applications").
+"""
+type AppHubCategory {
+  """Category name"""
+  displayName: String!
+  """Category-level description"""
+  categoryDescription: String!
+  """Applications in this category"""
+  applications: [AppHubEntry!]!
+}
+
+"""
+Status of an AppsHub, analogous to ChaosHubStatus.
+"""
+type AppHubStatus {
+  """Hub ID"""
+  id: ID!
+  """Hub name"""
+  name: String!
+  """Git repo URL"""
+  repoURL: String!
+  """Git branch"""
+  repoBranch: String!
+  """Whether the hub is synced and available"""
+  isAvailable: Boolean!
+  """Total number of applications defined in the hub"""
+  totalApps: Int!
+  """Number of applications currently deployed"""
+  deployedApps: Int!
+  """Whether this is the default hub"""
+  isDefault: Boolean!
+  """Last synced timestamp"""
+  lastSyncedAt: String!
+}
+
+# ──────────────────────────────────────────────────
+# Queries
+# ──────────────────────────────────────────────────
+
+extend type Query {
+  # AgentHub Queries
+  """List all agent hub categories with their agents and deployment status"""
+  listAgentHubCategories(projectID: ID!): [AgentHubCategory!]! @authorized
+
+  """Get the AgentHub status (sync state, counts)"""
+  getAgentHubStatus(projectID: ID!): AgentHubStatus! @authorized
+
+  # AppsHub Queries
+  """List all app hub categories with their applications and deployment status"""
+  listAppHubCategories(projectID: ID!): [AppHubCategory!]! @authorized
+
+  """Get the AppsHub status (sync state, counts)"""
+  getAppHubStatus(projectID: ID!): AppHubStatus! @authorized
+}

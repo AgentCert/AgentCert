@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: helm-test
+  namespace: litmus
+spec:
+  serviceAccountName: argo-chaos
+  restartPolicy: Never
+  containers:
+  - name: helm-test
+    image: agentcert/agentcert-install-app:latest
+    imagePullPolicy: IfNotPresent
+    args:
+    - "-folder=sock-shop"
+    - "-namespace=sock-shop"
+    - "-upgrade"
+    - "-timeout=5m"
+    env:
+    - name: HELM_BURST_LIMIT
+      value: "100"
+    - name: HELM_QPS
+      value: "50"
