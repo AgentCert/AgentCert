@@ -1,0 +1,123 @@
+{
+    "fault_id": "litmus-disk-fill-001",
+    "fault_name": "disk-fill",
+    "fault_provider": "LitmusChaos",
+    "fault_category": "resource_fault",
+    "description": "Fills the ephemeral storage or a specific disk path on a target pod's node to simulate disk pressure conditions. This fault introduces a storage-level disruption, causing the target pod to experience disk space exhaustion which may trigger pod eviction by the Kubelet, application write failures, or degraded performance due to inability to write logs, temp files, or data.",
+    "injection_timestamp": "2026-03-04T08:30:01.031Z",
+    "fault_configuration": {
+        "target_service": "",
+        "target_namespace": "",
+        "target_label_selector": "app=<target-app>",
+        "chaos_duration_seconds": 60,
+        "chaos_interval_seconds": 10,
+        "total_chaos_duration": "60s",
+        "ramp_time_seconds": 0,
+        "fill_percentage": 90,
+        "ephemeral_storage_mebibytes": 256,
+        "target_fill_path": "/var/lib/kubelet",
+        "container_path": "/tmp",
+        "sequence": "parallel",
+        "pods_affected_percentage": 100
+    },
+    "expected_impact": {
+        "service_disruption": true,
+        "affected_resource_type": "Node/Pod",
+        "expected_downtime_seconds": 60,
+        "expected_recovery_mechanism": "Disk space is reclaimed after chaos duration expires; Kubelet may evict pods under disk pressure and reschedule them on healthy nodes"
+    },
+    "ground_truth": {
+        "fault_description_goal_remediation": {
+            "symptoms": [
+                "Target pod experiences disk space exhaustion, causing write operations to fail",
+                "Node reports DiskPressure condition, potentially triggering pod evictions",
+                "Application logs show I/O errors or 'No space left on device' messages",
+                "Kubernetes events show disk pressure taints and pod eviction activity",
+                "Dependent services may report degraded performance due to failed writes or missing log data"
+            ],
+            "goal": "Introduce a storage-level disruption by filling disk space on the target pod's node or ephemeral storage, causing disk pressure conditions that test the application's ability to handle storage exhaustion gracefully and validate Kubernetes eviction and rescheduling mechanisms.",
+            "remediation": "Verify that disk space has been reclaimed after the chaos duration expires. Confirm that evicted pods have been rescheduled to healthy nodes and are running normally. If pods remain in an evicted or failed state, manually clean up disk space and restart affected workloads. Investigate application resilience to disk pressure and add appropriate ephemeral storage limits and resource requests."
+        },
+        "ideal_course_of_action": [
+            {
+                "step": 1,
+                "action": "Detect the anomaly",
+                "detail": "Identify disk pressure conditions on the target node by monitoring Kubernetes node conditions, pod eviction events, or application error logs reporting I/O failures."
+            },
+            {
+                "step": 2,
+                "action": "Identify the affected node and pods",
+                "detail": "Determine the exact node experiencing disk pressure and the pods affected by eviction or write failures."
+            },
+            {
+                "step": 3,
+                "action": "Check node conditions and disk usage",
+                "detail": "Inspect the node status for DiskPressure condition. Check disk usage on the affected node to confirm storage exhaustion."
+            },
+            {
+                "step": 4,
+                "action": "Review pod eviction events",
+                "detail": "Check Kubernetes events for pod eviction activity triggered by the Kubelet due to disk pressure. Identify which pods were evicted and their current status."
+            },
+            {
+                "step": 5,
+                "action": "Verify disk space recovery",
+                "detail": "Confirm that disk space has been reclaimed on the affected node after the chaos duration expires or after manual cleanup."
+            },
+            {
+                "step": 6,
+                "action": "Validate pod rescheduling and service restoration",
+                "detail": "Verify that evicted pods have been rescheduled to healthy nodes, are in Running and Ready status, and that the application endpoint is responding correctly."
+            },
+            {
+                "step": 7,
+                "action": "Document root cause and resolution",
+                "detail": "Summarize the incident: disk was filled (simulated failure), Kubelet evicted pods under disk pressure, pods were rescheduled and service restored. Note time-to-detect, time-to-recover, and recommendations for ephemeral storage resource limits."
+            }
+        ],
+        "ideal_tool_usage_trajectory": [
+            {
+                "step": 1,
+                "tool": "kubectl describe node",
+                "command": "kubectl describe node <node-name>",
+                "purpose": "Check node conditions for DiskPressure and review node-level events including taints applied"
+            },
+            {
+                "step": 2,
+                "tool": "kubectl get pods",
+                "command": "kubectl get pods -n <target-namespace> -o wide",
+                "purpose": "List all pods in the target namespace to identify evicted, pending, or failing pods"
+            },
+            {
+                "step": 3,
+                "tool": "kubectl get events",
+                "command": "kubectl get events -n <target-namespace> --sort-by='.lastTimestamp' --field-selector reason=Evicted",
+                "purpose": "Review eviction events to identify pods evicted due to disk pressure"
+            },
+            {
+                "step": 4,
+                "tool": "kubectl describe pod",
+                "command": "kubectl describe pod <pod-name> -n <target-namespace>",
+                "purpose": "Get detailed information about affected pods including eviction reason and current status"
+            },
+            {
+                "step": 5,
+                "tool": "kubectl top node",
+                "command": "kubectl top node <node-name>",
+                "purpose": "Check current resource utilization on the affected node to confirm disk pressure has subsided"
+            },
+            {
+                "step": 6,
+                "tool": "kubectl logs",
+                "command": "kubectl logs <pod-name> -n <target-namespace>",
+                "purpose": "Inspect application logs for I/O errors or disk-related failure messages"
+            },
+            {
+                "step": 7,
+                "tool": "kubectl get endpoints",
+                "command": "kubectl get endpoints <service-name> -n <target-namespace>",
+                "purpose": "Verify that the Kubernetes Service endpoints include the rescheduled pod's IP address"
+            }
+        ]
+    }
+}

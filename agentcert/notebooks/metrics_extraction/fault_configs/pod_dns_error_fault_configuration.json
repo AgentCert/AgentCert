@@ -1,0 +1,122 @@
+{
+    "fault_id": "litmus-pod-dns-error-001",
+    "fault_name": "pod-dns-error",
+    "fault_provider": "LitmusChaos",
+    "fault_category": "network_fault",
+    "description": "Injects DNS resolution failures into a target pod by intercepting DNS queries and returning error responses. This fault introduces a network-level disruption at the DNS layer, causing the target pod to fail when resolving domain names for upstream service dependencies, external APIs, or internal Kubernetes service discovery, thereby testing the application's resilience to DNS failures.",
+    "injection_timestamp": "2026-03-04T06:16:34.744Z",
+    "fault_configuration": {
+        "target_service": "",
+        "target_namespace": "",
+        "target_label_selector": "app=<target-app>",
+        "target_container": "<container-name>",
+        "chaos_duration_seconds": 60,
+        "chaos_interval_seconds": 10,
+        "total_chaos_duration": "60s",
+        "ramp_time_seconds": 0,
+        "target_host_names": "",
+        "match_scheme": "exact",
+        "sequence": "parallel",
+        "pods_affected_percentage": 100
+    },
+    "expected_impact": {
+        "service_disruption": true,
+        "affected_resource_type": "Pod",
+        "expected_downtime_seconds": 60,
+        "expected_recovery_mechanism": "DNS resolution resumes automatically after chaos duration expires; application retries DNS queries and reconnects to upstream services"
+    },
+    "ground_truth": {
+        "fault_description_goal_remediation": {
+            "symptoms": [
+                "Target pod fails to resolve DNS names for upstream services or external endpoints",
+                "Application logs show DNS resolution errors such as 'could not resolve host' or 'NXDOMAIN'",
+                "HTTP requests to upstream services fail with connection errors or timeouts due to unresolvable hostnames",
+                "Kubernetes Service discovery via DNS (e.g., <service>.<namespace>.svc.cluster.local) stops working for the affected pod",
+                "Dependent services may report increased error rates from the affected pod's failed outbound requests"
+            ],
+            "goal": "Introduce a DNS-level disruption by injecting DNS resolution errors into the target pod, causing it to fail when resolving domain names for service dependencies. This tests the application's ability to handle DNS failures gracefully, including retry logic, fallback mechanisms, and circuit breaker behavior.",
+            "remediation": "Verify that DNS resolution resumes after the chaos duration expires. Confirm that the application reconnects to upstream services and normal traffic flow is restored. If the application does not recover automatically, restart the affected pod. Investigate whether the application implements DNS caching, retry logic, or circuit breakers to mitigate transient DNS failures."
+        },
+        "ideal_course_of_action": [
+            {
+                "step": 1,
+                "action": "Detect the anomaly",
+                "detail": "Identify DNS resolution failures in the target pod by monitoring application logs, error rates, or alerting signals indicating connectivity issues to upstream services."
+            },
+            {
+                "step": 2,
+                "action": "Identify the affected pod and scope",
+                "detail": "Determine the exact pod name, namespace, and which DNS queries are failing. Identify whether the failure affects all DNS resolution or only specific hostnames."
+            },
+            {
+                "step": 3,
+                "action": "Verify DNS resolution from the pod",
+                "detail": "Exec into the affected pod and attempt DNS lookups using nslookup or dig to confirm DNS resolution is failing and identify the specific error responses."
+            },
+            {
+                "step": 4,
+                "action": "Check CoreDNS and cluster DNS health",
+                "detail": "Verify that the CoreDNS pods in kube-system namespace are running and healthy. Check CoreDNS logs for any errors or unusual patterns to rule out cluster-wide DNS issues."
+            },
+            {
+                "step": 5,
+                "action": "Inspect pod DNS configuration",
+                "detail": "Check the pod's DNS configuration (resolv.conf) to verify nameserver settings and search domains. Ensure the pod's DNS policy is correctly configured."
+            },
+            {
+                "step": 6,
+                "action": "Validate DNS recovery and service restoration",
+                "detail": "After the chaos duration expires, verify that DNS resolution resumes. Confirm that the application reconnects to upstream services and the endpoint responds correctly."
+            },
+            {
+                "step": 7,
+                "action": "Document root cause and resolution",
+                "detail": "Summarize the incident: DNS resolution was disrupted (simulated failure), application experienced connectivity failures to upstream services, DNS resolution recovered after chaos duration. Note time-to-detect, time-to-recover, and recommendations for DNS caching and retry mechanisms."
+            }
+        ],
+        "ideal_tool_usage_trajectory": [
+            {
+                "step": 1,
+                "tool": "kubectl get pods",
+                "command": "kubectl get pods -n <target-namespace> -o wide",
+                "purpose": "List all pods in the target namespace to identify the affected pod and its current status"
+            },
+            {
+                "step": 2,
+                "tool": "kubectl logs",
+                "command": "kubectl logs <pod-name> -n <target-namespace> | grep -i 'dns\\|resolve\\|NXDOMAIN'",
+                "purpose": "Inspect application logs for DNS resolution error messages"
+            },
+            {
+                "step": 3,
+                "tool": "kubectl exec",
+                "command": "kubectl exec -it <pod-name> -n <target-namespace> -- nslookup <target-hostname>",
+                "purpose": "Perform a DNS lookup from within the affected pod to confirm DNS resolution failure"
+            },
+            {
+                "step": 4,
+                "tool": "kubectl get pods",
+                "command": "kubectl get pods -n kube-system -l k8s-app=kube-dns",
+                "purpose": "Check the status of CoreDNS pods to rule out cluster-wide DNS issues"
+            },
+            {
+                "step": 5,
+                "tool": "kubectl exec",
+                "command": "kubectl exec -it <pod-name> -n <target-namespace> -- cat /etc/resolv.conf",
+                "purpose": "Inspect the pod's DNS configuration to verify nameserver and search domain settings"
+            },
+            {
+                "step": 6,
+                "tool": "kubectl get events",
+                "command": "kubectl get events -n <target-namespace> --sort-by='.lastTimestamp'",
+                "purpose": "Review recent Kubernetes events for any DNS-related warnings or errors"
+            },
+            {
+                "step": 7,
+                "tool": "kubectl get endpoints",
+                "command": "kubectl get endpoints <service-name> -n <target-namespace>",
+                "purpose": "Verify that service endpoints are intact and the issue is DNS resolution, not service availability"
+            }
+        ]
+    }
+}
