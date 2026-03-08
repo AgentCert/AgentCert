@@ -87,30 +87,61 @@ def _compute_stats(
 # Step 1: Query per-run metrics from MongoDB
 # ---------------------------------------------------------------------------
 
-def query_runs_by_fault_category(
+def query_runs_by_agent(
     db_client: "MongoDBClient",
-    fault_category: str,
+    agent_id: str,
 ) -> List[Dict[str, Any]]:
     """
-    Query all per-run metric documents for a given fault_category.
+    Query all per-run metric documents for a given agent_id.
 
-    Documents are stored by metrics_extractor_from_trace.py with ``fault_category``
-    as a top-level field (promoted from quantitative.injected_fault_category).
-    Structure: { experiment_id, fault_category, fault_name, quantitative, qualitative, metadata, created_at }
+    Uses the top-level ``agent_id`` field and the index created by
+    ``_init_metrics_collection`` for efficient lookup.
     """
-    collection = db_client.sync_db[db_client.config.metrics_collection]
-    cursor = collection.find({"fault_category": fault_category})
-    docs = list(cursor)
+    docs = db_client.find_by_agent_id(agent_id)
     logger.info(
-        f"Queried {len(docs)} per-run documents for fault_category='{fault_category}'"
+        f"Queried {len(docs)} per-run documents for agent_id='{agent_id}'"
     )
     return docs
 
 
-def get_all_fault_categories(db_client: "MongoDBClient") -> List[str]:
-    """Return distinct fault_category values present in the metrics collection."""
+def query_runs_by_fault_category(
+    db_client: "MongoDBClient",
+    fault_category: str,
+    agent_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Query all per-run metric documents for a given fault_category.
+
+    When *agent_id* is provided the query is scoped to that agent only.
+
+    Documents are stored by metrics_extractor_from_trace.py with ``fault_category``
+    as a top-level field (promoted from quantitative.injected_fault_category).
+    Structure: { experiment_id, agent_name, agent_id, fault_category, fault_name, quantitative, qualitative, metadata, created_at }
+    """
     collection = db_client.sync_db[db_client.config.metrics_collection]
-    categories = collection.distinct("fault_category")
+    query: Dict[str, Any] = {"fault_category": fault_category}
+    if agent_id:
+        query["agent_id"] = agent_id
+    cursor = collection.find(query)
+    docs = list(cursor)
+    logger.info(
+        f"Queried {len(docs)} per-run documents for fault_category='{fault_category}'"
+        + (f", agent_id='{agent_id}'" if agent_id else "")
+    )
+    return docs
+
+
+def get_all_fault_categories(
+    db_client: "MongoDBClient",
+    agent_id: Optional[str] = None,
+) -> List[str]:
+    """Return distinct fault_category values present in the metrics collection.
+
+    When *agent_id* is provided, only categories for that agent are returned.
+    """
+    collection = db_client.sync_db[db_client.config.metrics_collection]
+    filter_query = {"agent_id": agent_id} if agent_id else {}
+    categories = collection.distinct("fault_category", filter_query)
     return [c for c in categories if c is not None]
 
 
@@ -430,6 +461,62 @@ Respond with a JSON object exactly matching this schema:
   ]
 }}"""
 
+# Prompt for synthesizing known_limitations and recommendations from aggregated metrics
+SCORECARD_SYNTHESIS_PROMPT = """You are an expert evaluator producing a certification scorecard for an AI agent \
+that autonomously detects, diagnoses, and remediates infrastructure faults.
+
+You are analysing the "{fault_category}" fault category based on {total_runs} experiment runs \
+across these fault types: {faults_tested}.
+
+Below are the aggregated metrics computed across all runs:
+
+## Numeric Metrics
+{numeric_metrics}
+
+## Derived Rates
+{derived_rates}
+
+## Boolean / Status Metrics
+{boolean_metrics}
+
+## Textual Summaries (LLM-synthesized consensus from per-run observations)
+{textual_summaries}
+
+Using ONLY the evidence above, produce:
+
+1. **known_limitations**: A ranked list of the agent's weaknesses and failure patterns \
+observed in this fault category. Each limitation should be:
+   - Specific and actionable (not vague)
+   - Grounded in the metrics (e.g., cite detection/mitigation rates, scores, or textual findings)
+   - Ranked by severity (High > Medium > Low) and estimated frequency across runs
+
+2. **recommendations**: A prioritized list of improvements for the agent. Each should:
+   - Directly address one or more of the identified limitations
+   - Be technically actionable
+   - Be ranked by priority (Critical > High > Medium > Low) and estimated frequency
+
+Respond with a JSON object exactly matching this schema:
+{{
+  "known_limitations": {{
+    "ranked_items": [
+      {{
+        "limitation": "<specific description grounded in metrics>",
+        "frequency": <estimated count out of {total_runs} runs>,
+        "severity": "<High|Medium|Low>"
+      }}
+    ]
+  }},
+  "recommendations": {{
+    "prioritized_items": [
+      {{
+        "recommendation": "<actionable improvement>",
+        "priority": "<Critical|High|Medium|Low>",
+        "frequency": <estimated count of runs that would benefit>
+      }}
+    ]
+  }}
+}}"""
+
 
 async def _run_single_judge(
     llm_client: "AzureLLMClient",
@@ -615,6 +702,71 @@ async def synthesize_list_metric(
     return best_result, total_usage
 
 
+async def synthesize_limitations_and_recommendations(
+    llm_client: "AzureLLMClient",
+    fault_category: str,
+    faults_tested: List[str],
+    total_runs: int,
+    numeric_aggs: Dict[str, Dict[str, Any]],
+    derived_rates: Dict[str, Optional[float]],
+    boolean_aggs: Dict[str, Any],
+    textual_aggs: Dict[str, Any],
+) -> Tuple[Dict[str, Any], Dict[str, int]]:
+    """
+    Synthesize known_limitations and recommendations from already-computed
+    aggregated metrics for a fault category.
+
+    Instead of collecting raw per-run lists (which creates noisy, bloated prompts
+    at 30 runs × N faults), this analyses the compact aggregated scorecard
+    to produce evidence-grounded limitations and recommendations.
+
+    Returns (result_dict, token_usage) where result_dict has keys
+    'known_limitations' and 'recommendations'.
+    """
+    total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+
+    # Build compact textual summaries section from existing textual aggregates
+    # (exclude known_limitations/recommendations themselves to avoid circularity)
+    summaries_for_prompt: Dict[str, Any] = {}
+    for key, val in textual_aggs.items():
+        if key in ("known_limitations", "recommendations"):
+            continue
+        if isinstance(val, dict) and "consensus_summary" in val:
+            summaries_for_prompt[key] = val["consensus_summary"]
+        else:
+            summaries_for_prompt[key] = val
+
+    prompt = SCORECARD_SYNTHESIS_PROMPT.format(
+        fault_category=fault_category,
+        total_runs=total_runs,
+        faults_tested=", ".join(faults_tested) if faults_tested else "N/A",
+        numeric_metrics=json.dumps(numeric_aggs, indent=2, default=str),
+        derived_rates=json.dumps(derived_rates, indent=2, default=str),
+        boolean_metrics=json.dumps(boolean_aggs, indent=2, default=str),
+        textual_summaries=json.dumps(summaries_for_prompt, indent=2, default=str),
+    )
+
+    response, usage = await llm_client.call_llm(
+        model_name=LLM_COUNCIL_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=2000,
+        system_prompt="You are an expert evaluator of AI agent performance metrics. "
+                      "Always respond with valid JSON only.",
+    )
+    for k in total_usage:
+        total_usage[k] += usage.get(k, 0)
+
+    result: Dict[str, Any] = {}
+    if isinstance(response, dict):
+        result["known_limitations"] = response.get("known_limitations", {})
+        result["recommendations"] = response.get("recommendations", {})
+    else:
+        logger.warning("Scorecard synthesis returned non-dict response; skipping.")
+
+    return result, total_usage
+
+
 def _collect_narratives(
     docs: List[Dict[str, Any]], section: str, field_name: str
 ) -> List[str]:
@@ -654,9 +806,10 @@ async def compute_textual_aggregates(
     - rai_check_summary: { consensus_summary, severity_label, confidence, inter_judge_agreement }
     - overall_response_and_reasoning_quality: { consensus_summary, severity_label, confidence, inter_judge_agreement }
     - security_compliance_summary: { consensus_summary, severity_label, confidence, inter_judge_agreement }
-    - known_limitations: { ranked_items: [{ limitation, frequency, severity }] }
-    - recommendations: { prioritized_items: [{ recommendation, priority, frequency }] }
     - agent_summary: { consensus_summary, confidence, inter_judge_agreement }
+
+    Note: known_limitations and recommendations are synthesized separately by
+    synthesize_limitations_and_recommendations() using the full aggregated scorecard.
     """
     total_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     results: Dict[str, Any] = {}
@@ -708,27 +861,10 @@ async def compute_textual_aggregates(
         for k in total_usage:
             total_usage[k] += usage.get(k, 0)
 
-    # known_limitations (list-based, from qualitative.known_limitations)
-    limitation_items = _collect_list_narratives(docs, "qualitative", "known_limitations")
-    if limitation_items:
-        agg, usage = await synthesize_list_metric(
-            llm_client, limitation_items, "known_limitations", fault_category,
-            prompt_template=LIMITATIONS_JUDGE_PROMPT_TEMPLATE,
-        )
-        results["known_limitations"] = agg  # { ranked_items: [...] }
-        for k in total_usage:
-            total_usage[k] += usage.get(k, 0)
-
-    # recommendations (list-based, from qualitative.recommendations)
-    recommendation_items = _collect_list_narratives(docs, "qualitative", "recommendations")
-    if recommendation_items:
-        agg, usage = await synthesize_list_metric(
-            llm_client, recommendation_items, "recommendations", fault_category,
-            prompt_template=RECOMMENDATIONS_JUDGE_PROMPT_TEMPLATE,
-        )
-        results["recommendations"] = agg  # { prioritized_items: [...] }
-        for k in total_usage:
-            total_usage[k] += usage.get(k, 0)
+    # NOTE: known_limitations and recommendations are NOT synthesized here.
+    # They are generated by synthesize_limitations_and_recommendations() in the
+    # orchestrator (aggregate_fault_category) after all metrics are computed,
+    # using the aggregated scorecard as evidence instead of raw per-run lists.
 
     # agent_summary (from qualitative.agent_summary)
     summary_narratives = _collect_narratives(docs, "qualitative", "agent_summary")
@@ -888,9 +1024,12 @@ async def aggregate_fault_category(
     fault_category: str,
     db_client: "MongoDBClient",
     llm_client: "AzureLLMClient",
+    agent_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Full aggregation pipeline for a single fault category.
+
+    When *agent_id* is provided, only runs for that agent are included.
 
     Steps:
     1. Query per-run metrics from MongoDB
@@ -898,12 +1037,14 @@ async def aggregate_fault_category(
     3. Compute derived rate metrics
     4. Compute boolean/status aggregates
     5. Synthesize textual metrics via LLM Council
+    5b. Synthesize known_limitations & recommendations from aggregated metrics
     6. Assemble the category scorecard
     """
-    logger.info(f"Starting aggregation for fault_category='{fault_category}'")
+    logger.info(f"Starting aggregation for fault_category='{fault_category}'"
+                + (f", agent_id='{agent_id}'" if agent_id else ""))
 
     # Step 1: Query
-    docs = query_runs_by_fault_category(db_client, fault_category)
+    docs = query_runs_by_fault_category(db_client, fault_category, agent_id=agent_id)
     if not docs:
         logger.warning(f"No per-run documents found for fault_category='{fault_category}'")
         return {
@@ -937,6 +1078,29 @@ async def aggregate_fault_category(
         f"(tokens: {textual_usage})"
     )
 
+    # Step 5b: Synthesize known_limitations & recommendations from aggregated metrics
+    fault_names = set()
+    for doc in docs:
+        fname = doc.get("fault_name") or doc.get("quantitative", {}).get("injected_fault_name")
+        if fname:
+            fault_names.add(fname)
+
+    synthesis_result, synthesis_usage = await synthesize_limitations_and_recommendations(
+        llm_client=llm_client,
+        fault_category=fault_category,
+        faults_tested=sorted(fault_names),
+        total_runs=len(docs),
+        numeric_aggs=numeric_aggs,
+        derived_rates=derived_rates,
+        boolean_aggs=boolean_aggs,
+        textual_aggs=textual_aggs,
+    )
+    textual_aggs.update(synthesis_result)
+    logger.info(
+        f"Synthesized known_limitations and recommendations "
+        f"(tokens: {synthesis_usage})"
+    )
+
     # Step 6: Assemble category scorecard
     scorecard = assemble_category_scorecard(
         fault_category=fault_category,
@@ -968,10 +1132,13 @@ async def aggregate_all(
     """
     Aggregate metrics for all fault categories and produce the final certification scorecard.
 
+    When *agent_id* is provided, only per-run documents belonging to that agent
+    are included in the aggregation.
+
     Processes categories sequentially to manage LLM API rate limits.
     Returns a complete scorecard dict matching mock_aggregated_scorecards.json.
     """
-    categories = get_all_fault_categories(db_client)
+    categories = get_all_fault_categories(db_client, agent_id=agent_id or None)
     logger.info(f"Found {len(categories)} fault categories: {categories}")
 
     category_scorecards: List[Dict[str, Any]] = []
@@ -981,6 +1148,7 @@ async def aggregate_all(
             fault_category=category,
             db_client=db_client,
             llm_client=llm_client,
+            agent_id=agent_id or None,
         )
         category_scorecards.append(scorecard)
 
@@ -1009,6 +1177,42 @@ async def aggregate_all(
 
 async def main():
     """CLI entry point for fault-category aggregation."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Aggregate per-run metrics into fault-category and certification scorecards"
+    )
+    parser.add_argument(
+        "--agent-id",
+        type=str,
+        required=True,
+        help="Agent ID to aggregate metrics for",
+    )
+    parser.add_argument(
+        "--agent-name",
+        type=str,
+        required=True,
+        help="Agent name for the certification scorecard",
+    )
+    parser.add_argument(
+        "--certification-run-id",
+        type=str,
+        default="",
+        help="Optional certification run ID",
+    )
+    parser.add_argument(
+        "--runs-per-fault",
+        type=int,
+        default=30,
+        help="Expected number of runs per fault (default: 30)",
+    )
+    parser.add_argument(
+        "--no-store",
+        action="store_true",
+        help="Skip storing the scorecard to MongoDB",
+    )
+
+    args = parser.parse_args()
 
     config = ConfigLoader.load_config()
 
@@ -1024,36 +1228,50 @@ async def main():
             logger.error("MongoDB connection failed. Ensure MongoDB is running.")
             return
 
-        logger.info("MongoDB connection successful. Starting aggregation...")
+        logger.info(
+            f"MongoDB connection successful. "
+            f"Starting aggregation for agent_id='{args.agent_id}', agent_name='{args.agent_name}'..."
+        )
 
-        # Get available fault categories
-        categories = get_all_fault_categories(db_client)
-
-        if not categories:
+        # Verify documents exist for the given agent_id
+        agent_docs = query_runs_by_agent(db_client, args.agent_id)
+        if not agent_docs:
             logger.warning(
-                "No fault categories found in the database. "
+                f"No per-run documents found for agent_id='{args.agent_id}'. "
                 "Ensure per-run metrics have been extracted with "
                 "metrics_extractor_from_trace.py first."
             )
             return
 
-        logger.info(f"Found fault categories: {categories}")
+        logger.info(f"Found {len(agent_docs)} per-run documents for agent_id='{args.agent_id}'")
+
+        # Get available fault categories for this agent
+        categories = get_all_fault_categories(db_client, agent_id=args.agent_id)
+
+        if not categories:
+            logger.warning(
+                f"No fault categories found for agent_id='{args.agent_id}'."
+            )
+            return
+
+        logger.info(f"Found fault categories for agent: {categories}")
 
         # Aggregate all categories into final scorecard
         final_scorecard = await aggregate_all(
             db_client=db_client,
             llm_client=llm_client,
-            agent_id="",  # Set via config or CLI args as needed
-            agent_name="",
-            certification_run_id="",
-            runs_per_fault=30,
-            store_results=True,
+            agent_id=args.agent_id,
+            agent_name=args.agent_name,
+            certification_run_id=args.certification_run_id,
+            runs_per_fault=args.runs_per_fault,
+            store_results=not args.no_store,
         )
 
         # Print summary
         print("\n" + "=" * 70)
         print("CERTIFICATION SCORECARD SUMMARY")
         print("=" * 70)
+        print(f"  Agent: {args.agent_name} ({args.agent_id})")
         print(f"  Total categories: {final_scorecard['total_fault_categories']}")
         print(f"  Total faults tested: {final_scorecard['total_faults_tested']}")
         print(f"  Total runs: {final_scorecard['total_runs']}")

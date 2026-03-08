@@ -131,6 +131,12 @@ class MongoDBClient:
             collection.create_index(
                 [("fault_category", ASCENDING), ("created_at", DESCENDING)]
             )
+            collection.create_index(
+                [("agent_name", ASCENDING)], sparse=True
+            )
+            collection.create_index(
+                [("agent_id", ASCENDING)], sparse=True
+            )
 
             logger.info(f"Initialized collection: {self.config.metrics_collection}")
             return True
@@ -210,6 +216,8 @@ class MongoDBClient:
 
         doc = {
             "experiment_id": experiment_id,
+            "agent_name": quant_doc.get("agent_name"),
+            "agent_id": quant_doc.get("agent_id"),
             "fault_category": quant_doc.get("injected_fault_category"),
             "fault_name": quant_doc.get("injected_fault_name"),
             "quantitative": quant_doc,
@@ -253,6 +261,16 @@ class MongoDBClient:
             .sort("created_at", DESCENDING)
             .limit(limit)
         )
+        return list(cursor)
+
+    def find_by_agent_id(
+        self, agent_id: str, limit: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Find all metrics documents for a given agent_id, ordered by created_at descending."""
+        collection = self.sync_db[self.config.metrics_collection]
+        cursor = collection.find({"agent_id": agent_id}).sort("created_at", DESCENDING)
+        if limit > 0:
+            cursor = cursor.limit(limit)
         return list(cursor)
 
     def find_by_fault_name(

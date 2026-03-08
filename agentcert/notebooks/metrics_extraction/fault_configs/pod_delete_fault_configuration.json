@@ -5,6 +5,11 @@
     "fault_category": "application_fault",
     "description": "Deletes a target application pod in a Kubernetes namespace to simulate an unexpected pod failure. This fault introduces a pod-level disruption into the simulation environment, causing the target pod to be terminated and forcing Kubernetes self-healing mechanisms (ReplicaSet reconciliation) to restore the application to a healthy state.",
     "injection_timestamp": "2026-02-21T00:00:00Z",
+    "agent":{
+        "agent_id": "flash-001-abc123",
+        "agent_name": "Flash",
+        "agent_version": "1.0.0"
+    },
     "fault_configuration": {
         "target_service": "",
         "target_namespace": "",

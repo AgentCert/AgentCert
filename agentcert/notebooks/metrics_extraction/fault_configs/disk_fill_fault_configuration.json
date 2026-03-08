@@ -5,6 +5,11 @@
     "fault_category": "resource_fault",
     "description": "Fills the ephemeral storage or a specific disk path on a target pod's node to simulate disk pressure conditions. This fault introduces a storage-level disruption, causing the target pod to experience disk space exhaustion which may trigger pod eviction by the Kubelet, application write failures, or degraded performance due to inability to write logs, temp files, or data.",
     "injection_timestamp": "2026-03-04T08:30:01.031Z",
+    "agent":{
+        "agent_id": "flash-001-abc123",
+        "agent_name": "Flash",
+        "agent_version": "1.0.0"
+    },
     "fault_configuration": {
         "target_service": "",
         "target_namespace": "",

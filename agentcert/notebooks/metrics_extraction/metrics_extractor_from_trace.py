@@ -416,6 +416,12 @@ class TraceMetricsExtractor:
 
         result: Dict[str, Any] = {}
 
+        agent_section = self.fault_config.get("agent", {})
+        if agent_section.get("agent_name"):
+            result["agent_name"] = agent_section["agent_name"]
+        if agent_section.get("agent_id"):
+            result["agent_id"] = agent_section["agent_id"]
+
         if self.fault_config.get("injection_timestamp"):
             result["fault_injection_time"] = self.fault_config["injection_timestamp"]
         if self.fault_config.get("fault_name"):

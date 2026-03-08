@@ -5,6 +5,11 @@
     "fault_category": "application_fault",
     "description": "Kills a target container within a pod in a Kubernetes namespace to simulate an unexpected container crash. This fault introduces a container-level disruption, causing the container runtime to terminate the specified container and triggering Kubernetes restart policies (restartPolicy: Always) to automatically restart the container within the same pod.",
     "injection_timestamp": "2026-03-04T06:04:18.957Z",
+    "agent":{
+        "agent_id": "flash-001-abc123",
+        "agent_name": "Flash",
+        "agent_version": "1.0.0"
+    },
     "fault_configuration": {
         "target_service": "",
         "target_namespace": "",

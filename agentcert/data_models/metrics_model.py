@@ -94,6 +94,12 @@ class MetricsExtractionResult(BaseModelWrapper):
 class LLMQuantitativeExtraction(BaseModelWrapper):
     """Model for LLM to extract quantitative metrics."""
 
+    agent_name: Optional[str] = Field(
+        default=None, description="Name of the agent being evaluated"
+    )
+    agent_id: Optional[str] = Field(
+        default=None, description="Unique identifier of the agent being evaluated"
+    )
     experiment_id: Optional[str] = Field(
         default=None, description="Experiment id if available"
     )
