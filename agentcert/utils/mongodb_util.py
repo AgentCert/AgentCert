@@ -1,6 +1,7 @@
 """
 MongoDB utility module for AgentCert metrics storage.
-Provides async/sync MongoDB client with Atlas Vector Search support.
+Provides sync MongoDB client with Atlas Vector Search support.
+Uses a single `agent_run_metrics` collection for all data.
 """
 
 import json
@@ -9,7 +10,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pydantic import BaseModel
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.errors import ConnectionFailure, DuplicateKeyError, OperationFailure
@@ -21,31 +21,20 @@ class MongoDBConfig:
     """MongoDB configuration loaded from configs.json."""
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """Load MongoDB configuration"""
         self._load_config(config)
 
     def _load_config(self, config) -> None:
-        """Load configuration from JSON file."""
         try:
             mongodb_config = config.get("mongodb", {})
 
-            # Connection settings
             self.connection_string = mongodb_config.get(
                 "connection_string_env", os.getenv("MONGODB_CONNECTION_STRING")
             )
             self.database_name = mongodb_config.get("database", "agentcert")
 
-            # Collection names
             collections = mongodb_config.get("collections", {})
             self.metrics_collection = collections.get("metrics", "agent_run_metrics")
-            self.quantitative_collection = collections.get(
-                "quantitative", "llm_quantitative_extractions"
-            )
-            self.qualitative_collection = collections.get(
-                "qualitative", "llm_qualitative_extractions"
-            )
 
-            # Vector search settings
             vector_config = mongodb_config.get("vector_search", {})
             self.vector_index_name = vector_config.get(
                 "index_name", "metrics_vector_index"
@@ -56,24 +45,19 @@ class MongoDBConfig:
             self.num_candidates = vector_config.get("num_candidates", 100)
             self.vector_limit = vector_config.get("limit", 10)
 
-        except FileNotFoundError:
-            logger.warning(
-                f"Config file not found at {self.config_path}, using defaults"
-            )
+        except (FileNotFoundError, AttributeError):
+            logger.warning("Config loading failed, using defaults")
             self._set_defaults()
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing config file: {e}")
             self._set_defaults()
 
     def _set_defaults(self) -> None:
-        """Set default configuration values."""
         self.connection_string = os.getenv(
             "MONGODB_CONNECTION_STRING", "mongodb://localhost:27017"
         )
         self.database_name = "agentcert"
         self.metrics_collection = "agent_run_metrics"
-        self.quantitative_collection = "llm_quantitative_extractions"
-        self.qualitative_collection = "llm_qualitative_extractions"
         self.vector_index_name = "metrics_vector_index"
         self.embedding_field = "embedding"
         self.embedding_dimensions = 1536
@@ -84,73 +68,37 @@ class MongoDBConfig:
 
 class MongoDBClient:
     """
-    MongoDB client with async support and Atlas Vector Search capabilities.
-
-    Supports storing LLMQuantitativeExtraction and LLMQualitativeExtraction
-    with optional vector embeddings for semantic search.
+    MongoDB client with Atlas Vector Search capabilities.
+    Stores combined quantitative and qualitative metrics in a single collection.
     """
 
     def __init__(self, config: Optional[MongoDBConfig] = None):
-        """
-        Initialize MongoDB client.
-
-        Args:
-            config: Optional MongoDBConfig. If not provided, loads from configs.json.
-        """
         self.config = config or MongoDBConfig()
         self._sync_client: Optional[MongoClient] = None
-        self._async_client: Optional[AsyncIOMotorClient] = None
         self._sync_db: Optional[Any] = None
-        self._async_db: Optional[AsyncIOMotorDatabase] = None
 
     # ==================== CONNECTION MANAGEMENT ====================
 
     def _get_sync_client(self) -> MongoClient:
-        """Get or create synchronous MongoDB client (lazy initialization)."""
         if self._sync_client is None:
             self._sync_client = MongoClient(self.config.connection_string)
             self._sync_db = self._sync_client[self.config.database_name]
-            logger.info(f"Connected to MongoDB (sync): {self.config.database_name}")
+            logger.info(f"Connected to MongoDB: {self.config.database_name}")
         return self._sync_client
-
-    def _get_async_client(self) -> AsyncIOMotorClient:
-        """Get or create asynchronous MongoDB client (lazy initialization)."""
-        if self._async_client is None:
-            self._async_client = AsyncIOMotorClient(self.config.connection_string)
-            self._async_db = self._async_client[self.config.database_name]
-            logger.info(f"Connected to MongoDB (async): {self.config.database_name}")
-        return self._async_client
 
     @property
     def sync_db(self):
-        """Get synchronous database reference."""
         self._get_sync_client()
         return self._sync_db
 
-    @property
-    def async_db(self) -> AsyncIOMotorDatabase:
-        """Get asynchronous database reference."""
-        self._get_async_client()
-        return self._async_db
-
     def close(self) -> None:
-        """Close synchronous client connection."""
         if self._sync_client:
             self._sync_client.close()
             self._sync_client = None
             self._sync_db = None
-            logger.info("MongoDB sync connection closed")
-
-    async def close_async(self) -> None:
-        """Close asynchronous client connection."""
-        if self._async_client:
-            self._async_client.close()
-            self._async_client = None
-            self._async_db = None
-            logger.info("MongoDB async connection closed")
+            logger.info("MongoDB connection closed")
 
     def health_check(self) -> bool:
-        """Check if MongoDB connection is healthy."""
         try:
             self._get_sync_client()
             self._sync_client.admin.command("ping")
@@ -159,66 +107,30 @@ class MongoDBClient:
             logger.error(f"MongoDB health check failed: {e}")
             return False
 
-    async def health_check_async(self) -> bool:
-        """Check if MongoDB connection is healthy (async)."""
-        try:
-            self._get_async_client()
-            await self._async_client.admin.command("ping")
-            return True
-        except ConnectionFailure as e:
-            logger.error(f"MongoDB async health check failed: {e}")
-            return False
-
     # ==================== COLLECTION INITIALIZATION ====================
 
     def initialize_collections(self) -> Dict[str, bool]:
-        """
-        Initialize metrics collection with proper indexes.
-        All data (quantitative and qualitative) is stored in a single collection
-        as nested documents for each agent run.
-        Returns:
-            Dict mapping collection name to success status.
-        """
+        """Initialize metrics collection with indexes if it does not already exist."""
         results = {}
-
-        # Create collection if it doesn't exist
         existing_collections = self.sync_db.list_collection_names()
         if self.config.metrics_collection not in existing_collections:
             self.sync_db.create_collection(self.config.metrics_collection)
-
-            # Initialize combined metrics collection (single source of truth)
-            results["metrics"] = self._init_metrics_collection()
-
-        else:
-            logger.info("Metrics collection already exists, skipping initialization.")
-
+        results["metrics"] = self._init_metrics_collection()
         return results
 
     def _init_metrics_collection(self) -> bool:
-        """Initialize combined metrics collection with indexes."""
         try:
             collection = self.sync_db[self.config.metrics_collection]
 
-            # Create indexes aligned with LLMQuantitativeExtraction / LLMQualitativeExtraction fields
             collection.create_index(
-                [("quantitative.experiment_id", ASCENDING)], unique=True, sparse=True
+                [("fault_category", ASCENDING), ("fault_name", ASCENDING)]
             )
             collection.create_index(
-                [
-                    ("quantitative.fault_namespace", ASCENDING),
-                    ("quantitative.fault_target_service", ASCENDING),
-                ]
-            )
-            collection.create_index([("quantitative.fault_type", ASCENDING)])
-            collection.create_index([("qualitative.reasoning_score", DESCENDING)])
-            collection.create_index([("qualitative.rai_check_status", ASCENDING)])
-            collection.create_index(
-                [("qualitative.acceptance_criteria_met", ASCENDING)]
+                [("experiment_id", ASCENDING)], unique=True, sparse=True
             )
             collection.create_index(
-                [("qualitative.security_compliance_status", ASCENDING)]
+                [("fault_category", ASCENDING), ("created_at", DESCENDING)]
             )
-            collection.create_index([("extraction_timestamp", DESCENDING)])
 
             logger.info(f"Initialized collection: {self.config.metrics_collection}")
             return True
@@ -227,24 +139,12 @@ class MongoDBClient:
             return False
 
     def create_vector_search_index(self, collection_name: Optional[str] = None) -> bool:
-        """
-        Create Atlas Vector Search index on a collection.
-
-        Note: This requires MongoDB Atlas with Vector Search enabled.
-        For local MongoDB, vector search is not available.
-
-        Args:
-            collection_name: Collection to create index on. Defaults to metrics collection.
-
-        Returns:
-            True if index created successfully.
-        """
+        """Create Atlas Vector Search index on a collection."""
         collection_name = collection_name or self.config.metrics_collection
 
         try:
             collection = self.sync_db[collection_name]
 
-            # Define vector search index
             search_index_model = SearchIndexModel(
                 definition={
                     "fields": [
@@ -254,22 +154,15 @@ class MongoDBClient:
                             "numDimensions": self.config.embedding_dimensions,
                             "similarity": self.config.similarity_metric,
                         },
-                        {
-                            "type": "filter",
-                            "path": "quantitative.fault_namespace",
-                        },
-                        {
-                            "type": "filter",
-                            "path": "quantitative.fault_type",
-                        },
+                        {"type": "filter", "path": "fault_category"},
+                        {"type": "filter", "path": "fault_name"},
                     ]
                 },
                 name=self.config.vector_index_name,
                 type="vectorSearch",
             )
 
-            # Create the search index
-            result = collection.create_search_index(model=search_index_model)
+            collection.create_search_index(model=search_index_model)
             logger.info(
                 f"Created vector search index '{self.config.vector_index_name}' on {collection_name}"
             )
@@ -287,126 +180,6 @@ class MongoDBClient:
 
     # ==================== CRUD OPERATIONS ====================
 
-    def _prepare_document(
-        self,
-        data: Union[BaseModel, Dict[str, Any]],
-        embedding: Optional[List[float]] = None,
-    ) -> Dict[str, Any]:
-        """Prepare a document for insertion."""
-        if isinstance(data, BaseModel):
-            doc = data.model_dump(mode="json")
-        else:
-            doc = dict(data)
-
-        # Add metadata
-        doc["extraction_timestamp"] = datetime.now(timezone.utc)
-
-        # Add embedding if provided
-        if embedding:
-            doc[self.config.embedding_field] = embedding
-
-        return doc
-
-    # --- Quantitative Extraction ---
-
-    def insert_quantitative(
-        self,
-        data: Union[BaseModel, Dict[str, Any]],
-        embedding: Optional[List[float]] = None,
-    ) -> str:
-        """
-        Insert a LLMQuantitativeExtraction document.
-
-        Args:
-            data: Pydantic model or dict with quantitative data.
-            embedding: Optional vector embedding for semantic search.
-
-        Returns:
-            Inserted document ID.
-        """
-        collection = self.sync_db[self.config.quantitative_collection]
-        doc = self._prepare_document(data, embedding)
-        result = collection.insert_one(doc)
-        logger.debug(f"Inserted quantitative extraction: {result.inserted_id}")
-        return str(result.inserted_id)
-
-    async def insert_quantitative_async(
-        self,
-        data: Union[BaseModel, Dict[str, Any]],
-        embedding: Optional[List[float]] = None,
-    ) -> str:
-        """Insert a LLMQuantitativeExtraction document (async)."""
-        collection = self.async_db[self.config.quantitative_collection]
-        doc = self._prepare_document(data, embedding)
-        result = await collection.insert_one(doc)
-        logger.debug(f"Inserted quantitative extraction: {result.inserted_id}")
-        return str(result.inserted_id)
-
-    def find_quantitative_by_experiment_id(
-        self, experiment_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """Find quantitative extraction by experiment ID."""
-        collection = self.sync_db[self.config.quantitative_collection]
-        return collection.find_one({"experiment_id": experiment_id})
-
-    async def find_quantitative_by_experiment_id_async(
-        self, experiment_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """Find quantitative extraction by experiment ID (async)."""
-        collection = self.async_db[self.config.quantitative_collection]
-        return await collection.find_one({"experiment_id": experiment_id})
-
-    # --- Qualitative Extraction ---
-
-    def insert_qualitative(
-        self,
-        data: Union[BaseModel, Dict[str, Any]],
-        embedding: Optional[List[float]] = None,
-    ) -> str:
-        """
-        Insert a LLMQualitativeExtraction document.
-
-        Args:
-            data: Pydantic model or dict with qualitative data.
-            embedding: Optional vector embedding for semantic search.
-
-        Returns:
-            Inserted document ID.
-        """
-        collection = self.sync_db[self.config.qualitative_collection]
-        doc = self._prepare_document(data, embedding)
-        result = collection.insert_one(doc)
-        logger.debug(f"Inserted qualitative extraction: {result.inserted_id}")
-        return str(result.inserted_id)
-
-    async def insert_qualitative_async(
-        self,
-        data: Union[BaseModel, Dict[str, Any]],
-        embedding: Optional[List[float]] = None,
-    ) -> str:
-        """Insert a LLMQualitativeExtraction document (async)."""
-        collection = self.async_db[self.config.qualitative_collection]
-        doc = self._prepare_document(data, embedding)
-        result = await collection.insert_one(doc)
-        logger.debug(f"Inserted qualitative extraction: {result.inserted_id}")
-        return str(result.inserted_id)
-
-    def find_metrics_by_experiment_id(
-        self, experiment_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """Find combined metrics by experiment ID in the metrics collection."""
-        collection = self.sync_db[self.config.metrics_collection]
-        return collection.find_one({"quantitative.experiment_id": experiment_id})
-
-    async def find_metrics_by_experiment_id_async(
-        self, experiment_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """Find combined metrics by experiment ID (async)."""
-        collection = self.async_db[self.config.metrics_collection]
-        return await collection.find_one({"quantitative.experiment_id": experiment_id})
-
-    # --- Combined Metrics ---
-
     def insert_metrics(
         self,
         quantitative: Union[BaseModel, Dict[str, Any]],
@@ -417,14 +190,8 @@ class MongoDBClient:
         """
         Insert combined quantitative and qualitative metrics.
 
-        Args:
-            quantitative: Quantitative metrics data.
-            qualitative: Qualitative metrics data.
-            embedding: Optional vector embedding.
-            metadata: Optional additional metadata.
-
-        Returns:
-            Inserted document ID.
+        Top-level fields `experiment_id`, `fault_category`, and `fault_name`
+        are extracted from the quantitative data to support indexed queries.
         """
         collection = self.sync_db[self.config.metrics_collection]
 
@@ -439,18 +206,19 @@ class MongoDBClient:
             else dict(qualitative)
         )
 
-        if not quant_doc.get("experiment_id"):
-            quant_doc["experiment_id"] = str(uuid.uuid4())
+        experiment_id = quant_doc.get("experiment_id") or str(uuid.uuid4())
 
         doc = {
+            "experiment_id": experiment_id,
+            "fault_category": quant_doc.get("injected_fault_category"),
+            "fault_name": quant_doc.get("injected_fault_name"),
             "quantitative": quant_doc,
             "qualitative": qual_doc,
-            "extraction_timestamp": datetime.now(timezone.utc),
+            "created_at": datetime.now(timezone.utc),
         }
 
         if embedding:
             doc[self.config.embedding_field] = embedding
-
         if metadata:
             doc["metadata"] = metadata
 
@@ -459,72 +227,45 @@ class MongoDBClient:
             logger.debug(f"Inserted combined metrics: {result.inserted_id}")
             return str(result.inserted_id)
         except DuplicateKeyError:
-            # Update existing document if experiment_id already exists
             logger.info(
-                f"Document with experiment_id '{quant_doc['experiment_id']}' already exists, updating..."
+                f"Document with experiment_id '{experiment_id}' already exists, updating..."
             )
-            result = collection.replace_one(
-                {"quantitative.experiment_id": quant_doc["experiment_id"]},
-                doc,
-            )
-            existing = collection.find_one(
-                {"quantitative.experiment_id": quant_doc["experiment_id"]}
-            )
+            collection.replace_one({"experiment_id": experiment_id}, doc)
+            existing = collection.find_one({"experiment_id": experiment_id})
             return str(existing["_id"]) if existing else ""
 
-    async def insert_metrics_async(
-        self,
-        quantitative: Union[BaseModel, Dict[str, Any]],
-        qualitative: Union[BaseModel, Dict[str, Any]],
-        embedding: Optional[List[float]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> str:
-        """Insert combined metrics (async)."""
-        collection = self.async_db[self.config.metrics_collection]
+    # ==================== QUERY OPERATIONS ====================
 
-        quant_doc = (
-            quantitative.model_dump(mode="json")
-            if isinstance(quantitative, BaseModel)
-            else dict(quantitative)
+    def find_by_experiment_id(
+        self, experiment_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Find metrics document by experiment_id."""
+        collection = self.sync_db[self.config.metrics_collection]
+        return collection.find_one({"experiment_id": experiment_id})
+
+    def find_by_fault_category(
+        self, fault_category: str, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Find metrics by fault_category, ordered by created_at descending."""
+        collection = self.sync_db[self.config.metrics_collection]
+        cursor = (
+            collection.find({"fault_category": fault_category})
+            .sort("created_at", DESCENDING)
+            .limit(limit)
         )
-        qual_doc = (
-            qualitative.model_dump(mode="json")
-            if isinstance(qualitative, BaseModel)
-            else dict(qualitative)
+        return list(cursor)
+
+    def find_by_fault_name(
+        self, fault_name: str, limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Find metrics by fault_name, ordered by created_at descending."""
+        collection = self.sync_db[self.config.metrics_collection]
+        cursor = (
+            collection.find({"fault_name": fault_name})
+            .sort("created_at", DESCENDING)
+            .limit(limit)
         )
-
-        if not quant_doc.get("experiment_id"):
-            quant_doc["experiment_id"] = str(uuid.uuid4())
-
-        doc = {
-            "quantitative": quant_doc,
-            "qualitative": qual_doc,
-            "extraction_timestamp": datetime.now(timezone.utc),
-        }
-
-        if embedding:
-            doc[self.config.embedding_field] = embedding
-
-        if metadata:
-            doc["metadata"] = metadata
-
-        try:
-            result = await collection.insert_one(doc)
-            logger.debug(f"Inserted combined metrics: {result.inserted_id}")
-            return str(result.inserted_id)
-        except DuplicateKeyError:
-            # Update existing document if experiment_id already exists
-            logger.info(
-                f"Document with experiment_id '{quant_doc['experiment_id']}' already exists, updating..."
-            )
-            await collection.replace_one(
-                {"quantitative.experiment_id": quant_doc["experiment_id"]},
-                doc,
-            )
-            existing = await collection.find_one(
-                {"quantitative.experiment_id": quant_doc["experiment_id"]}
-            )
-            return str(existing["_id"]) if existing else ""
+        return list(cursor)
 
     # ==================== VECTOR SEARCH ====================
 
@@ -535,23 +276,11 @@ class MongoDBClient:
         filter_query: Optional[Dict[str, Any]] = None,
         limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Perform vector similarity search using Atlas Vector Search.
-
-        Args:
-            query_embedding: Query vector (1536 dimensions for OpenAI embeddings).
-            collection_name: Collection to search. Defaults to metrics collection.
-            filter_query: Optional MongoDB filter to apply.
-            limit: Maximum results to return.
-
-        Returns:
-            List of matching documents with similarity scores.
-        """
+        """Perform vector similarity search using Atlas Vector Search."""
         collection_name = collection_name or self.config.metrics_collection
         limit = limit or self.config.vector_limit
         collection = self.sync_db[collection_name]
 
-        # Build aggregation pipeline for vector search
         pipeline = [
             {
                 "$vectorSearch": {
@@ -565,11 +294,9 @@ class MongoDBClient:
             {"$addFields": {"search_score": {"$meta": "vectorSearchScore"}}},
         ]
 
-        # Add filter if provided
         if filter_query:
             pipeline[0]["$vectorSearch"]["filter"] = filter_query
 
-        # Exclude embedding field from results (can be large)
         pipeline.append({"$project": {self.config.embedding_field: 0}})
 
         try:
@@ -580,132 +307,8 @@ class MongoDBClient:
             logger.error(f"Vector search failed: {e}")
             return []
 
-    async def vector_search_async(
-        self,
-        query_embedding: List[float],
-        collection_name: Optional[str] = None,
-        filter_query: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
-        """Perform vector similarity search (async)."""
-        collection_name = collection_name or self.config.metrics_collection
-        limit = limit or self.config.vector_limit
-        collection = self.async_db[collection_name]
-
-        pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": self.config.vector_index_name,
-                    "path": self.config.embedding_field,
-                    "queryVector": query_embedding,
-                    "numCandidates": self.config.num_candidates,
-                    "limit": limit,
-                }
-            },
-            {"$addFields": {"search_score": {"$meta": "vectorSearchScore"}}},
-        ]
-
-        if filter_query:
-            pipeline[0]["$vectorSearch"]["filter"] = filter_query
-
-        pipeline.append({"$project": {self.config.embedding_field: 0}})
-
-        try:
-            cursor = collection.aggregate(pipeline)
-            results = await cursor.to_list(length=limit)
-            logger.debug(f"Vector search returned {len(results)} results")
-            return results
-        except OperationFailure as e:
-            logger.error(f"Vector search failed: {e}")
-            return []
-
-    # ==================== QUERY OPERATIONS ====================
-
-    def find_by_fault_type(
-        self,
-        fault_type: str,
-        limit: int = 100,
-    ) -> List[Dict[str, Any]]:
-        """Find metrics by fault type in the combined metrics collection."""
-        collection = self.sync_db[self.config.metrics_collection]
-
-        cursor = (
-            collection.find({"quantitative.fault_type": fault_type})
-            .sort("extraction_timestamp", DESCENDING)
-            .limit(limit)
-        )
-
-        return list(cursor)
-
-    def find_by_namespace(
-        self, namespace: str, limit: int = 100
-    ) -> List[Dict[str, Any]]:
-        """Find metrics by Kubernetes namespace in the combined metrics collection."""
-        collection = self.sync_db[self.config.metrics_collection]
-
-        cursor = (
-            collection.find({"quantitative.fault_namespace": namespace})
-            .sort("extraction_timestamp", DESCENDING)
-            .limit(limit)
-        )
-
-        return list(cursor)
-
-    def get_metrics_summary(self) -> Dict[str, Any]:
-        """Get summary statistics for stored metrics."""
-        quant_collection = self.sync_db[self.config.quantitative_collection]
-        qual_collection = self.sync_db[self.config.qualitative_collection]
-        metrics_collection = self.sync_db[self.config.metrics_collection]
-
-        return {
-            "quantitative_count": quant_collection.count_documents({}),
-            "qualitative_count": qual_collection.count_documents({}),
-            "combined_metrics_count": metrics_collection.count_documents({}),
-            "collections": {
-                "quantitative": self.config.quantitative_collection,
-                "qualitative": self.config.qualitative_collection,
-                "metrics": self.config.metrics_collection,
-            },
-        }
-
-    async def get_metrics_summary_async(self) -> Dict[str, Any]:
-        """Get summary statistics for stored metrics (async)."""
-        quant_collection = self.async_db[self.config.quantitative_collection]
-        qual_collection = self.async_db[self.config.qualitative_collection]
-        metrics_collection = self.async_db[self.config.metrics_collection]
-
-        return {
-            "quantitative_count": await quant_collection.count_documents({}),
-            "qualitative_count": await qual_collection.count_documents({}),
-            "combined_metrics_count": await metrics_collection.count_documents({}),
-            "collections": {
-                "quantitative": self.config.quantitative_collection,
-                "qualitative": self.config.qualitative_collection,
-                "metrics": self.config.metrics_collection,
-            },
-        }
-
-
-# ==================== CONVENIENCE FUNCTIONS ====================
-
-
-def get_mongodb_client(config: Optional[MongoDBConfig] = None) -> MongoDBClient:
-    """Get a MongoDB client instance."""
-    return MongoDBClient(config)
-
-
-def initialize_mongodb() -> Dict[str, bool]:
-    """Initialize MongoDB collections and indexes."""
-    client = MongoDBClient()
-    try:
-        results = client.initialize_collections()
-        return results
-    finally:
-        client.close()
-
 
 if __name__ == "__main__":
-    # Test MongoDB connection, initialization, insert, and delete
     print("Testing MongoDB connection...")
 
     from utils.load_config import ConfigLoader
@@ -721,17 +324,13 @@ if __name__ == "__main__":
 
         print("✅ MongoDB connection successful")
 
-        # Initialize collections
         print("\nInitializing collections...")
         results = client.initialize_collections()
-
         for collection, success in results.items():
             status = "✅" if success else "❌"
             print(f"  {status} {collection}")
 
-        # Create sample metrics data
         print("\n📝 Creating sample metrics document...")
-
         experiment_id = (
             f"exp_test_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         )
@@ -743,12 +342,13 @@ if __name__ == "__main__":
             "agent_fault_mitigation_time": "2026-02-15T10:01:30Z",
             "time_to_detect": 15.0,
             "time_to_mitigate": 90.0,
-            "framework_overhead_seconds": 2.5,
             "fault_detected": "Misconfig",
             "trajectory_steps": 12,
             "input_tokens": 5000,
             "output_tokens": 1500,
-            "fault_type": "Misconfig",
+            "injected_fault_name": "pod-delete",
+            "injected_fault_category": "compute",
+            "detected_fault_type": "pod-delete",
             "fault_target_service": "payment-service",
             "fault_namespace": "production",
             "tool_calls": [
@@ -765,18 +365,10 @@ if __name__ == "__main__":
         qualitative_data = {
             "rai_check_status": "Passed",
             "rai_check_notes": "No harmful content detected",
-            "trajectory_efficiency_score": 8.5,
-            "trajectory_efficiency_notes": "Efficient diagnostic path",
             "security_compliance_status": "Compliant",
             "security_compliance_notes": "No credentials exposed",
-            "acceptance_criteria_met": True,
-            "acceptance_criteria_notes": "Fault correctly detected and mitigated",
-            "response_quality_score": 9.0,
-            "response_quality_notes": "Clear and accurate reasoning",
-            "reasoning_score": 8,
-            "reasoning_judgement": "Strong diagnostic reasoning",
-            "known_limitations": ["Could have checked more services"],
-            "recommendations": ["Add broader health checks"],
+            "reasoning_quality_score": 9.0,
+            "reasoning_quality_notes": "Clear and accurate reasoning",
             "agent_summary": "Agent detected misconfig in payment-service and remediated it.",
         }
 
@@ -790,73 +382,39 @@ if __name__ == "__main__":
             },
         }
 
-        # Insert the metrics document
         doc_id = client.insert_metrics(
             quantitative=quantitative_data,
             qualitative=qualitative_data,
             metadata=metadata,
         )
-
         print(f"✅ Inserted metrics document with ID: {doc_id}")
         print(f"   Experiment ID: {experiment_id}")
 
-        # Verify the document was inserted using experiment_id lookup
         print("\n🔍 Verifying document insertion...")
-        inserted_doc = client.find_metrics_by_experiment_id(experiment_id)
-
+        inserted_doc = client.find_by_experiment_id(experiment_id)
         if inserted_doc:
             print(f"✅ Document found in database")
-            print(
-                f"   Quantitative metrics: {list(inserted_doc['quantitative'].keys())}"
-            )
-            print(f"   Qualitative metrics: {list(inserted_doc['qualitative'].keys())}")
-            print(f"   Metadata: {inserted_doc.get('metadata', {})}")
+            print(f"   fault_category: {inserted_doc.get('fault_category')}")
+            print(f"   fault_name: {inserted_doc.get('fault_name')}")
         else:
             print("❌ Document not found after insertion")
 
-        # Get metrics summary
-        print("\n📊 Metrics summary:")
-        summary = client.get_metrics_summary()
-        for key, value in summary.items():
-            if key != "collections":
-                print(f"   {key}: {value}")
+        category_docs = client.find_by_fault_category("compute")
+        print(f"\n📊 Documents with fault_category='compute': {len(category_docs)}")
 
-        # Delete the test document
         print(f"\n🗑️  Deleting test document (experiment_id: {experiment_id})...")
         collection = client.sync_db[client.config.metrics_collection]
-        delete_result = collection.delete_one(
-            {"quantitative.experiment_id": experiment_id}
-        )
-
+        delete_result = collection.delete_one({"experiment_id": experiment_id})
         if delete_result.deleted_count > 0:
-            print(
-                f"✅ Document deleted successfully (deleted {delete_result.deleted_count} document)"
-            )
+            print(f"✅ Test document deleted successfully")
         else:
-            print("❌ Document deletion failed - no documents matched")
-
-        # Verify deletion
-        print("\n🔍 Verifying document deletion...")
-        deleted_doc = client.find_metrics_by_experiment_id(experiment_id)
-
-        if deleted_doc is None:
-            print("✅ Document successfully removed from database")
-        else:
-            print("❌ Document still exists in database")
-
-        # Final summary
-        print("\n📊 Final metrics summary:")
-        final_summary = client.get_metrics_summary()
-        for key, value in final_summary.items():
-            if key != "collections":
-                print(f"   {key}: {value}")
+            print("❌ Document deletion failed")
 
         print("\n✅ Test completed successfully!")
 
     except Exception as e:
         print(f"\n❌ Error during test: {e}")
         import traceback
-
         traceback.print_exc()
 
     finally:

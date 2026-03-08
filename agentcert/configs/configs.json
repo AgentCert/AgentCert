@@ -3,9 +3,7 @@
         "connection_string_env": "ENV_MONGODB_CONNECTION_STRING",
         "database": "agentcert",
         "collections": {
-            "metrics": "agent_run_metrics",
-            "quantitative": "llm_quantitative_extractions",
-            "qualitative": "llm_qualitative_extractions"
+            "metrics": "agent_run_metrics"
         },
         "vector_search": {
             "index_name": "metrics_vector_index",
