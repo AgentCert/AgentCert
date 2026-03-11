@@ -472,6 +472,7 @@ fieldMaxLength: Length should be {{length}} characters maximum.
 fieldMinLength: Length should be {{length}} characters minimum.
 fieldSelector: Field Selector
 fixAllErrors: Fix all the errors indicated in the YAML Editor to resolve the issue.
+generateCertificate: Generate Certificate
 generateSSH: Generate New SSH Key
 genericResourceNotFoundError: >-
   {{resource}} [{{resourceID}}] under Project [{{projectID}}] does not exist or

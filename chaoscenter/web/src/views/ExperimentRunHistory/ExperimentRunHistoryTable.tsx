@@ -1,9 +1,9 @@
 import React from 'react';
-import { Avatar, Button, ButtonVariation, Layout, Popover, TableV2, Text } from '@harnessio/uicore';
+import { Avatar, Button, ButtonVariation, Layout, Popover, TableV2, Text, useToggleOpen } from '@harnessio/uicore';
 import { Color } from '@harnessio/design-system';
 import { isEqual } from 'lodash-es';
 import type { Column, Row, UseExpandedRowProps } from 'react-table';
-import { Classes, Menu, MenuItem, Position } from '@blueprintjs/core';
+import { Classes, Dialog, Menu, MenuItem, Position } from '@blueprintjs/core';
 import { useHistory } from 'react-router-dom';
 import { getDetailedTime, getColorBasedOnResilienceScore, killEvent } from '@utils';
 import type { ExperimentRunDetails, ExperimentRunHistoryTableProps } from '@controllers/ExperimentRunHistory';
@@ -158,6 +158,7 @@ const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistory
         Header: '',
         id: 'threeDotMenu',
         Cell: ({ row: { original: data } }: { row: Row<ExperimentRunDetails> }) => {
+          const { isOpen: isCertDialogOpen, open: openCertDialog, close: closeCertDialog } = useToggleOpen();
           return (
             <Layout.Horizontal style={{ justifyContent: 'flex-end' }} onClick={killEvent}>
               <Popover className={Classes.DARK} position={Position.LEFT}>
@@ -179,8 +180,34 @@ const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistory
                     onClick={() => window.open(`${window.location.href}/runs/${data.experimentRunID}`, '_blank')}
                     className={css.menuItem}
                   />
+                  <MenuItem
+                    disabled={data.experimentStatus !== ExperimentRunStatus.COMPLETED}
+                    text={getString('generateCertificate')}
+                    className={css.menuItem}
+                    onClick={() => openCertDialog()}
+                  />
                 </Menu>
               </Popover>
+              {isCertDialogOpen && (
+                <Dialog
+                  isOpen={isCertDialogOpen}
+                  canOutsideClickClose
+                  canEscapeKeyClose
+                  onClose={() => closeCertDialog()}
+                  title={getString('generateCertificate')}
+                  style={{ width: 500, height: 300 }}
+                >
+                  <Layout.Vertical
+                    padding="xlarge"
+                    flex={{ justifyContent: 'center', alignItems: 'center' }}
+                    height="100%"
+                  >
+                    <Text font={{ size: 'medium' }} color={Color.GREY_700}>
+                      TODO - Certificate
+                    </Text>
+                  </Layout.Vertical>
+                </Dialog>
+              )}
             </Layout.Horizontal>
           );
         },

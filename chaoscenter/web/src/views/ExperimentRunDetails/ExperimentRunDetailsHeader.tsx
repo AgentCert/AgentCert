@@ -1,11 +1,12 @@
 import React from 'react';
-import { Container, Heading, Layout, Text } from '@harnessio/uicore';
+import { Container, Heading, Layout, Text, useToggleOpen } from '@harnessio/uicore';
 import { Icon } from '@harnessio/icons';
 import { Color, FontVariation } from '@harnessio/design-system';
 import type { DefaultLayoutTemplateProps } from '@components/DefaultLayout/DefaultLayout';
-import type { ExecutionData, ExperimentRunStatus } from '@api/entities';
+import { type ExecutionData, ExperimentRunStatus } from '@api/entities';
 import { useStrings } from '@strings';
 import ResiliencyScoreArrowCard from '@components/ResiliencyScoreArrowCard';
+import { Dialog } from '@blueprintjs/core';
 import { getDurationBetweenTwoDates, handleTimestampAmbiguity } from '@utils';
 import StatusBadgeV2, { StatusBadgeEntity } from '@components/StatusBadgeV2';
 import LitmusBreadCrumbs from '@components/LitmusBreadCrumbs';
@@ -33,6 +34,7 @@ export default function ExperimentRunDetailsHeader({
   rightSideBar
 }: React.PropsWithChildren<ExperimentRunDetailsHeaderProps>): React.ReactElement {
   const { getString } = useStrings();
+  const { isOpen: isCertDialogOpen, open: openCertDialog, close: closeCertDialog } = useToggleOpen();
   const breadCrumb = <LitmusBreadCrumbs links={breadcrumbs} />;
   return (
     <Container className={css.test} flex={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
@@ -57,6 +59,36 @@ export default function ExperimentRunDetailsHeader({
                     {title ?? <Icon name="steps-spinner" size={22} color={Color.GREY_800} />}
                   </Heading>
                   {phase && <StatusBadgeV2 status={phase} entity={StatusBadgeEntity.ExperimentRun} />}
+                  {phase === ExperimentRunStatus.COMPLETED && (
+                    <Text
+                      font={{ variation: FontVariation.SMALL_SEMI }}
+                      color={Color.PRIMARY_7}
+                      style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                      onClick={() => openCertDialog()}
+                    >
+                      {getString('generateCertificate')}
+                    </Text>
+                  )}
+                  {isCertDialogOpen && (
+                    <Dialog
+                      isOpen={isCertDialogOpen}
+                      canOutsideClickClose
+                      canEscapeKeyClose
+                      onClose={() => closeCertDialog()}
+                      title={getString('generateCertificate')}
+                      style={{ width: 500, height: 300 }}
+                    >
+                      <Layout.Vertical
+                        padding="xlarge"
+                        flex={{ justifyContent: 'center', alignItems: 'center' }}
+                        height="100%"
+                      >
+                        <Text font={{ size: 'medium' }} color={Color.GREY_700}>
+                          TODO - Certificate
+                        </Text>
+                      </Layout.Vertical>
+                    </Dialog>
+                  )}
                 </Layout.Horizontal>
               </Layout.Vertical>
               <Layout.Horizontal
