@@ -31,6 +31,8 @@ import AgentOnboardingController from '@controllers/AgentOnboarding';
 import AppsOnboardingController from '@controllers/AppsOnboarding';
 import AgentHubController from '@controllers/AgentHub';
 import AppsHubController from '@controllers/AppsHub';
+import AgentDetailController from '@controllers/AgentDetail';
+import AppDetailController from '@controllers/AppDetail';
 
 const experimentID = ':experimentID';
 const runID = ':runID';
@@ -42,6 +44,8 @@ const chaosInfrastructureID = ':chaosInfrastructureID';
 const experimentKey = ':experimentKey';
 const notifyID = ':notifyID';
 const probeName = ':probeName';
+const agentName = ':agentName';
+const appName = ':appName';
 
 export function RoutesWithAuthentication(): React.ReactElement {
   const projectMatchPaths = useRouteDefinitionsMatch();
@@ -115,8 +119,10 @@ export function RoutesWithAuthentication(): React.ReactElement {
       <Route exact path={projectMatchPaths.toAppsOnboarding()} component={AppsOnboardingController} />
       {/* Agent Hub */}
       <Route exact path={projectMatchPaths.toAgentHub()} component={AgentHubController} />
+      <Route exact path={projectMatchPaths.toAgentDetail({ agentName })} component={AgentDetailController} />
       {/* Apps Hub */}
       <Route exact path={projectMatchPaths.toAppsHub()} component={AppsHubController} />
+      <Route exact path={projectMatchPaths.toAppDetail({ appName })} component={AppDetailController} />
       {/*Environments */}
       <Route exact path={projectMatchPaths.toEnvironments()} component={EnvironmentController} />
       {/* Kubernetes Chaos Infrastructure */}

@@ -3,10 +3,11 @@ import { Color, FontVariation } from '@harnessio/design-system';
 import { Card, Container, Layout, Text } from '@harnessio/uicore';
 import { Icon } from '@harnessio/icons';
 import React from 'react';
+import { useHistory } from 'react-router-dom';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
-import type { AppHubCategory, AppHubEntry, Microservice } from '@api/entities';
+import type { AppHubCategory, AppHubEntry } from '@api/entities';
 import type { ListAppHubCategoriesRequest, ListAppHubCategoriesResponse } from '@api/core';
-import { useDocumentTitle } from '@hooks';
+import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
 import Loader from '@components/Loader';
 import css from './AppsHub.module.scss';
@@ -19,6 +20,7 @@ interface AppsHubViewProps {
   ) => Promise<ApolloQueryResult<ListAppHubCategoriesResponse>>;
 }
 
+/* DeploymentStatusBadge hidden as part of UI-changes branch
 function DeploymentStatusBadge({ isDeployed, runningServices }: { isDeployed: boolean; runningServices?: string }): React.ReactElement {
   const { getString } = useStrings();
   return (
@@ -32,7 +34,9 @@ function DeploymentStatusBadge({ isDeployed, runningServices }: { isDeployed: bo
     </Layout.Horizontal>
   );
 }
+*/
 
+/* MicroserviceRow moved to AppDetail page
 function MicroserviceRow({ service }: { service: Microservice }): React.ReactElement {
   return (
     <Layout.Horizontal
@@ -54,12 +58,19 @@ function MicroserviceRow({ service }: { service: Microservice }): React.ReactEle
     </Layout.Horizontal>
   );
 }
+*/
 
 function AppCard({ app }: { app: AppHubEntry }): React.ReactElement {
-  const [expanded, setExpanded] = React.useState(false);
+  const history = useHistory();
+  const paths = useRouteWithBaseUrl();
 
   return (
-    <Card className={css.appCard} elevation={1}>
+    <Card
+      className={css.appCard}
+      elevation={1}
+      interactive
+      onClick={() => history.push(paths.toAppDetail({ appName: app.name }))}
+    >
       <Layout.Vertical spacing="medium" padding="medium">
         <Layout.Horizontal flex={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <Layout.Horizontal spacing="small" flex={{ alignItems: 'center' }}>
@@ -68,10 +79,6 @@ function AppCard({ app }: { app: AppHubEntry }): React.ReactElement {
               {app.displayName}
             </Text>
           </Layout.Horizontal>
-          <DeploymentStatusBadge
-            isDeployed={app.isDeployed}
-            runningServices={app.runningServices}
-          />
         </Layout.Horizontal>
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_600} lineClamp={2}>
           {app.description}
@@ -90,26 +97,9 @@ function AppCard({ app }: { app: AppHubEntry }): React.ReactElement {
           )}
         </Layout.Horizontal>
         {app.microservices && app.microservices.length > 0 && (
-          <Layout.Vertical spacing="xsmall">
-            <Layout.Horizontal
-              spacing="xsmall"
-              flex={{ alignItems: 'center' }}
-              className={css.expandToggle}
-              onClick={() => setExpanded(!expanded)}
-            >
-              <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} color={Color.PRIMARY_7} />
-              <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.PRIMARY_7}>
-                {app.microservices.length} microservices
-              </Text>
-            </Layout.Horizontal>
-            {expanded && (
-              <Layout.Vertical spacing="none" className={css.microserviceList}>
-                {app.microservices.map(svc => (
-                  <MicroserviceRow key={svc.name} service={svc} />
-                ))}
-              </Layout.Vertical>
-            )}
-          </Layout.Vertical>
+          <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.PRIMARY_7}>
+            {app.microservices.length} microservices
+          </Text>
         )}
       </Layout.Vertical>
     </Card>

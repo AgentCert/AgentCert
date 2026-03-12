@@ -1,0 +1,27 @@
+.container {
+  max-width: 900px;
+}
+
+.detailCard {
+  border-radius: 8px;
+}
+
+.section {
+  border-bottom: 1px solid var(--grey-200);
+  padding-bottom: var(--spacing-large);
+}
+
+.capabilityTag {
+  background-color: var(--grey-100);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--grey-600);
+}
+
+.capabilities {
+  flex-wrap: wrap;
+}
+
+.infoRow {
+  min-width: 160px;
+}

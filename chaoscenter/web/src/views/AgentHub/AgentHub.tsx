@@ -3,10 +3,11 @@ import { Color, FontVariation } from '@harnessio/design-system';
 import { Card, Container, Layout, Text } from '@harnessio/uicore';
 import { Icon } from '@harnessio/icons';
 import React from 'react';
+import { useHistory } from 'react-router-dom';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
 import type { AgentHubCategory, AgentHubEntry } from '@api/entities';
 import type { ListAgentHubCategoriesRequest, ListAgentHubCategoriesResponse } from '@api/core';
-import { useDocumentTitle } from '@hooks';
+import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
 import { useStrings } from '@strings';
 import Loader from '@components/Loader';
 import css from './AgentHub.module.scss';
@@ -19,6 +20,7 @@ interface AgentHubViewProps {
   ) => Promise<ApolloQueryResult<ListAgentHubCategoriesResponse>>;
 }
 
+/* DeploymentStatusBadge hidden as part of UI-changes branch
 function DeploymentStatusBadge({ isDeployed, status }: { isDeployed: boolean; status: string }): React.ReactElement {
   const { getString } = useStrings();
   return (
@@ -32,10 +34,18 @@ function DeploymentStatusBadge({ isDeployed, status }: { isDeployed: boolean; st
     </Layout.Horizontal>
   );
 }
+*/
 
 function AgentCard({ agent }: { agent: AgentHubEntry }): React.ReactElement {
+  const history = useHistory();
+  const paths = useRouteWithBaseUrl();
   return (
-    <Card className={css.agentCard} elevation={1}>
+    <Card
+      className={css.agentCard}
+      elevation={1}
+      interactive
+      onClick={() => history.push(paths.toAgentDetail({ agentName: agent.name }))}
+    >
       <Layout.Vertical spacing="medium" padding="medium">
         <Layout.Horizontal flex={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <Layout.Horizontal spacing="small" flex={{ alignItems: 'center' }}>
@@ -44,7 +54,6 @@ function AgentCard({ agent }: { agent: AgentHubEntry }): React.ReactElement {
               {agent.displayName}
             </Text>
           </Layout.Horizontal>
-          <DeploymentStatusBadge isDeployed={agent.isDeployed} status={agent.deploymentStatus} />
         </Layout.Horizontal>
         <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_600} lineClamp={2}>
           {agent.description}
