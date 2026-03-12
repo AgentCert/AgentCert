@@ -1,0 +1,37 @@
+.container {
+  max-width: 900px;
+}
+
+.detailCard {
+  border-radius: 8px;
+}
+
+.section {
+  border-bottom: 1px solid var(--grey-200);
+  padding-bottom: var(--spacing-large);
+}
+
+.infoRow {
+  min-width: 160px;
+}
+
+.microserviceList {
+  background-color: var(--grey-50);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.microserviceRow {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--grey-100);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.microserviceHeader {
+  background-color: var(--grey-100);
+  padding: 8px 12px;
+  border-radius: 4px 4px 0 0;
+}
