@@ -2,6 +2,7 @@ package chaos_infrastructure
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -19,12 +20,33 @@ type SubscriberConfigurations struct {
 	TLSCert        string
 }
 
+// getOutboundIP returns the preferred outbound IP of this machine.
+// This is the IP that K8s pods on the same network can reach.
+func getOutboundIP() string {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
+}
+
 func GetEndpoint(host string) (string, error) {
-	// returns endpoint from env, if provided by user
+	// 1. Explicit env var takes priority
 	if utils.Config.ChaosCenterUiEndpoint != "" {
 		return utils.Config.ChaosCenterUiEndpoint + "/query", nil
 	}
 
+	// 2. Auto-detect the machine's outbound IP so subscriber pods can reach us
+	if ip := getOutboundIP(); ip != "" {
+		port := utils.Config.RestPort
+		endpoint := fmt.Sprintf("http://%s:%s/query", ip, port)
+		log.Infof("CHAOS_CENTER_UI_ENDPOINT not set, auto-detected SERVER_ADDR: %s", endpoint)
+		return endpoint, nil
+	}
+
+	// 3. Fallback to the request host
 	return host + "/query", nil
 }
 
