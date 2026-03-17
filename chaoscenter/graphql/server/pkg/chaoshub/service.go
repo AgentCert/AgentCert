@@ -734,12 +734,19 @@ func (c *chaosHubService) ListPredefinedExperiments(ctx context.Context, hubID s
 		return nil, err
 	}
 
-	var hubPath string
+	var basePath string
 	if hub.IsDefault {
-		hubPath = DefaultPath + "default/" + hub.Name + "/experiments/"
+		basePath = DefaultPath + "default/" + hub.Name + "/"
 	} else {
-		hubPath = DefaultPath + projectID + "/" + hub.Name + "/experiments/"
+		basePath = DefaultPath + projectID + "/" + hub.Name + "/"
 	}
+
+	hubPath, err := resolvePredefinedExperimentsPath(basePath)
+	if err != nil {
+		log.WithFields(log.Fields{"hubID": hubID, "hubPath": basePath}).WithError(err).Warn("predefined experiments directory not found")
+		return []*model.PredefinedExperimentList{}, nil
+	}
+
 	var predefinedWorkflows []*model.PredefinedExperimentList
 	files, err := os.ReadDir(hubPath)
 	if err != nil {
@@ -793,12 +800,19 @@ func (c *chaosHubService) GetPredefinedExperiment(ctx context.Context, hubID str
 	if err != nil {
 		return nil, err
 	}
-	var hubPath string
+	var basePath string
 	if hub.IsDefault {
-		hubPath = DefaultPath + "default/" + hub.Name + "/experiments/"
+		basePath = DefaultPath + "default/" + hub.Name + "/"
 	} else {
-		hubPath = DefaultPath + projectID + "/" + hub.Name + "/experiments/"
+		basePath = DefaultPath + projectID + "/" + hub.Name + "/"
 	}
+
+	hubPath, err := resolvePredefinedExperimentsPath(basePath)
+	if err != nil {
+		log.WithFields(log.Fields{"hubID": hubID, "hubPath": basePath}).WithError(err).Warn("predefined experiments directory not found")
+		return []*model.PredefinedExperimentList{}, nil
+	}
+
 	var predefinedWorkflows []*model.PredefinedExperimentList
 
 	for _, experiment := range experiments {
@@ -809,6 +823,25 @@ func (c *chaosHubService) GetPredefinedExperiment(ctx context.Context, hubID str
 	}
 
 	return predefinedWorkflows, nil
+}
+
+func resolvePredefinedExperimentsPath(basePath string) (string, error) {
+	candidates := []string{
+		basePath + "experiments/",
+		basePath + "workflows/",
+	}
+
+	for _, path := range candidates {
+		exists, err := utils.IsFileExisting(path)
+		if err != nil {
+			return "", err
+		}
+		if exists {
+			return path, nil
+		}
+	}
+
+	return "", fmt.Errorf("neither experiments/ nor workflows/ exists under %s", basePath)
 }
 
 func (c *chaosHubService) getPredefinedExperimentDetails(experimentsPath string, experiment string) *model.PredefinedExperimentList {
