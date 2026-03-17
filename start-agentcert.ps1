@@ -189,7 +189,6 @@ $gqlLauncher = @"
 $commonEnv
 `$env:LITMUS_AUTH_GRPC_ENDPOINT = "localhost"
 `$env:LITMUS_AUTH_GRPC_PORT = "3030"
-`$env:CHAOS_CENTER_UI_ENDPOINT = "http://localhost:8080"
 Set-Location "$gqlPath"
 .\server.exe
 "@

@@ -95,30 +95,30 @@ NC='\033[0m'
 
 print_header() {
     echo ""
-    echo -e "${BLUE}â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—${NC}"
-    echo -e "${BLUE}â•‘ ${CYAN}$1${BLUE}${NC}"
-    echo -e "${BLUE}â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•${NC}"
+    echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║ ${CYAN}$1${BLUE}${NC}"
+    echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
 
 print_section() {
-    echo -e "${CYAN}â†’ $1${NC}"
+    echo -e "${CYAN}→ $1${NC}"
 }
 
 print_success() {
-    echo -e "${GREEN}âœ“ $1${NC}"
+    echo -e "${GREEN}✓ $1${NC}"
 }
 
 print_info() {
-    echo -e "${BLUE}â„¹ $1${NC}"
+    echo -e "${BLUE}ℹ $1${NC}"
 }
 
 print_warning() {
-    echo -e "${YELLOW}âš  $1${NC}"
+    echo -e "${YELLOW}⚠ $1${NC}"
 }
 
 print_error() {
-    echo -e "${RED}âœ— $1${NC}"
+    echo -e "${RED}✗ $1${NC}"
 }
 
 log_to_file() {
@@ -240,22 +240,6 @@ sync_langfuse_env_from_dotenv() {
 
         kubectl -n "$NAMESPACE" patch secret litmus-portal-admin-secret --type merge -p "$sec_patch" || true
     fi
-}
-
-sync_mongodb_connection_to_cluster() {
-    # Update MongoDB connection string in cluster to use minikube host IP
-    local host_ip
-    host_ip=$(get_minikube_host_ip)
-    if [ -z "$host_ip" ]; then
-        print_warning "Unable to resolve minikube host IP. Skipping MongoDB connection sync"
-        return 0
-    fi
-
-    print_section "Syncing MongoDB connection to cluster"
-    local db_server="mongodb://root:1234@${host_ip}:27017/admin"
-    local cm_patch="{\"data\":{\"DB_SERVER\":\"$(json_escape "$db_server")\"}}"
-    kubectl -n "$NAMESPACE" patch configmap litmus-portal-admin-config --type merge -p "$cm_patch" || true
-    print_success "MongoDB connection updated to use host IP: $host_ip"
 }
 
 # ============================================================================
@@ -568,9 +552,6 @@ deploy_manifest() {
     # Sync Langfuse values from AI_Ops .env into cluster config/secret
     sync_langfuse_env_from_dotenv
     
-    # Sync MongoDB connection to use minikube host IP
-    sync_mongodb_connection_to_cluster
-    
     # Apply Litmus configuration fixes for offline/minikube environments
     print_info "Applying Litmus configuration fixes..."
     bash "$SCRIPT_DIR/fix-litmus-config.sh" "$NAMESPACE" || print_warning "Litmus config fixes encountered an issue, but deployment continues"
@@ -625,7 +606,6 @@ sync_envs_if_namespace_exists() {
         print_header "Syncing Env to Running Cluster"
         sync_azure_env_from_dotenv
         sync_langfuse_env_from_dotenv
-        sync_mongodb_connection_to_cluster
         print_info "Restarting GraphQL Server to pick env changes"
         kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE" || true
     fi
@@ -685,7 +665,7 @@ main() {
     display_info
     display_next
     
-    print_header "âœ“ Pipeline Complete!"
+    print_header "✓ Pipeline Complete!"
     log_to_file "========== Build Completed =========="
 }
 
