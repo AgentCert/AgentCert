@@ -195,12 +195,121 @@ func roleSatisfiesRequirements(role *k8srbacv1.ClusterRole, requirements []rbacR
 	return missing
 }
 
+func rulesSatisfyRequirements(rules []k8srbacv1.PolicyRule, requirements []rbacRequirement) []rbacRequirement {
+	missing := make([]rbacRequirement, 0)
+	for _, req := range requirements {
+		satisfied := false
+		for _, rule := range rules {
+			if policyRuleAllows(rule, req) {
+				satisfied = true
+				break
+			}
+		}
+		if !satisfied {
+			missing = append(missing, req)
+		}
+	}
+	return missing
+}
+
 func formatRequirement(req rbacRequirement) string {
 	resource := req.Resource
 	if req.APIGroup != "" {
 		resource = fmt.Sprintf("%s.%s", req.Resource, req.APIGroup)
 	}
 	return fmt.Sprintf("%s %s", req.Verb, resource)
+}
+
+func normalizeRBACNamePart(in string) string {
+	in = strings.ToLower(strings.TrimSpace(in))
+	if in == "" {
+		return "default"
+	}
+	replacer := strings.NewReplacer(
+		"/", "-",
+		":", "-",
+		"_", "-",
+		".", "-",
+		" ", "-",
+	)
+	out := replacer.Replace(in)
+	out = strings.Trim(out, "-")
+	if out == "" {
+		return "default"
+	}
+	return out
+}
+
+func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccount string) error {
+	const roleName = "litmus-dynamic-app-helm"
+
+	bindingName := fmt.Sprintf(
+		"%s-%s-%s",
+		roleName,
+		normalizeRBACNamePart(infraNamespace),
+		normalizeRBACNamePart(serviceAccount),
+	)
+
+	requiredRole := &k8srbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{Name: roleName},
+		Rules: []k8srbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"namespaces"},
+				Verbs:     []string{"create", "patch", "update"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+			},
+		},
+	}
+
+	if existingRole, err := clientset.RbacV1().ClusterRoles().Get(ctx, roleName, metav1.GetOptions{}); err != nil {
+		if _, createErr := clientset.RbacV1().ClusterRoles().Create(ctx, requiredRole, metav1.CreateOptions{}); createErr != nil {
+			return fmt.Errorf("failed creating clusterrole %s: %w", roleName, createErr)
+		}
+	} else {
+		requiredRole.ResourceVersion = existingRole.ResourceVersion
+		if _, updateErr := clientset.RbacV1().ClusterRoles().Update(ctx, requiredRole, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("failed updating clusterrole %s: %w", roleName, updateErr)
+		}
+	}
+
+	requiredBinding := &k8srbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: bindingName},
+		Subjects: []k8srbacv1.Subject{{
+			Kind:      "ServiceAccount",
+			Name:      serviceAccount,
+			Namespace: infraNamespace,
+		}},
+		RoleRef: k8srbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     roleName,
+		},
+	}
+
+	if existingBinding, err := clientset.RbacV1().ClusterRoleBindings().Get(ctx, bindingName, metav1.GetOptions{}); err != nil {
+		if _, createErr := clientset.RbacV1().ClusterRoleBindings().Create(ctx, requiredBinding, metav1.CreateOptions{}); createErr != nil {
+			return fmt.Errorf("failed creating clusterrolebinding %s: %w", bindingName, createErr)
+		}
+	} else {
+		requiredBinding.ResourceVersion = existingBinding.ResourceVersion
+		if _, updateErr := clientset.RbacV1().ClusterRoleBindings().Update(ctx, requiredBinding, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("failed updating clusterrolebinding %s: %w", bindingName, updateErr)
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"clusterRole":         roleName,
+		"clusterRoleBinding":  bindingName,
+		"serviceAccount":      serviceAccount,
+		"serviceAccountNs":    infraNamespace,
+	}).Info("ensured dynamic app Helm RBAC binding")
+
+	return nil
 }
 
 func normalizeInstallTemplateArgs(args []string) ([]string, bool) {
@@ -468,9 +577,22 @@ func detectAppKindFromCluster(clientset *kubernetes.Clientset, namespace string,
 		}
 	}
 
-	// Fall back to provided value if nothing detected
-	logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selectors": selectors, "fallback": fallback}).Warn("Could not detect app kind, using fallback")
-	return fallback
+	// Fall back conservatively if nothing is detected.
+	// In practice most app targets are Deployments; preserving stale StatefulSet often causes TARGET_SELECTION_ERROR.
+	safeFallback := strings.ToLower(strings.TrimSpace(fallback))
+	switch safeFallback {
+	case "deployment", "statefulset", "daemonset":
+	default:
+		safeFallback = "deployment"
+	}
+
+	if safeFallback == "statefulset" {
+		logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selectors": selectors, "fallback": fallback}).Warn("Could not detect app kind, overriding statefulset fallback to deployment")
+		return "deployment"
+	}
+
+	logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selectors": selectors, "fallback": safeFallback}).Warn("Could not detect app kind, using fallback")
+	return safeFallback
 }
 
 // normalizeChaosEngineAppKind normalizes the appkind in ChaosEngine by detecting actual resource type from cluster
@@ -667,25 +789,51 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 		return fmt.Errorf("failed RBAC preflight: unable to create kubernetes client: %w", err)
 	}
 
+	if err := ensureDynamicAppHelmRBAC(ctx, clientset, infraNamespace, serviceAccount); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"infraNamespace":  infraNamespace,
+			"serviceAccount": serviceAccount,
+		}).WithError(err).Warn("RBAC preflight auto-remediation skipped; continuing with RBAC validation")
+	}
+
 	bindings, err := clientset.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed RBAC preflight: unable to list ClusterRoleBindings: %w", err)
 	}
 
 	boundClusterRoles := make(map[string]struct{})
+	boundRoles := make(map[string]struct{})
 	for _, binding := range bindings.Items {
 		for _, subject := range binding.Subjects {
 			if subject.Kind == "ServiceAccount" && subject.Name == serviceAccount && subject.Namespace == infraNamespace {
 				if binding.RoleRef.Kind == "ClusterRole" {
 					boundClusterRoles[binding.RoleRef.Name] = struct{}{}
+				} else if binding.RoleRef.Kind == "Role" {
+					boundRoles[binding.RoleRef.Name] = struct{}{}
 				}
 			}
 		}
 	}
 
-	if len(boundClusterRoles) == 0 {
+	if roleBindings, roleBindErr := clientset.RbacV1().RoleBindings(infraNamespace).List(ctx, metav1.ListOptions{}); roleBindErr == nil {
+		for _, binding := range roleBindings.Items {
+			for _, subject := range binding.Subjects {
+				if subject.Kind == "ServiceAccount" && subject.Name == serviceAccount && subject.Namespace == infraNamespace {
+					if binding.RoleRef.Kind == "ClusterRole" {
+						boundClusterRoles[binding.RoleRef.Name] = struct{}{}
+					} else if binding.RoleRef.Kind == "Role" {
+						boundRoles[binding.RoleRef.Name] = struct{}{}
+					}
+				}
+			}
+		}
+	} else {
+		logrus.WithField("infraNamespace", infraNamespace).WithError(roleBindErr).Warn("RBAC preflight: unable to list namespace RoleBindings")
+	}
+
+	if len(boundClusterRoles) == 0 && len(boundRoles) == 0 {
 		return fmt.Errorf(
-			"RBAC preflight failed for serviceaccount %s/%s: no ClusterRoleBinding found. "+
+			"RBAC preflight failed for serviceaccount %s/%s: no RoleBinding/ClusterRoleBinding found. "+
 				"Bind this service account to a role with namespace patch/create/update and secrets list/get/watch/create/update/patch/delete permissions",
 			infraNamespace,
 			serviceAccount,
@@ -693,6 +841,18 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 	}
 
 	remaining := append([]rbacRequirement{}, dynamicAppHelmRBACRequirements...)
+	for roleName := range boundRoles {
+		role, roleErr := clientset.RbacV1().Roles(infraNamespace).Get(ctx, roleName, metav1.GetOptions{})
+		if roleErr != nil {
+			continue
+		}
+
+		remaining = rulesSatisfyRequirements(role.Rules, remaining)
+		if len(remaining) == 0 {
+			break
+		}
+	}
+
 	for clusterRoleName := range boundClusterRoles {
 		role, roleErr := clientset.RbacV1().ClusterRoles().Get(ctx, clusterRoleName, metav1.GetOptions{})
 		if roleErr != nil {

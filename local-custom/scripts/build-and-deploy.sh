@@ -243,6 +243,52 @@ sync_langfuse_env_from_dotenv() {
 }
 
 # ============================================================================
+# RUNTIME RBAC BOOTSTRAP (LITMUS-EXP)
+# ============================================================================
+ensure_litmus_exp_runtime_rbac() {
+        print_header "Ensuring Runtime RBAC in litmus-exp"
+
+        local infra_namespace="litmus-exp"
+        local infra_sa="litmus-exp"
+
+        if ! kubectl get namespace "$infra_namespace" &> /dev/null; then
+                print_info "Namespace $infra_namespace not found yet. Skipping runtime RBAC bootstrap."
+                return 0
+        fi
+
+        if ! kubectl -n "$infra_namespace" get serviceaccount "$infra_sa" &> /dev/null; then
+                print_info "ServiceAccount $infra_namespace/$infra_sa not found yet. Skipping runtime RBAC bootstrap."
+                return 0
+        fi
+
+        print_section "Applying cluster-scope watcher permissions for subscriber"
+        kubectl create clusterrolebinding infra-cluster-role-binding-litmus-exp \
+                --clusterrole=infra-cluster-role \
+                --serviceaccount="${infra_namespace}:${infra_sa}" \
+                --dry-run=client -o yaml | kubectl apply -f -
+
+        print_section "Applying namespace pod-read permissions for subscriber"
+        kubectl -n "$infra_namespace" create role subscriber-pod-reader \
+            --verb=get,list,watch \
+            --resource=pods \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+        kubectl -n "$infra_namespace" create rolebinding subscriber-pod-reader-binding \
+            --role=subscriber-pod-reader \
+            --serviceaccount="${infra_namespace}:${infra_sa}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+        if kubectl -n "$infra_namespace" get deployment subscriber &> /dev/null; then
+                print_section "Restarting subscriber to pick updated RBAC"
+                kubectl -n "$infra_namespace" rollout restart deployment/subscriber || true
+        else
+                print_info "Subscriber deployment not found in $infra_namespace (yet)."
+        fi
+
+        print_success "Runtime RBAC bootstrap check complete"
+}
+
+# ============================================================================
 # PREREQUISITE CHECK
 # ============================================================================
 check_prerequisites() {
@@ -606,6 +652,7 @@ sync_envs_if_namespace_exists() {
         print_header "Syncing Env to Running Cluster"
         sync_azure_env_from_dotenv
         sync_langfuse_env_from_dotenv
+        ensure_litmus_exp_runtime_rbac
         print_info "Restarting GraphQL Server to pick env changes"
         kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE" || true
     fi
@@ -660,7 +707,7 @@ main() {
     cleanup_generated_code
     
     [ "$SKIP_BUILD" = false ] && { build_all_images; load_to_minikube; } || print_warning "Skipping build"
-    [ "$SKIP_DEPLOY" = false ] && { create_namespace; deploy_manifest; sync_langfuse_env_from_dotenv; sync_azure_env_from_dotenv; kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE"; verify_pods; } || print_warning "Skipping deploy"
+    [ "$SKIP_DEPLOY" = false ] && { create_namespace; deploy_manifest; sync_langfuse_env_from_dotenv; sync_azure_env_from_dotenv; ensure_litmus_exp_runtime_rbac; kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE"; verify_pods; } || print_warning "Skipping deploy"
     
     display_info
     display_next

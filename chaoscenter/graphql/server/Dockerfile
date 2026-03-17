@@ -25,8 +25,11 @@ RUN echo "=== Current Directory ===" && pwd && ls -la
 # Generate GraphQL code
 RUN echo "=== Running go generate ===" && go generate ./... && echo "=== go generate completed ===" 
 
-# Verify generated files exist
-RUN echo "=== Checking generated files ===" && ls -lh graph/generated/ && grep -l "chartData\|ChartData" graph/generated/*.go || echo "WARNING: chartData not found in generated code!"
+# Verify generated files exist and are non-empty
+RUN echo "=== Checking generated files ===" \
+    && ls -lh graph/generated/ \
+    && test -s graph/generated/generated.go \
+    && echo "Generated GraphQL code is present"
 
 RUN CGO_ENABLED=0 go build -o /output/server -v
 

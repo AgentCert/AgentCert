@@ -563,6 +563,48 @@ func (c *chaosExperimentService) applyRBACPatch(wf *v1alpha1.Workflow) error {
 			Image:   "litmuschaos/k8s:latest",
 			Command: []string{"sh", "-c"},
 			Args: []string{`set -eu
+
+discover_target_subject() {
+	SA_NAME=""
+	SA_NAMESPACE=""
+
+	# Prefer the existing infra binding subject if already configured.
+	SA_NAME=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].name}' 2>/dev/null || true)
+	SA_NAMESPACE=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].namespace}' 2>/dev/null || true)
+
+	# Otherwise, discover likely control-plane server deployment and use its service account.
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		CANDIDATE=$(kubectl get deploy -A --no-headers 2>/dev/null | awk '$2 ~ /(server|graphql|portal)/ {print $1" "$2; exit}')
+		if [ -n "$CANDIDATE" ]; then
+			SA_NAMESPACE=$(echo "$CANDIDATE" | awk '{print $1}')
+			DEPLOY_NAME=$(echo "$CANDIDATE" | awk '{print $2}')
+			SA_NAME=$(kubectl -n "$SA_NAMESPACE" get deploy "$DEPLOY_NAME" -o jsonpath='{.spec.template.spec.serviceAccountName}' 2>/dev/null || true)
+		fi
+	fi
+
+	# Final fallback: this workflow pod's own service account.
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		SA_NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || true)
+		POD_NAME=$(hostname)
+		if [ -n "$SA_NAMESPACE" ] && [ -n "$POD_NAME" ]; then
+			SA_NAME=$(kubectl -n "$SA_NAMESPACE" get pod "$POD_NAME" -o jsonpath='{.spec.serviceAccountName}' 2>/dev/null || true)
+		fi
+	fi
+
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		echo "[rbac-patch] failed to discover service account subject"
+		return 1
+	fi
+
+	echo "$SA_NAME|$SA_NAMESPACE"
+}
+
+SUBJECT=$(discover_target_subject)
+SA_NAME=$(echo "$SUBJECT" | cut -d'|' -f1)
+SA_NAMESPACE=$(echo "$SUBJECT" | cut -d'|' -f2)
+
+echo "[rbac-patch] applying workload-discovery RBAC for serviceaccount ${SA_NAMESPACE}/${SA_NAME}"
+
 kubectl apply -f - <<'EOF'
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -575,20 +617,13 @@ rules:
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["list", "get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: litmus-workload-discoverer-binding
-subjects:
-- kind: ServiceAccount
-  name: litmus-server-account
-  namespace: litmus-chaos
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: litmus-workload-discoverer
 EOF
+
+kubectl create clusterrolebinding litmus-workload-discoverer-binding \
+	--clusterrole=litmus-workload-discoverer \
+	--serviceaccount="${SA_NAMESPACE}:${SA_NAME}" \
+	--dry-run=client -o yaml | kubectl apply -f -
+
 echo "[rbac-patch] workload-discovery RBAC applied"`},
 		},
 	}
