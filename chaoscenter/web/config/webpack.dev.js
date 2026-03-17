@@ -10,6 +10,9 @@ require('dotenv').config();
 const CONTEXT = process.cwd();
 const baseUrl = process.env.BASE_URL;
 const targetLocalHost = (process.env.TARGET_LOCALHOST && JSON.parse(process.env.TARGET_LOCALHOST)) ?? true; // set to false to target baseUrl environment instead of localhost
+const frontendPort = Number.parseInt(process.env.FRONTEND_PORT || '', 10) || 2001;
+const graphQLProxyPort = Number.parseInt(process.env.GQL_PROXY_PORT || '', 10) || 8080;
+const authProxyPort = Number.parseInt(process.env.AUTH_PROXY_PORT || '', 10) || 3030;
 
 const certificateExists = fs.existsSync(path.join(CONTEXT, 'certificates/localhost.pem'));
 
@@ -29,7 +32,7 @@ const devConfig = {
   devServer: {
     static: [path.join(process.cwd(), 'src/static')],
     historyApiFallback: true,
-    port: 2001,
+    port: frontendPort,
     server: {
       type: 'https',
       options: {
@@ -43,7 +46,7 @@ const devConfig = {
         target: process.env.CHAOS_MANAGER
           ? process.env.CHAOS_MANAGER
           : targetLocalHost
-          ? 'http://localhost:8080'
+          ? `http://localhost:${graphQLProxyPort}`
           : `${baseUrl}/api`,
         secure: false,
         changeOrigin: true,
@@ -54,7 +57,11 @@ const devConfig = {
         target: process.env.CHAOS_MANAGER
           ? process.env.CHAOS_MANAGER
           : targetLocalHost
+<<<<<<< Updated upstream
           ? 'http://localhost:3030'
+=======
+          ? `http://localhost:${authProxyPort}`
+>>>>>>> Stashed changes
           : `${baseUrl}/auth`,
         secure: false,
         changeOrigin: true,

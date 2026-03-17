@@ -14,6 +14,7 @@ ENV GOOS=${TARGETOS} \
 
 RUN go env
 RUN go mod download
+RUN go mod tidy
 
 # Clean existing generated files to force regeneration
 RUN rm -rf graph/generated/ graph/model/models_gen.go graph/model/models.go 2>/dev/null || true

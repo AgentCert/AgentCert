@@ -151,7 +151,7 @@ metadata:
 rules:
   - apiGroups: [ "" ]
     resources: [ "secrets" ]
-    verbs: [ "get", "create", "update", "patch" ]
+    verbs: [ "get", "list", "watch", "create", "update", "patch", "delete" ]
 
   - apiGroups: [ "" ]
     resources: [ "configmaps"]
