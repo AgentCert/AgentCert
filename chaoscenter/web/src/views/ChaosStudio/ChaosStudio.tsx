@@ -169,7 +169,9 @@ export default function ChaosStudioView({
         experiment?.manifest as KubernetesExperimentManifest
       );
 
-      if (doesProbeExists) {
+      // Only warn in EDIT mode: in CREATE/CLONE the probes are pre-normalization and the
+      // backend will extract them into probeRef annotations automatically.
+      if (doesProbeExists && mode === StudioMode.EDIT) {
         showWarning(getString('probeMetadataExists'));
       }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -389,11 +390,13 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 				continue
 			}
 			rawData := artifact[0].Raw.Data
-			if normalizedRaw, changed, normErr := normalizePodDeleteProbeSettings(rawData); normErr != nil {
-				logrus.WithError(normErr).Warn("failed to normalize pod-delete probe settings")
-			} else if changed {
-				artifact[0].Raw.Data = normalizedRaw
-				rawData = normalizedRaw
+			if !workflow.IsCustomExperiment {
+				if normalizedRaw, changed, normErr := normalizeProbeExecutionSettings(rawData); normErr != nil {
+					logrus.WithError(normErr).Warn("failed to normalize probe execution settings")
+				} else if changed {
+					artifact[0].Raw.Data = normalizedRaw
+					rawData = normalizedRaw
+				}
 			}
 
 			var data = rawData
@@ -568,26 +571,27 @@ discover_target_subject() {
 	SA_NAME=""
 	SA_NAMESPACE=""
 
-	# Prefer the existing infra binding subject if already configured.
-	SA_NAME=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].name}' 2>/dev/null || true)
-	SA_NAMESPACE=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].namespace}' 2>/dev/null || true)
+	# Prefer this workflow pod's own service account (the identity that runs
+	# install/apply steps and needs the permissions on any cluster).
+	SA_NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || true)
+	POD_NAME=$(hostname)
+	if [ -n "$SA_NAMESPACE" ] && [ -n "$POD_NAME" ]; then
+		SA_NAME=$(kubectl -n "$SA_NAMESPACE" get pod "$POD_NAME" -o jsonpath='{.spec.serviceAccountName}' 2>/dev/null || true)
+	fi
 
-	# Otherwise, discover likely control-plane server deployment and use its service account.
+	# Otherwise, prefer the existing infra binding subject if already configured.
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		SA_NAME=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].name}' 2>/dev/null || true)
+		SA_NAMESPACE=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].namespace}' 2>/dev/null || true)
+	fi
+
+	# Last fallback: discover likely control-plane server deployment SA.
 	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
 		CANDIDATE=$(kubectl get deploy -A --no-headers 2>/dev/null | awk '$2 ~ /(server|graphql|portal)/ {print $1" "$2; exit}')
 		if [ -n "$CANDIDATE" ]; then
 			SA_NAMESPACE=$(echo "$CANDIDATE" | awk '{print $1}')
 			DEPLOY_NAME=$(echo "$CANDIDATE" | awk '{print $2}')
 			SA_NAME=$(kubectl -n "$SA_NAMESPACE" get deploy "$DEPLOY_NAME" -o jsonpath='{.spec.template.spec.serviceAccountName}' 2>/dev/null || true)
-		fi
-	fi
-
-	# Final fallback: this workflow pod's own service account.
-	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
-		SA_NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || true)
-		POD_NAME=$(hostname)
-		if [ -n "$SA_NAMESPACE" ] && [ -n "$POD_NAME" ]; then
-			SA_NAME=$(kubectl -n "$SA_NAMESPACE" get pod "$POD_NAME" -o jsonpath='{.spec.serviceAccountName}' 2>/dev/null || true)
 		fi
 	fi
 
@@ -602,6 +606,10 @@ discover_target_subject() {
 SUBJECT=$(discover_target_subject)
 SA_NAME=$(echo "$SUBJECT" | cut -d'|' -f1)
 SA_NAMESPACE=$(echo "$SUBJECT" | cut -d'|' -f2)
+
+RBAC_SUBJECT_SUFFIX=$(printf "%s-%s" "$SA_NAMESPACE" "$SA_NAME" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//' | cut -c1-25)
+WORKLOAD_CRB_NAME="litmus-workload-discoverer-${RBAC_SUBJECT_SUFFIX}"
+APP_RB_NAME="litmus-app-installer-binding-${RBAC_SUBJECT_SUFFIX}"
 
 echo "[rbac-patch] applying workload-discovery RBAC for serviceaccount ${SA_NAMESPACE}/${SA_NAME}"
 
@@ -619,8 +627,25 @@ rules:
   verbs: ["list", "get"]
 EOF
 
-kubectl create clusterrolebinding litmus-workload-discoverer-binding \
+kubectl create clusterrolebinding "${WORKLOAD_CRB_NAME}" \
 	--clusterrole=litmus-workload-discoverer \
+	--serviceaccount="${SA_NAMESPACE}:${SA_NAME}" \
+	--dry-run=client -o yaml | kubectl apply -f -
+
+TARGET_APP_NS="{{workflow.parameters.appNamespace}}"
+if [ -z "${TARGET_APP_NS}" ]; then
+	TARGET_APP_NS="{{workflow.parameters.adminModeNamespace}}"
+fi
+
+echo "[rbac-patch] ensuring namespace install RBAC in ${TARGET_APP_NS} for ${SA_NAMESPACE}/${SA_NAME}"
+
+kubectl -n "${TARGET_APP_NS}" create role litmus-app-installer \
+	--verb=get,list,watch,create,update,patch,delete \
+	--resource=configmaps,secrets,serviceaccounts,services,pods,persistentvolumeclaims,jobs.batch,cronjobs.batch,deployments.apps,replicasets.apps,statefulsets.apps,daemonsets.apps,roles.rbac.authorization.k8s.io,rolebindings.rbac.authorization.k8s.io \
+	--dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n "${TARGET_APP_NS}" create rolebinding "${APP_RB_NAME}" \
+	--role=litmus-app-installer \
 	--serviceaccount="${SA_NAMESPACE}:${SA_NAME}" \
 	--dry-run=client -o yaml | kubectl apply -f -
 
@@ -1191,9 +1216,9 @@ exit 0`,
 	return nil
 }
 
-// normalizePodDeleteProbeSettings reduces false negatives caused by transient 500 responses
-// during pod-delete chaos by enforcing edge probe mode with bounded run properties.
-func normalizePodDeleteProbeSettings(raw string) (string, bool, error) {
+// normalizeProbeExecutionSettings applies app-agnostic probe hardening for chaos
+// execution by forcing bounded HTTP probe behavior.
+func normalizeProbeExecutionSettings(raw string) (string, bool, error) {
 	if strings.TrimSpace(raw) == "" {
 		return raw, false, nil
 	}
@@ -1219,20 +1244,96 @@ func normalizePodDeleteProbeSettings(raw string) (string, bool, error) {
 	}
 
 	changed := false
+
+	setMinDuration := func(runProps map[string]interface{}, key string, minValue string) bool {
+		cur, exists := runProps[key]
+		if !exists || cur == nil || strings.TrimSpace(toString(cur)) == "" {
+			runProps[key] = minValue
+			return true
+		}
+
+		curDur, errCur := time.ParseDuration(strings.TrimSpace(toString(cur)))
+		minDur, errMin := time.ParseDuration(minValue)
+		if errCur != nil || errMin != nil {
+			runProps[key] = minValue
+			return true
+		}
+
+		if curDur < minDur {
+			runProps[key] = minValue
+			return true
+		}
+		return false
+	}
+
+	setMinInt := func(runProps map[string]interface{}, key string, minValue int) bool {
+		cur, exists := runProps[key]
+		if !exists || cur == nil || strings.TrimSpace(toString(cur)) == "" {
+			runProps[key] = minValue
+			return true
+		}
+
+		curInt, err := strconv.Atoi(strings.TrimSpace(toString(cur)))
+		if err != nil {
+			runProps[key] = minValue
+			return true
+		}
+
+		if curInt < minValue {
+			runProps[key] = minValue
+			return true
+		}
+		return false
+	}
+
 	for _, expAny := range experiments {
 		exp, ok := expAny.(map[string]interface{})
 		if !ok {
 			continue
 		}
 
-		expName, _ := exp["name"].(string)
-		if strings.ToLower(expName) != "pod-delete" {
-			continue
-		}
-
 		expSpec, ok := exp["spec"].(map[string]interface{})
 		if !ok {
 			continue
+		}
+
+		chaosDurationSec := getChaosDurationSeconds(expSpec)
+		if chaosDurationSec <= 0 {
+			chaosDurationSec = 60
+		}
+
+		recoveryWindowSec := chaosDurationSec * 4
+		if recoveryWindowSec < 120 {
+			recoveryWindowSec = 120
+		}
+		defaultIntervalSec := chaosDurationSec / 30
+		if defaultIntervalSec < 2 {
+			defaultIntervalSec = 2
+		}
+		if defaultIntervalSec > 10 {
+			defaultIntervalSec = 10
+		}
+
+		defaultAttempt := (recoveryWindowSec + defaultIntervalSec - 1) / defaultIntervalSec
+		if defaultAttempt < 5 {
+			defaultAttempt = 5
+		}
+		defaultRetry := (defaultAttempt + 4) / 5
+		if defaultRetry < 3 {
+			defaultRetry = 3
+		}
+
+		defaultInitialDelaySec := chaosDurationSec
+		if defaultInitialDelaySec < 20 {
+			defaultInitialDelaySec = 20
+		}
+		if defaultInitialDelaySec > 120 {
+			defaultInitialDelaySec = 120
+		}
+
+		defaultProbeTimeoutSec := defaultIntervalSec
+		if defaultProbeTimeoutSec < 2 {
+			defaultProbeTimeoutSec = 2
 		}
 
 		probes, ok := expSpec["probe"].([]interface{})
@@ -1246,12 +1347,14 @@ func normalizePodDeleteProbeSettings(raw string) (string, bool, error) {
 				continue
 			}
 
-			probeName, _ := probe["name"].(string)
-			if probeName != "" && !strings.HasPrefix(probeName, "check-catalogue-access-url") {
+			probeType, _ := probe["type"].(string)
+			_, hasHTTPInputs := probe["httpProbe/inputs"]
+			if strings.ToLower(probeType) != "httpprobe" && !hasHTTPInputs {
 				continue
 			}
 
-			if mode, _ := probe["mode"].(string); strings.ToLower(mode) != "edge" {
+			mode, _ := probe["mode"].(string)
+			if strings.TrimSpace(mode) == "" || strings.EqualFold(mode, "continuous") {
 				probe["mode"] = "Edge"
 				changed = true
 			}
@@ -1263,20 +1366,25 @@ func normalizePodDeleteProbeSettings(raw string) (string, bool, error) {
 				changed = true
 			}
 
-			defaults := map[string]interface{}{
-				"probeTimeout":         "10s",
-				"interval":             "5s",
-				"probePollingInterval": "1s",
-				"attempt":              5,
-				"retry":                3,
-				"initialDelay":         "20s",
+			// Hub templates can carry brittle probe settings. Enforce minimum
+			// duration-derived budgets so template runs wait for recovery.
+			if setMinDuration(runProps, "probeTimeout", formatDurationSeconds(defaultProbeTimeoutSec)) {
+				changed = true
 			}
-
-			for key, value := range defaults {
-				if current, exists := runProps[key]; !exists || current == nil || current == "" {
-					runProps[key] = value
-					changed = true
-				}
+			if setMinDuration(runProps, "interval", formatDurationSeconds(defaultIntervalSec)) {
+				changed = true
+			}
+			if setMinDuration(runProps, "probePollingInterval", formatDurationSeconds(defaultIntervalSec)) {
+				changed = true
+			}
+			if setMinDuration(runProps, "initialDelay", formatDurationSeconds(defaultInitialDelaySec)) {
+				changed = true
+			}
+			if setMinInt(runProps, "attempt", defaultAttempt) {
+				changed = true
+			}
+			if setMinInt(runProps, "retry", defaultRetry) {
+				changed = true
 			}
 		}
 	}
@@ -1291,4 +1399,85 @@ func normalizePodDeleteProbeSettings(raw string) (string, bool, error) {
 	}
 
 	return string(out), true, nil
+}
+
+func toString(value interface{}) string {
+	if value == nil {
+		return ""
+	}
+
+	switch v := value.(type) {
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case float32:
+		return strconv.FormatInt(int64(v), 10)
+	case float64:
+		return strconv.FormatInt(int64(v), 10)
+	default:
+		return strings.TrimSpace(fmt.Sprint(value))
+	}
+}
+
+func getChaosDurationSeconds(expSpec map[string]interface{}) int {
+	components, ok := expSpec["components"].(map[string]interface{})
+	if !ok {
+		return 0
+	}
+
+	envList, ok := components["env"].([]interface{})
+	if !ok {
+		return 0
+	}
+
+	parseDuration := func(raw interface{}) int {
+		value := strings.TrimSpace(toString(raw))
+		if value == "" {
+			return 0
+		}
+		seconds, err := strconv.Atoi(value)
+		if err != nil || seconds <= 0 {
+			return 0
+		}
+		return seconds
+	}
+
+	isDurationKey := func(name string) bool {
+		upper := strings.ToUpper(strings.TrimSpace(name))
+		if upper == "TOTAL_CHAOS_DURATION" || upper == "CHAOS_DURATION" {
+			return true
+		}
+		return strings.Contains(upper, "CHAOS") && strings.Contains(upper, "DURATION")
+	}
+
+	for _, envAny := range envList {
+		envItem, ok := envAny.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name := toString(envItem["name"])
+		if !isDurationKey(name) {
+			continue
+		}
+
+		seconds := parseDuration(envItem["value"])
+		if seconds > 0 {
+			return seconds
+		}
+	}
+
+	return 0
+}
+
+func formatDurationSeconds(seconds int) string {
+	if seconds < 1 {
+		seconds = 1
+	}
+	return strconv.Itoa(seconds) + "s"
 }
