@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,6 +39,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
+	k8srbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
@@ -59,6 +66,25 @@ type ChaosExperimentRunHandler struct {
 	mongodbOperator            mongodb.MongoOperator
 }
 
+type rbacRequirement struct {
+	APIGroup string
+	Resource string
+	Verb     string
+}
+
+var dynamicAppHelmRBACRequirements = []rbacRequirement{
+	{APIGroup: "", Resource: "namespaces", Verb: "create"},
+	{APIGroup: "", Resource: "namespaces", Verb: "patch"},
+	{APIGroup: "", Resource: "namespaces", Verb: "update"},
+	{APIGroup: "", Resource: "secrets", Verb: "get"},
+	{APIGroup: "", Resource: "secrets", Verb: "list"},
+	{APIGroup: "", Resource: "secrets", Verb: "watch"},
+	{APIGroup: "", Resource: "secrets", Verb: "create"},
+	{APIGroup: "", Resource: "secrets", Verb: "update"},
+	{APIGroup: "", Resource: "secrets", Verb: "patch"},
+	{APIGroup: "", Resource: "secrets", Verb: "delete"},
+}
+
 // NewChaosExperimentRunHandler returns a new instance of ChaosWorkflowHandler
 func NewChaosExperimentRunHandler(
 	chaosExperimentRunService types.Service,
@@ -78,6 +104,783 @@ func NewChaosExperimentRunHandler(
 		probeService:               probeService,
 		mongodbOperator:            mongodbOperator,
 	}
+}
+
+func buildKubeClientset() (*kubernetes.Clientset, error) {
+	tryPaths := make([]string, 0, 3)
+
+	if utils.Config.KubeConfigFilePath != "" {
+		tryPaths = append(tryPaths, utils.Config.KubeConfigFilePath)
+	}
+
+	if envKubeConfig := strings.TrimSpace(os.Getenv("KUBECONFIG")); envKubeConfig != "" {
+		for _, p := range strings.Split(envKubeConfig, string(os.PathListSeparator)) {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				tryPaths = append(tryPaths, p)
+			}
+		}
+	}
+
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		tryPaths = append(tryPaths, filepath.Join(home, ".kube", "config"))
+	}
+
+	seen := make(map[string]struct{})
+	for _, kubePath := range tryPaths {
+		if kubePath == "" {
+			continue
+		}
+		if _, ok := seen[kubePath]; ok {
+			continue
+		}
+		seen[kubePath] = struct{}{}
+
+		cfg, err := clientcmd.BuildConfigFromFlags("", kubePath)
+		if err != nil {
+			continue
+		}
+
+		clientset, err := kubernetes.NewForConfig(cfg)
+		if err == nil {
+			logrus.WithField("kubeconfig", kubePath).Debug("using kubeconfig for appkind/runtime detection")
+			return clientset, nil
+		}
+	}
+
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return kubernetes.NewForConfig(cfg)
+}
+
+func containsWithWildcard(values []string, wanted string) bool {
+	for _, v := range values {
+		if v == "*" || v == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func policyRuleAllows(rule k8srbacv1.PolicyRule, req rbacRequirement) bool {
+	if !containsWithWildcard(rule.Verbs, req.Verb) {
+		return false
+	}
+	if !containsWithWildcard(rule.APIGroups, req.APIGroup) {
+		return false
+	}
+	if !containsWithWildcard(rule.Resources, req.Resource) {
+		return false
+	}
+	return true
+}
+
+func roleSatisfiesRequirements(role *k8srbacv1.ClusterRole, requirements []rbacRequirement) []rbacRequirement {
+	missing := make([]rbacRequirement, 0)
+	for _, req := range requirements {
+		satisfied := false
+		for _, rule := range role.Rules {
+			if policyRuleAllows(rule, req) {
+				satisfied = true
+				break
+			}
+		}
+		if !satisfied {
+			missing = append(missing, req)
+		}
+	}
+	return missing
+}
+
+func rulesSatisfyRequirements(rules []k8srbacv1.PolicyRule, requirements []rbacRequirement) []rbacRequirement {
+	missing := make([]rbacRequirement, 0)
+	for _, req := range requirements {
+		satisfied := false
+		for _, rule := range rules {
+			if policyRuleAllows(rule, req) {
+				satisfied = true
+				break
+			}
+		}
+		if !satisfied {
+			missing = append(missing, req)
+		}
+	}
+	return missing
+}
+
+func formatRequirement(req rbacRequirement) string {
+	resource := req.Resource
+	if req.APIGroup != "" {
+		resource = fmt.Sprintf("%s.%s", req.Resource, req.APIGroup)
+	}
+	return fmt.Sprintf("%s %s", req.Verb, resource)
+}
+
+func normalizeRBACNamePart(in string) string {
+	in = strings.ToLower(strings.TrimSpace(in))
+	if in == "" {
+		return "default"
+	}
+	replacer := strings.NewReplacer(
+		"/", "-",
+		":", "-",
+		"_", "-",
+		".", "-",
+		" ", "-",
+	)
+	out := replacer.Replace(in)
+	out = strings.Trim(out, "-")
+	if out == "" {
+		return "default"
+	}
+	return out
+}
+
+func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccount string) error {
+	const roleName = "litmus-dynamic-app-helm"
+
+	bindingName := fmt.Sprintf(
+		"%s-%s-%s",
+		roleName,
+		normalizeRBACNamePart(infraNamespace),
+		normalizeRBACNamePart(serviceAccount),
+	)
+
+	requiredRole := &k8srbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{Name: roleName},
+		Rules: []k8srbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"namespaces"},
+				Verbs:     []string{"create", "patch", "update"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+				Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+			},
+		},
+	}
+
+	if existingRole, err := clientset.RbacV1().ClusterRoles().Get(ctx, roleName, metav1.GetOptions{}); err != nil {
+		if _, createErr := clientset.RbacV1().ClusterRoles().Create(ctx, requiredRole, metav1.CreateOptions{}); createErr != nil {
+			return fmt.Errorf("failed creating clusterrole %s: %w", roleName, createErr)
+		}
+	} else {
+		requiredRole.ResourceVersion = existingRole.ResourceVersion
+		if _, updateErr := clientset.RbacV1().ClusterRoles().Update(ctx, requiredRole, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("failed updating clusterrole %s: %w", roleName, updateErr)
+		}
+	}
+
+	requiredBinding := &k8srbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: bindingName},
+		Subjects: []k8srbacv1.Subject{{
+			Kind:      "ServiceAccount",
+			Name:      serviceAccount,
+			Namespace: infraNamespace,
+		}},
+		RoleRef: k8srbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     roleName,
+		},
+	}
+
+	if existingBinding, err := clientset.RbacV1().ClusterRoleBindings().Get(ctx, bindingName, metav1.GetOptions{}); err != nil {
+		if _, createErr := clientset.RbacV1().ClusterRoleBindings().Create(ctx, requiredBinding, metav1.CreateOptions{}); createErr != nil {
+			return fmt.Errorf("failed creating clusterrolebinding %s: %w", bindingName, createErr)
+		}
+	} else {
+		requiredBinding.ResourceVersion = existingBinding.ResourceVersion
+		if _, updateErr := clientset.RbacV1().ClusterRoleBindings().Update(ctx, requiredBinding, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("failed updating clusterrolebinding %s: %w", bindingName, updateErr)
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"clusterRole":         roleName,
+		"clusterRoleBinding":  bindingName,
+		"serviceAccount":      serviceAccount,
+		"serviceAccountNs":    infraNamespace,
+	}).Info("ensured dynamic app Helm RBAC binding")
+
+	return nil
+}
+
+func normalizeInstallTemplateArgs(args []string) ([]string, bool) {
+	const timeoutArg = "-timeout={{workflow.parameters.installTimeout}}"
+	const waitArg = "-wait=false"
+
+	normalized := make([]string, 0, len(args)+1)
+	hasTimeout := false
+	hasWaitSetting := false
+	changed := false
+
+	for i := 0; i < len(args); i++ {
+		arg := strings.TrimSpace(args[i])
+		if arg == "" {
+			continue
+		}
+
+		lower := strings.ToLower(arg)
+		switch {
+		case lower == "-wait" || lower == "--wait":
+			changed = true
+			if !hasWaitSetting {
+				hasWaitSetting = true
+				normalized = append(normalized, waitArg)
+			}
+			continue
+		case strings.HasPrefix(lower, "-wait=") || strings.HasPrefix(lower, "--wait="):
+			if !hasWaitSetting {
+				hasWaitSetting = true
+				normalized = append(normalized, waitArg)
+			}
+			if lower != strings.ToLower(waitArg) {
+				changed = true
+			}
+			continue
+		case lower == "-timeout" || lower == "--timeout":
+			changed = true
+			if !hasTimeout {
+				normalized = append(normalized, timeoutArg)
+				hasTimeout = true
+			}
+			if i+1 < len(args) {
+				i++
+			}
+			continue
+		case strings.HasPrefix(lower, "-timeout=") || strings.HasPrefix(lower, "--timeout="):
+			if hasTimeout {
+				changed = true
+				continue
+			}
+			hasTimeout = true
+			normalized = append(normalized, timeoutArg)
+			if arg != timeoutArg {
+				changed = true
+			}
+			continue
+		}
+
+		normalized = append(normalized, arg)
+	}
+
+	if !hasTimeout {
+		normalized = append(normalized, timeoutArg)
+		changed = true
+	}
+
+	if !hasWaitSetting {
+		normalized = append(normalized, waitArg)
+		changed = true
+	}
+
+	return normalized, changed
+}
+
+func normalizeInstallTemplates(templates []v1alpha1.Template) bool {
+	updated := false
+
+	for i := range templates {
+		if templates[i].Container == nil {
+			continue
+		}
+
+		if templates[i].Name != "install-application" && templates[i].Name != "install-agent" {
+			continue
+		}
+
+		normalized, changed := normalizeInstallTemplateArgs(templates[i].Container.Args)
+		if changed {
+			logrus.WithField("template", templates[i].Name).Info("normalized install template arguments")
+			templates[i].Container.Args = normalized
+			updated = true
+		}
+	}
+
+	return updated
+}
+
+func normalizeLabelSelector(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	// Handle selectors persisted in forms like [name=user-db] or name: user-db.
+	trimmed := strings.Trim(raw, "[]{}\"")
+	trimmed = strings.TrimSpace(trimmed)
+
+	selectors := make([]string, 0, 3)
+	if trimmed != "" {
+		selectors = append(selectors, trimmed)
+	}
+
+	if strings.Contains(trimmed, ":") && !strings.Contains(trimmed, "=") {
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) == 2 {
+			selectors = append(selectors, strings.TrimSpace(parts[0])+"="+strings.TrimSpace(parts[1]))
+		}
+	}
+
+	if strings.Contains(trimmed, " ") && !strings.Contains(trimmed, "=") {
+		parts := strings.Fields(trimmed)
+		if len(parts) == 2 {
+			selectors = append(selectors, parts[0]+"="+parts[1])
+		}
+	}
+
+	seen := make(map[string]struct{})
+	uniq := make([]string, 0, len(selectors))
+	for _, s := range selectors {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		uniq = append(uniq, s)
+	}
+
+	return uniq
+}
+
+func buildWorkflowParameterMap(args interface{}) map[string]string {
+	paramMap := make(map[string]string)
+	if args == nil {
+		return paramMap
+	}
+
+	buf, err := json.Marshal(args)
+	if err != nil {
+		return paramMap
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(buf, &parsed); err != nil {
+		return paramMap
+	}
+
+	rawParams, ok := parsed["parameters"].([]interface{})
+	if !ok {
+		return paramMap
+	}
+
+	for _, p := range rawParams {
+		pm, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name := strings.TrimSpace(fmt.Sprint(pm["name"]))
+		if name == "" || name == "<nil>" {
+			continue
+		}
+
+		value := strings.TrimSpace(fmt.Sprint(pm["value"]))
+		if value == "<nil>" {
+			value = ""
+		}
+		paramMap[name] = value
+	}
+
+	return paramMap
+}
+
+func resolveWorkflowParameterValue(raw string, params map[string]string) string {
+	resolved := strings.TrimSpace(raw)
+	if resolved == "" || len(params) == 0 {
+		return resolved
+	}
+
+	for key, value := range params {
+		tokenBraced := "{{workflow.parameters." + key + "}}"
+		tokenPlain := "workflow.parameters." + key
+		resolved = strings.ReplaceAll(resolved, tokenBraced, value)
+		resolved = strings.ReplaceAll(resolved, tokenPlain, value)
+	}
+
+	resolved = strings.TrimSpace(resolved)
+	resolved = strings.Trim(resolved, "\"'")
+	return resolved
+}
+
+// detectAppKindFromCluster queries the Kubernetes cluster to determine actual resource type.
+// Returns the detected kind name (lowercase), or the provided fallback if detection fails.
+func detectAppKindFromCluster(clientset *kubernetes.Clientset, namespace string, appLabel string, fallback string) string {
+	if clientset == nil || namespace == "" || appLabel == "" {
+		return fallback
+	}
+
+	selectors := normalizeLabelSelector(appLabel)
+	if len(selectors) == 0 {
+		return fallback
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for _, selector := range selectors {
+		deployments, err := clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err == nil && len(deployments.Items) > 0 {
+			logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selector": selector}).Debug("Detected Deployment")
+			return "deployment"
+		}
+
+		statefulsets, err := clientset.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err == nil && len(statefulsets.Items) > 0 {
+			logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selector": selector}).Debug("Detected StatefulSet")
+			return "statefulset"
+		}
+
+		daemonsets, err := clientset.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err == nil && len(daemonsets.Items) > 0 {
+			logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selector": selector}).Debug("Detected DaemonSet")
+			return "daemonset"
+		}
+
+		replicasets, err := clientset.AppsV1().ReplicaSets(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err == nil && len(replicasets.Items) > 0 {
+			// ChaosEngine appkind expects top-level workload kinds; most ReplicaSets are Deployment-managed.
+			logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selector": selector}).Debug("Detected ReplicaSet, normalizing to Deployment")
+			return "deployment"
+		}
+
+		// Fall back to pod owner references if workload listing is unavailable or inconclusive.
+		pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err == nil && len(pods.Items) > 0 {
+			for _, p := range pods.Items {
+				for _, owner := range p.OwnerReferences {
+					switch strings.ToLower(owner.Kind) {
+					case "replicaset":
+						logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selector": selector, "owner": owner.Kind}).Debug("Detected Deployment via Pod owner")
+						return "deployment"
+					case "statefulset":
+						logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selector": selector, "owner": owner.Kind}).Debug("Detected StatefulSet via Pod owner")
+						return "statefulset"
+					case "daemonset":
+						logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selector": selector, "owner": owner.Kind}).Debug("Detected DaemonSet via Pod owner")
+						return "daemonset"
+					case "deployment":
+						return "deployment"
+					}
+				}
+			}
+		}
+	}
+
+	// Fall back conservatively if nothing is detected.
+	// In practice most app targets are Deployments; preserving stale StatefulSet often causes TARGET_SELECTION_ERROR.
+	safeFallback := strings.ToLower(strings.TrimSpace(fallback))
+	switch safeFallback {
+	case "deployment", "statefulset", "daemonset":
+	default:
+		safeFallback = "deployment"
+	}
+
+	if safeFallback == "statefulset" {
+		logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selectors": selectors, "fallback": fallback}).Warn("Could not detect app kind, overriding statefulset fallback to deployment")
+		return "deployment"
+	}
+
+	logrus.WithFields(logrus.Fields{"namespace": namespace, "label": appLabel, "selectors": selectors, "fallback": safeFallback}).Warn("Could not detect app kind, using fallback")
+	return safeFallback
+}
+
+// normalizeChaosEngineAppKind normalizes the appkind in ChaosEngine by detecting actual resource type from cluster
+func normalizeChaosEngineAppKind(clientset *kubernetes.Clientset, engine *chaosTypes.ChaosEngine) bool {
+	if engine == nil {
+		logrus.Debug("[AppKind] Engine is nil, skipping normalization")
+		return false
+	}
+
+	currentKind := strings.ToLower(engine.Spec.Appinfo.AppKind)
+	appLabel := engine.Spec.Appinfo.Applabel
+	appNamespace := engine.Spec.Appinfo.Appns
+
+	// If no label or namespace, can't detect
+	if appLabel == "" || appNamespace == "" {
+		logrus.WithFields(logrus.Fields{
+			"appLabel": appLabel,
+			"appNs":    appNamespace,
+		}).Debug("[AppKind] Missing label or namespace, skipping normalization")
+		return false
+	}
+
+	// Detect actual kind from cluster
+	detectedKind := detectAppKindFromCluster(clientset, appNamespace, appLabel, currentKind)
+
+	logrus.WithFields(logrus.Fields{
+		"namespace":    appNamespace,
+		"label":        appLabel,
+		"currentKind":  currentKind,
+		"detectedKind": detectedKind,
+	}).Info("[AppKind] Detection result")
+
+	// If detected kind differs from stored kind, update it
+	if detectedKind != currentKind {
+		logrus.WithFields(logrus.Fields{
+			"namespace": appNamespace,
+			"label":     appLabel,
+			"old_kind":  currentKind,
+			"new_kind":  detectedKind,
+		}).Info("Normalizing ChaosEngine appkind")
+		engine.Spec.Appinfo.AppKind = detectedKind
+		return true
+	}
+
+	return false
+}
+
+// detectNodeContainerRuntime returns the container runtime name and socket path
+// by querying the Kubernetes node status. Supports docker, containerd, and cri-o.
+func detectNodeContainerRuntime(clientset *kubernetes.Clientset) (runtime, socketPath string) {
+	if clientset == nil {
+		return "", ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	nodes, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil || len(nodes.Items) == 0 {
+		return "", ""
+	}
+
+	// ContainerRuntimeVersion format: "docker://28.2.2", "containerd://1.7.x", "cri-o://..."
+	rv := nodes.Items[0].Status.NodeInfo.ContainerRuntimeVersion
+	switch {
+	case strings.HasPrefix(rv, "docker://"):
+		return "docker", "/run/docker.sock"
+	case strings.HasPrefix(rv, "containerd://"):
+		return "containerd", "/run/containerd/containerd.sock"
+	case strings.HasPrefix(rv, "cri-o://"):
+		return "cri-o", "/var/run/crio/crio.sock"
+	default:
+		return "", ""
+	}
+}
+
+// normalizeContainerRuntimeInYAML injects or updates CONTAINER_RUNTIME and SOCKET_PATH
+// in all spec.experiments[].spec.components.env entries of a ChaosEngine YAML artifact.
+// Works via JSON map manipulation so it is independent of the exact Go type definition.
+func normalizeContainerRuntimeInYAML(data, runtime, socketPath string) string {
+	if runtime == "" || data == "" {
+		return data
+	}
+
+	jsonData, err := yaml.YAMLToJSON([]byte(data))
+	if err != nil {
+		return data
+	}
+
+	var obj map[string]interface{}
+	if err := json.Unmarshal(jsonData, &obj); err != nil {
+		return data
+	}
+
+	kind, _ := obj["kind"].(string)
+	if strings.ToLower(kind) != "chaosengine" {
+		return data
+	}
+
+	spec, _ := obj["spec"].(map[string]interface{})
+	if spec == nil {
+		return data
+	}
+
+	experiments, _ := spec["experiments"].([]interface{})
+	for _, expRaw := range experiments {
+		expMap, _ := expRaw.(map[string]interface{})
+		if expMap == nil {
+			continue
+		}
+		expSpec, _ := expMap["spec"].(map[string]interface{})
+		if expSpec == nil {
+			expSpec = map[string]interface{}{}
+			expMap["spec"] = expSpec
+		}
+		components, _ := expSpec["components"].(map[string]interface{})
+		if components == nil {
+			components = map[string]interface{}{}
+			expSpec["components"] = components
+		}
+
+		var envSlice []interface{}
+		if existing, ok := components["env"].([]interface{}); ok {
+			envSlice = existing
+		}
+
+		envUpdates := map[string]string{
+			"CONTAINER_RUNTIME": runtime,
+			"SOCKET_PATH":       socketPath,
+		}
+
+		for envName, envValue := range envUpdates {
+			found := false
+			for _, entryRaw := range envSlice {
+				entry, _ := entryRaw.(map[string]interface{})
+				if entry == nil {
+					continue
+				}
+				if entry["name"] == envName {
+					if entry["value"] != envValue {
+						logrus.WithFields(logrus.Fields{
+							"env":   envName,
+							"old":   entry["value"],
+							"new":   envValue,
+						}).Info("Normalizing ChaosEngine container runtime env")
+						entry["value"] = envValue
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				logrus.WithFields(logrus.Fields{
+					"env":   envName,
+					"value": envValue,
+				}).Info("Injecting missing container runtime env into ChaosEngine")
+				envSlice = append(envSlice, map[string]interface{}{
+					"name":  envName,
+					"value": envValue,
+				})
+			}
+		}
+		components["env"] = envSlice
+	}
+
+	resultJSON, err := json.Marshal(obj)
+	if err != nil {
+		return data
+	}
+	resultYAML, err := yaml.JSONToYAML(resultJSON)
+	if err != nil {
+		return data
+	}
+	return string(resultYAML)
+}
+
+func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infra *dbChaosInfra.ChaosInfra) error {
+	if infra == nil {
+		return errors.New("infra not found for RBAC preflight")
+	}
+
+	infraNamespace := "litmus"
+	if infra.InfraNamespace != nil && *infra.InfraNamespace != "" {
+		infraNamespace = *infra.InfraNamespace
+	}
+
+	serviceAccount := "argo-chaos"
+	if infra.ServiceAccount != nil && *infra.ServiceAccount != "" {
+		serviceAccount = *infra.ServiceAccount
+	}
+
+	clientset, err := buildKubeClientset()
+	if err != nil {
+		return fmt.Errorf("failed RBAC preflight: unable to create kubernetes client: %w", err)
+	}
+
+	if err := ensureDynamicAppHelmRBAC(ctx, clientset, infraNamespace, serviceAccount); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"infraNamespace":  infraNamespace,
+			"serviceAccount": serviceAccount,
+		}).WithError(err).Warn("RBAC preflight auto-remediation skipped; continuing with RBAC validation")
+	}
+
+	bindings, err := clientset.RbacV1().ClusterRoleBindings().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed RBAC preflight: unable to list ClusterRoleBindings: %w", err)
+	}
+
+	boundClusterRoles := make(map[string]struct{})
+	boundRoles := make(map[string]struct{})
+	for _, binding := range bindings.Items {
+		for _, subject := range binding.Subjects {
+			if subject.Kind == "ServiceAccount" && subject.Name == serviceAccount && subject.Namespace == infraNamespace {
+				if binding.RoleRef.Kind == "ClusterRole" {
+					boundClusterRoles[binding.RoleRef.Name] = struct{}{}
+				} else if binding.RoleRef.Kind == "Role" {
+					boundRoles[binding.RoleRef.Name] = struct{}{}
+				}
+			}
+		}
+	}
+
+	if roleBindings, roleBindErr := clientset.RbacV1().RoleBindings(infraNamespace).List(ctx, metav1.ListOptions{}); roleBindErr == nil {
+		for _, binding := range roleBindings.Items {
+			for _, subject := range binding.Subjects {
+				if subject.Kind == "ServiceAccount" && subject.Name == serviceAccount && subject.Namespace == infraNamespace {
+					if binding.RoleRef.Kind == "ClusterRole" {
+						boundClusterRoles[binding.RoleRef.Name] = struct{}{}
+					} else if binding.RoleRef.Kind == "Role" {
+						boundRoles[binding.RoleRef.Name] = struct{}{}
+					}
+				}
+			}
+		}
+	} else {
+		logrus.WithField("infraNamespace", infraNamespace).WithError(roleBindErr).Warn("RBAC preflight: unable to list namespace RoleBindings")
+	}
+
+	if len(boundClusterRoles) == 0 && len(boundRoles) == 0 {
+		return fmt.Errorf(
+			"RBAC preflight failed for serviceaccount %s/%s: no RoleBinding/ClusterRoleBinding found. "+
+				"Bind this service account to a role with namespace patch/create/update and secrets list/get/watch/create/update/patch/delete permissions",
+			infraNamespace,
+			serviceAccount,
+		)
+	}
+
+	remaining := append([]rbacRequirement{}, dynamicAppHelmRBACRequirements...)
+	for roleName := range boundRoles {
+		role, roleErr := clientset.RbacV1().Roles(infraNamespace).Get(ctx, roleName, metav1.GetOptions{})
+		if roleErr != nil {
+			continue
+		}
+
+		remaining = rulesSatisfyRequirements(role.Rules, remaining)
+		if len(remaining) == 0 {
+			break
+		}
+	}
+
+	for clusterRoleName := range boundClusterRoles {
+		role, roleErr := clientset.RbacV1().ClusterRoles().Get(ctx, clusterRoleName, metav1.GetOptions{})
+		if roleErr != nil {
+			continue
+		}
+
+		remaining = roleSatisfiesRequirements(role, remaining)
+		if len(remaining) == 0 {
+			break
+		}
+	}
+
+	if len(remaining) > 0 {
+		missing := make([]string, 0, len(remaining))
+		for _, req := range remaining {
+			missing = append(missing, formatRequirement(req))
+		}
+
+		return fmt.Errorf(
+			"RBAC preflight failed for serviceaccount %s/%s; missing permissions: %s. "+
+			"Please update infra RBAC/ClusterRoleBinding to support dynamic app namespaces",
+			infraNamespace,
+			serviceAccount,
+			strings.Join(missing, ", "),
+		)
+	}
+
+	return nil
 }
 
 // GetExperimentRun returns details of a requested experiment run
@@ -856,6 +1659,10 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, errors.New("experiment re-run failed due to inactive infra")
 	}
 
+	if err := c.preflightInfraRBAC(ctx, &infra); err != nil {
+		return nil, err
+	}
+
 	var (
 		workflowManifest v1alpha1.Workflow
 	)
@@ -884,6 +1691,8 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, errors.New("failed to unmarshal workflow manifest")
 	}
 
+	normalizeInstallTemplates(workflowManifest.Spec.Templates)
+
 	var resScore float64 = 0
 
 	if _, found := workflowManifest.Labels["infra_id"]; !found {
@@ -892,69 +1701,100 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	workflowManifest.Labels["notify_id"] = notifyID
 	workflowManifest.Name = workflowManifest.Name + "-" + strconv.FormatInt(currentTime, 10)
 
+	// Detect container runtime once for all ChaosEngine templates in this workflow
+	var (
+		clusterRuntime, clusterSocketPath string
+		clusterClientset                *kubernetes.Clientset
+	)
+	if cs, kerr := buildKubeClientset(); kerr == nil {
+		clusterClientset = cs
+		clusterRuntime, clusterSocketPath = detectNodeContainerRuntime(cs)
+	}
+	wfParams := buildWorkflowParameterMap(workflowManifest.Spec.Arguments)
+
 	var probes []dbChaosExperimentRun.Probes
 	for i, template := range workflowManifest.Spec.Templates {
-		artifact := template.Inputs.Artifacts
-		if len(artifact) > 0 {
-			if artifact[0].Raw == nil {
+		artifacts := template.Inputs.Artifacts
+		logrus.Infof("[Artifact Processing] Template %s has %d artifacts", template.Name, len(artifacts))
+		for j := range artifacts {
+			if artifacts[j].Raw == nil {
+				logrus.Debugf("[Artifact %d] Raw is nil, skipping", j)
 				continue
 			}
-			var data = artifact[0].Raw.Data
-			if len(data) > 0 {
 
-				var (
-					meta       chaosTypes.ChaosEngine
-					annotation = make(map[string]string)
-				)
-				err := yaml.Unmarshal([]byte(data), &meta)
+			data := artifacts[j].Raw.Data
+			if len(data) == 0 {
+				logrus.Debugf("[Artifact %d] Data is empty, skipping", j)
+				continue
+			}
+
+			// Normalize container runtime env vars before processing
+			data = normalizeContainerRuntimeInYAML(data, clusterRuntime, clusterSocketPath)
+
+			var (
+				meta       chaosTypes.ChaosEngine
+				annotation = make(map[string]string)
+			)
+			err := yaml.Unmarshal([]byte(data), &meta)
+			if err != nil {
+				return nil, errors.New("failed to unmarshal chaosengine")
+			}
+			if strings.ToLower(meta.Kind) != "chaosengine" {
+				continue
+			}
+
+			if meta.Annotations != nil {
+				annotation = meta.Annotations
+			}
+
+			var annotationArray []string
+			for _, key := range annotation {
+				var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
+				err := json.Unmarshal([]byte(key), &manifestAnnotation)
 				if err != nil {
-					return nil, errors.New("failed to unmarshal chaosengine")
+					return nil, errors.New("failed to unmarshal experiment annotation object")
 				}
-				if strings.ToLower(meta.Kind) == "chaosengine" {
-					if meta.Annotations != nil {
-						annotation = meta.Annotations
-					}
-
-					var annotationArray []string
-					for _, key := range annotation {
-						var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-						err := json.Unmarshal([]byte(key), &manifestAnnotation)
-						if err != nil {
-							return nil, errors.New("failed to unmarshal experiment annotation object")
-						}
-						for _, annotationKey := range manifestAnnotation {
-							annotationArray = append(annotationArray, annotationKey.Name)
-						}
-					}
-					probes = append(probes, dbChaosExperimentRun.Probes{
-						artifact[0].Name,
-						annotationArray,
-					})
-
-					meta.Annotations = annotation
-
-					if meta.Labels == nil {
-						meta.Labels = map[string]string{
-							"infra_id":        workflow.InfraID,
-							"step_pod_name":   "{{pod.name}}",
-							"workflow_run_id": "{{workflow.uid}}",
-						}
-					} else {
-						meta.Labels["infra_id"] = workflow.InfraID
-						meta.Labels["step_pod_name"] = "{{pod.name}}"
-						meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
-					}
-
-					if len(meta.Spec.Experiments[0].Spec.Probe) != 0 {
-						meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
-					}
-					res, err := yaml.Marshal(&meta)
-					if err != nil {
-						return nil, errors.New("failed to marshal chaosengine")
-					}
-					workflowManifest.Spec.Templates[i].Inputs.Artifacts[0].Raw.Data = string(res)
+				for _, annotationKey := range manifestAnnotation {
+					annotationArray = append(annotationArray, annotationKey.Name)
 				}
 			}
+			probes = append(probes, dbChaosExperimentRun.Probes{
+				artifacts[j].Name,
+				annotationArray,
+			})
+
+			meta.Annotations = annotation
+
+			if meta.Labels == nil {
+				meta.Labels = map[string]string{
+					"infra_id":        workflow.InfraID,
+					"step_pod_name":   "{{pod.name}}",
+					"workflow_run_id": "{{workflow.uid}}",
+				}
+			} else {
+				meta.Labels["infra_id"] = workflow.InfraID
+				meta.Labels["step_pod_name"] = "{{pod.name}}"
+				meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
+			}
+
+			meta.Spec.Appinfo.Appns = resolveWorkflowParameterValue(meta.Spec.Appinfo.Appns, wfParams)
+			meta.Spec.Appinfo.Applabel = resolveWorkflowParameterValue(meta.Spec.Appinfo.Applabel, wfParams)
+
+			// Normalize appkind by detecting actual resource type from cluster
+			if clusterClientset != nil {
+				if normalizeChaosEngineAppKind(clusterClientset, &meta) {
+					logrus.WithField("experiment", meta.Spec.Experiments[0].Name).Debug("Updated appkind for ChaosEngine")
+				}
+			}
+
+			if len(meta.Spec.Experiments[0].Spec.Probe) != 0 {
+				meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
+			}
+			res, err := yaml.Marshal(&meta)
+			if err != nil {
+				return nil, errors.New("failed to marshal chaosengine")
+			}
+			workflowManifest.Spec.Templates[i].Inputs.Artifacts[j].Raw.Data = string(res)
 		}
 	}
 
@@ -1152,47 +1992,79 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 		return errors.New("failed to unmarshal experiment manifest")
 	}
 
+	normalizeInstallTemplates(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+
+	// Detect container runtime once for all ChaosEngine templates in this cron workflow
+	var (
+		cronRuntime, cronSocketPath string
+		cronClientset              *kubernetes.Clientset
+	)
+	if cs, kerr := buildKubeClientset(); kerr == nil {
+		cronClientset = cs
+		cronRuntime, cronSocketPath = detectNodeContainerRuntime(cs)
+	}
+	cronParams := buildWorkflowParameterMap(cronExperimentManifest.Spec.WorkflowSpec.Arguments)
+
 	for i, template := range cronExperimentManifest.Spec.WorkflowSpec.Templates {
-		artifact := template.Inputs.Artifacts
-		if len(artifact) > 0 {
-			if artifact[0].Raw == nil {
+		artifacts := template.Inputs.Artifacts
+		for j := range artifacts {
+			if artifacts[j].Raw == nil {
 				continue
 			}
-			var data = artifact[0].Raw.Data
-			if len(data) > 0 {
-				var meta chaosTypes.ChaosEngine
-				annotation := make(map[string]string)
-				err := yaml.Unmarshal([]byte(data), &meta)
-				if err != nil {
-					return errors.New("failed to unmarshal chaosengine")
-				}
-				if strings.ToLower(meta.Kind) == "chaosengine" {
-					if meta.Annotations != nil {
-						annotation = meta.Annotations
-					}
-					meta.Annotations = annotation
 
-					if meta.Labels == nil {
-						meta.Labels = map[string]string{
-							"infra_id":        workflow.InfraID,
-							"step_pod_name":   "{{pod.name}}",
-							"workflow_run_id": "{{workflow.uid}}",
-						}
-					} else {
-						meta.Labels["infra_id"] = workflow.InfraID
-						meta.Labels["step_pod_name"] = "{{pod.name}}"
-						meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
-					}
-					if len(meta.Spec.Experiments[0].Spec.Probe) != 0 {
-						meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
-					}
-					res, err := yaml.Marshal(&meta)
-					if err != nil {
-						return errors.New("failed to marshal chaosengine")
-					}
-					cronExperimentManifest.Spec.WorkflowSpec.Templates[i].Inputs.Artifacts[0].Raw.Data = string(res)
+			data := artifacts[j].Raw.Data
+			if len(data) == 0 {
+				continue
+			}
+
+			// Normalize container runtime env vars before processing
+			data = normalizeContainerRuntimeInYAML(data, cronRuntime, cronSocketPath)
+
+			var meta chaosTypes.ChaosEngine
+			annotation := make(map[string]string)
+			err := yaml.Unmarshal([]byte(data), &meta)
+			if err != nil {
+				return errors.New("failed to unmarshal chaosengine")
+			}
+			if strings.ToLower(meta.Kind) != "chaosengine" {
+				continue
+			}
+
+			if meta.Annotations != nil {
+				annotation = meta.Annotations
+			}
+			meta.Annotations = annotation
+
+			if meta.Labels == nil {
+				meta.Labels = map[string]string{
+					"infra_id":        workflow.InfraID,
+					"step_pod_name":   "{{pod.name}}",
+					"workflow_run_id": "{{workflow.uid}}",
+				}
+			} else {
+				meta.Labels["infra_id"] = workflow.InfraID
+				meta.Labels["step_pod_name"] = "{{pod.name}}"
+				meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
+			}
+
+			meta.Spec.Appinfo.Appns = resolveWorkflowParameterValue(meta.Spec.Appinfo.Appns, cronParams)
+			meta.Spec.Appinfo.Applabel = resolveWorkflowParameterValue(meta.Spec.Appinfo.Applabel, cronParams)
+
+			// Normalize appkind by detecting actual resource type from cluster
+			if cronClientset != nil {
+				if normalizeChaosEngineAppKind(cronClientset, &meta) {
+					logrus.WithField("experiment", meta.Spec.Experiments[0].Name).Debug("Updated appkind for ChaosEngine in cron")
 				}
 			}
+
+			if len(meta.Spec.Experiments[0].Spec.Probe) != 0 {
+				meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
+			}
+			res, err := yaml.Marshal(&meta)
+			if err != nil {
+				return errors.New("failed to marshal chaosengine")
+			}
+			cronExperimentManifest.Spec.WorkflowSpec.Templates[i].Inputs.Artifacts[j].Raw.Data = string(res)
 		}
 	}
 

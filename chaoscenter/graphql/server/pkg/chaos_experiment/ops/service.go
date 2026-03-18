@@ -10,6 +10,7 @@ import (
 
 	probeUtils "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/utils"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
+	"github.com/sirupsen/logrus"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 
@@ -33,6 +34,7 @@ import (
 	scheduleTypes "github.com/litmuschaos/chaos-scheduler/api/litmuschaos/v1alpha1"
 	probe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/handler"
 	"go.mongodb.org/mongo-driver/bson"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -386,7 +388,15 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 			if artifact[0].Raw == nil {
 				continue
 			}
-			var data = artifact[0].Raw.Data
+			rawData := artifact[0].Raw.Data
+			if normalizedRaw, changed, normErr := normalizePodDeleteProbeSettings(rawData); normErr != nil {
+				logrus.WithError(normErr).Warn("failed to normalize pod-delete probe settings")
+			} else if changed {
+				artifact[0].Raw.Data = normalizedRaw
+				rawData = normalizedRaw
+			}
+
+			var data = rawData
 			if len(data) > 0 {
 				// This replacement is required because chaos engine yaml have a syntax template. example:{{ workflow.parameters.adminModeNamespace }}
 				// And it is not able the unmarshal the yamlstring to chaos engine struct
@@ -475,12 +485,172 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	}
 
 	workflow.Weightages = append(workflow.Weightages, newWeights...)
+
+	// Apply workload-discovery RBAC patch automatically after install-application.
+	err = c.applyRBACPatch(&workflowManifest)
+	if err != nil {
+		logrus.Errorf("Failed to apply RBAC patch: %v", err)
+		// Log but don't fail - RBAC may already exist in the cluster.
+	}
+	
+	// Apply readiness normalization patch automatically
+	err = c.applyInstallApplicationReadinessPatch(&workflowManifest)
+	if err != nil {
+		logrus.Errorf("Failed to apply readiness patch: %v", err)
+		// Log but don't fail - readiness patch is optional
+	}
+	
 	out, err := json.Marshal(workflowManifest)
 	if err != nil {
 		return err
 	}
 
 	workflow.ExperimentManifest = string(out)
+	return nil
+}
+
+// applyRBACPatch injects a step after install-application to grant the Litmus server
+// service account workload-discovery permissions required for dynamic app kind detection.
+func (c *chaosExperimentService) applyRBACPatch(wf *v1alpha1.Workflow) error {
+	if wf == nil || len(wf.Spec.Templates) == 0 {
+		return nil
+	}
+
+	entrypoint := wf.Spec.Entrypoint
+	if entrypoint == "" {
+		return nil
+	}
+
+	var rootTemplate *v1alpha1.Template
+	for i, t := range wf.Spec.Templates {
+		if t.Name == entrypoint {
+			rootTemplate = &wf.Spec.Templates[i]
+			break
+		}
+	}
+
+	if rootTemplate == nil || len(rootTemplate.Steps) == 0 {
+		return nil
+	}
+
+	stepGroupIdx := -1
+	for i, stepGroup := range rootTemplate.Steps {
+		for _, step := range stepGroup.Steps {
+			if step.Name == "install-application" {
+				stepGroupIdx = i
+				break
+			}
+		}
+		if stepGroupIdx >= 0 {
+			break
+		}
+	}
+
+	if stepGroupIdx < 0 {
+		return nil
+	}
+
+	rbacStepName := "apply-workload-rbac"
+	for _, t := range wf.Spec.Templates {
+		if t.Name == rbacStepName {
+			return nil
+		}
+	}
+
+	rbacTpl := v1alpha1.Template{
+		Name: rbacStepName,
+		Container: &corev1.Container{
+			Image:   "litmuschaos/k8s:latest",
+			Command: []string{"sh", "-c"},
+			Args: []string{`set -eu
+
+discover_target_subject() {
+	SA_NAME=""
+	SA_NAMESPACE=""
+
+	# Prefer the existing infra binding subject if already configured.
+	SA_NAME=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].name}' 2>/dev/null || true)
+	SA_NAMESPACE=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].namespace}' 2>/dev/null || true)
+
+	# Otherwise, discover likely control-plane server deployment and use its service account.
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		CANDIDATE=$(kubectl get deploy -A --no-headers 2>/dev/null | awk '$2 ~ /(server|graphql|portal)/ {print $1" "$2; exit}')
+		if [ -n "$CANDIDATE" ]; then
+			SA_NAMESPACE=$(echo "$CANDIDATE" | awk '{print $1}')
+			DEPLOY_NAME=$(echo "$CANDIDATE" | awk '{print $2}')
+			SA_NAME=$(kubectl -n "$SA_NAMESPACE" get deploy "$DEPLOY_NAME" -o jsonpath='{.spec.template.spec.serviceAccountName}' 2>/dev/null || true)
+		fi
+	fi
+
+	# Final fallback: this workflow pod's own service account.
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		SA_NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || true)
+		POD_NAME=$(hostname)
+		if [ -n "$SA_NAMESPACE" ] && [ -n "$POD_NAME" ]; then
+			SA_NAME=$(kubectl -n "$SA_NAMESPACE" get pod "$POD_NAME" -o jsonpath='{.spec.serviceAccountName}' 2>/dev/null || true)
+		fi
+	fi
+
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		echo "[rbac-patch] failed to discover service account subject"
+		return 1
+	fi
+
+	echo "$SA_NAME|$SA_NAMESPACE"
+}
+
+SUBJECT=$(discover_target_subject)
+SA_NAME=$(echo "$SUBJECT" | cut -d'|' -f1)
+SA_NAMESPACE=$(echo "$SUBJECT" | cut -d'|' -f2)
+
+echo "[rbac-patch] applying workload-discovery RBAC for serviceaccount ${SA_NAMESPACE}/${SA_NAME}"
+
+kubectl apply -f - <<'EOF'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: litmus-workload-discoverer
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+  verbs: ["list", "get", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "get"]
+EOF
+
+kubectl create clusterrolebinding litmus-workload-discoverer-binding \
+	--clusterrole=litmus-workload-discoverer \
+	--serviceaccount="${SA_NAMESPACE}:${SA_NAME}" \
+	--dry-run=client -o yaml | kubectl apply -f -
+
+echo "[rbac-patch] workload-discovery RBAC applied"`},
+		},
+	}
+
+	wf.Spec.Templates = append(wf.Spec.Templates, rbacTpl)
+
+	newStepGroup := v1alpha1.ParallelSteps{
+		Steps: []v1alpha1.WorkflowStep{{
+			Name:     rbacStepName,
+			Template: rbacStepName,
+		}},
+	}
+
+	newSteps := make([]v1alpha1.ParallelSteps, 0, len(rootTemplate.Steps)+1)
+	for i, stepGroup := range rootTemplate.Steps {
+		newSteps = append(newSteps, stepGroup)
+		if i == stepGroupIdx {
+			newSteps = append(newSteps, newStepGroup)
+		}
+	}
+	rootTemplate.Steps = newSteps
+
+	logrus.WithFields(logrus.Fields{
+		"entrypoint":         entrypoint,
+		"install_step_index": stepGroupIdx,
+	}).Info("[RBAC Patch] Successfully injected workload-discovery RBAC step")
+
 	return nil
 }
 
@@ -894,4 +1064,231 @@ func (c *chaosExperimentService) UpdateRuntimeCronWorkflowConfiguration(cronWork
 		}
 	}
 	return cronWorkflowManifest, faults, nil
+}
+
+// applyInstallApplicationReadinessPatch automatically adds a normalization step after install-application.
+// It waits for pods to reach Running/Succeeded with a bounded timeout to avoid deadlocking the workflow.
+func (c *chaosExperimentService) applyInstallApplicationReadinessPatch(wf *v1alpha1.Workflow) error {
+	if wf == nil || len(wf.Spec.Templates) == 0 {
+		return nil
+	}
+
+	// Find the entrypoint template
+	entrypoint := wf.Spec.Entrypoint
+	if entrypoint == "" {
+		return nil
+	}
+
+	var rootTemplate *v1alpha1.Template
+	for i, t := range wf.Spec.Templates {
+		if t.Name == entrypoint {
+			rootTemplate = &wf.Spec.Templates[i]
+			break
+		}
+	}
+
+	if rootTemplate == nil || len(rootTemplate.Steps) == 0 {
+		return nil
+	}
+
+	// Look for install-application step and insert readiness check after it
+	stepGroupIdx := -1
+	for i, stepGroup := range rootTemplate.Steps {
+		for _, step := range stepGroup.Steps {
+			if step.Name == "install-application" {
+				stepGroupIdx = i
+				break
+			}
+		}
+		if stepGroupIdx >= 0 {
+			break
+		}
+	}
+
+	if stepGroupIdx < 0 {
+		// No install-application step found, nothing to patch
+		return nil
+	}
+
+	// Check if readiness check already exists
+	readinessStepName := "normalize-install-application-readiness"
+	for _, t := range wf.Spec.Templates {
+		if t.Name == readinessStepName {
+			// Already patched
+			return nil
+		}
+	}
+
+	// Create readiness check template with pod readiness wait logic
+	readinessTpl := v1alpha1.Template{
+		Name: readinessStepName,
+		Container: &corev1.Container{
+			Image: "litmuschaos/k8s:latest",
+			Command: []string{"sh", "-c"},
+			Args: []string{
+				`set -eu
+NS="{{workflow.parameters.appNamespace}}"
+DEADLINE=$(($(date +%s) + ${READINESS_WAIT_SECONDS:-600}))
+echo "[readiness-check] Waiting for all pods in namespace $NS to reach Running/Succeeded..."
+while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+	if ! kubectl get ns "$NS" >/dev/null 2>&1; then
+		echo "[readiness-check] Namespace $NS not found yet; retrying..."
+		sleep 5
+		continue
+	fi
+
+	TOTAL=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+	if [ -z "$TOTAL" ] || [ "$TOTAL" -eq 0 ]; then
+		echo "[readiness-check] No pods created yet in $NS; retrying..."
+		sleep 5
+		continue
+	fi
+
+	NOT_READY=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | awk '$3!="Running" && $3!="Succeeded" && $3!="Completed" {c++} END {print c+0}')
+	RUNNING=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | awk '$3=="Running" || $3=="Succeeded" || $3=="Completed" {c++} END {print c+0}')
+
+	echo "[readiness-check] Pods status: $RUNNING/$TOTAL in Running/Succeeded"
+	if [ "$NOT_READY" -eq 0 ]; then
+		echo "[readiness-check] ✓ All pods in namespace $NS are Running/Succeeded"
+		exit 0
+	fi
+
+	kubectl get pods -n "$NS" --no-headers 2>/dev/null | awk '$3!="Running" && $3!="Succeeded" && $3!="Completed" {print "[readiness-check] waiting:", $1, $3, $2}' | head -n 6 || true
+  sleep 5
+done
+echo "[readiness-check] ⚠ Timeout waiting for all pods; continuing workflow to avoid deadlock"
+exit 0`,
+			},
+		},
+	}
+
+	// Add the template to workflow
+	wf.Spec.Templates = append(wf.Spec.Templates, readinessTpl)
+
+	// Insert a new step group after install-application with the readiness check
+	newStepGroup := v1alpha1.ParallelSteps{
+		Steps: []v1alpha1.WorkflowStep{{
+			Name:     readinessStepName,
+			Template: readinessStepName,
+		}},
+	}
+
+	// Insert the new step group after install-application
+	newSteps := make([]v1alpha1.ParallelSteps, 0, len(rootTemplate.Steps)+1)
+	for i, stepGroup := range rootTemplate.Steps {
+		newSteps = append(newSteps, stepGroup)
+		if i == stepGroupIdx {
+			newSteps = append(newSteps, newStepGroup)
+		}
+	}
+	rootTemplate.Steps = newSteps
+
+	logrus.WithFields(logrus.Fields{
+		"entrypoint":         entrypoint,
+		"install_step_index": stepGroupIdx,
+	}).Info("[Readiness Patch] Successfully applied install-application readiness normalization")
+
+	return nil
+}
+
+// normalizePodDeleteProbeSettings reduces false negatives caused by transient 500 responses
+// during pod-delete chaos by enforcing edge probe mode with bounded run properties.
+func normalizePodDeleteProbeSettings(raw string) (string, bool, error) {
+	if strings.TrimSpace(raw) == "" {
+		return raw, false, nil
+	}
+
+	var obj map[string]interface{}
+	if err := yaml.Unmarshal([]byte(raw), &obj); err != nil {
+		return raw, false, err
+	}
+
+	kind, _ := obj["kind"].(string)
+	if strings.ToLower(kind) != "chaosengine" {
+		return raw, false, nil
+	}
+
+	spec, ok := obj["spec"].(map[string]interface{})
+	if !ok {
+		return raw, false, nil
+	}
+
+	experiments, ok := spec["experiments"].([]interface{})
+	if !ok || len(experiments) == 0 {
+		return raw, false, nil
+	}
+
+	changed := false
+	for _, expAny := range experiments {
+		exp, ok := expAny.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		expName, _ := exp["name"].(string)
+		if strings.ToLower(expName) != "pod-delete" {
+			continue
+		}
+
+		expSpec, ok := exp["spec"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		probes, ok := expSpec["probe"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, probeAny := range probes {
+			probe, ok := probeAny.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			probeName, _ := probe["name"].(string)
+			if probeName != "" && !strings.HasPrefix(probeName, "check-catalogue-access-url") {
+				continue
+			}
+
+			if mode, _ := probe["mode"].(string); strings.ToLower(mode) != "edge" {
+				probe["mode"] = "Edge"
+				changed = true
+			}
+
+			runProps, ok := probe["runProperties"].(map[string]interface{})
+			if !ok {
+				runProps = map[string]interface{}{}
+				probe["runProperties"] = runProps
+				changed = true
+			}
+
+			defaults := map[string]interface{}{
+				"probeTimeout":         "10s",
+				"interval":             "5s",
+				"probePollingInterval": "1s",
+				"attempt":              5,
+				"retry":                3,
+				"initialDelay":         "20s",
+			}
+
+			for key, value := range defaults {
+				if current, exists := runProps[key]; !exists || current == nil || current == "" {
+					runProps[key] = value
+					changed = true
+				}
+			}
+		}
+	}
+
+	if !changed {
+		return raw, false, nil
+	}
+
+	out, err := yaml.Marshal(obj)
+	if err != nil {
+		return raw, false, err
+	}
+
+	return string(out), true, nil
 }

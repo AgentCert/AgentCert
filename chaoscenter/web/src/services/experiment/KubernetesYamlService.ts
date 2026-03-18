@@ -658,7 +658,14 @@ export class KubernetesYamlService extends ExperimentYamlService {
       if (template.inputs?.artifacts?.[0].raw?.data) {
         const chaosEngineCR = parse(template.inputs.artifacts[0].raw.data ?? '') as ChaosEngine;
         if (chaosEngineCR.kind === 'ChaosEngine') {
-          if (chaosEngineCR.spec?.experiments[0].spec.probe !== undefined) {
+          const probesInSpec = chaosEngineCR.spec?.experiments?.[0]?.spec?.probe;
+          const hasProbeInSpec = Array.isArray(probesInSpec) ? probesInSpec.length > 0 : probesInSpec !== undefined;
+          const probeRef = chaosEngineCR.metadata?.annotations?.probeRef;
+          const hasProbeRef = typeof probeRef === 'string' && probeRef.trim() !== '';
+
+          // Show warning only when probes are still embedded in ChaosEngine spec
+          // and no probeRef annotation exists for analytics mapping.
+          if (hasProbeInSpec && !hasProbeRef) {
             doesProbeExists = true;
           }
         }
