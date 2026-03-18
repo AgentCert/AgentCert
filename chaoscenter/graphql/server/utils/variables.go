@@ -19,7 +19,7 @@ type Configuration struct {
 	LitmusChaosExporterImage    string   `required:"true" split_words:"true"`
 	ContainerRuntimeExecutor    string   `required:"true" split_words:"true"`
 	KubernetesMcpServerImage    string   `split_words:"true" default:"quay.io/containers/kubernetes_mcp_server:latest"`
-	PrometheusMcpServerImage    string   `split_words:"true" default:"ghcr.io/pab1it0/prometheus-mcp-server:latest"`
+	PrometheusMcpServerImage    string   `split_words:"true" default:"agentcert/prometheus-mcp-server:latest"`
 	PrometheusMcpUrl            string   `split_words:"true" default:"http://prometheus.monitoring.svc.cluster.local:9090"`
 	WorkflowHelperImageVersion  string   `required:"true" split_words:"true"`
 	ChaosCenterUiEndpoint       string   `split_words:"true" default:"https://localhost:8080"`
