@@ -249,20 +249,36 @@ ensure_litmus_exp_runtime_rbac() {
         print_header "Ensuring Runtime RBAC in litmus-exp"
 
         local infra_namespace="litmus-exp"
-        local infra_sa="litmus-exp"
+    local infra_sa=""
 
         if ! kubectl get namespace "$infra_namespace" &> /dev/null; then
                 print_info "Namespace $infra_namespace not found yet. Skipping runtime RBAC bootstrap."
                 return 0
         fi
 
-        if ! kubectl -n "$infra_namespace" get serviceaccount "$infra_sa" &> /dev/null; then
-                print_info "ServiceAccount $infra_namespace/$infra_sa not found yet. Skipping runtime RBAC bootstrap."
-                return 0
+        # Prefer subscriber deployment SA when present, fall back to common SA names.
+        if kubectl -n "$infra_namespace" get deployment subscriber &> /dev/null; then
+            infra_sa=$(kubectl -n "$infra_namespace" get deployment subscriber -o jsonpath='{.spec.template.spec.serviceAccountName}' 2>/dev/null || true)
         fi
 
+        if [ -z "$infra_sa" ]; then
+            for candidate_sa in litmus-exp argo-chaos default; do
+                if kubectl -n "$infra_namespace" get serviceaccount "$candidate_sa" &> /dev/null; then
+                    infra_sa="$candidate_sa"
+                    break
+                fi
+            done
+        fi
+
+        if [ -z "$infra_sa" ]; then
+            print_info "No suitable ServiceAccount found in $infra_namespace yet. Skipping runtime RBAC bootstrap."
+            return 0
+        fi
+
+        print_info "Using ServiceAccount $infra_namespace/$infra_sa"
+
         print_section "Applying cluster-scope watcher permissions for subscriber"
-        kubectl create clusterrolebinding infra-cluster-role-binding-litmus-exp \
+        kubectl create clusterrolebinding infra-cluster-role-binding-${infra_namespace}-${infra_sa} \
                 --clusterrole=infra-cluster-role \
                 --serviceaccount="${infra_namespace}:${infra_sa}" \
                 --dry-run=client -o yaml | kubectl apply -f -
