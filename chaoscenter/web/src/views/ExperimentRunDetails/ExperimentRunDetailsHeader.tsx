@@ -6,7 +6,7 @@ import type { DefaultLayoutTemplateProps } from '@components/DefaultLayout/Defau
 import { type ExecutionData, ExperimentRunStatus } from '@api/entities';
 import { useStrings } from '@strings';
 import ResiliencyScoreArrowCard from '@components/ResiliencyScoreArrowCard';
-import { Dialog } from '@blueprintjs/core';
+import CertificateReportDialog from '@components/CertificateReportDialog/CertificateReportDialog';
 import { getDurationBetweenTwoDates, handleTimestampAmbiguity } from '@utils';
 import StatusBadgeV2, { StatusBadgeEntity } from '@components/StatusBadgeV2';
 import LitmusBreadCrumbs from '@components/LitmusBreadCrumbs';
@@ -70,24 +70,10 @@ export default function ExperimentRunDetailsHeader({
                     </Text>
                   )}
                   {isCertDialogOpen && (
-                    <Dialog
+                    <CertificateReportDialog
                       isOpen={isCertDialogOpen}
-                      canOutsideClickClose
-                      canEscapeKeyClose
                       onClose={() => closeCertDialog()}
-                      title={getString('generateCertificate')}
-                      style={{ width: 500, height: 300 }}
-                    >
-                      <Layout.Vertical
-                        padding="xlarge"
-                        flex={{ justifyContent: 'center', alignItems: 'center' }}
-                        height="100%"
-                      >
-                        <Text font={{ size: 'medium' }} color={Color.GREY_700}>
-                          TODO - Certificate
-                        </Text>
-                      </Layout.Vertical>
-                    </Dialog>
+                    />
                   )}
                 </Layout.Horizontal>
               </Layout.Vertical>

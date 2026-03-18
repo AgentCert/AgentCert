@@ -1,0 +1,38 @@
+[
+  {
+    "op": "add",
+    "path": "/rules/-",
+    "value": {
+      "apiGroups": [""],
+      "resources": ["configmaps", "secrets"],
+      "verbs": ["get", "list", "create", "update", "patch", "delete", "watch"]
+    }
+  },
+  {
+    "op": "add",
+    "path": "/rules/-",
+    "value": {
+      "apiGroups": [""],
+      "resources": ["namespaces"],
+      "verbs": ["get", "list", "create", "update", "patch", "delete", "watch"]
+    }
+  },
+  {
+    "op": "add",
+    "path": "/rules/-",
+    "value": {
+      "apiGroups": ["apps"],
+      "resources": ["deployments", "statefulsets", "replicasets", "daemonsets"],
+      "verbs": ["get", "list", "create", "update", "patch", "delete", "watch"]
+    }
+  },
+  {
+    "op": "add",
+    "path": "/rules/-",
+    "value": {
+      "apiGroups": [""],
+      "resources": ["services"],
+      "verbs": ["get", "list", "create", "update", "patch", "delete", "watch"]
+    }
+  }
+]

@@ -3,7 +3,7 @@ import { Avatar, Button, ButtonVariation, Layout, Popover, TableV2, Text, useTog
 import { Color } from '@harnessio/design-system';
 import { isEqual } from 'lodash-es';
 import type { Column, Row, UseExpandedRowProps } from 'react-table';
-import { Classes, Dialog, Menu, MenuItem, Position } from '@blueprintjs/core';
+import { Classes, Menu, MenuItem, Position } from '@blueprintjs/core';
 import { useHistory } from 'react-router-dom';
 import { getDetailedTime, getColorBasedOnResilienceScore, killEvent } from '@utils';
 import type { ExperimentRunDetails, ExperimentRunHistoryTableProps } from '@controllers/ExperimentRunHistory';
@@ -13,6 +13,7 @@ import CopyButton from '@components/CopyButton';
 import StatusBadgeV2, { StatusBadgeEntity } from '@components/StatusBadgeV2';
 import { ExperimentRunStatus } from '@api/entities';
 import Duration from '@components/Duration';
+import CertificateReportDialog from '@components/CertificateReportDialog/CertificateReportDialog';
 import { MemoisedExperimentRunFaultsTable } from './ExperimentRunFaultTable';
 import css from './ExperimentRunHistoryTable.module.scss';
 
@@ -189,24 +190,10 @@ const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistory
                 </Menu>
               </Popover>
               {isCertDialogOpen && (
-                <Dialog
+                <CertificateReportDialog
                   isOpen={isCertDialogOpen}
-                  canOutsideClickClose
-                  canEscapeKeyClose
                   onClose={() => closeCertDialog()}
-                  title={getString('generateCertificate')}
-                  style={{ width: 500, height: 300 }}
-                >
-                  <Layout.Vertical
-                    padding="xlarge"
-                    flex={{ justifyContent: 'center', alignItems: 'center' }}
-                    height="100%"
-                  >
-                    <Text font={{ size: 'medium' }} color={Color.GREY_700}>
-                      TODO - Certificate
-                    </Text>
-                  </Layout.Vertical>
-                </Dialog>
+                />
               )}
             </Layout.Horizontal>
           );
