@@ -1153,6 +1153,13 @@ function updateContainerImage(image: string, registry: ImageRegistry | undefined
     return image;
   }
 
+  // Only override images that originate from the default "litmuschaos" org.
+  // Images from other organizations (e.g., agentcert) should be preserved as-is
+  // to avoid rewriting them to a wrong registry/org.
+  if (!image.includes('/litmuschaos/')) {
+    return image;
+  }
+
   // Build new image
   const newImage = `${registry.repo}/${lastPart}`;
 
