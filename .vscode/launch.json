@@ -1,0 +1,81 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/agentcert/.env"
+        },
+        {
+            "name": "Mock trace generation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/agentcert/notebooks/metrics_extraction/trace_data_generation/trace_data_gen.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--fault-name", "disk-fill", 
+                "--fault-description", "Fills the ephemeral storage or persistent volume attached to a target pod by writing large files to the filesystem, causing disk pressure that leads to pod eviction, application write failures, log rotation issues, and potential node-level resource starvation affecting co-located workloads.", 
+                "--output-dir", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/disk_fill",
+                "--num-cycles", "2", 
+                "--num-pods", "3"
+            ]
+        },
+        {
+            "name": "multi fault trace generation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/agentcert/notebooks/metrics_extraction/trace_data_generation/multi_fault_trace_generation.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--fault", "pod-delete:Deletes a running pod causing downtime",
+                "--fault", "pod-network-latency:Injects network latency into pod traffic",
+                "--fault", "disk-fill:Fills disk on node causing I/O pressure",
+                "--output-dir", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault"
+            ]
+        },
+        {
+            "name": "trace metrics extraction",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/agentcert/notebooks/metrics_extraction/metric_extraction_from_trace/metrics_extractor_from_trace.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--trace-directory", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/pod_dns_error",
+                "--fault-config-path", "${workspaceFolder}/agentcert/notebooks/metrics_extraction/fault_configs/pod_dns_error_fault_configuration.json",
+                "--store"
+            ]
+        },
+        {
+            "name": "Run aggregation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/agentcert/notebooks/metrics_extraction/aggregation/aggregation.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": ["--agent-id", "flash-001-abc123",
+                "--agent-name", "Flash Agent"
+            ]
+        },
+        {
+            "name": "generate pdf report",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/agentcert/notebooks/metrics_extraction/generate_certification_report_from_scorecard.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--scorecard-path", "C:/Users/machary/Downloads/Work/Projects/Infosys/Agentcert/repo/AgentCert/aggregated_scorecard_output.json",
+                "--output-dir", "${workspaceFolder}/agentcert/data/reports"
+            ]
+        }
+    ]
+}
