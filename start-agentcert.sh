@@ -46,7 +46,7 @@ echo ""
 status "Checking for port conflicts..."
 
 conflict=false
-for port in 3030 8080 2001; do
+for port in 3030 3000 8080 8082 2001; do
     pid=$(lsof -ti :"$port" 2>/dev/null || true)
     if [ -n "$pid" ]; then
         pname=$(ps -p "$pid" -o comm= 2>/dev/null || echo "unknown")
@@ -59,7 +59,7 @@ if [ "$conflict" = true ]; then
     echo ""
     read -rp "Kill conflicting processes? (Y/n) " response
     if [[ -z "$response" || "$response" =~ ^[Yy] ]]; then
-        for port in 3030 8080 2001; do
+        for port in 3030 3000 8080 8082 2001; do
             pid=$(lsof -ti :"$port" 2>/dev/null || true)
             if [ -n "$pid" ]; then
                 kill -9 "$pid" 2>/dev/null || true
@@ -82,21 +82,27 @@ if [ "$SKIP_MONGO" = false ]; then
     status "Checking MongoDB..."
 
     mongo_running=false
+    mongo_container=""
     if docker ps --filter "publish=27017" --format "{{.Names}}" 2>/dev/null | grep -q .; then
-        container=$(docker ps --filter "publish=27017" --format "{{.Names}}" 2>/dev/null | head -1)
-        ok "MongoDB is running in container: $container"
+        mongo_container=$(docker ps --filter "publish=27017" --format "{{.Names}}" 2>/dev/null | head -1)
+        ok "MongoDB is running in container: $mongo_container"
         mongo_running=true
     fi
 
     if [ "$mongo_running" = false ]; then
         wait_msg "Starting MongoDB container..."
-        existing=$(docker ps -a --filter "name=m3" --format "{{.Names}}" 2>/dev/null)
-        if [ "$existing" = "m3" ]; then
-            docker start m3 > /dev/null
-            ok "Started existing MongoDB container 'm3'"
+        if docker ps -a --format "{{.Names}}" 2>/dev/null | grep -qx "m3"; then
+            mongo_container="m3"
+            docker start "$mongo_container" > /dev/null
+            ok "Started existing MongoDB container '$mongo_container'"
+        elif docker ps -a --format "{{.Names}}" 2>/dev/null | grep -qx "agentcert-mongo"; then
+            mongo_container="agentcert-mongo"
+            docker start "$mongo_container" > /dev/null
+            ok "Started existing MongoDB container '$mongo_container'"
         else
-            docker run -d --name agentcert-mongo -p 27017:27017 mongo:4.2 > /dev/null
-            ok "Started new MongoDB container 'agentcert-mongo'"
+            mongo_container="agentcert-mongo"
+            docker run -d --name "$mongo_container" -p 27017:27017 mongo:4.2 > /dev/null
+            ok "Started new MongoDB container '$mongo_container'"
         fi
         mongo_running=true
     fi
@@ -105,7 +111,8 @@ if [ "$SKIP_MONGO" = false ]; then
         wait_msg "Waiting for MongoDB to accept connections..."
         retries=0
         while [ $retries -lt 10 ]; do
-            if docker exec m3 mongo --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
+            if docker exec "$mongo_container" mongosh --quiet --eval "db.adminCommand({ ping: 1 })" > /dev/null 2>&1 || \
+               docker exec "$mongo_container" mongo --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
                 ok "MongoDB is ready"
                 break
             fi
@@ -133,11 +140,19 @@ export DB_USER="admin"
 export DB_PASSWORD="1234"
 export SELF_AGENT="false"
 export INFRA_COMPATIBLE_VERSIONS='["3.0.0"]'
-export ALLOWED_ORIGINS='^(http://|https://|)(localhost|host\.docker\.internal|host\.minikube\.internal)(:[0-9]+|)'
+export ALLOWED_ORIGINS='^(http://|https://|)((localhost|host\.docker\.internal|host\.minikube\.internal)|100\.78\.[0-9]+\.[0-9]+)(:[0-9]+|)$'
 export SKIP_SSL_VERIFY="true"
 export ENABLE_GQL_INTROSPECTION="true"
 export INFRA_SCOPE="cluster"
 export ENABLE_INTERNAL_TLS="false"
+export LITMUS_AUTH_GRPC_ENDPOINT="localhost"
+export LITMUS_AUTH_GRPC_PORT="3030"
+export ADMIN_USERNAME="admin"
+export ADMIN_PASSWORD="litmus"
+export REST_PORT="3000"
+export GRPC_PORT="3030"
+export GQL_REST_PORT="8080"
+export GQL_GRPC_PORT="8082"
 
 # Chaos Hub settings
 export DEFAULT_HUB_GIT_URL="https://github.com/agentcert/chaos-charts"
@@ -157,10 +172,10 @@ export WORKFLOW_HELPER_IMAGE_VERSION="3.0.0"
 # Agent/App Hub settings
 export DEFAULT_AGENT_HUB_GIT_URL="https://github.com/agentcert/agent-charts"
 export DEFAULT_AGENT_HUB_BRANCH_NAME="main"
-export DEFAULT_AGENT_HUB_PATH="/tmp/default-agent-hub"
+export DEFAULT_AGENT_HUB_PATH="/tmp/default"
 export DEFAULT_APP_HUB_GIT_URL="https://github.com/agentcert/app-charts"
 export DEFAULT_APP_HUB_BRANCH_NAME="main"
-export DEFAULT_APP_HUB_PATH="/tmp/default-app-hub"
+export DEFAULT_APP_HUB_PATH="/tmp/default"
 
 # NOTE: CHAOS_CENTER_UI_ENDPOINT is intentionally NOT set here.
 # The Go server auto-detects the machine's outbound IP address on the
@@ -174,41 +189,19 @@ ok "Environment variables set"
 # ============================================================================
 # Step 4: Build Go binaries (if needed)
 # ============================================================================
-AUTH_DIR="$SCRIPT_DIR/chaoscenter/authentication"
+AUTH_DIR="$SCRIPT_DIR/chaoscenter/authentication/api"
 GQL_DIR="$SCRIPT_DIR/chaoscenter/graphql/server"
 WEB_DIR="$SCRIPT_DIR/chaoscenter/web"
 
-AUTH_BIN="$AUTH_DIR/auth"
-GQL_BIN="$GQL_DIR/server"
 
-if [ ! -f "$AUTH_BIN" ]; then
-    status "Building auth binary..."
-    (cd "$AUTH_DIR" && go build -o auth .)
-    ok "Auth binary built"
-fi
 
-if [ ! -f "$GQL_BIN" ]; then
-    status "Building GraphQL server binary..."
-    (cd "$GQL_DIR" && go build -o server .)
-    ok "GraphQL server binary built"
-fi
 
 # ============================================================================
 # Step 5: Start Authentication Service
 # ============================================================================
 status "Starting Authentication Service..."
 
-if [ ! -f "$AUTH_BIN" ]; then
-    fail "auth binary not found at $AUTH_BIN"
-    exit 1
-fi
-
-export ADMIN_USERNAME="admin"
-export ADMIN_PASSWORD="litmus"
-export REST_PORT="3000"
-export GRPC_PORT="3030"
-
-(cd "$AUTH_DIR" && ./auth > "$PID_DIR/.auth.log" 2>&1) &
+(cd "$AUTH_DIR" && go run main.go > "$PID_DIR/.auth.log" 2>&1) &
 AUTH_PID=$!
 echo "$AUTH_PID" > "$PID_DIR/.agentcert-auth.pid"
 
@@ -232,15 +225,21 @@ fi
 # ============================================================================
 status "Starting GraphQL Server..."
 
-if [ ! -f "$GQL_BIN" ]; then
-    fail "server binary not found at $GQL_BIN"
-    exit 1
-fi
+status "Tidying GraphQL dependencies..."
+(cd "$GQL_DIR" && go mod tidy)
+ok "GraphQL dependencies ready"
 
-export LITMUS_AUTH_GRPC_ENDPOINT="localhost"
-export LITMUS_AUTH_GRPC_PORT="3030"
+GQL_APP_NAME="agentcert-graph"
+GQL_BINARY="$GQL_DIR/$GQL_APP_NAME"
 
-(cd "$GQL_DIR" && ./server > "$PID_DIR/.graphql.log" 2>&1) &
+status "Building GraphQL binary..."
+(cd "$GQL_DIR" && go build -o "$GQL_APP_NAME" .)
+ok "GraphQL binary built"
+
+# Stop any previously running daemon by process name.
+pkill -f "$GQL_APP_NAME" 2>/dev/null || true
+
+nohup env REST_PORT="$GQL_REST_PORT" GRPC_PORT="$GQL_GRPC_PORT" "$GQL_BINARY" >> "$PID_DIR/.graphql.log" 2>&1 &
 GQL_PID=$!
 echo "$GQL_PID" > "$PID_DIR/.agentcert-graphql.pid"
 
