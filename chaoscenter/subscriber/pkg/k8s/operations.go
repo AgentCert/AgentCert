@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,9 +31,11 @@ import (
 )
 
 const (
-	InfraConfigName   = "subscriber-config"
-	InfraSecretName   = "subscriber-secret"
-	LiveCheckMaxTries = 6
+	InfraConfigName          = "subscriber-config"
+	InfraSecretName          = "subscriber-secret"
+	DefaultLiveCheckMaxTries = 18
+	DefaultRetryInterval     = 10 * time.Second
+	MaxRetryInterval         = 60 * time.Second
 )
 
 type InfraComponents struct {
@@ -45,6 +49,16 @@ var (
 	decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 	dr              dynamic.ResourceInterface
 )
+
+// getLiveCheckMaxTries reads LIVE_CHECK_MAX_TRIES from environment or returns default
+func getLiveCheckMaxTries() int {
+	if val := os.Getenv("LIVE_CHECK_MAX_TRIES"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n > 0 {
+			return n
+		}
+	}
+	return DefaultLiveCheckMaxTries
+}
 
 func (k8s *k8sSubscriber) CheckComponentStatus(componentEnv string) error {
 	if componentEnv == "" {
@@ -61,6 +75,22 @@ func (k8s *k8sSubscriber) CheckComponentStatus(componentEnv string) error {
 	err = yaml2.Unmarshal([]byte(strings.TrimSpace(componentEnv)), &components)
 	if err != nil {
 		return err
+	}
+
+	// Filter out subscriber itself to avoid self-check deadlock
+	filtered := make([]string, 0, len(components.Deployments))
+	for _, dep := range components.Deployments {
+		if dep != "app=subscriber" {
+			filtered = append(filtered, dep)
+		} else {
+			logrus.Info("Skipping self-check for app=subscriber")
+		}
+	}
+	components.Deployments = filtered
+
+	if len(components.Deployments) == 0 {
+		logrus.Info("No external components to check, proceeding")
+		return nil
 	}
 
 	components.LiveStatus = true
@@ -83,8 +113,13 @@ func (k8s *k8sSubscriber) checkDeploymentStatus(components *InfraComponents, cli
 	ctx := context.TODO()
 	downCount := 0
 	retries := 0
+	maxTries := getLiveCheckMaxTries()
+	retryInterval := DefaultRetryInterval
 	defer wait.Done()
-	for retries < LiveCheckMaxTries {
+
+	logrus.Infof("Checking component status (max retries: %d, components: %v)", maxTries, components.Deployments)
+
+	for retries < maxTries {
 		for _, dep := range components.Deployments {
 			podList, err := clientset.CoreV1().Pods(InfraNamespace).List(ctx, metav1.ListOptions{LabelSelector: dep})
 			if err != nil {
@@ -119,7 +154,13 @@ func (k8s *k8sSubscriber) checkDeploymentStatus(components *InfraComponents, cli
 		} else {
 			retries += 1
 			downCount = 0
-			time.Sleep(30 * time.Second)
+			logrus.Infof("Components not ready, retry %d/%d in %v", retries, maxTries, retryInterval)
+			time.Sleep(retryInterval)
+			// Exponential backoff capped at MaxRetryInterval
+			retryInterval = retryInterval * 2
+			if retryInterval > MaxRetryInterval {
+				retryInterval = MaxRetryInterval
+			}
 		}
 	}
 	components.AccessLiveStatus.Lock()

@@ -211,7 +211,7 @@ spec:
             - name: ENABLE_GQL_INTROSPECTION
               value: "false"
             - name: INFRA_DEPLOYMENTS
-              value: '["app=chaos-exporter", "name=chaos-operator", "app=workflow-controller", "app=event-tracker"]'
+              value: '["app=subscriber", "app=chaos-exporter", "name=chaos-operator", "app=workflow-controller", "app=event-tracker"]'
             - name: CHAOS_CENTER_UI_ENDPOINT
               value: ""
             - name: SUBSCRIBER_IMAGE
