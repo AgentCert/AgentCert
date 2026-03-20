@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -369,6 +370,8 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 		return errors.New("failed to unmarshal workflow manifest")
 	}
 
+	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
+
 	if workflowManifest.Labels == nil {
 		workflowManifest.Labels = map[string]string{
 			"workflow_id": *workflow.ExperimentID,
@@ -689,6 +692,8 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	if err != nil {
 		return errors.New("failed to unmarshal workflow manifest")
 	}
+
+	applyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 
 	if strings.TrimSpace(cronExperimentManifest.Spec.Schedule) == "" {
 		return errors.New("failed to process cron workflow, cron syntax not provided in manifest")
@@ -1214,6 +1219,58 @@ exit 0`,
 	}).Info("[Readiness Patch] Successfully applied install-application readiness normalization")
 
 	return nil
+}
+
+// applyInstallAgentTemplateOverrides enforces a configurable install-agent image
+// and pull policy for all template-based workflow manifests.
+func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
+	targetImage := strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE"))
+	if targetImage == "" {
+		targetImage = "agentcert/agentcert-install-agent:latest"
+	}
+
+	targetPullPolicy := strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE_PULL_POLICY"))
+	if targetPullPolicy == "" {
+		targetPullPolicy = string(corev1.PullIfNotPresent)
+	}
+
+	// Guard against invalid values and keep behavior deterministic.
+	switch corev1.PullPolicy(targetPullPolicy) {
+	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+	default:
+		targetPullPolicy = string(corev1.PullIfNotPresent)
+	}
+
+	changed := false
+	for i := range templates {
+		t := &templates[i]
+		if t.Container == nil {
+			continue
+		}
+
+		// Only override the agent installer template, never app installer templates.
+		isInstallAgentTemplate := t.Name == "install-agent" || strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
+		if !isInstallAgentTemplate {
+			continue
+		}
+
+		if strings.TrimSpace(t.Container.Image) != targetImage {
+			t.Container.Image = targetImage
+			changed = true
+		}
+
+		if t.Container.ImagePullPolicy != corev1.PullPolicy(targetPullPolicy) {
+			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
+			changed = true
+		}
+	}
+
+	if changed {
+		logrus.WithFields(logrus.Fields{
+			"image":       targetImage,
+			"pull_policy": targetPullPolicy,
+		}).Info("[Install Agent Patch] Applied dynamic install-agent image override")
+	}
 }
 
 // normalizeProbeExecutionSettings applies app-agnostic probe hardening for chaos

@@ -242,6 +242,43 @@ sync_langfuse_env_from_dotenv() {
     fi
 }
 
+sync_install_agent_env_from_dotenv() {
+    # Use local .env for install-agent image overrides consumed by GraphQL server.
+    local env_file="$LOCAL_ENV_FILE"
+    if [ ! -f "$env_file" ]; then
+        print_warning ".env not found at $LOCAL_ENV_FILE; skipping install-agent env sync"
+        return 0
+    fi
+
+    print_section "Syncing install-agent env from .env to GraphQL deployment"
+    local install_agent_image install_agent_pull_policy
+    install_agent_image=$(get_env_value "INSTALL_AGENT_IMAGE" "$env_file")
+    install_agent_pull_policy=$(get_env_value "INSTALL_AGENT_IMAGE_PULL_POLICY" "$env_file")
+
+    if [ -z "$install_agent_image" ] && [ -z "$install_agent_pull_policy" ]; then
+        print_info "INSTALL_AGENT_IMAGE* not set in .env; skipping deployment env update"
+        return 0
+    fi
+
+    # Validate pull policy when provided to avoid pushing invalid values.
+    if [ -n "$install_agent_pull_policy" ]; then
+        case "$install_agent_pull_policy" in
+            Always|IfNotPresent|Never) ;;
+            *)
+                print_warning "Invalid INSTALL_AGENT_IMAGE_PULL_POLICY='$install_agent_pull_policy'. Using IfNotPresent"
+                install_agent_pull_policy="IfNotPresent"
+                ;;
+        esac
+    fi
+
+    local set_env_args=("deploy/litmusportal-server" "-n" "$NAMESPACE")
+    [ -n "$install_agent_image" ] && set_env_args+=("INSTALL_AGENT_IMAGE=$install_agent_image")
+    [ -n "$install_agent_pull_policy" ] && set_env_args+=("INSTALL_AGENT_IMAGE_PULL_POLICY=$install_agent_pull_policy")
+
+    kubectl set env "${set_env_args[@]}" >/dev/null
+    print_success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE*"
+}
+
 # ============================================================================
 # RUNTIME RBAC BOOTSTRAP (LITMUS-EXP)
 # ============================================================================
@@ -613,6 +650,9 @@ deploy_manifest() {
 
     # Sync Langfuse values from AI_Ops .env into cluster config/secret
     sync_langfuse_env_from_dotenv
+
+    # Sync install-agent image overrides consumed by GraphQL workflow processing
+    sync_install_agent_env_from_dotenv
     
     # Apply Litmus configuration fixes for offline/minikube environments
     print_info "Applying Litmus configuration fixes..."
@@ -668,6 +708,7 @@ sync_envs_if_namespace_exists() {
         print_header "Syncing Env to Running Cluster"
         sync_azure_env_from_dotenv
         sync_langfuse_env_from_dotenv
+        sync_install_agent_env_from_dotenv
         ensure_litmus_exp_runtime_rbac
         print_info "Restarting GraphQL Server to pick env changes"
         kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE" || true
@@ -723,7 +764,7 @@ main() {
     cleanup_generated_code
     
     [ "$SKIP_BUILD" = false ] && { build_all_images; load_to_minikube; } || print_warning "Skipping build"
-    [ "$SKIP_DEPLOY" = false ] && { create_namespace; deploy_manifest; sync_langfuse_env_from_dotenv; sync_azure_env_from_dotenv; ensure_litmus_exp_runtime_rbac; kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE"; verify_pods; } || print_warning "Skipping deploy"
+    [ "$SKIP_DEPLOY" = false ] && { create_namespace; deploy_manifest; sync_langfuse_env_from_dotenv; sync_azure_env_from_dotenv; sync_install_agent_env_from_dotenv; ensure_litmus_exp_runtime_rbac; kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE"; verify_pods; } || print_warning "Skipping deploy"
     
     display_info
     display_next
