@@ -333,6 +333,7 @@ download: Download
 downloadChaosInfrastructureManifest: Re-Download the manifest
 downloadExperiment: Download Manifest
 downloadSuccess: Download request successfully sent
+generateReport: Generate Report
 downloadYAML: Download YML
 downloadYAMLFile: Step 1 - Download YML file
 downloadedSuccessfully: Downloaded successfully
