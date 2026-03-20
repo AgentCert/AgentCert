@@ -104,6 +104,20 @@ export const MenuCell = ({
             }}
             permission={PermissionGroup.VIEWER}
           />
+          {/* <!-- generate report button --> */}
+          <RbacMenuItem
+            icon={'document'}
+            text={getString('generateReport')}
+            onClick={() => {
+              const link = document.createElement('a');
+              link.href = '/sample_agent_report.pdf';
+              link.download = `${data.experimentName}-report.pdf`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            permission={PermissionGroup.VIEWER}
+          />
           <MenuDivider />
           {/* <!-- delete experiment button --> */}
           <RbacMenuItem

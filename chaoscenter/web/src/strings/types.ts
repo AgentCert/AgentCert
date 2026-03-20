@@ -382,6 +382,7 @@ export interface StringsMap {
   'fieldMinLength': PrimitiveObject<'length'>
   'fieldSelector': unknown
   'fixAllErrors': unknown
+  'generateReport': unknown
   'generateSSH': unknown
   'genericResourceNotFoundError': PrimitiveObject<'resource' | 'resourceID' | 'projectID'>
   'gitConnection': unknown
