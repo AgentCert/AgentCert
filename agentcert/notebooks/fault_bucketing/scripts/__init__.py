@@ -1,4 +1,4 @@
 """Scripts for the Fault Bucketing pipeline."""
 
-from .classifier import FaultEventClassifier
-from .fault_bucketing import FaultBucketingPipeline
+from notebooks.fault_bucketing.scripts.classifier import FaultEventClassifier
+from notebooks.fault_bucketing.scripts.fault_bucketing import FaultBucketingPipeline

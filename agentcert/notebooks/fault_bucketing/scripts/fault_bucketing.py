@@ -21,8 +21,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .classifier import FaultEventClassifier
-from ..schema.data_models import (
+from notebooks.fault_bucketing.scripts.classifier import FaultEventClassifier
+from notebooks.fault_bucketing.schema.data_models import (
     EventClassification,
     FaultBucket,
     parse_iso_timestamp,

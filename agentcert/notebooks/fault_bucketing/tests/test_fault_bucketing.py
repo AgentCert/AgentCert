@@ -8,16 +8,10 @@ Tests cover:
 """
 
 import json
-import sys
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
-
-# Import directly from subpackages to avoid triggering the full notebooks import chain
-# which requires pymongo and other heavy dependencies
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 from notebooks.fault_bucketing.schema.data_models import (
     BatchClassificationResult,

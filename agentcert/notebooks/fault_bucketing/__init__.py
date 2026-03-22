@@ -1,6 +1,6 @@
 """Fault Bucketing package — preprocess Langfuse traces into per-fault buckets."""
 
-from .schema.data_models import (
+from notebooks.fault_bucketing.schema.data_models import (
     BatchClassificationResult,
     EventClassification,
     FaultBucket,
@@ -8,5 +8,5 @@ from .schema.data_models import (
     safe_parse_json,
     safe_parse_python_literal,
 )
-from .scripts.classifier import FaultEventClassifier
-from .scripts.fault_bucketing import FaultBucketingPipeline
+from notebooks.fault_bucketing.scripts.classifier import FaultEventClassifier
+from notebooks.fault_bucketing.scripts.fault_bucketing import FaultBucketingPipeline
