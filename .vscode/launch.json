@@ -43,6 +43,20 @@
             ]
         },
         {
+            "name": "Run fault bucketing (scripts)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "notebooks.fault_bucketing.scripts.fault_bucketing",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/agentcert",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--trace-file", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/multi_fault_trace.json",
+                "--output-dir", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/buckets",
+                "--batch-size", "10"
+            ]
+        },
+        {
             "name": "trace metrics extraction",
             "type": "debugpy",
             "request": "launch",
@@ -64,19 +78,6 @@
             "envFile": "${workspaceFolder}/agentcert/.env",
             "args": ["--agent-id", "flash-001-abc123",
                 "--agent-name", "Flash Agent"
-            ]
-        },
-        {
-            "name": "Run fault bucketing",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/agentcert/notebooks/metrics_extraction/fault_bucketing/fault_bucketing.py",
-            "console": "integratedTerminal",
-            "envFile": "${workspaceFolder}/agentcert/.env",
-            "args": [
-                "--trace-file", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/trace-multi_pod-delete_pod-network-latency_disk-fill_b5998ba8ce1eef86c80cece2.json",
-                "--output-dir", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/buckets",
-                "--batch-size", "10"
             ]
         },
         {

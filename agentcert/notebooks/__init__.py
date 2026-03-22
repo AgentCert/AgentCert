@@ -17,15 +17,26 @@ Usage:
     result = asyncio.run(extractor.extract("path/to/trace.json"))
 """
 
-from notebooks.metrics_extraction.metric_extraction_from_trace import (
-    TraceMetricsExtractor,
-    ExtractionResult,
-    TokenUsage,
-    extract_metrics_from_trace,
-    extract_metrics_from_trace_async,
-)
-from notebooks.metrics_extraction.fault_bucketing import FaultBucketingPipeline
-from notebooks.metrics_extraction.aggregation import AggregationOrchestrator
+try:
+    from notebooks.metric_extraction_from_trace import (
+        TraceMetricsExtractor,
+        ExtractionResult,
+        TokenUsage,
+        extract_metrics_from_trace,
+        extract_metrics_from_trace_async,
+    )
+except ImportError:
+    pass
+
+try:
+    from notebooks.fault_bucketing import FaultBucketingPipeline
+except ImportError:
+    pass
+
+try:
+    from notebooks.aggregation import AggregationOrchestrator
+except ImportError:
+    pass
 
 __all__ = [
     "TraceMetricsExtractor",

@@ -30,8 +30,8 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
 
-from notebooks.metrics_extraction.fault_bucketing import FaultBucketingPipeline
-from notebooks.metrics_extraction.metric_extraction_from_trace import (
+from notebooks.fault_bucketing import FaultBucketingPipeline
+from notebooks.metric_extraction_from_trace import (
     TraceMetricsExtractor,
     ExtractionResult,
 )

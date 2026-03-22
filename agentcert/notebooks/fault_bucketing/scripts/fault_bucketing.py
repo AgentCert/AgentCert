@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .classifier import FaultEventClassifier
-from .data_models import (
+from ..schema.data_models import (
     EventClassification,
     FaultBucket,
     parse_iso_timestamp,
@@ -37,6 +37,20 @@ except ImportError:
     ConfigLoader = None
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
+
+
+# ---------------------------------------------------------------------------
+# Module-level paths
+# ---------------------------------------------------------------------------
+
+_MODULE_DIR = Path(__file__).resolve().parent.parent
+_CONFIG_PATH = _MODULE_DIR / "config" / "fault_bucketing_config.json"
+
+
+def _load_module_config() -> Dict[str, Any]:
+    """Load the fault bucketing module configuration from JSON."""
+    with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 # ---------------------------------------------------------------------------
@@ -58,18 +72,22 @@ class FaultBucketingPipeline:
       7. Output per-fault JSON files.
     """
 
-    DEFAULT_BATCH_SIZE = 10
-
     def __init__(
         self,
         trace_file_path: str,
         output_dir: str,
         config: Optional[Dict[str, Any]] = None,
-        batch_size: int = DEFAULT_BATCH_SIZE,
+        batch_size: Optional[int] = None,
     ):
+        # Load module-level settings
+        module_config = _load_module_config()
+        pipeline_config = module_config.get("pipeline", {})
+        default_batch_size = pipeline_config.get("default_batch_size", 10)
+        self._max_filename_stem_length = pipeline_config.get("max_filename_stem_length", 80)
+
         self.trace_file_path = Path(trace_file_path)
         self.output_dir = Path(output_dir)
-        self.batch_size = batch_size
+        self.batch_size = batch_size if batch_size is not None else default_batch_size
 
         # Load config
         if config:
@@ -453,7 +471,7 @@ class FaultBucketingPipeline:
 
         trace_stem = self.trace_file_path.stem  # filename without extension
         # Truncate trace stem to keep filenames within OS limits
-        max_stem = 80
+        max_stem = self._max_filename_stem_length
         short_stem = trace_stem[:max_stem] if len(trace_stem) > max_stem else trace_stem
 
         all_buckets = {**self.active_faults, **self.closed_faults}
@@ -546,6 +564,10 @@ class FaultBucketingPipeline:
 
 def main():
     """CLI entry point for running the fault bucketing pipeline."""
+    # Load default batch size from module config
+    module_config = _load_module_config()
+    default_batch_size = module_config.get("pipeline", {}).get("default_batch_size", 10)
+
     parser = argparse.ArgumentParser(
         description="Fault Bucketing Pipeline — preprocess Langfuse traces "
         "into per-fault buckets for metrics extraction."
@@ -563,9 +585,9 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=FaultBucketingPipeline.DEFAULT_BATCH_SIZE,
+        default=default_batch_size,
         help=f"Number of events per LLM classification batch "
-        f"(default: {FaultBucketingPipeline.DEFAULT_BATCH_SIZE}).",
+        f"(default: {default_batch_size}).",
     )
 
     args = parser.parse_args()
