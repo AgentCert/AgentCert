@@ -99,7 +99,7 @@
             "console": "integratedTerminal",
             "envFile": "${workspaceFolder}/agentcert/.env",
             "args": [
-                "--trace-file", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/trace-multi_pod-delete_pod-network-latency_disk-fill_b5998ba8ce1eef86c80cece2.json",
+                "--trace-file", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/multi_fault_trace.json",
                 "--output-dir", "${workspaceFolder}/agentcert/data/reports",
                 "--batch-size", "10",
                 "--store"
