@@ -216,16 +216,20 @@ export default function ChaosStudioView({
         showSuccess(getString('reRunSuccessful'));
         setSafeToNavigate(true);
         const notifyID = response.runChaosExperiment.notifyID;
-        if (!isEmpty(notifyID)) {
-          history.push(
-            paths.toExperimentRunDetailsViaNotifyID({
-              experimentID: experimentKey,
-              notifyID: notifyID
-            })
-          );
-        } else {
-          history.push(paths.toExperiments());
-        }
+        // Defer navigation to next tick so React 18 can flush queued state updates
+        // before component unmounts. Prevents "Invariant: Should have a queue" error.
+        setTimeout(() => {
+          if (!isEmpty(notifyID)) {
+            history.push(
+              paths.toExperimentRunDetailsViaNotifyID({
+                experimentID: experimentKey,
+                notifyID: notifyID
+              })
+            );
+          } else {
+            history.push(paths.toExperiments());
+          }
+        }, 0);
       }
     });
   };

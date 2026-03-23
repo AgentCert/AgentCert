@@ -44,30 +44,30 @@ function RightSideBarV2({
   refetchExperimentRuns
 }: RightSideBarViewV2Props): React.ReactElement {
   const { showError } = useToaster();
-  let experimentList: ListExperimentResponse | undefined;
-  if (experimentType === ExperimentType.CRON) {
-    const scope = getScope();
-    const { data: experimentListData } = listExperiment({
-      ...scope,
-      experimentIDs: [experimentID],
-      options: {
-        onError: err => showError(err.message),
-        fetchPolicy: 'network-only'
-      }
-    });
-
-    experimentList = experimentListData;
-  }
+  const scope = getScope();
+  
+  // Always call the hook (React rules), but skip if not a cron experiment
+  const { data: experimentList } = listExperiment({
+    ...scope,
+    experimentIDs: [experimentID],
+    options: {
+      onError: err => showError(err.message),
+      fetchPolicy: 'network-only',
+      skip: experimentType !== ExperimentType.CRON
+    }
+  });
 
   React.useEffect(() => {
-    if (experimentList !== undefined) {
+    if (experimentType === ExperimentType.CRON && experimentList !== undefined) {
       const experimentData = experimentList?.listExperiment.experiments.filter(
         experiment => experiment.experimentID === experimentID
       )[0];
-      const parsedManifest = JSON.parse(experimentData?.experimentManifest);
-      setIsCronEnabled?.(cronEnabled(parsedManifest));
+      if (experimentData?.experimentManifest) {
+        const parsedManifest = JSON.parse(experimentData.experimentManifest);
+        setIsCronEnabled?.(cronEnabled(parsedManifest));
+      }
     }
-  }, [experimentList]);
+  }, [experimentList, experimentType, experimentID, setIsCronEnabled]);
 
   const { getString } = useStrings();
   const showStopButton = phase === ExperimentRunStatus.RUNNING || phase === ExperimentRunStatus.QUEUED;

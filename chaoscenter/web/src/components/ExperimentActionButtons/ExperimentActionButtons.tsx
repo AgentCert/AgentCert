@@ -62,12 +62,16 @@ export const RunExperimentButton = ({
       refetchExperiments?.();
       const notifyID = response.runChaosExperiment.notifyID;
       if (notifyID !== '') {
-        history.push(
-          paths.toExperimentRunDetailsViaNotifyID({
-            experimentID: experimentID,
-            notifyID: response.runChaosExperiment.notifyID
-          })
-        );
+        // Defer navigation to next tick so React 18 can flush queued state updates
+        // before component unmounts. Prevents "Invariant: Should have a queue" error.
+        setTimeout(() => {
+          history.push(
+            paths.toExperimentRunDetailsViaNotifyID({
+              experimentID: experimentID,
+              notifyID: response.runChaosExperiment.notifyID
+            })
+          );
+        }, 0);
       }
     },
     onError: err => {
