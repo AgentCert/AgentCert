@@ -2,24 +2,21 @@
 Phase 3 LLM Client Utility.
 
 Provides a thin wrapper around Azure OpenAI for all Phase 3 LLM calls.
-Handles: .env loading, client init, retry with exponential backoff,
+Handles: client init, retry with exponential backoff,
 token tracking, and structured JSON schema enforcement.
+
+Environment variables (AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, etc.)
+must be set before running — e.g. via VS Code debug profile or shell env.
 """
 
 import copy
 import json
 import os
 import time
-from pathlib import Path
 from typing import Type
 
-from dotenv import load_dotenv
 from openai import AzureOpenAI
 from pydantic import BaseModel
-
-# Load .env from certification_framework root
-_ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(_ENV_PATH)
 
 
 def get_client() -> AzureOpenAI:
