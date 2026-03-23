@@ -1,6 +1,7 @@
 .DS_Store
 .idea
-.vscode
+.vscode/*
+!.vscode/launch.json
 .nyc_output
 __pycache__/
 **/node_modules/
@@ -28,3 +29,4 @@ data/*
 setup/
 commands.txt
 .github/*
+*.log
