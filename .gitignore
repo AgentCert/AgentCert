@@ -16,7 +16,10 @@ out/
 vendor/
 _vendor-*
 tmp/
-.env
+**/.env
+**/.env.*
+*.env
+*.env.example
 litmus-portal-service
 litmus-portal-app
 litmus-portal/graphql-server/server
