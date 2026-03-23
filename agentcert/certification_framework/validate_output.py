@@ -6,16 +6,13 @@ structural keys -- field names, block types, dict keys at every
 level -- must match.
 
 Usage:
-    python validate_output.py
+    python validate_output.py <output_path> <groundtruth_path>
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent
-OUTPUT = ROOT / "data" / "output" / "certification_report.json"
-GROUND = ROOT / "data" / "groundtruth" / "certification_report.json"
 
 passed = 0
 failed = 0
@@ -156,12 +153,17 @@ def compare_sections(out_sections, gt_sections):
 
 
 def main():
-    out = json.loads(OUTPUT.read_text(encoding="utf-8"))
-    gt = json.loads(GROUND.read_text(encoding="utf-8"))
+    parser = argparse.ArgumentParser(description="Structural key comparison: certification report vs groundtruth")
+    parser.add_argument("output_path", type=Path, help="Path to generated certification_report.json")
+    parser.add_argument("groundtruth_path", type=Path, help="Path to groundtruth certification_report.json")
+    args = parser.parse_args()
+
+    out = json.loads(args.output_path.read_text(encoding="utf-8"))
+    gt = json.loads(args.groundtruth_path.read_text(encoding="utf-8"))
 
     print("Certification Report: Structural Key Comparison")
-    print(f"Output: {OUTPUT}")
-    print(f"Ground: {GROUND}")
+    print(f"Output: {args.output_path}")
+    print(f"Ground: {args.groundtruth_path}")
 
     # Top-level keys
     print("\n=== Top-Level ===")
