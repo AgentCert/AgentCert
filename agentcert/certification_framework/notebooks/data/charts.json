@@ -1,0 +1,317 @@
+{
+  "charts": {
+    "scorecard_radar": {
+      "chart_type": "radar",
+      "title": "Scorecard Snapshot",
+      "dimensions": [
+        {
+          "dimension": "Normalized TTD",
+          "value": 0.58
+        },
+        {
+          "dimension": "Normalized TTM",
+          "value": 0.47
+        },
+        {
+          "dimension": "Normalized Action Correctness",
+          "value": 1.0
+        },
+        {
+          "dimension": "Normalized Reasoning",
+          "value": 0.85
+        },
+        {
+          "dimension": "Normalized Safety (RAI)",
+          "value": 1.0
+        },
+        {
+          "dimension": "Normalized Hallucination",
+          "value": 1.0
+        },
+        {
+          "dimension": "Normalized Security",
+          "value": 1.0
+        }
+      ]
+    },
+    "ttd_bar": {
+      "chart_type": "grouped_bar",
+      "title": "Time-to-Detect (seconds)",
+      "categories": [
+        "Application",
+        "Network",
+        "Resource"
+      ],
+      "series": [
+        {
+          "name": "Median",
+          "values": [
+            455.03,
+            437.11,
+            1366.74
+          ]
+        },
+        {
+          "name": "P95",
+          "values": [
+            584.56,
+            1226.05,
+            1497.56
+          ]
+        }
+      ],
+      "y_axis": "Seconds",
+      "reference_lines": [
+        {
+          "value": 300.0,
+          "label": "Concern Threshold"
+        }
+      ]
+    },
+    "ttm_bar": {
+      "chart_type": "grouped_bar",
+      "title": "Time-to-Mitigate (seconds)",
+      "categories": [
+        "Application",
+        "Network",
+        "Resource"
+      ],
+      "series": [
+        {
+          "name": "Median",
+          "values": [
+            419.27,
+            697.35,
+            1602.34
+          ]
+        },
+        {
+          "name": "P95",
+          "values": [
+            814.72,
+            1405.8,
+            1684.74
+          ]
+        }
+      ],
+      "y_axis": "Seconds",
+      "reference_lines": [
+        {
+          "value": 600.0,
+          "label": "Concern Threshold"
+        }
+      ]
+    },
+    "rates_bar": {
+      "chart_type": "grouped_bar",
+      "title": "Detection & Mitigation Rates",
+      "categories": [
+        "Application",
+        "Network",
+        "Resource"
+      ],
+      "series": [
+        {
+          "name": "Detection Rate",
+          "values": [
+            0.2,
+            0.0,
+            0.2
+          ]
+        },
+        {
+          "name": "Mitigation Rate",
+          "values": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "y_axis": "Rate (0-1)",
+      "reference_lines": [
+        {
+          "value": 0.5,
+          "label": "Minimum Acceptable"
+        }
+      ]
+    },
+    "accuracy_heatmap": {
+      "chart_type": "heatmap",
+      "title": "Accuracy & Quality Overview",
+      "x_labels": [
+        "Action Correctness",
+        "Reasoning Score",
+        "Response Quality",
+        "Hallucination Control"
+      ],
+      "y_labels": [
+        "Application",
+        "Network",
+        "Resource"
+      ],
+      "values": [
+        [
+          1.0,
+          0.842,
+          0.842,
+          1.0
+        ],
+        [
+          null,
+          0.8432000000000001,
+          0.8432000000000001,
+          1.0
+        ],
+        [
+          null,
+          0.8602000000000001,
+          0.8602000000000001,
+          0.9986
+        ]
+      ],
+      "scale": [
+        0.0,
+        0.25,
+        0.5,
+        0.75,
+        1.0
+      ],
+      "display_values": [
+        [
+          1.0,
+          8.42,
+          8.42,
+          1.0
+        ],
+        [
+          null,
+          8.432,
+          8.432,
+          1.0
+        ],
+        [
+          null,
+          8.602,
+          8.602,
+          0.9986
+        ]
+      ]
+    },
+    "reasoning_bar": {
+      "chart_type": "grouped_bar",
+      "title": "Reasoning & Response Quality (out of 10)",
+      "categories": [
+        "Application",
+        "Network",
+        "Resource"
+      ],
+      "series": [
+        {
+          "name": "Reasoning",
+          "values": [
+            8.42,
+            8.432,
+            8.602
+          ]
+        },
+        {
+          "name": "Response Quality",
+          "values": [
+            8.42,
+            8.432,
+            8.602
+          ]
+        }
+      ],
+      "y_axis": "Score (0-10)",
+      "reference_lines": null
+    },
+    "hallucination_bar": {
+      "chart_type": "grouped_bar",
+      "title": "Hallucination Scores",
+      "categories": [
+        "Application",
+        "Network",
+        "Resource"
+      ],
+      "series": [
+        {
+          "name": "Mean",
+          "values": [
+            0.0,
+            0.0,
+            0.014
+          ]
+        },
+        {
+          "name": "Max",
+          "values": [
+            0.0,
+            0.0,
+            0.07
+          ]
+        }
+      ],
+      "y_axis": "Score (0-10)",
+      "reference_lines": null
+    },
+    "compliance_bar": {
+      "chart_type": "grouped_bar",
+      "title": "Compliance Rates",
+      "categories": [
+        "Application",
+        "Network",
+        "Resource"
+      ],
+      "series": [
+        {
+          "name": "RAI Compliance",
+          "values": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "name": "Security Compliance",
+          "values": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "y_axis": "Rate (0-1)",
+      "reference_lines": null
+    },
+    "token_stacked": {
+      "chart_type": "stacked_bar",
+      "title": "Token Usage per Category",
+      "categories": [
+        "Application",
+        "Network",
+        "Resource"
+      ],
+      "series": [
+        {
+          "name": "Input Tokens",
+          "values": [
+            2525.0,
+            0.0,
+            1851.0
+          ]
+        },
+        {
+          "name": "Output Tokens",
+          "values": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "y_axis": "Tokens"
+    }
+  }
+}
