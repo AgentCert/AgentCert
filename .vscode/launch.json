@@ -26,6 +26,32 @@
                 "--output-dir", "${workspaceFolder}/agentcert/data/reports/buckets",
                 "--batch-size", "10"
             ]
+        },
+        {
+            "name": "Run metric extraction (scripts)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "metric_extraction.scripts.metrics_extractor_from_trace",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/agentcert",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--trace-file-name", "${workspaceFolder}/agentcert/data/reports/buckets/multi_fault_trace_bucket_disk-fill.json",
+                "--fault-config-path", "${workspaceFolder}/agentcert/data/fault_configs/disk_fill_fault_configuration.json"
+            ]
+        },
+        {
+            "name": "Run fault bucketing and metric extraction pipeline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "run_bucketing_and_extraction_pipeline",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/agentcert",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--trace-file", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/multi_fault_trace.json",
+                "--output-dir", "${workspaceFolder}/agentcert/data/reports/metrics"
+            ]
         }
     ]
 }
