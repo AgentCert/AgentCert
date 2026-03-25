@@ -1,4 +1,10 @@
 ````markdown
+# Clone the repo: https://github.com/AgentCert/AgentCert.git
+
+```
+git clone https://github.com/AgentCert/AgentCert.git
+```
+
 # MongoDB Single-Node Replica Set Setup Instructions
 
 This guide outlines the steps to deploy a MongoDB 5.0 container configured as a single-node replica set with admin authentication.
@@ -54,80 +60,88 @@ docker exec -it simple-mongo mongosh -u admin -p 1234 --authenticationDatabase a
 
 # Start the auth services
 ```
-export DB_USER=admin                               
-export DB_PASSWORD=1234
-export DB_SERVER="mongodb://$DB_USER:$DB_PASSWORD@localhost:27017/?replicaSet=rs0&authSource=admin"
-export JWT_SECRET=litmus-portal@123
-export PORTAL_ENDPOINT=http://localhost:8080
-export LITMUS_SVC_ENDPOINT=""
-export SELF_AGENT=false
-export INFRA_SCOPE=cluster
-export INFRA_NAMESPACE=litmus
-export LITMUS_PORTAL_NAMESPACE=litmus
-export PORTAL_SCOPE=namespace
-export SUBSCRIBER_IMAGE=agentcert/litmusportal-subscriber:3.0.0
-export EVENT_TRACKER_IMAGE=litmuschaos/litmusportal-event-tracker:ci
-export CONTAINER_RUNTIME_EXECUTOR=k8sapi
-export ARGO_WORKFLOW_CONTROLLER_IMAGE=argoproj/workflow-controller:v2.11.0
-export ARGO_WORKFLOW_EXECUTOR_IMAGE=argoproj/argoexec:v2.11.0
-export CHAOS_CENTER_SCOPE=cluster
-export WORKFLOW_HELPER_IMAGE_VERSION=3.0.0
-export LITMUS_CHAOS_OPERATOR_IMAGE=litmuschaos/chaos-operator:3.0.0
-export LITMUS_CHAOS_RUNNER_IMAGE=litmuschaos/chaos-runner:3.0.0
-export LITMUS_CHAOS_EXPORTER_IMAGE=litmuschaos/chaos-exporter:3.0.0
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=litmus
-export VERSION=ci
-export HUB_BRANCH_NAME=v2.0.x
-export INFRA_DEPLOYMENTS="[\"app=chaos-exporter\", \"name=chaos-operator\", \"app=event-tracker\",\"app=workflow-controller\"]"
-export INFRA_COMPATIBLE_VERSIONS='["0.2.0", "0.1.0","ci"]'
-export DEFAULT_HUB_BRANCH_NAME=master
-export REST_PORT=3000                              
-export GRPC_PORT=3030
-export ALLOWED_ORIGINS=".*" 
+export VERSION="3.0.0"
+export INFRA_DEPLOYMENTS="false"
+export DB_SERVER="mongodb://localhost:27017"
+export JWT_SECRET="litmus-portal@123"
+export DB_USER="admin"
+export DB_PASSWORD="1234"
+export SELF_AGENT="false"
+export INFRA_COMPATIBLE_VERSIONS='["3.0.0"]'
+export ALLOWED_ORIGINS=".*"
+export SKIP_SSL_VERIFY="true"
+export ENABLE_GQL_INTROSPECTION="true"
+export INFRA_SCOPE="cluster"
+export ENABLE_INTERNAL_TLS="false"
+export DEFAULT_HUB_GIT_URL="https://github.com/agentcert/chaos-charts"
+export DEFAULT_HUB_BRANCH_NAME="master"
+export SUBSCRIBER_IMAGE="agentcert/litmusportal-subscriber:3.0.0"
+export EVENT_TRACKER_IMAGE="litmuschaos/litmusportal-event-tracker:3.0.0"
+export ARGO_WORKFLOW_CONTROLLER_IMAGE="litmuschaos/workflow-controller:v3.3.1"
+export ARGO_WORKFLOW_EXECUTOR_IMAGE="litmuschaos/argoexec:v3.3.1"
+export LITMUS_CHAOS_OPERATOR_IMAGE="litmuschaos/chaos-operator:3.0.0"
+export LITMUS_CHAOS_RUNNER_IMAGE="litmuschaos/chaos-runner:3.0.0"
+export LITMUS_CHAOS_EXPORTER_IMAGE="litmuschaos/chaos-exporter:3.0.0"
+export CONTAINER_RUNTIME_EXECUTOR="k8sapi"
+export WORKFLOW_HELPER_IMAGE_VERSION="3.0.0"
+export DEFAULT_AGENT_HUB_GIT_URL="https://github.com/agentcert/agent-charts"
+export DEFAULT_AGENT_HUB_BRANCH_NAME="main"
+export DEFAULT_AGENT_HUB_PATH="/temp/default"
+export DEFAULT_APP_HUB_GIT_URL="https://github.com/agentcert/app-charts"
+export DEFAULT_APP_HUB_BRANCH_NAME="main"
+export DEFAULT_APP_HUB_PATH="/temp/default"
+export ADMIN_USERNAME="admin"
+export ADMIN_PASSWORD="litmus"
+export REST_PORT="3000"
+export GRPC_PORT="3030"
 ```
 
 ### Run the service
 ```
 cd chaoscenter/authentication/api
-go run main.go  
+go run main.go
 ```
 
 # Start the graphql server
 ```
-export DB_USER=admin                               
-export DB_PASSWORD=1234
-export DB_SERVER="mongodb://$DB_USER:$DB_PASSWORD@localhost:27017/?replicaSet=rs0&authSource=admin"
-export JWT_SECRET=litmus-portal@123
-export PORTAL_ENDPOINT=http://localhost:8080
-export LITMUS_SVC_ENDPOINT=""
-export SELF_AGENT=false
-export INFRA_SCOPE=cluster
-export INFRA_NAMESPACE=litmus
-export LITMUS_PORTAL_NAMESPACE=litmus
-export PORTAL_SCOPE=namespace
-export SUBSCRIBER_IMAGE=agentcert/litmusportal-subscriber:3.0.0
-export EVENT_TRACKER_IMAGE=litmuschaos/litmusportal-event-tracker:ci
-export CONTAINER_RUNTIME_EXECUTOR=k8sapi
-export ARGO_WORKFLOW_CONTROLLER_IMAGE=argoproj/workflow-controller:v2.11.0
-export ARGO_WORKFLOW_EXECUTOR_IMAGE=argoproj/argoexec:v2.11.0
-export CHAOS_CENTER_SCOPE=cluster
-export WORKFLOW_HELPER_IMAGE_VERSION=3.0.0
-export LITMUS_CHAOS_OPERATOR_IMAGE=litmuschaos/chaos-operator:3.0.0
-export LITMUS_CHAOS_RUNNER_IMAGE=litmuschaos/chaos-runner:3.0.0
-export LITMUS_CHAOS_EXPORTER_IMAGE=litmuschaos/chaos-exporter:3.0.0
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=litmusexport VERSION=ci
-export HUB_BRANCH_NAME=v2.0.x
-export INFRA_DEPLOYMENTS="["app=chaos-exporter", "name=chaos-operator", "app=event-tracker","app=workflow-controller"]"export INFRA_COMPATIBLE_VERSIONS='["0.2.0", "0.1.0","ci"]'
-export DEFAULT_HUB_BRANCH_NAME=master
+export VERSION="3.0.0"
+export INFRA_DEPLOYMENTS="false"
+export DB_SERVER="mongodb://localhost:27017"
+export JWT_SECRET="litmus-portal@123"
+export DB_USER="admin"
+export DB_PASSWORD="1234"
+export SELF_AGENT="false"
+export INFRA_COMPATIBLE_VERSIONS='["3.0.0"]'
 export ALLOWED_ORIGINS=".*"
+export SKIP_SSL_VERIFY="true"
+export ENABLE_GQL_INTROSPECTION="true"
+export INFRA_SCOPE="cluster"
+export ENABLE_INTERNAL_TLS="false"
+export DEFAULT_HUB_GIT_URL="https://github.com/agentcert/chaos-charts"
+export DEFAULT_HUB_BRANCH_NAME="master"
+export SUBSCRIBER_IMAGE="agentcert/litmusportal-subscriber:3.0.0"
+export EVENT_TRACKER_IMAGE="litmuschaos/litmusportal-event-tracker:3.0.0"
+export ARGO_WORKFLOW_CONTROLLER_IMAGE="litmuschaos/workflow-controller:v3.3.1"
+export ARGO_WORKFLOW_EXECUTOR_IMAGE="litmuschaos/argoexec:v3.3.1"
+export LITMUS_CHAOS_OPERATOR_IMAGE="litmuschaos/chaos-operator:3.0.0"
+export LITMUS_CHAOS_RUNNER_IMAGE="litmuschaos/chaos-runner:3.0.0"
+export LITMUS_CHAOS_EXPORTER_IMAGE="litmuschaos/chaos-exporter:3.0.0"
+export CONTAINER_RUNTIME_EXECUTOR="k8sapi"
+export WORKFLOW_HELPER_IMAGE_VERSION="3.0.0"
+export DEFAULT_AGENT_HUB_GIT_URL="https://github.com/agentcert/agent-charts"
+export DEFAULT_AGENT_HUB_BRANCH_NAME="main"
+export DEFAULT_AGENT_HUB_PATH="/temp/default"
+export DEFAULT_APP_HUB_GIT_URL="https://github.com/agentcert/app-charts"
+export DEFAULT_APP_HUB_BRANCH_NAME="main"
+export DEFAULT_APP_HUB_PATH="/temp/default"
+export LITMUS_AUTH_GRPC_ENDPOINT="localhost"
+export LITMUS_AUTH_GRPC_PORT="3030"
 ```
 
 ### Run the service
 ```
 cd chaoscenter/graphql/server
-go run server.go  
+go run server.go
 ```
 
 # Start the UI
