@@ -27,6 +27,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/ghodss/yaml"
 	chaosTypes "github.com/litmuschaos/chaos-operator/api/litmuschaos/v1alpha1"
@@ -1469,14 +1471,34 @@ func (c *ChaosExperimentRunHandler) ListExperimentRun(projectID string, request 
 	return &output, nil
 }
 
-// traceExperimentExecution logs fault execution to observability backend (Langfuse, AI_Ops, etc.)
-// This function can be easily replaced with alternative observers (AI_Ops, Prometheus, etc.)
+// traceExperimentExecution logs fault execution to observability backend.
+// When OTEL is enabled, creates an OTEL root span for the experiment run.
+// Falls back to Langfuse REST when OTEL is not configured.
 func traceExperimentExecution(ctx context.Context, notifyID string, experimentID string, experimentName string, infra dbChaosInfra.ChaosInfra, projectID string) error {
-	tracer := observability.GetLangfuseTracer()
 	namespace := ""
 	if infra.InfraNamespace != nil {
 		namespace = *infra.InfraNamespace
 	}
+
+	// OTEL path: create a root span for the experiment run
+	if observability.OTELTracerEnabled() {
+		observability.StartExperimentSpan(ctx, notifyID,
+			attribute.String("experiment.id", experimentID),
+			attribute.String("experiment.name", experimentName),
+			attribute.String("experiment.fault_name", "chaos-workflow"),
+			attribute.String("experiment.session_id", notifyID),
+			attribute.String("infra.id", infra.InfraID),
+			attribute.String("project.id", projectID),
+			attribute.String("infra.namespace", namespace),
+			attribute.String("experiment.phase", "injection"),
+			attribute.String("experiment.priority", "high"),
+		)
+		logrus.Infof("[OTEL] Started experiment span: traceID=%s experiment=%s", notifyID, experimentName)
+		return nil
+	}
+
+	// Langfuse REST fallback
+	tracer := observability.GetLangfuseTracer()
 	return tracer.TraceExperimentExecution(ctx, &observability.ExperimentExecutionDetails{
 		TraceID:        notifyID,
 		ExperimentID:   experimentID,
@@ -1491,9 +1513,15 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 	})
 }
 
-// completeExperimentExecution logs fault execution completion to observability backend
-// This function can be easily replaced with alternative observers (AI_Ops, Prometheus, etc.)
+// completeExperimentExecution logs fault execution completion to observability backend.
+// When OTEL is enabled, this is a no-op (spans are ended in ChaosExperimentRunEvent).
+// Falls back to Langfuse REST when OTEL is not configured.
 func completeExperimentExecution(ctx context.Context, notifyID string, experimentID string, experimentName string, status string, result string) error {
+	if observability.OTELTracerEnabled() {
+		// OTEL spans are ended via endExperimentOTELSpan; no separate "complete" needed
+		return nil
+	}
+
 	tracer := observability.GetLangfuseTracer()
 	return tracer.CompleteExperimentExecution(ctx, notifyID, &observability.ExperimentCompletionDetails{
 		ExperimentID:   experimentID,
@@ -1503,19 +1531,69 @@ func completeExperimentExecution(ctx context.Context, notifyID string, experimen
 	})
 }
 
-// traceExperimentObservation logs continuous workflow events to Langfuse.
+// traceExperimentObservation logs continuous workflow events.
+// When OTEL is enabled, adds events to the active experiment span.
+// Falls back to Langfuse REST when OTEL is not configured.
 func traceExperimentObservation(ctx context.Context, traceID string, event model.ExperimentRunRequest, executionData types.ExecutionData, metrics *types.ExperimentRunMetrics) {
 	if traceID == "" {
 		return
 	}
+
+	// OTEL path: add events and child spans to the active experiment span
+	if observability.OTELTracerEnabled() {
+		observationName := fmt.Sprintf("workflow-event: %s (%s)", executionData.Phase, executionData.EventType)
+		if executionData.Phase == "" && executionData.EventType == "" {
+			observationName = "workflow-event"
+		}
+
+		eventAttrs := []attribute.KeyValue{
+			attribute.String("experiment.id", event.ExperimentID),
+			attribute.String("experiment.run_id", event.ExperimentRunID),
+			attribute.String("experiment.name", event.ExperimentName),
+			attribute.String("event.type", executionData.EventType),
+			attribute.String("event.phase", executionData.Phase),
+			attribute.String("event.message", executionData.Message),
+			attribute.Bool("event.completed", event.Completed),
+		}
+
+		if metrics != nil {
+			eventAttrs = append(eventAttrs,
+				attribute.Float64("metrics.resiliency_score", metrics.ResiliencyScore),
+				attribute.Int("metrics.total_experiments", metrics.TotalExperiments),
+				attribute.Int("metrics.experiments_passed", metrics.ExperimentsPassed),
+				attribute.Int("metrics.experiments_failed", metrics.ExperimentsFailed),
+				attribute.Int("metrics.experiments_awaited", metrics.ExperimentsAwaited),
+				attribute.Int("metrics.experiments_stopped", metrics.ExperimentsStopped),
+				attribute.Int("metrics.experiments_na", metrics.ExperimentsNA),
+			)
+		}
+
+		// Add execution data as JSON attribute
+		eventAttrs = append(eventAttrs,
+			attribute.String("execution_data", observability.MarshalJSON(executionData)),
+		)
+
+		observability.AddExperimentEvent(traceID, observationName, eventAttrs...)
+
+		// Also update the span's top-level attributes with latest phase
+		observability.SetExperimentSpanAttributes(traceID,
+			attribute.String("experiment.phase", executionData.Phase),
+			attribute.String("experiment.event_type", executionData.EventType),
+		)
+
+		logrus.Infof("[OTEL] Added event '%s' to span: traceID=%s", observationName, traceID)
+		return
+	}
+
+	// Langfuse REST fallback
 	tracer := observability.GetLangfuseTracer()
 
 	input := map[string]interface{}{
-		"experimentID":   event.ExperimentID,
+		"experimentID":    event.ExperimentID,
 		"experimentRunID": event.ExperimentRunID,
-		"experimentName": event.ExperimentName,
-		"revisionID":     event.RevisionID,
-		"completed":      event.Completed,
+		"experimentName":  event.ExperimentName,
+		"revisionID":      event.RevisionID,
+		"completed":       event.Completed,
 	}
 	if event.NotifyID != nil {
 		input["notifyID"] = *event.NotifyID
@@ -1534,7 +1612,6 @@ func traceExperimentObservation(ctx context.Context, traceID string, event model
 		"message":   executionData.Message,
 	}
 
-	// Create unique observation name based on phase and event type
 	observationName := fmt.Sprintf("workflow-event: %s (%s)", executionData.Phase, executionData.EventType)
 	if executionData.Phase == "" && executionData.EventType == "" {
 		observationName = "workflow-event"
@@ -1542,27 +1619,62 @@ func traceExperimentObservation(ctx context.Context, traceID string, event model
 
 	logrus.Infof("[Tracing] Creating observation: %s for trace: %s", observationName, traceID)
 
-	// Set start and end time for observation in ISO 8601 format
 	now := time.Now()
-	
+
 	_ = tracer.TraceExperimentObservation(ctx, &observability.ExperimentObservationDetails{
 		TraceID:   traceID,
 		Name:      observationName,
 		Type:      "EVENT",
 		StartTime: now.Format(time.RFC3339),
-		EndTime:   now.Format(time.RFC3339), // Same as start for instantaneous events
+		EndTime:   now.Format(time.RFC3339),
 		Input:     input,
 		Output:    output,
 		Metadata:  metadata,
 	})
 }
 
-// scoreExperimentRun logs resiliency scores and fault metrics to Langfuse after completion.
+// scoreExperimentRun logs resiliency scores and fault metrics after experiment completion.
+// When OTEL is enabled, sets span attributes for metrics and ends the span.
+// Langfuse scores are always submitted via REST (OTEL has no native score concept).
 func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.ExperimentRunMetrics, status string) {
 	if traceID == "" || metrics == nil {
 		return
 	}
+
+	// OTEL path: set final metric attributes and end the experiment span
+	if observability.OTELTracerEnabled() {
+		observability.SetExperimentSpanAttributes(traceID,
+			attribute.String("experiment.final_phase", status),
+			attribute.Float64("experiment.resiliency_score", metrics.ResiliencyScore),
+			attribute.Int("experiment.total_faults", metrics.TotalExperiments),
+			attribute.Int("experiment.faults_passed", metrics.ExperimentsPassed),
+			attribute.Int("experiment.faults_failed", metrics.ExperimentsFailed),
+			attribute.Int("experiment.faults_awaited", metrics.ExperimentsAwaited),
+			attribute.Int("experiment.faults_stopped", metrics.ExperimentsStopped),
+			attribute.Int("experiment.faults_na", metrics.ExperimentsNA),
+		)
+
+		// Set span status based on experiment outcome
+		_, span := observability.GetExperimentSpan(traceID)
+		if span != nil {
+			phaseLower := strings.ToLower(status)
+			if strings.Contains(phaseLower, "failed") || strings.Contains(phaseLower, "error") {
+				span.SetStatus(codes.Error, fmt.Sprintf("experiment %s: resiliency=%.1f%%", status, metrics.ResiliencyScore))
+			} else {
+				span.SetStatus(codes.Ok, fmt.Sprintf("experiment %s: resiliency=%.1f%%", status, metrics.ResiliencyScore))
+			}
+		}
+
+		// End the OTEL span — this triggers export to Langfuse via OTLP
+		observability.EndExperimentSpan(traceID)
+		logrus.Infof("[OTEL] Ended experiment span: traceID=%s phase=%s resiliency=%.1f%%", traceID, status, metrics.ResiliencyScore)
+	}
+
+	// Langfuse REST scores — submitted regardless of OTEL (scores need REST API)
 	tracer := observability.GetLangfuseTracer()
+	if !tracer.IsEnabled() {
+		return
+	}
 
 	// Score 1: Resiliency Score
 	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{

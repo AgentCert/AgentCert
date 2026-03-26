@@ -1,0 +1,181 @@
+package observability
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"sync"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+	"go.opentelemetry.io/otel/trace"
+)
+
+const (
+	otelTracerName = "chaoscenter-observability"
+	serviceName    = "chaoscenter-graphql-server"
+)
+
+var otelTracerProvider *sdktrace.TracerProvider
+
+// activeSpans stores open OTEL spans keyed by traceID (notifyID) so the
+// ChaosExperimentRunEvent handler can add events to the span that was opened
+// when the experiment was triggered.
+var (
+	activeSpans   = make(map[string]trace.Span)
+	activeCtxs    = make(map[string]context.Context)
+	activeSpansMu sync.Mutex
+)
+
+// InitOTELTracer initializes the OpenTelemetry TracerProvider with an OTLP HTTP exporter.
+// It reads configuration from environment variables:
+//   - OTEL_EXPORTER_OTLP_ENDPOINT: The OTLP endpoint (e.g. http://langfuse:3000/api/public/otel)
+//   - OTEL_EXPORTER_OTLP_HEADERS: Optional headers (e.g. Authorization=Basic <base64>)
+//
+// Returns nil if OTEL_EXPORTER_OTLP_ENDPOINT is not set (OTEL tracing disabled).
+func InitOTELTracer(ctx context.Context) error {
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if endpoint == "" {
+		fmt.Println("[OTEL] OTEL_EXPORTER_OTLP_ENDPOINT not set — OTEL tracing disabled")
+		return nil
+	}
+
+	// Build exporter options — the OTLP HTTP exporter reads OTEL_EXPORTER_OTLP_ENDPOINT
+	// and OTEL_EXPORTER_OTLP_HEADERS automatically from environment, but we set endpoint
+	// explicitly for clarity.
+	exporterOpts := []otlptracehttp.Option{
+		otlptracehttp.WithEndpointURL(endpoint + "/v1/traces"),
+	}
+
+	exporter, err := otlptracehttp.New(ctx, exporterOpts...)
+	if err != nil {
+		return fmt.Errorf("failed to create OTLP trace exporter: %w", err)
+	}
+
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(serviceName),
+			semconv.TelemetrySDKLanguageGo,
+			semconv.TelemetrySDKNameKey.String("opentelemetry"),
+			attribute.String("service.component", "chaos-experiment-runner"),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create OTEL resource: %w", err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter,
+			sdktrace.WithMaxExportBatchSize(128),
+			sdktrace.WithBatchTimeout(5*time.Second),
+		),
+		sdktrace.WithResource(res),
+	)
+
+	otelTracerProvider = tp
+	otel.SetTracerProvider(tp)
+
+	fmt.Printf("[OTEL] TracerProvider initialized (endpoint: %s)\n", endpoint)
+	return nil
+}
+
+// ShutdownOTELTracer gracefully flushes and shuts down the TracerProvider.
+// Call this during server graceful shutdown.
+func ShutdownOTELTracer(ctx context.Context) error {
+	if otelTracerProvider == nil {
+		return nil
+	}
+	return otelTracerProvider.Shutdown(ctx)
+}
+
+// OTELTracerEnabled returns true if the OTEL TracerProvider has been initialized.
+func OTELTracerEnabled() bool {
+	return otelTracerProvider != nil
+}
+
+// GetOTELTracer returns a named tracer from the global TracerProvider.
+func GetOTELTracer() trace.Tracer {
+	return otel.Tracer(otelTracerName)
+}
+
+// StartExperimentSpan creates a root span for an experiment run and stores it
+// in the active span map keyed by traceID (typically the notifyID).
+func StartExperimentSpan(ctx context.Context, traceID string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
+	tracer := GetOTELTracer()
+	spanCtx, span := tracer.Start(ctx, "experiment-run",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(attrs...),
+	)
+
+	activeSpansMu.Lock()
+	activeSpans[traceID] = span
+	activeCtxs[traceID] = spanCtx
+	activeSpansMu.Unlock()
+
+	return spanCtx, span
+}
+
+// GetExperimentSpan retrieves an active experiment span by traceID.
+// Returns nil, nil if not found.
+func GetExperimentSpan(traceID string) (context.Context, trace.Span) {
+	activeSpansMu.Lock()
+	defer activeSpansMu.Unlock()
+
+	span, ok := activeSpans[traceID]
+	if !ok {
+		return nil, nil
+	}
+	return activeCtxs[traceID], span
+}
+
+// EndExperimentSpan ends the active experiment span and removes it from the map.
+func EndExperimentSpan(traceID string) {
+	activeSpansMu.Lock()
+	span, ok := activeSpans[traceID]
+	if ok {
+		delete(activeSpans, traceID)
+		delete(activeCtxs, traceID)
+	}
+	activeSpansMu.Unlock()
+
+	if ok && span != nil {
+		span.End()
+	}
+}
+
+// AddExperimentEvent adds a timestamped event to the active experiment span.
+func AddExperimentEvent(traceID string, eventName string, attrs ...attribute.KeyValue) {
+	activeSpansMu.Lock()
+	span, ok := activeSpans[traceID]
+	activeSpansMu.Unlock()
+
+	if ok && span != nil {
+		span.AddEvent(eventName, trace.WithAttributes(attrs...))
+	}
+}
+
+// SetExperimentSpanAttributes sets attributes on the active experiment span.
+func SetExperimentSpanAttributes(traceID string, attrs ...attribute.KeyValue) {
+	activeSpansMu.Lock()
+	span, ok := activeSpans[traceID]
+	activeSpansMu.Unlock()
+
+	if ok && span != nil {
+		span.SetAttributes(attrs...)
+	}
+}
+
+// MarshalJSON safely marshals a value to JSON string for span attributes.
+func MarshalJSON(v interface{}) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(b)
+}
