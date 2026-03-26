@@ -171,6 +171,62 @@ func SetExperimentSpanAttributes(traceID string, attrs ...attribute.KeyValue) {
 	}
 }
 
+// StartFaultSpan creates a child span under the active experiment span for a specific fault.
+// Returns the child span (caller should call span.End() when fault execution data arrives).
+// The child span is stored in a separate map keyed by "traceID:faultName".
+func StartFaultSpan(traceID string, faultName string, attrs ...attribute.KeyValue) trace.Span {
+	activeSpansMu.Lock()
+	parentCtx, ok := activeCtxs[traceID]
+	activeSpansMu.Unlock()
+
+	if !ok || parentCtx == nil {
+		return nil
+	}
+
+	tracer := GetOTELTracer()
+	_, faultSpan := tracer.Start(parentCtx, "fault: "+faultName,
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(attrs...),
+	)
+
+	faultKey := traceID + ":" + faultName
+	activeSpansMu.Lock()
+	activeSpans[faultKey] = faultSpan
+	activeSpansMu.Unlock()
+
+	return faultSpan
+}
+
+// EndFaultSpan ends a per-fault child span and removes it from the map.
+func EndFaultSpan(traceID string, faultName string, attrs ...attribute.KeyValue) {
+	faultKey := traceID + ":" + faultName
+
+	activeSpansMu.Lock()
+	span, ok := activeSpans[faultKey]
+	if ok {
+		delete(activeSpans, faultKey)
+	}
+	activeSpansMu.Unlock()
+
+	if ok && span != nil {
+		span.SetAttributes(attrs...)
+		span.End()
+	}
+}
+
+// AddFaultEvent adds an event to an existing per-fault child span.
+func AddFaultEvent(traceID string, faultName string, eventName string, attrs ...attribute.KeyValue) {
+	faultKey := traceID + ":" + faultName
+
+	activeSpansMu.Lock()
+	span, ok := activeSpans[faultKey]
+	activeSpansMu.Unlock()
+
+	if ok && span != nil {
+		span.AddEvent(eventName, trace.WithAttributes(attrs...))
+	}
+}
+
 // MarshalJSON safely marshals a value to JSON string for span attributes.
 func MarshalJSON(v interface{}) string {
 	b, err := json.Marshal(v)

@@ -1902,6 +1902,51 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 			if len(meta.Spec.Experiments[0].Spec.Probe) != 0 {
 				meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
 			}
+
+			// OTEL Hook 1: Create a per-fault child span with config details
+			if observability.OTELTracerEnabled() && len(meta.Spec.Experiments) > 0 {
+				exp := meta.Spec.Experiments[0]
+				faultName := exp.Name
+
+				faultAttrs := []attribute.KeyValue{
+					attribute.String("fault.name", faultName),
+					attribute.String("fault.target_namespace", meta.Spec.Appinfo.Appns),
+					attribute.String("fault.target_label", meta.Spec.Appinfo.Applabel),
+					attribute.String("fault.target_kind", string(meta.Spec.Appinfo.AppKind)),
+					attribute.String("fault.engine_template", template.Name),
+				}
+
+				// Extract chaos params from experiment env vars
+				for _, envVar := range exp.Spec.Components.ENV {
+					switch envVar.Name {
+					case "TOTAL_CHAOS_DURATION":
+						faultAttrs = append(faultAttrs, attribute.String("fault.chaos_duration", envVar.Value))
+					case "CPU_CORES":
+						faultAttrs = append(faultAttrs, attribute.String("fault.cpu_cores", envVar.Value))
+					case "MEMORY_CONSUMPTION":
+						faultAttrs = append(faultAttrs, attribute.String("fault.memory_consumption", envVar.Value))
+					case "FILL_PERCENTAGE":
+						faultAttrs = append(faultAttrs, attribute.String("fault.fill_percentage", envVar.Value))
+					case "NETWORK_PACKET_LOSS_PERCENTAGE":
+						faultAttrs = append(faultAttrs, attribute.String("fault.network_loss_pct", envVar.Value))
+					case "CHAOS_INTERVAL":
+						faultAttrs = append(faultAttrs, attribute.String("fault.chaos_interval", envVar.Value))
+					}
+				}
+
+				// Add probe names
+				var probeNames []string
+				for _, p := range exp.Spec.Probe {
+					probeNames = append(probeNames, p.Name)
+				}
+				if len(probeNames) > 0 {
+					faultAttrs = append(faultAttrs, attribute.String("fault.probes", strings.Join(probeNames, ",")))
+				}
+
+				observability.StartFaultSpan(notifyID, faultName, faultAttrs...)
+				logrus.Infof("[OTEL] Created per-fault span: fault=%s target=%s/%s", faultName, meta.Spec.Appinfo.AppKind, meta.Spec.Appinfo.Applabel)
+			}
+
 			res, err := yaml.Marshal(&meta)
 			if err != nil {
 				return nil, errors.New("failed to marshal chaosengine")
@@ -2355,6 +2400,76 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	var metricsPtr *types.ExperimentRunMetrics
 	if isCompleted {
 		metricsPtr = &workflowRunMetrics
+	}
+
+	// OTEL Hook 2: End per-fault child spans with verdicts from execution data
+	if observability.OTELTracerEnabled() && isCompleted {
+		for _, node := range executionData.Nodes {
+			if node.Type == "ChaosEngine" && node.ChaosExp != nil {
+				faultName := node.ChaosExp.ExperimentName
+				if faultName == "" {
+					faultName = node.ChaosExp.EngineName
+				}
+
+				verdictAttrs := []attribute.KeyValue{
+					attribute.String("fault.verdict", node.ChaosExp.ExperimentVerdict),
+					attribute.String("fault.probe_success_pct", node.ChaosExp.ProbeSuccessPercentage),
+					attribute.String("fault.status", node.ChaosExp.ExperimentStatus),
+					attribute.String("fault.engine_name", node.ChaosExp.EngineName),
+					attribute.String("fault.namespace", node.ChaosExp.Namespace),
+					attribute.String("fault.started_at", node.StartedAt),
+					attribute.String("fault.finished_at", node.FinishedAt),
+					attribute.String("fault.node_phase", node.Phase),
+				}
+
+				if node.ChaosExp.FailStep != "" {
+					verdictAttrs = append(verdictAttrs, attribute.String("fault.fail_step", node.ChaosExp.FailStep))
+				}
+
+				// End the per-fault child span with verdict attributes
+				observability.EndFaultSpan(traceID, faultName, verdictAttrs...)
+
+				logrus.WithFields(logFields).Infof("[OTEL] Ended per-fault span: fault=%s verdict=%s probe%%=%s",
+					faultName, node.ChaosExp.ExperimentVerdict, node.ChaosExp.ProbeSuccessPercentage)
+			}
+		}
+	}
+
+	// Also submit per-fault observations via Langfuse REST for Langfuse-native consumers
+	if !observability.OTELTracerEnabled() && isCompleted {
+		tracer := observability.GetLangfuseTracer()
+		if tracer.IsEnabled() {
+			for _, node := range executionData.Nodes {
+				if node.Type == "ChaosEngine" && node.ChaosExp != nil {
+					faultName := node.ChaosExp.ExperimentName
+					if faultName == "" {
+						faultName = node.ChaosExp.EngineName
+					}
+					_ = tracer.TraceExperimentObservation(ctx, &observability.ExperimentObservationDetails{
+						TraceID:   traceID,
+						Name:      fmt.Sprintf("fault-verdict: %s", faultName),
+						Type:      "SPAN",
+						StartTime: node.StartedAt,
+						EndTime:   node.FinishedAt,
+						Input: map[string]interface{}{
+							"faultName":  faultName,
+							"engineName": node.ChaosExp.EngineName,
+							"namespace":  node.ChaosExp.Namespace,
+						},
+						Output: map[string]interface{}{
+							"verdict":             node.ChaosExp.ExperimentVerdict,
+							"probeSuccessPct":     node.ChaosExp.ProbeSuccessPercentage,
+							"experimentStatus":    node.ChaosExp.ExperimentStatus,
+							"failStep":            node.ChaosExp.FailStep,
+						},
+						Metadata: map[string]interface{}{
+							"nodePhase": node.Phase,
+							"type":      "fault-verdict",
+						},
+					})
+				}
+			}
+		}
 	}
 
 	traceExperimentObservation(ctx, traceID, event, executionData, metricsPtr)
