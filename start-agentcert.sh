@@ -239,7 +239,7 @@ ok "GraphQL binary built"
 # Stop any previously running daemon by process name.
 pkill -f "$GQL_APP_NAME" 2>/dev/null || true
 
-nohup env REST_PORT="$GQL_REST_PORT" GRPC_PORT="$GQL_GRPC_PORT" "$GQL_BINARY" >> "$PID_DIR/.graphql.log" 2>&1 &
+(cd "$GQL_DIR" && nohup env REST_PORT="$GQL_REST_PORT" GRPC_PORT="$GQL_GRPC_PORT" "$GQL_BINARY" >> "$PID_DIR/.graphql.log" 2>&1) &
 GQL_PID=$!
 echo "$GQL_PID" > "$PID_DIR/.agentcert-graphql.pid"
 
@@ -268,6 +268,45 @@ if [ "$SKIP_FRONTEND" = false ]; then
     if [ ! -f "$WEB_DIR/package.json" ]; then
         fail "package.json not found in $WEB_DIR"
     else
+        status "Preparing Frontend dependencies..."
+
+        if ! command -v yarn >/dev/null 2>&1; then
+            fail "yarn is not installed. Please install yarn and re-run."
+            kill "$GQL_PID" 2>/dev/null || true
+            kill "$AUTH_PID" 2>/dev/null || true
+            exit 1
+        fi
+
+        needs_install=false
+        if [ ! -d "$WEB_DIR/node_modules" ]; then
+            needs_install=true
+        elif [ ! -x "$WEB_DIR/node_modules/.bin/webpack" ]; then
+            needs_install=true
+        fi
+
+        if [ "$needs_install" = true ]; then
+            wait_msg "Installing frontend dependencies (fresh setup or missing webpack)..."
+            if ! (cd "$WEB_DIR" && yarn install --frozen-lockfile); then
+                wait_msg "Retrying dependency install without --frozen-lockfile..."
+                (cd "$WEB_DIR" && yarn install)
+            fi
+            ok "Frontend dependencies installed"
+        else
+            ok "Frontend dependencies already present"
+        fi
+
+        has_generate_cert_script=false
+        if (cd "$WEB_DIR" && yarn run 2>/dev/null | grep -q "generate-certificate"); then
+            has_generate_cert_script=true
+        fi
+
+        cert_count=$(find "$WEB_DIR" -maxdepth 3 -type f \( -name "*.crt" -o -name "*.key" -o -name "*.pem" \) | wc -l | tr -d ' ')
+        if [ "$has_generate_cert_script" = true ] && [ "$cert_count" = "0" ]; then
+            wait_msg "No frontend cert files found; running yarn generate-certificate..."
+            (cd "$WEB_DIR" && yarn generate-certificate)
+            ok "Frontend certificates generated"
+        fi
+
         (cd "$WEB_DIR" && yarn dev > "$PID_DIR/.frontend.log" 2>&1) &
         FE_PID=$!
         echo "$FE_PID" > "$PID_DIR/.agentcert-frontend.pid"
