@@ -1,65 +1,141 @@
-````markdown
-# Clone the repo: https://github.com/AgentCert/AgentCert.git
+# AgentCert — Local Development Setup Guide
 
+A step-by-step guide to clone, configure, and run the **AgentCert** platform on your local machine.
+
+---
+
+## Table of Contents
+
+1. [Prerequisites](#1-prerequisites)
+2. [Clone the Repository](#2-clone-the-repository)
+3. [Set Up MongoDB](#3-set-up-mongodb)
+4. [Start the Authentication Service](#4-start-the-authentication-service)
+5. [Start the GraphQL Server](#5-start-the-graphql-server)
+6. [Start the Frontend](#6-start-the-frontend)
+7. [Set Up Minikube (Kubernetes)](#7-set-up-minikube-kubernetes)
+8. [Set Up LiteLLM (LLM Gateway)](#8-set-up-litellm-llm-gateway)
+9. [Set Up Langfuse (LLM Observability)](#9-set-up-langfuse-llm-observability)
+10. [Quick Start (Automated)](#10-quick-start-automated)
+11. [Verify Everything Works](#11-verify-everything-works)
+12. [Stopping Services](#12-stopping-services)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Port Reference](#14-port-reference)
+
+---
+
+## 1. Prerequisites
+
+Install the following tools before proceeding:
+
+| Tool       | Version      | Installation                                                       |
+| ---------- | ------------ | ------------------------------------------------------------------ |
+| **Git**    | 2.x+         | `sudo apt install git` (Ubuntu) / `brew install git` (macOS)      |
+| **Docker** | 20.x+        | [Install Docker](https://docs.docker.com/engine/install/)          |
+| **Go**     | 1.24.0+      | [Install Go](https://go.dev/doc/install)                           |
+| **Node.js**| 18.x (LTS)   | [Install Node.js](https://nodejs.org/) or use `nvm install 18`    |
+| **Yarn**   | 1.22+        | `npm install -g yarn`                                              |
+| **Python** | 3.10+        | [Install Python](https://www.python.org/downloads/)                |
+| **Minikube** | latest     | [Install Minikube](https://minikube.sigs.k8s.io/docs/start/)      |
+| **kubectl** | latest      | [Install kubectl](https://kubernetes.io/docs/tasks/tools/)         |
+
+**Verify installations:**
+
+```bash
+git --version
+docker --version
+go version
+node --version
+yarn --version
+python3 --version
+minikube version
+kubectl version --client
 ```
+
+---
+
+## 2. Clone the Repository
+
+```bash
 git clone https://github.com/AgentCert/AgentCert.git
+cd AgentCert
 ```
 
-# MongoDB Single-Node Replica Set Setup Instructions
+---
 
-This guide outlines the steps to deploy a MongoDB 5.0 container configured as a single-node replica set with admin authentication.
+## 3. Set Up MongoDB
 
-## 1. Environment Preparation
-### Navigate to your project workspace and ensure you have the latest MongoDB 5 image.
-```
+AgentCert uses MongoDB 5.0 as a single-node replica set with admin authentication.
+
+### 3.1 Pull the MongoDB image
+
+```bash
 docker pull mongo:5
 ```
 
-### Clean up the resources
-```
+### 3.2 Clean up any previous MongoDB containers (optional)
+
+```bash
 docker stop mongo \
 docker system prune -y
 ```
 
-### Deploy the Container
-```
+### 3.3 Start the MongoDB container
+
+```bash
 docker run -d \
   --name simple-mongo \
   -p 27017:27017 \
   mongo:5 mongod --replSet rs0 --bind_ip_all
 ```
 
-### Initialize the Replica Set
-### Access the MongoDB shell to initiate the cluster configuration
-```
+### 3.4 Initialize the replica set
+
+```bash
 docker exec -it simple-mongo mongosh
 ```
-### Inside the shell, run:
-```
+
+Inside the MongoDB shell, run:
+
+```javascript
 rs.initiate({
   _id: "rs0",
   members: [{ _id: 0, host: "localhost:27017" }]
 })
 ```
-### Create a root administrative user.
-```
+
+### 3.5 Create the admin user
+
+Still in the MongoDB shell:
+
+```javascript
 db.getSiblingDB("admin").createUser({
   user: "admin",
   pwd: "1234",
   roles: [{ role: "root", db: "admin" }]
 })
-
-exit()
 ```
 
-### Verify Connection
-### Test the administrative access using the credentials created in the previous step.
-```
+Type `exit` to leave the shell.
+
+### 3.6 Verify the connection
+
+```bash
 docker exec -it simple-mongo mongosh -u admin -p 1234 --authenticationDatabase admin
 ```
 
-# Start the auth services
-```
+If you see the MongoDB prompt, your database is ready. Type `exit` to leave.
+
+---
+
+## 4. Start the Authentication Service
+
+The Auth Service is a Go-based service that handles user authentication, JWT tokens, and gRPC.
+
+### 4.1 Set environment variables
+
+Open a new terminal and run:
+
+```bash
 export VERSION="3.0.0"
 export INFRA_DEPLOYMENTS="false"
 export DB_SERVER="mongodb://localhost:27017"
@@ -86,24 +162,40 @@ export CONTAINER_RUNTIME_EXECUTOR="k8sapi"
 export WORKFLOW_HELPER_IMAGE_VERSION="3.0.0"
 export DEFAULT_AGENT_HUB_GIT_URL="https://github.com/agentcert/agent-charts"
 export DEFAULT_AGENT_HUB_BRANCH_NAME="main"
-export DEFAULT_AGENT_HUB_PATH="/temp/default"
+export DEFAULT_AGENT_HUB_PATH='C:/temp/default/'
 export DEFAULT_APP_HUB_GIT_URL="https://github.com/agentcert/app-charts"
 export DEFAULT_APP_HUB_BRANCH_NAME="main"
-export DEFAULT_APP_HUB_PATH="/temp/default"
+export DEFAULT_APP_HUB_PATH='C:/temp/default/'
 export ADMIN_USERNAME="admin"
 export ADMIN_PASSWORD="litmus"
 export REST_PORT="3000"
 export GRPC_PORT="3030"
 ```
 
-### Run the service
-```
+### 4.2 Run the Auth Service
+
+```bash
 cd chaoscenter/authentication/api
 go run main.go
 ```
 
-# Start the graphql server
-```
+> **Keep this terminal open.** The Auth Service runs on:
+> - **REST API:** `http://localhost:3000`
+> - **gRPC:** `localhost:3030`
+
+Wait until you see logs confirming the service has started before proceeding to the next step.
+
+---
+
+## 5. Start the GraphQL Server
+
+The GraphQL Server is the core API layer for AgentCert.
+
+### 5.1 Set environment variables
+
+Open a **new terminal** and run:
+
+```bash
 export VERSION="3.0.0"
 export INFRA_DEPLOYMENTS="false"
 export DB_SERVER="mongodb://localhost:27017"
@@ -130,59 +222,152 @@ export CONTAINER_RUNTIME_EXECUTOR="k8sapi"
 export WORKFLOW_HELPER_IMAGE_VERSION="3.0.0"
 export DEFAULT_AGENT_HUB_GIT_URL="https://github.com/agentcert/agent-charts"
 export DEFAULT_AGENT_HUB_BRANCH_NAME="main"
-export DEFAULT_AGENT_HUB_PATH="/temp/default"
+export DEFAULT_AGENT_HUB_PATH='C:/temp/default/'
 export DEFAULT_APP_HUB_GIT_URL="https://github.com/agentcert/app-charts"
 export DEFAULT_APP_HUB_BRANCH_NAME="main"
-export DEFAULT_APP_HUB_PATH="/temp/default"
+export DEFAULT_AGENT_HUB_PATH='C:/temp/default/'
 export LITMUS_AUTH_GRPC_ENDPOINT="localhost"
 export LITMUS_AUTH_GRPC_PORT="3030"
 ```
 
-### Run the service
-```
+### 5.2 Run the GraphQL Server
+
+```bash
 cd chaoscenter/graphql/server
 go run server.go
 ```
 
-# Start the UI
-```
+> **Keep this terminal open.** The GraphQL Server runs on:
+> - **REST/GraphQL:** `http://localhost:8080`
+> - **gRPC:** `localhost:8082`
+
+---
+
+## 6. Start the Frontend
+
+The Frontend is a React/TypeScript web application.
+
+### 6.1 Install dependencies
+
+Open a **new terminal** and run:
+
+```bash
 cd chaoscenter/web
-yarn
+yarn install
+```
+
+> First-time install may take a few minutes.
+
+### 6.2 Start the dev server
+
+```bash
 yarn dev
 ```
 
-# Start Minikube
-```
+> **Keep this terminal open.** The Frontend runs on:
+> - **UI:** `https://localhost:2001`
+
+### 6.3 Login
+
+Open your browser and go to `https://localhost:2001`. Use these default credentials:
+
+| Field    | Value    |
+| -------- | -------- |
+| Username | `admin`  |
+| Password | `litmus` |
+
+---
+
+## 7. Set Up Minikube (Kubernetes)
+
+Minikube is required for running chaos experiments on a local Kubernetes cluster.
+
+### 7.1 Start Minikube
+
+```bash
 minikube start --cpus=2 --memory=4096 --driver=docker
 ```
 
-# Initialise the environment, setup chaos with cluster level access, download the yaml file
-## alter the SERVER_ADDRESS: http://<System IP address>:8080/query
-```
-kubectl apply -f <yaml file>
-```
+### 7.2 Connect the infrastructure
 
-## Verify if all pods are running
-```
+1. Log into the AgentCert UI (`https://localhost:2001`).
+2. Navigate to **Environments → Infrastructure** and create a new environment.
+3. Download the generated YAML file.
+4. **Find your machine's local IP** (you'll need this in the next steps):
+   ```bash
+   export MY_IP=$(hostname -I | awk '{print $1}')
+   echo "Your IP: $MY_IP"
+   ```
+
+5. **Edit the YAML** — update the `SERVER_ADDRESS` field to your machine's IP:
+   ```
+   SERVER_ADDRESS: "http://<YOUR_LOCAL_IP>:8080/query"
+   ```
+   Replace `<YOUR_LOCAL_IP>` with the IP from step 4.
+
+   > **Why is this needed?** The subscriber pod runs inside the Minikube cluster (a separate Docker network), so it cannot reach the GraphQL server via `localhost`. You must use your host machine's actual IP address so the subscriber can communicate back to the AgentCert control plane running on the host.
+
+6. **Apply the YAML:**
+   ```bash
+   kubectl apply -f <downloaded-yaml-file>.yaml
+   ```
+
+7. **Patch the subscriber config** — update the server address and required components:
+   ```bash
+   kubectl patch configmap subscriber-config -n litmus \
+     --type merge \
+     -p "{\"data\":{\"SERVER_ADDR\":\"http://$MY_IP:8080/query\"}}"
+
+   kubectl patch configmap subscriber-config -n litmus \
+     --type merge \
+     -p '{"data":{"COMPONENTS":"DEPLOYMENTS: \n    - app=subscriber\n    - app=event-tracker\n    - name=chaos-operator\n    - app=workflow-controller\n    - app=chaos-exporter\n"}}'
+   ```
+
+8. **Restart the subscriber** to pick up the config changes:
+   ```bash
+   kubectl rollout restart deployment/subscriber -n litmus
+   ```
+
+9. **Check subscriber logs** to confirm it connected successfully:
+   ```bash
+   kubectl logs -n litmus -l app=subscriber
+   ```
+
+### 7.3 Verify pods are running
+
+```bash
 kubectl get po -A
 ```
-## Issue: RBAC Permission Denied (Namespace Creation)
-### The Litmus Chaos workflow failed because the argo-chaos ServiceAccount lacked sufficient permissions to create the sock-shop namespace at the cluster scope.
-### Grant the ServiceAccount the necessary cluster-wide permissions by creating a ClusterRoleBinding using the kubectl command-line tool:
-```
+
+All pods in the `litmus` namespace should be in `Running` state.
+
+### 7.4 Fix RBAC permissions (if needed)
+
+If chaos workflows fail with permission errors, grant cluster-admin access:
+
+```bash
 kubectl create clusterrolebinding argo-chaos-cluster-admin \
   --clusterrole=cluster-admin \
   --serviceaccount=litmus:argo-chaos
 ```
 
-## Onboard the chaos to the choashub from https://github.com/AgentCert/chaos-charts.git
+### 7.5 Onboard ChaosHub
 
+In the AgentCert UI, go to **ChaosHubs** and connect the chaos chart repository:
 
-
-## LiteLLM Setup
-
-### Postgres Container: This container will use port 5433 on your host.
 ```
+https://github.com/AgentCert/chaos-charts.git
+```
+
+---
+
+## 8. Set Up LiteLLM (LLM Gateway)
+
+LiteLLM provides a unified OpenAI-compatible API gateway for calling LLMs.
+
+### 8.1 Start a Postgres container (LiteLLM backend)
+
+```bash
 docker run --name litellm-postgres \
   -e POSTGRES_USER=litellm_user \
   -e POSTGRES_PASSWORD=litellm_pass \
@@ -191,8 +376,11 @@ docker run --name litellm-postgres \
   -d postgres:17
 ```
 
-### Update your litellm-config.yaml
-```
+### 8.2 Create a LiteLLM config file
+
+Create a file named `litellm-config.yaml` in the project root:
+
+```yaml
 model_list:
   - model_name: gpt-4o
     litellm_params:
@@ -209,76 +397,275 @@ general_settings:
   ui_username: admin
 ```
 
-LiteLLM provides a unified Python SDK and AI Gateway (proxy) to call 100+ LLMs (OpenAI, Anthropic, Azure, etc.) with an OpenAI-compatible API. Complete docs: https://docs.litellm.ai/
-
-### 1. Install LiteLLM
+### 8.3 Install LiteLLM
 
 ```bash
 pip install 'litellm[proxy]'
 pip install prisma
 pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp
 pip install langfuse
-prisma generate --schema <PATH>/.venv/lib/python3.10/site-packages/litellm/proxy/schema.prismaa
 ```
 
-### 2. Start LiteLLM Proxy (OpenAI-compatible endpoint on port 4000) 
+### 8.4 Generate Prisma client
 
 ```bash
-# Start proxy with a default model
-litellm --model gpt-4o --port 4000
+prisma generate --schema $(python3 -c "import litellm; print(litellm.__path__[0])")/proxy/schema.prisma
 ```
 
-### 3. Verify LiteLLM is Running
+### 8.5 Start LiteLLM proxy
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+litellm --config litellm-config.yaml --port 4000
+```
+
+### 8.6 Verify LiteLLM is running
 
 ```bash
 curl http://localhost:4000/v1/models
 ```
 
-### 4. Test with Python
+---
 
-```python
-from litellm import completion
-import os
-os.environ['OPENAI_API_KEY'] = 'your-openai-key'
-response = completion(
-    model='gpt-4o',
-    messages=[{'role': 'user', 'content': 'Hello!'}],
-    api_base='http://localhost:4000'
-)
-print(response['choices'][0]['message']['content'])
+## 9. Set Up Langfuse (LLM Observability)
+
+Langfuse tracks all AI agent behavior with traces, metrics, and scoring.
+
+### 9.1 Sign up for Langfuse Cloud
+
+1. Go to [https://cloud.langfuse.com](https://cloud.langfuse.com)
+2. Create a free account and a new project
+3. Navigate to **Settings → API Keys** and copy your keys
+
+### 9.2 Set environment variables
+
+```bash
+export LANGFUSE_PUBLIC_KEY="pk-lf-xxxxxxxx"
+export LANGFUSE_SECRET_KEY="sk-lf-xxxxxxxx"
+export LANGFUSE_HOST="https://cloud.langfuse.com"
+```
+
+### 9.3 Set LiteLLM + Langfuse variables together
+
+For convenience, export all AI-related variables in one block:
+
+```bash
+export LITELLM_URL="http://localhost:4000"
+export MODEL_ALIAS="gpt-4o"
+export OPENAI_API_KEY="your-openai-api-key"
+export LANGFUSE_PUBLIC_KEY="pk-lf-xxxxxxxx"
+export LANGFUSE_SECRET_KEY="sk-lf-xxxxxxxx"
+export LANGFUSE_HOST="https://cloud.langfuse.com"
 ```
 
 ---
 
-## Langfuse Setup
+## 10. Quick Start (Automated)
 
-Langfuse is an open-source LLM observability platform. Docs: https://docs.langfuse.com/
-
-### Option 1: Langfuse Cloud (Quick Start)
-
-1. Go to https://cloud.langfuse.com
-2. Sign up and create a project
-3. Get API keys from Settings > API Keys
+Instead of starting each service manually (Steps 3–6), you can use the automated startup script:
 
 ```bash
-export LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx
-export LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
-export LANGFUSE_HOST=https://cloud.langfuse.com
+chmod +x start-agentcert.sh
+./start-agentcert.sh
 ```
 
+This script will:
 
-## Complete Environment Variables
+1. Check for port conflicts (3030, 3000, 8080, 8082, 2001)
+2. Start or reuse a MongoDB Docker container
+3. Set all required environment variables
+4. Start the Authentication Service (Go)
+5. Build and start the GraphQL Server (Go)
+6. Install dependencies and start the Frontend (React)
+7. Wait for each service with health checks
+
+**Options:**
 
 ```bash
-# LiteLLM
-export LITELLM_URL=http://localhost:4000
-export MODEL_ALIAS=gpt-4o
-export OPENAI_API_KEY=your-openai-key
-
-# Langfuse
-export LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxx
-export LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxx
-export LANGFUSE_HOST=https://cloud.langfuse.com
+./start-agentcert.sh --skip-mongo      # Skip MongoDB startup (if already running)
+./start-agentcert.sh --skip-frontend   # Skip Frontend startup (backend only)
 ```
 
-````
+---
+
+## 11. Verify Everything Works
+
+Run these checks to confirm all services are healthy:
+
+### Auth Service (port 3000)
+
+```bash
+curl -s http://localhost:3000/status
+```
+
+### GraphQL Server (port 8080)
+
+```bash
+curl -s http://localhost:8080
+```
+
+### Frontend (port 2001)
+
+Open `https://localhost:2001` in your browser.
+
+### MongoDB (port 27017)
+
+```bash
+docker exec -it simple-mongo mongosh -u admin -p 1234 --authenticationDatabase admin --eval "rs.status()"
+```
+
+### LiteLLM (port 4000)
+
+```bash
+curl -s http://localhost:4000/v1/models
+```
+
+### Kubernetes (Minikube)
+
+```bash
+kubectl get po -A
+```
+
+---
+
+## 12. Stopping Services
+
+### If you used the automated script:
+
+```bash
+chmod +x stop-agentcert.sh
+./stop-agentcert.sh
+```
+
+> Use `./stop-agentcert.sh --keep-mongo` to keep MongoDB running.
+
+### If you started services manually:
+
+Press `Ctrl+C` in each terminal running a service, then stop Docker containers:
+
+```bash
+docker stop simple-mongo litellm-postgres
+```
+
+To stop Minikube:
+
+```bash
+minikube stop
+```
+
+---
+
+## 13. Troubleshooting
+
+### Port already in use
+
+```bash
+# Find what's using a port (e.g., 3000)
+lsof -i :3000
+
+# Kill the process
+kill -9 <PID>
+```
+
+### MongoDB connection refused
+
+```bash
+# Check if the container is running
+docker ps | grep mongo
+
+# Restart it
+docker start simple-mongo
+```
+
+### Go build errors
+
+```bash
+# Make sure you're using Go 1.24+
+go version
+
+# Clean module cache and retry
+go clean -modcache
+go mod tidy
+```
+
+### Frontend `yarn install` fails
+
+```bash
+# Make sure you're using Node 18
+node --version
+
+# Clear cache and retry
+rm -rf node_modules
+yarn cache clean
+yarn install
+```
+
+### GraphQL Server can't connect to Auth Service
+
+Make sure the Auth Service is running on port 3030 **before** starting the GraphQL Server:
+
+```bash
+ss -tlnp | grep 3030
+```
+
+### Minikube pod CrashLoopBackOff
+
+```bash
+# Check pod logs
+kubectl logs <pod-name> -n litmus
+
+# Describe the pod for events
+kubectl describe pod <pod-name> -n litmus
+```
+
+---
+
+## 14. Port Reference
+
+| Service              | Port  | Protocol      |
+| -------------------- | ----- | ------------- |
+| MongoDB              | 27017 | TCP           |
+| Auth Service (REST)  | 3000  | HTTP          |
+| Auth Service (gRPC)  | 3030  | gRPC          |
+| GraphQL Server       | 8080  | HTTP/GraphQL  |
+| GraphQL gRPC         | 8082  | gRPC          |
+| Frontend (UI)        | 2001  | HTTPS         |
+| LiteLLM Proxy        | 4000  | HTTP          |
+| PostgreSQL (LiteLLM) | 5433  | TCP           |
+
+---
+
+## Architecture Overview
+
+```
+┌──────────────┐     ┌──────────────────┐     ┌─────────────┐
+│   Frontend   │────▶│  GraphQL Server  │────▶│  MongoDB    │
+│  (React UI)  │     │   (Go :8080)     │     │  (:27017)   │
+│  :2001       │     └──────┬───────────┘     └─────────────┘
+└──────────────┘            │
+                            │ gRPC
+                     ┌──────▼───────────┐
+                     │  Auth Service    │
+                     │  (Go :3000/3030) │
+                     └──────────────────┘
+
+┌──────────────┐     ┌──────────────────┐
+│  LiteLLM     │────▶│  Langfuse        │
+│  (Proxy :4000)│    │  (Observability) │
+└──────┬───────┘     └──────────────────┘
+       │
+       ▼
+  LLM Provider
+  (OpenAI, etc.)
+
+┌──────────────────────────────────────────┐
+│           Minikube (Kubernetes)           │
+│  - Subscriber Pod                        │
+│  - Chaos Operator / Runner               │
+│  - Argo Workflow Controller              │
+└──────────────────────────────────────────┘
+```
+
+---
+
+**Happy Chaos Engineering!**
