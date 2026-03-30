@@ -32,7 +32,7 @@ from typing import Any
 
 import yaml
 
-from schema.intermediate import TablesResult
+from certification_framework.schema.intermediate import TablesResult
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "table_config.yaml"
 

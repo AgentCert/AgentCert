@@ -33,7 +33,7 @@ from typing import Any
 
 import yaml
 
-from schema.intermediate import ChartsResult
+from certification_framework.schema.intermediate import ChartsResult
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "chart_config.yaml"
 

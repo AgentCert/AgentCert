@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-from schema.intermediate import ScorecardResult
+from certification_framework.schema.intermediate import ScorecardResult
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "scorecard_config.yaml"
 
