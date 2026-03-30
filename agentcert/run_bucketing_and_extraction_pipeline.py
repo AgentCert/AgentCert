@@ -59,12 +59,19 @@ def _build_fault_config_from_bucket(bucket_data: Dict[str, Any]) -> Dict[str, An
         "fault_id": bucket_data.get("fault_id", "unknown"),
         "fault_name": bucket_data.get("fault_name", "unknown"),
         "fault_category": bucket_data.get("severity", "unknown"),
-        "injection_timestamp": bucket_data.get("detected_at"),
+        "experiment_id": bucket_data.get("experiment_id"),
+        "run_id": bucket_data.get("run_id"),
+        "injection_timestamp": bucket_data.get("injection_timestamp") or bucket_data.get("detected_at"),
         "fault_configuration": {
             "target_service": bucket_data.get("target_pod", ""),
             "target_namespace": bucket_data.get("namespace", ""),
         },
         "ground_truth": ground_truth,
+        "agent": {
+            "agent_id": bucket_data.get("agent_id"),
+            "agent_name": bucket_data.get("agent_name"),
+            "agent_version": bucket_data.get("agent_version"),
+        },
     }
 
 
@@ -144,7 +151,8 @@ async def run_pipeline(
             continue
 
         # Write the events to a temporary trace file for the extractor
-        safe_name = fault_id.replace("/", "_").replace(" ", "_")
+        run_id = bucket_dict.get("run_id", "")
+        safe_name = f"{fault_id}_{run_id}".replace("/", "_").replace(" ", "_") if run_id else fault_id.replace("/", "_").replace(" ", "_")
         trace_tmp = metrics_dir / f"{safe_name}_trace.json"
         with open(trace_tmp, "w", encoding="utf-8") as f:
             json.dump(events, f, indent=2, default=str)
@@ -173,6 +181,7 @@ async def run_pipeline(
         # Persist per-fault metrics to disk
         result_dict = {
             "fault_id": fault_id,
+            "run_id": run_id,
             "fault_name": bucket.fault_name,
             "quantitative": extraction_result.quantitative.model_dump(mode="json"),
             "qualitative": extraction_result.qualitative.model_dump(mode="json"),
@@ -197,6 +206,7 @@ async def run_pipeline(
     summary_file = output_path / "pipeline_summary.json"
     summary = {
         "trace_file": str(Path(trace_file).name),
+        "run_id": results[0].get("run_id", "") if results else "",
         "total_faults": len(buckets),
         "faults_extracted": len(results),
         "bucketing_tokens": {

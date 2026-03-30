@@ -109,8 +109,14 @@ class LLMQuantitativeExtraction(BaseModelWrapper):
     agent_id: Optional[str] = Field(
         default=None, description="Unique identifier of the agent being evaluated"
     )
+    agent_version: Optional[str] = Field(
+        default=None, description="Version of the agent being evaluated"
+    )
     experiment_id: Optional[str] = Field(
         default=None, description="Experiment id if available"
+    )
+    run_id: Optional[str] = Field(
+        default=None, description="Run id if available"
     )
     fault_injection_time: Optional[str] = Field(
         default=None, description="Time of fault injection in seconds"

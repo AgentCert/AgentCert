@@ -14,6 +14,24 @@
             "envFile": "${workspaceFolder}/agentcert/.env"
         },
         {
+            "name": "Run multi-fault trace generation",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "multi_fault_trace_generation.main",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/agentcert",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--faults-file", "${workspaceFolder}/agentcert/multi_fault_trace_generation/config/fault_file.json",
+                "--output-dir", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/",
+                "--num-traces", "5",
+                "--num-cycles", "3",
+                "--agent-name", "Flash",
+                "--agent-id", "flash-001-abc123",
+                "--agent-description", "An ITOPs agent deployed in a Kubernetes cluster, responsible for monitoring the application's health and performance, and taking corrective actions to ensure optimal operation."
+            ]
+        },
+        {
             "name": "Run fault bucketing (scripts)",
             "type": "debugpy",
             "request": "launch",
@@ -49,8 +67,41 @@
             "cwd": "${workspaceFolder}/agentcert",
             "envFile": "${workspaceFolder}/agentcert/.env",
             "args": [
-                "--trace-file", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/multi_fault_trace.json",
-                "--output-dir", "${workspaceFolder}/agentcert/data/reports/metrics"
+                "--trace-file", "${workspaceFolder}/agentcert/data/langfuse_minio_traces/multi_fault/trace-multi_fault_614837e8-3f89-49dc-886e-304f545c02c9.json",
+                "--output-dir", "${workspaceFolder}/agentcert/data/reports",
+                "--store"
+            ]
+        },
+        {
+            "name": "Run aggregation (scripts)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "aggregation.scripts.aggregation",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/agentcert",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--agent-id", "flash-001-abc123",
+                "--agent-name", "Flash",
+                "--source", "directory",
+                "--directory", "${workspaceFolder}/agentcert/data/reports/metrics",
+                "--output-path", "${workspaceFolder}/agentcert/data/reports/aggregated/"
+            ]
+        },
+        {
+            "name": "Run aggregation and certification pipeline",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "run_aggregation_and_certification_pipeline",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/agentcert",
+            "envFile": "${workspaceFolder}/agentcert/.env",
+            "args": [
+                "--metrics-dir", "${workspaceFolder}/agentcert/data/reports/metrics",
+                "--output-dir", "${workspaceFolder}/agentcert/data/reports/certification",
+                "--agent-id", "flash-001-abc123",
+                "--agent-name", "Flash",
+                "--debug"
             ]
         }
     ]
