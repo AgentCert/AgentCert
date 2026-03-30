@@ -16,8 +16,8 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
-from schema.certification_schema import FindingSeverity
-from scripts.narratives.llm_client import get_client, call_llm
+from certification_framework.schema.certification_schema import FindingSeverity
+from certification_framework.scripts.narratives.llm_client import get_client, call_llm
 
 # ---------------------------------------------------------------------------
 # Load prompt config

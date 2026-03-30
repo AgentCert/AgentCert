@@ -10,14 +10,14 @@ Output keys: scorecard, findings, tables, charts, assessments, hardcoded, cards
 
 from pathlib import Path
 
-from schema.intermediate import ComputedContent
+from certification_framework.schema.intermediate import ComputedContent
 
-from scripts.computation.scorecard_builder import build_from_file as build_scorecard_from_file
-from scripts.computation.table_builder import build_from_file as build_tables_from_file
-from scripts.computation.chart_builder import build_from_file as build_charts_from_file
-from scripts.computation.assessment_formatter import build_from_file as build_assessments_from_file
-from scripts.computation.hardcoded_loader import load_all as load_hardcoded
-from scripts.computation.card_builder import build_from_file as build_cards_from_file
+from certification_framework.scripts.computation.scorecard_builder import build_from_file as build_scorecard_from_file
+from certification_framework.scripts.computation.table_builder import build_from_file as build_tables_from_file
+from certification_framework.scripts.computation.chart_builder import build_from_file as build_charts_from_file
+from certification_framework.scripts.computation.assessment_formatter import build_from_file as build_assessments_from_file
+from certification_framework.scripts.computation.hardcoded_loader import load_all as load_hardcoded
+from certification_framework.scripts.computation.card_builder import build_from_file as build_cards_from_file
 
 
 class ComputationAssembler:

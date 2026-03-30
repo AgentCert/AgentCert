@@ -16,12 +16,12 @@ import json
 import time
 from pathlib import Path
 
-from scripts.narratives.scope_narrative_builder import build_scope_narrative
-from scripts.narratives.key_findings_builder import build_key_findings
-from scripts.narratives.qualitative_builder import build_qualitative_findings
-from scripts.narratives.fault_analysis_builder import build_fault_analysis
-from scripts.narratives.limitation_builder import build_limitations
-from scripts.narratives.recommendation_builder import build_recommendations
+from certification_framework.scripts.narratives.scope_narrative_builder import build_scope_narrative
+from certification_framework.scripts.narratives.key_findings_builder import build_key_findings
+from certification_framework.scripts.narratives.qualitative_builder import build_qualitative_findings
+from certification_framework.scripts.narratives.fault_analysis_builder import build_fault_analysis
+from certification_framework.scripts.narratives.limitation_builder import build_limitations
+from certification_framework.scripts.narratives.recommendation_builder import build_recommendations
 
 
 async def _safe_call(phase_id: str, fn, *args) -> tuple[str, dict | None, dict | None]:
