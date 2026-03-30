@@ -151,7 +151,6 @@ When using `multipart/form-data`, metric files are uploaded directly. When using
 | `metrics_files` | file[] (JSON) | **Yes** | — | One or more per-run `*_metrics.json` files produced by the bucketing-extraction pipeline. |
 | `agent_id` | string | **Yes** | — | Agent ID to aggregate metrics for. |
 | `agent_name` | string | **Yes** | — | Agent name for the certification scorecard. |
-| `certification_run_id` | string | No | `""` | Optional certification run identifier. |
 | `runs_per_fault` | integer | No | `30` | Expected number of runs per fault. |
 | `debug` | boolean | No | `false` | Persist intermediate outputs for debugging. |
 
@@ -173,7 +172,6 @@ When using `multipart/form-data`, metric files are uploaded directly. When using
 | `metrics_dir` | string | **Yes** | — | Server-side directory containing per-run `*_metrics.json` files. |
 | `agent_id` | string | **Yes** | — | Agent ID to aggregate metrics for. |
 | `agent_name` | string | **Yes** | — | Agent name for the certification scorecard. |
-| `certification_run_id` | string | No | `""` | Optional certification run identifier. |
 | `runs_per_fault` | integer | No | `30` | Expected number of runs per fault. |
 | `debug` | boolean | No | `false` | Persist intermediate outputs for debugging. |
 
