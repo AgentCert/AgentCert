@@ -53,12 +53,17 @@ class QuantitativeAggregator:
             result["agent_name"] = agent_section["agent_name"]
         if agent_section.get("agent_id"):
             result["agent_id"] = agent_section["agent_id"]
+        if agent_section.get("agent_version"):
+            result["agent_version"] = agent_section["agent_version"]
 
+        if fault_config.get("experiment_id"):
+            result["experiment_id"] = fault_config["experiment_id"]
+        if fault_config.get("run_id"):
+            result["run_id"] = fault_config["run_id"]
         if fault_config.get("injection_timestamp"):
             result["fault_injection_time"] = fault_config["injection_timestamp"]
         if fault_config.get("fault_name"):
             result["injected_fault_name"] = fault_config["fault_name"]
-            result["detected_fault_type"] = fault_config["fault_name"]
         if fault_config.get("fault_category"):
             result["injected_fault_category"] = fault_config["fault_category"]
 
@@ -102,7 +107,7 @@ class QuantitativeAggregator:
                     aggregated[key] = val
 
         # First non-null text/timestamp selections from LLM batch output (fallback)
-        first_non_null_fields = ["experiment_id"]
+        first_non_null_fields = ["experiment_id", "run_id"]
         for fname in [
             "injected_fault_name",
             "injected_fault_category",
@@ -216,9 +221,16 @@ class QuantitativeAggregator:
             dt_inject = self._parse_timestamp(str(fit))
             dt_detect = self._parse_timestamp(str(fdt))
             if dt_inject and dt_detect:
-                aggregated["time_to_detect"] = round(
-                    abs((dt_detect - dt_inject).total_seconds()), 2
-                )
+                ttd = round(abs((dt_detect - dt_inject).total_seconds()), 2)
+                if ttd == 0.0:
+                    logger.warning(
+                        "time_to_detect is 0: fault_injection_time and "
+                        "agent_fault_detection_time are identical (%s). "
+                        "This likely means the injection timestamp was not "
+                        "available and detection time was used as fallback.",
+                        fit,
+                    )
+                aggregated["time_to_detect"] = ttd
 
         if fit and fmt:
             dt_inject = self._parse_timestamp(str(fit))

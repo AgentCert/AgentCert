@@ -102,9 +102,15 @@ class FaultBucket:
     status: str = "active"  # "active" or "closed"
     detected_at: Optional[str] = None
     mitigated_at: Optional[str] = None
+    injection_timestamp: Optional[str] = None
     ground_truth: Optional[Dict[str, Any]] = None
     ideal_course_of_action: Optional[List[Any]] = None
     ideal_tool_usage_trajectory: Optional[List[Any]] = None
+    agent_id: Optional[str] = None
+    agent_name: Optional[str] = None
+    agent_version: Optional[str] = None
+    experiment_id: Optional[str] = None
+    run_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the bucket metadata and events."""
@@ -118,9 +124,15 @@ class FaultBucket:
             "status": self.status,
             "detected_at": self.detected_at,
             "mitigated_at": self.mitigated_at,
+            "injection_timestamp": self.injection_timestamp,
             "ground_truth": self.ground_truth,
             "ideal_course_of_action": self.ideal_course_of_action,
             "ideal_tool_usage_trajectory": self.ideal_tool_usage_trajectory,
+            "agent_id": self.agent_id,
+            "agent_name": self.agent_name,
+            "agent_version": self.agent_version,
+            "experiment_id": self.experiment_id,
+            "run_id": self.run_id,
             "event_count": len(self.events),
             "events": self.events,
         }

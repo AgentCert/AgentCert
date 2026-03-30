@@ -106,6 +106,13 @@ class FaultBucketingPipeline:
         self.injected_faults: Dict[str, FaultBucket] = {}  # from FAULT_DATA
         self.unclassified_events: List[Dict[str, Any]] = []
 
+        # Agent metadata extracted from the first trace event
+        self.agent_id: Optional[str] = None
+        self.agent_name: Optional[str] = None
+        self.agent_version: Optional[str] = None
+        self.experiment_id: Optional[str] = None
+        self.run_id: Optional[str] = None
+
     @property
     def total_input_tokens(self) -> int:
         return self._classifier.total_input_tokens
@@ -113,6 +120,45 @@ class FaultBucketingPipeline:
     @property
     def total_output_tokens(self) -> int:
         return self._classifier.total_output_tokens
+
+    # ------------------------------------------------------------------
+    # Extract agent metadata
+    # ------------------------------------------------------------------
+
+    def _extract_agent_metadata(self, sorted_events: List[Dict[str, Any]]) -> None:
+        """Extract agent_id, agent_name, agent_version, experiment_id, and run_id from the first trace event.
+
+        Looks at the input and metadata fields of the first event for agent
+        onboarding information.
+        """
+        if not sorted_events:
+            return
+
+        first_event = sorted_events[0]
+        # Try input field first, then metadata
+        for field_name in ("input", "metadata"):
+            raw = first_event.get(field_name)
+            if not raw:
+                continue
+            parsed = safe_parse_python_literal(raw)
+            if isinstance(parsed, dict):
+                if not self.agent_id and parsed.get("agent_id"):
+                    self.agent_id = parsed["agent_id"]
+                if not self.agent_name and parsed.get("agent_name"):
+                    self.agent_name = parsed["agent_name"]
+                if not self.agent_version and parsed.get("agent_version"):
+                    self.agent_version = parsed["agent_version"]
+                if not self.experiment_id and parsed.get("experiment_id"):
+                    self.experiment_id = parsed["experiment_id"]
+                if not self.run_id and parsed.get("run_id"):
+                    self.run_id = parsed["run_id"]
+
+        if self.agent_id:
+            logger.info(
+                f"Agent metadata extracted: id={self.agent_id}, "
+                f"name={self.agent_name}, version={self.agent_version}, "
+                f"experiment_id={self.experiment_id}, run_id={self.run_id}"
+            )
 
     # ------------------------------------------------------------------
     # Load and sort events
@@ -223,6 +269,7 @@ class FaultBucketingPipeline:
                 bucket.ground_truth = injected.ground_truth
                 bucket.ideal_course_of_action = injected.ideal_course_of_action
                 bucket.ideal_tool_usage_trajectory = injected.ideal_tool_usage_trajectory
+                bucket.injection_timestamp = injected.detected_at
                 logger.info(
                     f"Enriched bucket '{bucket.fault_id}' with ground truth "
                     f"from injected fault '{injected.fault_name}'"
@@ -300,6 +347,11 @@ class FaultBucketingPipeline:
         sorted_events = self._sort_events_chronologically(raw_events)
 
         # ----------------------------------------------------------
+        # Extract agent metadata from the first trace event
+        # ----------------------------------------------------------
+        self._extract_agent_metadata(sorted_events)
+
+        # ----------------------------------------------------------
         # Pass 0: Extract FAULT_DATA events (injected fault ground truth)
         # ----------------------------------------------------------
         non_fault_data_events: List[Dict[str, Any]] = []
@@ -307,6 +359,11 @@ class FaultBucketingPipeline:
         for event in sorted_events:
             if self._is_fault_injection_event(event):
                 bucket = self._extract_ground_truth(event)
+                bucket.agent_id = self.agent_id
+                bucket.agent_name = self.agent_name
+                bucket.agent_version = self.agent_version
+                bucket.experiment_id = self.experiment_id
+                bucket.run_id = self.run_id
                 if bucket.fault_id in self.injected_faults:
                     self.injected_faults[bucket.fault_id].events.append(event)
                 else:
@@ -374,6 +431,11 @@ class FaultBucketingPipeline:
                             events=[event],
                             status="active",
                             detected_at=event.get("startTime"),
+                            agent_id=self.agent_id,
+                            agent_name=self.agent_name,
+                            agent_version=self.agent_version,
+                            experiment_id=self.experiment_id,
+                            run_id=self.run_id,
                         )
                         self._enrich_bucket_with_ground_truth(new_bucket)
                         self.active_faults[fault_id] = new_bucket
@@ -440,6 +502,11 @@ class FaultBucketingPipeline:
                     if non_fault_data_events
                     else None
                 ),
+                agent_id=self.agent_id,
+                agent_name=self.agent_name,
+                agent_version=self.agent_version,
+                experiment_id=self.experiment_id,
+                run_id=self.run_id,
             )
             self.closed_faults["single_fault"] = single_bucket
 
@@ -501,6 +568,9 @@ class FaultBucketingPipeline:
                 "ground_truth": bucket.ground_truth,
                 "ideal_course_of_action": bucket.ideal_course_of_action,
                 "ideal_tool_usage_trajectory": bucket.ideal_tool_usage_trajectory,
+                "agent_id": bucket.agent_id,
+                "agent_name": bucket.agent_name,
+                "agent_version": bucket.agent_version,
                 "output_file": bucket_filename,
             })
 
