@@ -25,7 +25,7 @@ class TestStatsSummary:
     """Tests for StatsSummary Pydantic model."""
 
     def test_default_creation(self):
-        from aggregation.schema.data_models import StatsSummary
+        from aggregator.schema.data_models import StatsSummary
 
         s = StatsSummary()
         assert s.mean is None
@@ -33,7 +33,7 @@ class TestStatsSummary:
         assert s.unit is None
 
     def test_full_creation(self):
-        from aggregation.schema.data_models import StatsSummary
+        from aggregator.schema.data_models import StatsSummary
 
         s = StatsSummary(
             mean=1.5, median=1.0, std_dev=0.5, p95=2.0,
@@ -45,7 +45,7 @@ class TestStatsSummary:
         assert s.scale == "0-10"
 
     def test_serialization(self):
-        from aggregation.schema.data_models import StatsSummary
+        from aggregator.schema.data_models import StatsSummary
 
         s = StatsSummary(mean=2.0, median=1.5)
         d = s.model_dump()
@@ -58,14 +58,14 @@ class TestDetectionStatus:
     """Tests for DetectionStatus Pydantic model."""
 
     def test_default_creation(self):
-        from aggregation.schema.data_models import DetectionStatus
+        from aggregator.schema.data_models import DetectionStatus
 
         ds = DetectionStatus()
         assert ds.any_detected is None
         assert ds.detection_rate is None
 
     def test_full_creation(self):
-        from aggregation.schema.data_models import DetectionStatus
+        from aggregator.schema.data_models import DetectionStatus
 
         ds = DetectionStatus(any_detected=True, detection_rate=0.75)
         assert ds.any_detected is True
@@ -76,7 +76,7 @@ class TestBooleanAggregates:
     """Tests for BooleanAggregates model."""
 
     def test_default_creation(self):
-        from aggregation.schema.data_models import BooleanAggregates
+        from aggregator.schema.data_models import BooleanAggregates
 
         ba = BooleanAggregates()
         assert ba.pii_detection.any_detected is None
@@ -87,14 +87,14 @@ class TestDerivedRates:
     """Tests for DerivedRates model."""
 
     def test_default_creation(self):
-        from aggregation.schema.data_models import DerivedRates
+        from aggregator.schema.data_models import DerivedRates
 
         dr = DerivedRates()
         assert dr.fault_detection_success_rate is None
         assert dr.rai_compliance_rate is None
 
     def test_full_creation(self):
-        from aggregation.schema.data_models import DerivedRates
+        from aggregator.schema.data_models import DerivedRates
 
         dr = DerivedRates(
             fault_detection_success_rate=0.9,
@@ -112,14 +112,14 @@ class TestTextualConsensus:
     """Tests for TextualConsensus model."""
 
     def test_default_creation(self):
-        from aggregation.schema.data_models import TextualConsensus
+        from aggregator.schema.data_models import TextualConsensus
 
         tc = TextualConsensus()
         assert tc.consensus_summary == ""
         assert tc.severity_label is None
 
     def test_full_creation(self):
-        from aggregation.schema.data_models import TextualConsensus
+        from aggregator.schema.data_models import TextualConsensus
 
         tc = TextualConsensus(
             consensus_summary="Agent performs well.",
@@ -135,14 +135,14 @@ class TestRankedLimitation:
     """Tests for RankedLimitation model."""
 
     def test_creation(self):
-        from aggregation.schema.data_models import RankedLimitation
+        from aggregator.schema.data_models import RankedLimitation
 
         rl = RankedLimitation(limitation="Slow detection", frequency=5, severity="High")
         assert rl.limitation == "Slow detection"
         assert rl.frequency == 5
 
     def test_defaults(self):
-        from aggregation.schema.data_models import RankedLimitation
+        from aggregator.schema.data_models import RankedLimitation
 
         rl = RankedLimitation(limitation="Some issue")
         assert rl.frequency == 0
@@ -153,7 +153,7 @@ class TestPrioritizedRecommendation:
     """Tests for PrioritizedRecommendation model."""
 
     def test_creation(self):
-        from aggregation.schema.data_models import PrioritizedRecommendation
+        from aggregator.schema.data_models import PrioritizedRecommendation
 
         pr = PrioritizedRecommendation(
             recommendation="Improve alerting", priority="High", frequency=10
@@ -166,13 +166,13 @@ class TestKnownLimitations:
     """Tests for KnownLimitations model."""
 
     def test_empty(self):
-        from aggregation.schema.data_models import KnownLimitations
+        from aggregator.schema.data_models import KnownLimitations
 
         kl = KnownLimitations()
         assert kl.ranked_items == []
 
     def test_with_items(self):
-        from aggregation.schema.data_models import KnownLimitations, RankedLimitation
+        from aggregator.schema.data_models import KnownLimitations, RankedLimitation
 
         kl = KnownLimitations(ranked_items=[
             RankedLimitation(limitation="Issue A", frequency=3, severity="High"),
@@ -185,7 +185,7 @@ class TestRecommendations:
     """Tests for Recommendations model."""
 
     def test_empty(self):
-        from aggregation.schema.data_models import Recommendations
+        from aggregator.schema.data_models import Recommendations
 
         r = Recommendations()
         assert r.prioritized_items == []
@@ -195,7 +195,7 @@ class TestFaultCategoryScorecard:
     """Tests for FaultCategoryScorecard model."""
 
     def test_creation(self):
-        from aggregation.schema.data_models import FaultCategoryScorecard
+        from aggregator.schema.data_models import FaultCategoryScorecard
 
         sc = FaultCategoryScorecard(
             fault_category="pod-kill",
@@ -211,7 +211,7 @@ class TestCertificationScorecard:
     """Tests for CertificationScorecard model."""
 
     def test_creation(self):
-        from aggregation.schema.data_models import CertificationScorecard
+        from aggregator.schema.data_models import CertificationScorecard
 
         cs = CertificationScorecard(
             agent_id="agent-001",
@@ -229,14 +229,14 @@ class TestTokenUsage:
     """Tests for TokenUsage model."""
 
     def test_default(self):
-        from aggregation.schema.data_models import TokenUsage
+        from aggregator.schema.data_models import TokenUsage
 
         tu = TokenUsage()
         assert tu.input_tokens == 0
         assert tu.total_tokens == 0
 
     def test_add(self):
-        from aggregation.schema.data_models import TokenUsage
+        from aggregator.schema.data_models import TokenUsage
 
         tu = TokenUsage()
         tu.add({"input_tokens": 100, "output_tokens": 50, "total_tokens": 150})
@@ -245,7 +245,7 @@ class TestTokenUsage:
         assert tu.total_tokens == 150
 
     def test_add_multiple(self):
-        from aggregation.schema.data_models import TokenUsage
+        from aggregator.schema.data_models import TokenUsage
 
         tu = TokenUsage()
         tu.add({"input_tokens": 100, "output_tokens": 50, "total_tokens": 150})
@@ -254,7 +254,7 @@ class TestTokenUsage:
         assert tu.total_tokens == 450
 
     def test_to_dict(self):
-        from aggregation.schema.data_models import TokenUsage
+        from aggregator.schema.data_models import TokenUsage
 
         tu = TokenUsage(input_tokens=10, output_tokens=5, total_tokens=15)
         d = tu.to_dict()
@@ -270,13 +270,13 @@ class TestComputeStats:
     """Tests for compute_stats()."""
 
     def test_empty_values(self):
-        from aggregation.scripts.numeric_aggregation import compute_stats
+        from aggregator.scripts.numeric_aggregation import compute_stats
 
         result = compute_stats([], ["mean", "median"])
         assert result == {}
 
     def test_single_value(self):
-        from aggregation.scripts.numeric_aggregation import compute_stats
+        from aggregator.scripts.numeric_aggregation import compute_stats
 
         result = compute_stats([5.0], ["mean", "median", "min", "max"])
         assert result["mean"] == 5.0
@@ -285,13 +285,13 @@ class TestComputeStats:
         assert result["max"] == 5.0
 
     def test_single_value_std_dev(self):
-        from aggregation.scripts.numeric_aggregation import compute_stats
+        from aggregator.scripts.numeric_aggregation import compute_stats
 
         result = compute_stats([5.0], ["std_dev"])
         assert result["std_dev"] == 0.0
 
     def test_multiple_values(self):
-        from aggregation.scripts.numeric_aggregation import compute_stats
+        from aggregator.scripts.numeric_aggregation import compute_stats
 
         result = compute_stats([1.0, 2.0, 3.0, 4.0, 5.0], ["mean", "median", "sum"])
         assert result["mean"] == 3.0
@@ -299,7 +299,7 @@ class TestComputeStats:
         assert result["sum"] == 15.0
 
     def test_p95(self):
-        from aggregation.scripts.numeric_aggregation import compute_stats
+        from aggregator.scripts.numeric_aggregation import compute_stats
 
         values = list(range(1, 101))
         result = compute_stats([float(v) for v in values], ["p95"])
@@ -307,13 +307,13 @@ class TestComputeStats:
         assert result["p95"] >= 95.0
 
     def test_mode(self):
-        from aggregation.scripts.numeric_aggregation import compute_stats
+        from aggregator.scripts.numeric_aggregation import compute_stats
 
         result = compute_stats([1.0, 2.0, 2.0, 3.0], ["mode"])
         assert result["mode"] == 2.0
 
     def test_unknown_stat_ignored(self):
-        from aggregation.scripts.numeric_aggregation import compute_stats
+        from aggregator.scripts.numeric_aggregation import compute_stats
 
         result = compute_stats([1.0, 2.0], ["mean", "nonexistent"])
         assert "mean" in result
@@ -344,7 +344,7 @@ class TestComputeNumericAggregates:
         ]
 
     def test_basic(self):
-        from aggregation.scripts.numeric_aggregation import compute_numeric_aggregates
+        from aggregator.scripts.numeric_aggregation import compute_numeric_aggregates
 
         docs = self._make_docs()
         result = compute_numeric_aggregates(docs)
@@ -356,13 +356,13 @@ class TestComputeNumericAggregates:
         assert result["response_quality_score"].get("scale") == "0-10"
 
     def test_empty_docs(self):
-        from aggregation.scripts.numeric_aggregation import compute_numeric_aggregates
+        from aggregator.scripts.numeric_aggregation import compute_numeric_aggregates
 
         result = compute_numeric_aggregates([])
         assert result == {}
 
     def test_missing_fields(self):
-        from aggregation.scripts.numeric_aggregation import compute_numeric_aggregates
+        from aggregator.scripts.numeric_aggregation import compute_numeric_aggregates
 
         docs = [{"quantitative": {}, "qualitative": {}}]
         result = compute_numeric_aggregates(docs)
@@ -373,14 +373,14 @@ class TestComputeDerivedRates:
     """Tests for compute_derived_rates()."""
 
     def test_empty_docs(self):
-        from aggregation.scripts.numeric_aggregation import compute_derived_rates
+        from aggregator.scripts.numeric_aggregation import compute_derived_rates
 
         result = compute_derived_rates([])
         assert result["fault_detection_success_rate"] is None
         assert result["rai_compliance_rate"] is None
 
     def test_all_detected(self):
-        from aggregation.scripts.numeric_aggregation import compute_derived_rates
+        from aggregator.scripts.numeric_aggregation import compute_derived_rates
 
         docs = [
             {
@@ -405,7 +405,7 @@ class TestComputeDerivedRates:
         assert result["security_compliance_rate"] == 1.0
 
     def test_partial_detection(self):
-        from aggregation.scripts.numeric_aggregation import compute_derived_rates
+        from aggregator.scripts.numeric_aggregation import compute_derived_rates
 
         docs = [
             {
@@ -427,14 +427,14 @@ class TestComputeBooleanAggregates:
     """Tests for compute_boolean_aggregates()."""
 
     def test_empty_docs(self):
-        from aggregation.scripts.numeric_aggregation import compute_boolean_aggregates
+        from aggregator.scripts.numeric_aggregation import compute_boolean_aggregates
 
         result = compute_boolean_aggregates([])
         assert result["pii_detection"]["any_detected"] is None
         assert result["hallucination_detection"]["any_detected"] is None
 
     def test_no_detections(self):
-        from aggregation.scripts.numeric_aggregation import compute_boolean_aggregates
+        from aggregator.scripts.numeric_aggregation import compute_boolean_aggregates
 
         docs = [
             {"quantitative": {"pii_detection": False}, "qualitative": {"hallucination_score": 0}}
@@ -445,7 +445,7 @@ class TestComputeBooleanAggregates:
         assert result["pii_detection"]["detection_rate"] == 0.0
 
     def test_some_detections(self):
-        from aggregation.scripts.numeric_aggregation import compute_boolean_aggregates
+        from aggregator.scripts.numeric_aggregation import compute_boolean_aggregates
 
         docs = [
             {"quantitative": {"pii_detection": True}, "qualitative": {"hallucination_score": 0.5}},
@@ -505,7 +505,7 @@ class TestLLMCouncil:
     """Tests for LLMCouncil with mocked LLM calls."""
 
     def _make_council(self):
-        from aggregation.scripts.llm_council import LLMCouncil
+        from aggregator.scripts.llm_council import LLMCouncil
 
         mock_client = AsyncMock()
         mock_client.call_llm = AsyncMock(return_value=(
@@ -574,7 +574,7 @@ class TestLLMCouncil:
 
     @pytest.mark.asyncio
     async def test_synthesize_list_metric(self):
-        from aggregation.scripts.llm_council import LLMCouncil
+        from aggregator.scripts.llm_council import LLMCouncil
 
         mock_client = AsyncMock()
         mock_client.call_llm = AsyncMock(return_value=(
@@ -605,7 +605,7 @@ class TestScorecardAssembler:
     """Tests for ScorecardAssembler."""
 
     def test_assemble_category_scorecard(self):
-        from aggregation.scripts.aggregation import ScorecardAssembler
+        from aggregator.scripts.aggregation import ScorecardAssembler
 
         docs = [
             {"fault_name": "pod-delete", "quantitative": {}},
@@ -626,7 +626,7 @@ class TestScorecardAssembler:
         assert "pod-kill" in result["faults_tested"]
 
     def test_assemble_final_scorecard(self):
-        from aggregation.scripts.aggregation import ScorecardAssembler
+        from aggregator.scripts.aggregation import ScorecardAssembler
 
         category_scorecards = [
             {"total_runs": 10, "faults_tested": ["pod-delete"]},
@@ -654,13 +654,13 @@ class TestCollectNarratives:
     """Tests for _collect_narratives helper."""
 
     def test_empty_docs(self):
-        from aggregation.scripts.llm_council import _collect_narratives
+        from aggregator.scripts.llm_council import _collect_narratives
 
         result = _collect_narratives([], "qualitative", "agent_summary")
         assert result == []
 
     def test_collects_non_empty(self):
-        from aggregation.scripts.llm_council import _collect_narratives
+        from aggregator.scripts.llm_council import _collect_narratives
 
         docs = [
             {"qualitative": {"agent_summary": "Good agent."}},
@@ -674,7 +674,7 @@ class TestCollectNarratives:
         assert "Needs improvement." in result
 
     def test_skips_non_string(self):
-        from aggregation.scripts.llm_council import _collect_narratives
+        from aggregator.scripts.llm_council import _collect_narratives
 
         docs = [
             {"qualitative": {"agent_summary": 123}},

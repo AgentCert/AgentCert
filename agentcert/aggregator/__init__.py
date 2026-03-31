@@ -20,7 +20,7 @@ __all__ = [
 
 def __getattr__(name):
     if name in ("AggregationOrchestrator", "MetricsQueryService", "ScorecardAssembler", "ScorecardStorage"):
-        from aggregation.scripts.aggregation import (
+        from aggregator.scripts.aggregation import (
             AggregationOrchestrator,
             MetricsQueryService,
             ScorecardAssembler,
@@ -28,10 +28,10 @@ def __getattr__(name):
         )
         return locals()[name]
     if name == "LLMCouncil":
-        from aggregation.scripts.llm_council import LLMCouncil
+        from aggregator.scripts.llm_council import LLMCouncil
         return LLMCouncil
     if name in ("compute_boolean_aggregates", "compute_derived_rates", "compute_numeric_aggregates", "compute_stats"):
-        from aggregation.scripts.numeric_aggregation import (
+        from aggregator.scripts.numeric_aggregation import (
             compute_boolean_aggregates,
             compute_derived_rates,
             compute_numeric_aggregates,

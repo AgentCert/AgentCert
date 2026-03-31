@@ -1,6 +1,6 @@
 """Schema models for the Aggregation module."""
 
-from aggregation.schema.data_models import (
+from aggregator.schema.data_models import (
     BooleanAggregates,
     CertificationScorecard,
     DerivedRates,

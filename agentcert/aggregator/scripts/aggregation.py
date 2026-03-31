@@ -24,8 +24,8 @@ from utils.load_config import ConfigLoader
 from utils.mongodb_util import MongoDBClient, MongoDBConfig
 from utils.setup_logging import logger
 
-from aggregation.scripts.llm_council import LLMCouncil
-from aggregation.scripts.numeric_aggregation import (
+from aggregator.scripts.llm_council import LLMCouncil
+from aggregator.scripts.numeric_aggregation import (
     compute_boolean_aggregates,
     compute_derived_rates,
     compute_numeric_aggregates,

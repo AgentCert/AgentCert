@@ -33,7 +33,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
 
-from aggregation.scripts.aggregation import (
+from aggregator.scripts.aggregation import (
     AggregationOrchestrator,
     DirectoryQueryService,
 )
