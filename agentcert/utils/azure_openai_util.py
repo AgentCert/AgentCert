@@ -19,6 +19,7 @@ class AzureLLMClient:
     # Shared client instance (singleton pattern)
     _shared_client: Optional[AzureOpenAIChatClient] = None
     _shared_clients: Dict[str, AzureOpenAIChatClient] = {}
+    _model_types: Dict[str, str] = {}
 
     def __init__(self, config: Optional[dict] = {}):
         """
@@ -36,6 +37,10 @@ class AzureLLMClient:
             # AzureOpenAIChatClient reads from env vars automatically:
             # AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT
             self._clients = self.get_clients(self.config)
+            # Store model types for parameter filtering
+            for model_name, model_config in self.config.items():
+                if isinstance(model_config, dict) and "model_type" in model_config:
+                    self.__class__._model_types[model_name] = model_config["model_type"]
             logger.info("AzureLLMClient initialized successfully")
         except Exception as e:
             logger.error(f"Error initializing AzureLLMClient: {str(e)}")
@@ -142,6 +147,10 @@ class AzureLLMClient:
 
         return self.model_agents[cache_key]
 
+    def is_reasoning_model(self, model_name: str) -> bool:
+        """Check if a model is a reasoning model that doesn't support temperature/max_tokens."""
+        return self._model_types.get(model_name, "standard") == "reasoning"
+
     def _convert_messages_to_chat_messages(
         self, messages: Union[List[Dict[str, str]], List[ChatMessage], str]
     ) -> List[ChatMessage]:
@@ -205,8 +214,14 @@ class AzureLLMClient:
             # Convert messages to ChatMessage format
             chat_messages = self._convert_messages_to_chat_messages(messages)
 
+            # Build generation kwargs — reasoning models (o-series, GPT-5)
+            # don't support temperature.
+            gen_kwargs: Dict[str, Any] = {}
+            if not self.is_reasoning_model(model_name):
+                gen_kwargs["temperature"] = temperature
+
             # Run the agent
-            result = await agent.run(messages=chat_messages)
+            result = await agent.run(messages=chat_messages, **gen_kwargs)
 
             # Try to parse as JSON, otherwise return as text
             try:
@@ -282,8 +297,14 @@ class AzureLLMClient:
             # Convert messages to ChatMessage format
             chat_messages = self._convert_messages_to_chat_messages(messages)
 
+            # Build generation kwargs — reasoning models (o-series, GPT-5)
+            # don't support temperature.
+            gen_kwargs: Dict[str, Any] = {}
+            if not self.is_reasoning_model(model_name):
+                gen_kwargs["temperature"] = temperature
+
             # Run the agent
-            result = await agent.run(messages=chat_messages)
+            result = await agent.run(messages=chat_messages, **gen_kwargs)
 
             # Parse and validate with Pydantic model
             try:

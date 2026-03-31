@@ -66,15 +66,40 @@ class LLMCouncil:
         self,
         llm_client: AzureLLMClient,
         council_size: Optional[int] = None,
+        council_members: Optional[List[str]] = None,
+        meta_judge_model: Optional[str] = None,
         model_name: Optional[str] = None,
     ):
         config = _get_config().get("llm_council", {})
         self.llm_client = llm_client
         self.council_size = council_size or config.get("council_size", 3)
-        self.model_name = model_name or config.get("model_name", "extraction_model")
         self._config = config
 
+        # Resolve council member models.
+        # Priority: explicit council_members > config council_members > legacy model_name
+        if council_members:
+            self.council_members = list(council_members)
+        elif config.get("council_members"):
+            self.council_members = list(config["council_members"])
+        else:
+            fallback = model_name or config.get("model_name", "extraction_model")
+            self.council_members = [fallback] * self.council_size
+
+        # Meta-judge / scorecard synthesis model
+        self.meta_judge_model = (
+            meta_judge_model
+            or config.get("meta_judge_model")
+            or self.council_members[0]
+        )
+
+        # Backward-compat: keep model_name pointing to the first member
+        self.model_name = self.council_members[0]
+
     # ---- single judge ----------------------------------------------------
+
+    def _model_for_judge(self, judge_index: int) -> str:
+        """Return the model name for the given judge index (cycles if needed)."""
+        return self.council_members[judge_index % len(self.council_members)]
 
     async def _run_single_judge(
         self,
@@ -84,14 +109,15 @@ class LLMCouncil:
     ) -> Tuple[Dict[str, Any], Dict[str, int]]:
         """Run a single LLM judge and return (parsed_response, token_usage)."""
         config = self._config
+        judge_model = self._model_for_judge(judge_index)
         response, usage = await self.llm_client.call_llm(
-            model_name=self.model_name,
+            model_name=judge_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=config.get("judge_temperature", 0.3),
             max_tokens=config.get("judge_max_tokens", 1500),
             system_prompt=system_prompt,
         )
-        logger.info(f"Judge {judge_index + 1} completed.")
+        logger.info(f"Judge {judge_index + 1} (model={judge_model}) completed.")
 
         if isinstance(response, dict):
             return response, usage
@@ -127,7 +153,7 @@ class LLMCouncil:
         )
 
         response, usage = await self.llm_client.call_llm(
-            model_name=self.model_name,
+            model_name=self.meta_judge_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=config.get("meta_judge_temperature", 0.1),
             max_tokens=config.get("meta_judge_max_tokens", 2000),
@@ -306,7 +332,7 @@ class LLMCouncil:
         )
 
         response, usage = await self.llm_client.call_llm(
-            model_name=self.model_name,
+            model_name=self.meta_judge_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=config.get("scorecard_synthesis_temperature", 0.2),
             max_tokens=config.get("scorecard_synthesis_max_tokens", 2000),

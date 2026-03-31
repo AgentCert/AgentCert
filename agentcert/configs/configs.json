@@ -32,13 +32,15 @@
             "endpoint": "ENV_AZURE_OPENAI_ENDPOINT",
             "api_key": "ENV_AZURE_OPENAI_API_KEY",
             "api_version": "ENV_AZURE_OPENAI_API_VERSION",
-            "deployment_name": "ENV_AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"
+            "deployment_name": "ENV_AZURE_OPENAI_CHAT_DEPLOYMENT_NAME",
+            "model_type": "standard"
         },
         "reasoning_model":{
             "endpoint": "ENV_AZURE_OPENAI_GPT5_ENDPOINT",
             "api_key": "ENV_AZURE_OPENAI_GPT5_API_KEY",
             "api_version": "ENV_AZURE_OPENAI_GPT5_API_VERSION",
-            "deployment_name": "ENV_AZURE_OPENAI_GPT5_CHAT_DEPLOYMENT_NAME"
+            "deployment_name": "ENV_AZURE_OPENAI_GPT5_CHAT_DEPLOYMENT_NAME",
+            "model_type": "reasoning"
         }
     }
 }

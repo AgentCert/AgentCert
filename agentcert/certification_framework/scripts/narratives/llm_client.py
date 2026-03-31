@@ -66,6 +66,7 @@ def call_llm(
     retries: int = 3,
     expect_json: bool = True,
     response_schema: Type[BaseModel] | None = None,
+    is_reasoning_model: bool = False,
 ) -> dict:
     """
     Send a prompt to Azure OpenAI and return the result.
@@ -81,6 +82,8 @@ def call_llm(
         expect_json: If True, parse response as JSON.
         response_schema: If provided, enforce this Pydantic model as a
             strict JSON schema via OpenAI structured output.
+        is_reasoning_model: If True, omit temperature and max_tokens
+            (reasoning models like o-series/GPT-5 do not support them).
 
     Returns:
         {
@@ -119,12 +122,18 @@ def call_llm(
     last_error = None
     for attempt in range(retries):
         try:
+            # Reasoning models (o-series, GPT-5) don't support
+            # temperature / max_tokens parameters.
+            gen_kwargs: dict = {}
+            if not is_reasoning_model:
+                gen_kwargs["temperature"] = temperature
+                gen_kwargs["max_tokens"] = max_tokens
+
             response = client.chat.completions.create(
                 model=deployment,
                 messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
                 response_format=response_format,
+                **gen_kwargs,
             )
 
             raw_text = response.choices[0].message.content.strip()
