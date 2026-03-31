@@ -29,7 +29,7 @@ except ImportError:
     logging.basicConfig(level=logging.INFO)
 
 from fault_bucketing import FaultBucketingPipeline
-from metric_extraction import (
+from metrics_extractor import (
     TraceMetricsExtractor,
     ExtractionResult,
 )

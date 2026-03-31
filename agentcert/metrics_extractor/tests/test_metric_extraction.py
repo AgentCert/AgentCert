@@ -15,15 +15,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from metric_extraction.schema.data_models import (
+from metrics_extractor.schema.data_models import (
     ExtractionResult,
     TokenUsage,
 )
-from metric_extraction.scripts.span_aggregator import (
+from metrics_extractor.scripts.span_aggregator import (
     QualitativeAggregator,
     QuantitativeAggregator,
 )
-from metric_extraction.scripts.metrics_extractor_from_trace import (
+from metrics_extractor.scripts.metrics_extractor_from_trace import (
     TraceMetricsExtractor,
     _load_module_config,
     _load_prompts,

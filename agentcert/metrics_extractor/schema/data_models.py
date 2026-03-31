@@ -6,7 +6,7 @@ Contains local dataclasses used within the extraction pipeline.
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from metric_extraction.schema.metrics_model import (
+from metrics_extractor.schema.metrics_model import (
     LLMQualitativeExtraction,
     LLMQuantitativeExtraction,
 )

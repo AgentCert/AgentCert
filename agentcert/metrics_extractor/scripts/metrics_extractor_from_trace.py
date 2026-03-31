@@ -17,16 +17,16 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from metric_extraction.schema.metrics_model import (
+from metrics_extractor.schema.metrics_model import (
     LLMQualitativeExtraction,
     LLMQuantitativeExtraction,
 )
 
-from metric_extraction.scripts.span_aggregator import (
+from metrics_extractor.scripts.span_aggregator import (
     QualitativeAggregator,
     QuantitativeAggregator,
 )
-from metric_extraction.schema.data_models import (
+from metrics_extractor.schema.data_models import (
     ExtractionResult,
     TokenUsage,
 )

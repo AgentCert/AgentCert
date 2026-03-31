@@ -1,10 +1,10 @@
 """Schema models for the Metric Extraction from Trace pipeline."""
 
-from metric_extraction.schema.data_models import (
+from metrics_extractor.schema.data_models import (
     ExtractionResult,
     TokenUsage,
 )
-from metric_extraction.schema.metrics_model import (
+from metrics_extractor.schema.metrics_model import (
     BaseModelWrapper,
     FaultInfo,
     LLMQualitativeExtraction,
