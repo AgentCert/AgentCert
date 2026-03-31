@@ -177,6 +177,12 @@ export DEFAULT_APP_HUB_GIT_URL="https://github.com/agentcert/app-charts"
 export DEFAULT_APP_HUB_BRANCH_NAME="main"
 export DEFAULT_APP_HUB_PATH="/tmp/default"
 
+# OTEL / Langfuse tracing for GraphQL server (PR #84)
+# The Go OTEL tracer in otel_tracer.go reads these at startup.
+# If OTEL_EXPORTER_OTLP_ENDPOINT is empty, tracing is silently disabled.
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://100.78.130.20:3001/api/public/otel"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic cGstbGYtNzhiM2QyMTAtOTY5NS00MWIzLThkMjktZDBiMWRkZDFmZjRkOnNrLWxmLWFkMjExMmIyLTY0MjEtNGFjMS1hYmVhLTUxZDNkZGE1NDkwMg=="
+
 # NOTE: CHAOS_CENTER_UI_ENDPOINT is intentionally NOT set here.
 # The Go server auto-detects the machine's outbound IP address on the
 # subscriber-pod-permanent-fix branch. This is the correct behavior for
@@ -239,7 +245,12 @@ ok "GraphQL binary built"
 # Stop any previously running daemon by process name.
 pkill -f "$GQL_APP_NAME" 2>/dev/null || true
 
-(cd "$GQL_DIR" && nohup env REST_PORT="$GQL_REST_PORT" GRPC_PORT="$GQL_GRPC_PORT" "$GQL_BINARY" >> "$PID_DIR/.graphql.log" 2>&1) &
+(cd "$GQL_DIR" && nohup env \
+  REST_PORT="$GQL_REST_PORT" \
+  GRPC_PORT="$GQL_GRPC_PORT" \
+  OTEL_EXPORTER_OTLP_ENDPOINT="$OTEL_EXPORTER_OTLP_ENDPOINT" \
+  OTEL_EXPORTER_OTLP_HEADERS="$OTEL_EXPORTER_OTLP_HEADERS" \
+  "$GQL_BINARY" >> "$PID_DIR/.graphql.log" 2>&1) &
 GQL_PID=$!
 echo "$GQL_PID" > "$PID_DIR/.agentcert-graphql.pid"
 
