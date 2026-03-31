@@ -15,7 +15,7 @@ Each block: {title, rating, confidence, agreement, body}
 import json
 from pathlib import Path
 
-from certification_framework.schema.intermediate import AssessmentsResult
+from cert_builder.schema.intermediate import AssessmentsResult
 
 # Ordered mapping: (source_field, display_title, has_rating)
 # Order matches certification_report.json Section 10

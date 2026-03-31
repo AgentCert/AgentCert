@@ -37,7 +37,7 @@ from aggregator.scripts.aggregation import (
     AggregationOrchestrator,
     DirectoryQueryService,
 )
-from certification_framework.scripts.certification_pipeline import CertificationPipeline
+from cert_builder.scripts.certification_pipeline import CertificationPipeline
 
 
 def _save_json(data: dict, path: Path) -> None:

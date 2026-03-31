@@ -17,7 +17,7 @@ Output: {"cards": {"identity_card": {...}, "scope_card": {...}, "categories_card
 import json
 from pathlib import Path
 
-from certification_framework.schema.intermediate import CardsResult
+from cert_builder.schema.intermediate import CardsResult
 
 
 def _build_identity_card(meta):

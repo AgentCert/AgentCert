@@ -14,10 +14,10 @@ import tempfile
 import time
 from pathlib import Path
 
-from certification_framework.scripts.ingestion.ingestor import ingest_from_file, save_context
-from certification_framework.scripts.computation.assembler import ComputationAssembler
-from certification_framework.scripts.narratives.assembler import NarrativeAssembler
-from certification_framework.scripts.report_assembler import ReportAssembler
+from cert_builder.scripts.ingestion.ingestor import ingest_from_file, save_context
+from cert_builder.scripts.computation.assembler import ComputationAssembler
+from cert_builder.scripts.narratives.assembler import NarrativeAssembler
+from cert_builder.scripts.report_assembler import ReportAssembler
 
 
 def _save_json(data, path):

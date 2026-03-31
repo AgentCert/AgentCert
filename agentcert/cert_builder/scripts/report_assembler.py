@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from certification_framework.schema.certification_schema import CertificationReport
+from cert_builder.schema.certification_schema import CertificationReport
 
 
 # ── Helpers ──────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
-from certification_framework.scripts.narratives.llm_client import get_client, call_llm
+from cert_builder.scripts.narratives.llm_client import get_client, call_llm
 
 # ---------------------------------------------------------------------------
 # Load prompt config

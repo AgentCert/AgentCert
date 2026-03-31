@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from certification_framework.schema.intermediate import HardcodedResult
+from cert_builder.schema.intermediate import HardcodedResult
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "hardcoded_content.yaml"
 
