@@ -180,7 +180,8 @@ export DEFAULT_APP_HUB_PATH="/tmp/default"
 # OTEL / Langfuse tracing for GraphQL server (PR #84)
 # The Go OTEL tracer in otel_tracer.go reads these at startup.
 # If OTEL_EXPORTER_OTLP_ENDPOINT is empty, tracing is silently disabled.
-export OTEL_EXPORTER_OTLP_ENDPOINT="http://100.78.130.20:3001/api/public/otel/v1/traces"
+# NOTE: Do NOT append /v1/traces — the Go tracer appends it automatically.
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://100.78.130.20:3001/api/public/otel"
 export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic cGstbGYtNzhiM2QyMTAtOTY5NS00MWIzLThkMjktZDBiMWRkZDFmZjRkOnNrLWxmLWFkMjExMmIyLTY0MjEtNGFjMS1hYmVhLTUxZDNkZGE1NDkwMg=="
 
 # NOTE: CHAOS_CENTER_UI_ENDPOINT is intentionally NOT set here.
