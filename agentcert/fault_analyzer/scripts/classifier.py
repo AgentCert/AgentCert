@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from fault_bucketing.schema.data_models import (
+from fault_analyzer.schema.data_models import (
     BatchClassificationResult,
     EventClassification,
     FaultBucket,

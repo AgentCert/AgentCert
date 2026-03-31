@@ -1,6 +1,6 @@
 """Schema models for the Fault Bucketing pipeline."""
 
-from fault_bucketing.schema.data_models import (
+from fault_analyzer.schema.data_models import (
     BatchClassificationResult,
     EventClassification,
     FaultBucket,

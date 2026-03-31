@@ -28,7 +28,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
 
-from fault_bucketing import FaultBucketingPipeline
+from fault_analyzer import FaultBucketingPipeline
 from metrics_extractor import (
     TraceMetricsExtractor,
     ExtractionResult,
