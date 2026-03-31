@@ -23,7 +23,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
 
-from multi_fault_trace_generation.schema.data_models import (
+from mock_trace_generator.schema.data_models import (
     ClusterScanResult,
     FaultDefinition,
     FaultInvestigationResult,
@@ -35,7 +35,7 @@ from multi_fault_trace_generation.schema.data_models import (
     ToolCallDetail,
     TriageDecision,
 )
-from multi_fault_trace_generation.scripts.tools_registry import (
+from mock_trace_generator.scripts.tools_registry import (
     AVAILABLE_TOOLS,
 )
 

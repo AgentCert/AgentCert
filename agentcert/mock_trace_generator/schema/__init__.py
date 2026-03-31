@@ -1,6 +1,6 @@
 """Schema models for multi-fault trace generation."""
 
-from multi_fault_trace_generation.schema.data_models import (
+from mock_trace_generator.schema.data_models import (
     ClusterScanResult,
     FaultDefinition,
     FaultInvestigationResult,

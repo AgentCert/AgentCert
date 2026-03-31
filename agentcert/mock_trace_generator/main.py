@@ -32,7 +32,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
 
-from multi_fault_trace_generation import (
+from mock_trace_generator import (
     FaultDefinition,
     MultiFaultTraceGenerator,
 )
