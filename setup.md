@@ -261,6 +261,7 @@ yarn install
 ### 6.2 Start the dev server
 
 ```bash
+export AUTH_PROXY_PORT=3000
 yarn dev
 ```
 
@@ -295,8 +296,8 @@ minikube start --cpus=2 --memory=4096 --driver=docker
 3. Download the generated YAML file.
 4. **Find your machine's local IP** (you'll need this in the next steps):
    ```bash
-   export MY_IP=$(hostname -I | awk '{print $1}')
-   echo "Your IP: $MY_IP"
+   MY_IP=$(ipconfig | awk '/IPv4/ && $2!="127.0.0.1" {print $NF; exit}')
+   echo "$MY_IP"
    ```
 
 5. **Edit the YAML** — update the `SERVER_ADDRESS` field to your machine's IP:
