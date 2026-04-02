@@ -1,0 +1,45 @@
+# LiteLLM Proxy Configuration — Local Development
+# ================================================
+# This config routes all LLM calls through the LiteLLM proxy on port 4000.
+# Langfuse tracing is enabled via success_callback / failure_callback.
+# Flash Agent sends extra_body.metadata on each call for rich trace context
+# (scan_id, step, namespace, experiment IDs).
+#
+# Required env vars at proxy startup:
+#   AZURE_API_BASE, AZURE_API_KEY, LITELLM_MASTER_KEY
+#   LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
+
+model_list:
+  - model_name: gpt-4.1-mini
+    litellm_params:
+      model: azure/gpt-4.1-mini
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: "2025-01-01-preview"
+    model_info:
+      base_model: azure/gpt-4.1-mini
+
+  # Alias so agents can use "gpt-4o-mini" as MODEL_ALIAS
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: azure/gpt-4.1-mini
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: "2025-01-01-preview"
+    model_info:
+      base_model: azure/gpt-4.1-mini
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  # Langfuse callback — all LLM calls are traced automatically.
+  # Flash Agent sends extra_body.metadata on each call for rich trace context.
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  # Retry settings — automatic retry on transient failures
+  num_retries: 3
+  retry_after: 30
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  allow_requests_on_health: true
