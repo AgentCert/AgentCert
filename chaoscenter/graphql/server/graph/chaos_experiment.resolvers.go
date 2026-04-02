@@ -101,6 +101,27 @@ func (r *mutationResolver) SaveChaosExperiment(ctx context.Context, request mode
 		return "", err
 	}
 
+	// Auto-deploy CronWorkflow to K8s when saving a scheduled experiment
+	query := bson.D{
+		{"experiment_id", request.ID},
+		{"is_removed", false},
+	}
+
+	experiment, err := r.chaosExperimentHandler.GetDBExperiment(query)
+	if err != nil {
+		logrus.WithFields(logFields).Warn("could not fetch experiment after save: " + err.Error())
+		return uiResponse, nil
+	}
+
+	if experiment.CronSyntax != "" {
+		logrus.WithFields(logFields).Info("deploying CronWorkflow to K8s for scheduled experiment")
+		if err = r.chaosExperimentRunHandler.RunCronExperiment(ctx, projectID, experiment, data_store.Store); err != nil {
+			logrus.WithFields(logFields).Error("failed to deploy CronWorkflow: " + err.Error())
+			return "", errors.New("experiment saved but failed to deploy CronWorkflow: " + err.Error())
+		}
+		logrus.WithFields(logFields).Info("CronWorkflow deployed successfully")
+	}
+
 	return uiResponse, nil
 }
 
