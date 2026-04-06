@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"regexp"
 	"runtime"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -120,6 +123,12 @@ func main() {
 		// Don't fail startup if Langfuse is not configured
 	}
 
+	// Initialize OTEL tracer for OTEL-compliant tracing to Langfuse
+	if err := observability.InitOTELTracer(context.Background()); err != nil {
+		log.Printf("Failed to initialize OTEL tracer: %v", err)
+		// Don't fail startup if OTEL is not configured
+	}
+
 	enableHTTPSConnection, err := strconv.ParseBool(utils.Config.EnableInternalTls)
 	if err != nil {
 		log.Errorf("unable to parse boolean value %v", err)
@@ -207,6 +216,20 @@ func main() {
 
 	projectEventChannel := make(chan string)
 	go projects.ProjectEvents(projectEventChannel, mongodb.MgoClient, mongodbOperator)
+
+	// Graceful shutdown handler for OTEL and Langfuse flush
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-sigCh
+		log.Infof("Received signal %v, shutting down tracers...", sig)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := observability.ShutdownOTELTracer(shutdownCtx); err != nil {
+			log.Errorf("OTEL tracer shutdown error: %v", err)
+		}
+		os.Exit(0)
+	}()
 
 	if enableHTTPSConnection {
 		if utils.Config.TlsCertPath == "" || utils.Config.TlsKeyPath == "" {

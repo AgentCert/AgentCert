@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	probeUtils "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/utils"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
+	"github.com/sirupsen/logrus"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 
@@ -33,6 +36,7 @@ import (
 	scheduleTypes "github.com/litmuschaos/chaos-scheduler/api/litmuschaos/v1alpha1"
 	probe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/handler"
 	"go.mongodb.org/mongo-driver/bson"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
@@ -366,6 +370,8 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 		return errors.New("failed to unmarshal workflow manifest")
 	}
 
+	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
+
 	if workflowManifest.Labels == nil {
 		workflowManifest.Labels = map[string]string{
 			"workflow_id": *workflow.ExperimentID,
@@ -386,7 +392,17 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 			if artifact[0].Raw == nil {
 				continue
 			}
-			var data = artifact[0].Raw.Data
+			rawData := artifact[0].Raw.Data
+			if !workflow.IsCustomExperiment {
+				if normalizedRaw, changed, normErr := normalizeProbeExecutionSettings(rawData); normErr != nil {
+					logrus.WithError(normErr).Warn("failed to normalize probe execution settings")
+				} else if changed {
+					artifact[0].Raw.Data = normalizedRaw
+					rawData = normalizedRaw
+				}
+			}
+
+			var data = rawData
 			if len(data) > 0 {
 				// This replacement is required because chaos engine yaml have a syntax template. example:{{ workflow.parameters.adminModeNamespace }}
 				// And it is not able the unmarshal the yamlstring to chaos engine struct
@@ -475,12 +491,194 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	}
 
 	workflow.Weightages = append(workflow.Weightages, newWeights...)
+
+	// Apply workload-discovery RBAC patch automatically after install-application.
+	err = c.applyRBACPatch(&workflowManifest)
+	if err != nil {
+		logrus.Errorf("Failed to apply RBAC patch: %v", err)
+		// Log but don't fail - RBAC may already exist in the cluster.
+	}
+	
+	// Apply readiness normalization patch automatically
+	err = c.applyInstallApplicationReadinessPatch(&workflowManifest)
+	if err != nil {
+		logrus.Errorf("Failed to apply readiness patch: %v", err)
+		// Log but don't fail - readiness patch is optional
+	}
+	
 	out, err := json.Marshal(workflowManifest)
 	if err != nil {
 		return err
 	}
 
 	workflow.ExperimentManifest = string(out)
+	return nil
+}
+
+// applyRBACPatch injects a step after install-application to grant the Litmus server
+// service account workload-discovery permissions required for dynamic app kind detection.
+func (c *chaosExperimentService) applyRBACPatch(wf *v1alpha1.Workflow) error {
+	if wf == nil || len(wf.Spec.Templates) == 0 {
+		return nil
+	}
+
+	entrypoint := wf.Spec.Entrypoint
+	if entrypoint == "" {
+		return nil
+	}
+
+	var rootTemplate *v1alpha1.Template
+	for i, t := range wf.Spec.Templates {
+		if t.Name == entrypoint {
+			rootTemplate = &wf.Spec.Templates[i]
+			break
+		}
+	}
+
+	if rootTemplate == nil || len(rootTemplate.Steps) == 0 {
+		return nil
+	}
+
+	stepGroupIdx := -1
+	for i, stepGroup := range rootTemplate.Steps {
+		for _, step := range stepGroup.Steps {
+			if step.Name == "install-application" {
+				stepGroupIdx = i
+				break
+			}
+		}
+		if stepGroupIdx >= 0 {
+			break
+		}
+	}
+
+	if stepGroupIdx < 0 {
+		return nil
+	}
+
+	rbacStepName := "apply-workload-rbac"
+	for _, t := range wf.Spec.Templates {
+		if t.Name == rbacStepName {
+			return nil
+		}
+	}
+
+	rbacTpl := v1alpha1.Template{
+		Name: rbacStepName,
+		Container: &corev1.Container{
+			Image:   "litmuschaos/k8s:latest",
+			Command: []string{"sh", "-c"},
+			Args: []string{`set -eu
+
+discover_target_subject() {
+	SA_NAME=""
+	SA_NAMESPACE=""
+
+	# Prefer this workflow pod's own service account (the identity that runs
+	# install/apply steps and needs the permissions on any cluster).
+	SA_NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || true)
+	POD_NAME=$(hostname)
+	if [ -n "$SA_NAMESPACE" ] && [ -n "$POD_NAME" ]; then
+		SA_NAME=$(kubectl -n "$SA_NAMESPACE" get pod "$POD_NAME" -o jsonpath='{.spec.serviceAccountName}' 2>/dev/null || true)
+	fi
+
+	# Otherwise, prefer the existing infra binding subject if already configured.
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		SA_NAME=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].name}' 2>/dev/null || true)
+		SA_NAMESPACE=$(kubectl get clusterrolebinding infra-cluster-role-binding -o jsonpath='{.subjects[0].namespace}' 2>/dev/null || true)
+	fi
+
+	# Last fallback: discover likely control-plane server deployment SA.
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		CANDIDATE=$(kubectl get deploy -A --no-headers 2>/dev/null | awk '$2 ~ /(server|graphql|portal)/ {print $1" "$2; exit}')
+		if [ -n "$CANDIDATE" ]; then
+			SA_NAMESPACE=$(echo "$CANDIDATE" | awk '{print $1}')
+			DEPLOY_NAME=$(echo "$CANDIDATE" | awk '{print $2}')
+			SA_NAME=$(kubectl -n "$SA_NAMESPACE" get deploy "$DEPLOY_NAME" -o jsonpath='{.spec.template.spec.serviceAccountName}' 2>/dev/null || true)
+		fi
+	fi
+
+	if [ -z "$SA_NAME" ] || [ -z "$SA_NAMESPACE" ]; then
+		echo "[rbac-patch] failed to discover service account subject"
+		return 1
+	fi
+
+	echo "$SA_NAME|$SA_NAMESPACE"
+}
+
+SUBJECT=$(discover_target_subject)
+SA_NAME=$(echo "$SUBJECT" | cut -d'|' -f1)
+SA_NAMESPACE=$(echo "$SUBJECT" | cut -d'|' -f2)
+
+RBAC_SUBJECT_SUFFIX=$(printf "%s-%s" "$SA_NAMESPACE" "$SA_NAME" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//;s/-*$//' | cut -c1-25)
+WORKLOAD_CRB_NAME="litmus-workload-discoverer-${RBAC_SUBJECT_SUFFIX}"
+APP_RB_NAME="litmus-app-installer-binding-${RBAC_SUBJECT_SUFFIX}"
+
+echo "[rbac-patch] applying workload-discovery RBAC for serviceaccount ${SA_NAMESPACE}/${SA_NAME}"
+
+kubectl apply -f - <<'EOF'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: litmus-workload-discoverer
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+  verbs: ["list", "get", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "get"]
+EOF
+
+kubectl create clusterrolebinding "${WORKLOAD_CRB_NAME}" \
+	--clusterrole=litmus-workload-discoverer \
+	--serviceaccount="${SA_NAMESPACE}:${SA_NAME}" \
+	--dry-run=client -o yaml | kubectl apply -f -
+
+TARGET_APP_NS="{{workflow.parameters.appNamespace}}"
+if [ -z "${TARGET_APP_NS}" ]; then
+	TARGET_APP_NS="{{workflow.parameters.adminModeNamespace}}"
+fi
+
+echo "[rbac-patch] ensuring namespace install RBAC in ${TARGET_APP_NS} for ${SA_NAMESPACE}/${SA_NAME}"
+
+kubectl -n "${TARGET_APP_NS}" create role litmus-app-installer \
+	--verb=get,list,watch,create,update,patch,delete \
+	--resource=configmaps,secrets,serviceaccounts,services,pods,persistentvolumeclaims,jobs.batch,cronjobs.batch,deployments.apps,replicasets.apps,statefulsets.apps,daemonsets.apps,roles.rbac.authorization.k8s.io,rolebindings.rbac.authorization.k8s.io \
+	--dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n "${TARGET_APP_NS}" create rolebinding "${APP_RB_NAME}" \
+	--role=litmus-app-installer \
+	--serviceaccount="${SA_NAMESPACE}:${SA_NAME}" \
+	--dry-run=client -o yaml | kubectl apply -f -
+
+echo "[rbac-patch] workload-discovery RBAC applied"`},
+		},
+	}
+
+	wf.Spec.Templates = append(wf.Spec.Templates, rbacTpl)
+
+	newStepGroup := v1alpha1.ParallelSteps{
+		Steps: []v1alpha1.WorkflowStep{{
+			Name:     rbacStepName,
+			Template: rbacStepName,
+		}},
+	}
+
+	newSteps := make([]v1alpha1.ParallelSteps, 0, len(rootTemplate.Steps)+1)
+	for i, stepGroup := range rootTemplate.Steps {
+		newSteps = append(newSteps, stepGroup)
+		if i == stepGroupIdx {
+			newSteps = append(newSteps, newStepGroup)
+		}
+	}
+	rootTemplate.Steps = newSteps
+
+	logrus.WithFields(logrus.Fields{
+		"entrypoint":         entrypoint,
+		"install_step_index": stepGroupIdx,
+	}).Info("[RBAC Patch] Successfully injected workload-discovery RBAC step")
+
 	return nil
 }
 
@@ -494,6 +692,8 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	if err != nil {
 		return errors.New("failed to unmarshal workflow manifest")
 	}
+
+	applyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 
 	if strings.TrimSpace(cronExperimentManifest.Spec.Schedule) == "" {
 		return errors.New("failed to process cron workflow, cron syntax not provided in manifest")
@@ -894,4 +1094,447 @@ func (c *chaosExperimentService) UpdateRuntimeCronWorkflowConfiguration(cronWork
 		}
 	}
 	return cronWorkflowManifest, faults, nil
+}
+
+// applyInstallApplicationReadinessPatch automatically adds a normalization step after install-application.
+// It waits for pods to reach Running/Succeeded with a bounded timeout to avoid deadlocking the workflow.
+func (c *chaosExperimentService) applyInstallApplicationReadinessPatch(wf *v1alpha1.Workflow) error {
+	if wf == nil || len(wf.Spec.Templates) == 0 {
+		return nil
+	}
+
+	// Find the entrypoint template
+	entrypoint := wf.Spec.Entrypoint
+	if entrypoint == "" {
+		return nil
+	}
+
+	var rootTemplate *v1alpha1.Template
+	for i, t := range wf.Spec.Templates {
+		if t.Name == entrypoint {
+			rootTemplate = &wf.Spec.Templates[i]
+			break
+		}
+	}
+
+	if rootTemplate == nil || len(rootTemplate.Steps) == 0 {
+		return nil
+	}
+
+	// Look for install-application step and insert readiness check after it
+	stepGroupIdx := -1
+	for i, stepGroup := range rootTemplate.Steps {
+		for _, step := range stepGroup.Steps {
+			if step.Name == "install-application" {
+				stepGroupIdx = i
+				break
+			}
+		}
+		if stepGroupIdx >= 0 {
+			break
+		}
+	}
+
+	if stepGroupIdx < 0 {
+		// No install-application step found, nothing to patch
+		return nil
+	}
+
+	// Check if readiness check already exists
+	readinessStepName := "normalize-install-application-readiness"
+	for _, t := range wf.Spec.Templates {
+		if t.Name == readinessStepName {
+			// Already patched
+			return nil
+		}
+	}
+
+	// Create readiness check template with pod readiness wait logic
+	readinessTpl := v1alpha1.Template{
+		Name: readinessStepName,
+		Container: &corev1.Container{
+			Image: "litmuschaos/k8s:latest",
+			Command: []string{"sh", "-c"},
+			Args: []string{
+				`set -eu
+NS="{{workflow.parameters.appNamespace}}"
+DEADLINE=$(($(date +%s) + ${READINESS_WAIT_SECONDS:-600}))
+echo "[readiness-check] Waiting for all pods in namespace $NS to reach Running/Succeeded..."
+while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+	if ! kubectl get ns "$NS" >/dev/null 2>&1; then
+		echo "[readiness-check] Namespace $NS not found yet; retrying..."
+		sleep 5
+		continue
+	fi
+
+	TOTAL=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+	if [ -z "$TOTAL" ] || [ "$TOTAL" -eq 0 ]; then
+		echo "[readiness-check] No pods created yet in $NS; retrying..."
+		sleep 5
+		continue
+	fi
+
+	NOT_READY=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | awk '$3!="Running" && $3!="Succeeded" && $3!="Completed" {c++} END {print c+0}')
+	RUNNING=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | awk '$3=="Running" || $3=="Succeeded" || $3=="Completed" {c++} END {print c+0}')
+
+	echo "[readiness-check] Pods status: $RUNNING/$TOTAL in Running/Succeeded"
+	if [ "$NOT_READY" -eq 0 ]; then
+		echo "[readiness-check] ✓ All pods in namespace $NS are Running/Succeeded"
+		exit 0
+	fi
+
+	kubectl get pods -n "$NS" --no-headers 2>/dev/null | awk '$3!="Running" && $3!="Succeeded" && $3!="Completed" {print "[readiness-check] waiting:", $1, $3, $2}' | head -n 6 || true
+  sleep 5
+done
+echo "[readiness-check] ⚠ Timeout waiting for all pods; continuing workflow to avoid deadlock"
+exit 0`,
+			},
+		},
+	}
+
+	// Add the template to workflow
+	wf.Spec.Templates = append(wf.Spec.Templates, readinessTpl)
+
+	// Insert a new step group after install-application with the readiness check
+	newStepGroup := v1alpha1.ParallelSteps{
+		Steps: []v1alpha1.WorkflowStep{{
+			Name:     readinessStepName,
+			Template: readinessStepName,
+		}},
+	}
+
+	// Insert the new step group after install-application
+	newSteps := make([]v1alpha1.ParallelSteps, 0, len(rootTemplate.Steps)+1)
+	for i, stepGroup := range rootTemplate.Steps {
+		newSteps = append(newSteps, stepGroup)
+		if i == stepGroupIdx {
+			newSteps = append(newSteps, newStepGroup)
+		}
+	}
+	rootTemplate.Steps = newSteps
+
+	logrus.WithFields(logrus.Fields{
+		"entrypoint":         entrypoint,
+		"install_step_index": stepGroupIdx,
+	}).Info("[Readiness Patch] Successfully applied install-application readiness normalization")
+
+	return nil
+}
+
+// applyInstallAgentTemplateOverrides enforces a configurable install-agent image
+// and pull policy for all template-based workflow manifests.
+func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
+	targetImage := strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE"))
+	if targetImage == "" {
+		targetImage = "agentcert/agentcert-install-agent:latest"
+	}
+
+	targetPullPolicy := strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE_PULL_POLICY"))
+	if targetPullPolicy == "" {
+		targetPullPolicy = string(corev1.PullIfNotPresent)
+	}
+
+	// Guard against invalid values and keep behavior deterministic.
+	switch corev1.PullPolicy(targetPullPolicy) {
+	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+	default:
+		targetPullPolicy = string(corev1.PullIfNotPresent)
+	}
+
+	changed := false
+	for i := range templates {
+		t := &templates[i]
+		if t.Container == nil {
+			continue
+		}
+
+		// Only override the agent installer template, never app installer templates.
+		isInstallAgentTemplate := t.Name == "install-agent" || strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
+		if !isInstallAgentTemplate {
+			continue
+		}
+
+		if strings.TrimSpace(t.Container.Image) != targetImage {
+			t.Container.Image = targetImage
+			changed = true
+		}
+
+		if t.Container.ImagePullPolicy != corev1.PullPolicy(targetPullPolicy) {
+			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
+			changed = true
+		}
+	}
+
+	if changed {
+		logrus.WithFields(logrus.Fields{
+			"image":       targetImage,
+			"pull_policy": targetPullPolicy,
+		}).Info("[Install Agent Patch] Applied dynamic install-agent image override")
+	}
+}
+
+// normalizeProbeExecutionSettings applies app-agnostic probe hardening for chaos
+// execution by forcing bounded HTTP probe behavior.
+func normalizeProbeExecutionSettings(raw string) (string, bool, error) {
+	if strings.TrimSpace(raw) == "" {
+		return raw, false, nil
+	}
+
+	var obj map[string]interface{}
+	if err := yaml.Unmarshal([]byte(raw), &obj); err != nil {
+		return raw, false, err
+	}
+
+	kind, _ := obj["kind"].(string)
+	if strings.ToLower(kind) != "chaosengine" {
+		return raw, false, nil
+	}
+
+	spec, ok := obj["spec"].(map[string]interface{})
+	if !ok {
+		return raw, false, nil
+	}
+
+	experiments, ok := spec["experiments"].([]interface{})
+	if !ok || len(experiments) == 0 {
+		return raw, false, nil
+	}
+
+	changed := false
+
+	setMinDuration := func(runProps map[string]interface{}, key string, minValue string) bool {
+		cur, exists := runProps[key]
+		if !exists || cur == nil || strings.TrimSpace(toString(cur)) == "" {
+			runProps[key] = minValue
+			return true
+		}
+
+		curDur, errCur := time.ParseDuration(strings.TrimSpace(toString(cur)))
+		minDur, errMin := time.ParseDuration(minValue)
+		if errCur != nil || errMin != nil {
+			runProps[key] = minValue
+			return true
+		}
+
+		if curDur < minDur {
+			runProps[key] = minValue
+			return true
+		}
+		return false
+	}
+
+	setMinInt := func(runProps map[string]interface{}, key string, minValue int) bool {
+		cur, exists := runProps[key]
+		if !exists || cur == nil || strings.TrimSpace(toString(cur)) == "" {
+			runProps[key] = minValue
+			return true
+		}
+
+		curInt, err := strconv.Atoi(strings.TrimSpace(toString(cur)))
+		if err != nil {
+			runProps[key] = minValue
+			return true
+		}
+
+		if curInt < minValue {
+			runProps[key] = minValue
+			return true
+		}
+		return false
+	}
+
+	for _, expAny := range experiments {
+		exp, ok := expAny.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		expSpec, ok := exp["spec"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		chaosDurationSec := getChaosDurationSeconds(expSpec)
+		if chaosDurationSec <= 0 {
+			chaosDurationSec = 60
+		}
+
+		recoveryWindowSec := chaosDurationSec * 4
+		if recoveryWindowSec < 120 {
+			recoveryWindowSec = 120
+		}
+		defaultIntervalSec := chaosDurationSec / 30
+		if defaultIntervalSec < 2 {
+			defaultIntervalSec = 2
+		}
+		if defaultIntervalSec > 10 {
+			defaultIntervalSec = 10
+		}
+
+		defaultAttempt := (recoveryWindowSec + defaultIntervalSec - 1) / defaultIntervalSec
+		if defaultAttempt < 5 {
+			defaultAttempt = 5
+		}
+		defaultRetry := (defaultAttempt + 4) / 5
+		if defaultRetry < 3 {
+			defaultRetry = 3
+		}
+
+		defaultInitialDelaySec := chaosDurationSec
+		if defaultInitialDelaySec < 20 {
+			defaultInitialDelaySec = 20
+		}
+		if defaultInitialDelaySec > 120 {
+			defaultInitialDelaySec = 120
+		}
+
+		defaultProbeTimeoutSec := defaultIntervalSec
+		if defaultProbeTimeoutSec < 2 {
+			defaultProbeTimeoutSec = 2
+		}
+
+		probes, ok := expSpec["probe"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, probeAny := range probes {
+			probe, ok := probeAny.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			probeType, _ := probe["type"].(string)
+			_, hasHTTPInputs := probe["httpProbe/inputs"]
+			if strings.ToLower(probeType) != "httpprobe" && !hasHTTPInputs {
+				continue
+			}
+
+			mode, _ := probe["mode"].(string)
+			if strings.TrimSpace(mode) == "" || strings.EqualFold(mode, "continuous") {
+				probe["mode"] = "Edge"
+				changed = true
+			}
+
+			runProps, ok := probe["runProperties"].(map[string]interface{})
+			if !ok {
+				runProps = map[string]interface{}{}
+				probe["runProperties"] = runProps
+				changed = true
+			}
+
+			// Hub templates can carry brittle probe settings. Enforce minimum
+			// duration-derived budgets so template runs wait for recovery.
+			if setMinDuration(runProps, "probeTimeout", formatDurationSeconds(defaultProbeTimeoutSec)) {
+				changed = true
+			}
+			if setMinDuration(runProps, "interval", formatDurationSeconds(defaultIntervalSec)) {
+				changed = true
+			}
+			if setMinDuration(runProps, "probePollingInterval", formatDurationSeconds(defaultIntervalSec)) {
+				changed = true
+			}
+			if setMinDuration(runProps, "initialDelay", formatDurationSeconds(defaultInitialDelaySec)) {
+				changed = true
+			}
+			if setMinInt(runProps, "attempt", defaultAttempt) {
+				changed = true
+			}
+			if setMinInt(runProps, "retry", defaultRetry) {
+				changed = true
+			}
+		}
+	}
+
+	if !changed {
+		return raw, false, nil
+	}
+
+	out, err := yaml.Marshal(obj)
+	if err != nil {
+		return raw, false, err
+	}
+
+	return string(out), true, nil
+}
+
+func toString(value interface{}) string {
+	if value == nil {
+		return ""
+	}
+
+	switch v := value.(type) {
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case float32:
+		return strconv.FormatInt(int64(v), 10)
+	case float64:
+		return strconv.FormatInt(int64(v), 10)
+	default:
+		return strings.TrimSpace(fmt.Sprint(value))
+	}
+}
+
+func getChaosDurationSeconds(expSpec map[string]interface{}) int {
+	components, ok := expSpec["components"].(map[string]interface{})
+	if !ok {
+		return 0
+	}
+
+	envList, ok := components["env"].([]interface{})
+	if !ok {
+		return 0
+	}
+
+	parseDuration := func(raw interface{}) int {
+		value := strings.TrimSpace(toString(raw))
+		if value == "" {
+			return 0
+		}
+		seconds, err := strconv.Atoi(value)
+		if err != nil || seconds <= 0 {
+			return 0
+		}
+		return seconds
+	}
+
+	isDurationKey := func(name string) bool {
+		upper := strings.ToUpper(strings.TrimSpace(name))
+		if upper == "TOTAL_CHAOS_DURATION" || upper == "CHAOS_DURATION" {
+			return true
+		}
+		return strings.Contains(upper, "CHAOS") && strings.Contains(upper, "DURATION")
+	}
+
+	for _, envAny := range envList {
+		envItem, ok := envAny.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name := toString(envItem["name"])
+		if !isDurationKey(name) {
+			continue
+		}
+
+		seconds := parseDuration(envItem["value"])
+		if seconds > 0 {
+			return seconds
+		}
+	}
+
+	return 0
+}
+
+func formatDurationSeconds(seconds int) string {
+	if seconds < 1 {
+		seconds = 1
+	}
+	return strconv.Itoa(seconds) + "s"
 }

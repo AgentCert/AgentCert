@@ -95,30 +95,30 @@ NC='\033[0m'
 
 print_header() {
     echo ""
-    echo -e "${BLUE}â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—${NC}"
-    echo -e "${BLUE}â•‘ ${CYAN}$1${BLUE}${NC}"
-    echo -e "${BLUE}â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•${NC}"
+    echo -e "${BLUE}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║ ${CYAN}$1${BLUE}${NC}"
+    echo -e "${BLUE}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
 
 print_section() {
-    echo -e "${CYAN}â†’ $1${NC}"
+    echo -e "${CYAN}→ $1${NC}"
 }
 
 print_success() {
-    echo -e "${GREEN}âœ“ $1${NC}"
+    echo -e "${GREEN}✓ $1${NC}"
 }
 
 print_info() {
-    echo -e "${BLUE}â„¹ $1${NC}"
+    echo -e "${BLUE}ℹ $1${NC}"
 }
 
 print_warning() {
-    echo -e "${YELLOW}âš  $1${NC}"
+    echo -e "${YELLOW}⚠ $1${NC}"
 }
 
 print_error() {
-    echo -e "${RED}âœ— $1${NC}"
+    echo -e "${RED}✗ $1${NC}"
 }
 
 log_to_file() {
@@ -242,20 +242,103 @@ sync_langfuse_env_from_dotenv() {
     fi
 }
 
-sync_mongodb_connection_to_cluster() {
-    # Update MongoDB connection string in cluster to use minikube host IP
-    local host_ip
-    host_ip=$(get_minikube_host_ip)
-    if [ -z "$host_ip" ]; then
-        print_warning "Unable to resolve minikube host IP. Skipping MongoDB connection sync"
+sync_install_agent_env_from_dotenv() {
+    # Use local .env for install-agent image overrides consumed by GraphQL server.
+    local env_file="$LOCAL_ENV_FILE"
+    if [ ! -f "$env_file" ]; then
+        print_warning ".env not found at $LOCAL_ENV_FILE; skipping install-agent env sync"
         return 0
     fi
 
-    print_section "Syncing MongoDB connection to cluster"
-    local db_server="mongodb://root:1234@${host_ip}:27017/admin"
-    local cm_patch="{\"data\":{\"DB_SERVER\":\"$(json_escape "$db_server")\"}}"
-    kubectl -n "$NAMESPACE" patch configmap litmus-portal-admin-config --type merge -p "$cm_patch" || true
-    print_success "MongoDB connection updated to use host IP: $host_ip"
+    print_section "Syncing install-agent env from .env to GraphQL deployment"
+    local install_agent_image install_agent_pull_policy
+    install_agent_image=$(get_env_value "INSTALL_AGENT_IMAGE" "$env_file")
+    install_agent_pull_policy=$(get_env_value "INSTALL_AGENT_IMAGE_PULL_POLICY" "$env_file")
+
+    if [ -z "$install_agent_image" ] && [ -z "$install_agent_pull_policy" ]; then
+        print_info "INSTALL_AGENT_IMAGE* not set in .env; skipping deployment env update"
+        return 0
+    fi
+
+    # Validate pull policy when provided to avoid pushing invalid values.
+    if [ -n "$install_agent_pull_policy" ]; then
+        case "$install_agent_pull_policy" in
+            Always|IfNotPresent|Never) ;;
+            *)
+                print_warning "Invalid INSTALL_AGENT_IMAGE_PULL_POLICY='$install_agent_pull_policy'. Using IfNotPresent"
+                install_agent_pull_policy="IfNotPresent"
+                ;;
+        esac
+    fi
+
+    local set_env_args=("deploy/litmusportal-server" "-n" "$NAMESPACE")
+    [ -n "$install_agent_image" ] && set_env_args+=("INSTALL_AGENT_IMAGE=$install_agent_image")
+    [ -n "$install_agent_pull_policy" ] && set_env_args+=("INSTALL_AGENT_IMAGE_PULL_POLICY=$install_agent_pull_policy")
+
+    kubectl set env "${set_env_args[@]}" >/dev/null
+    print_success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE*"
+}
+
+# ============================================================================
+# RUNTIME RBAC BOOTSTRAP (LITMUS-EXP)
+# ============================================================================
+ensure_litmus_exp_runtime_rbac() {
+        print_header "Ensuring Runtime RBAC in litmus-exp"
+
+        local infra_namespace="litmus-exp"
+    local infra_sa=""
+
+        if ! kubectl get namespace "$infra_namespace" &> /dev/null; then
+                print_info "Namespace $infra_namespace not found yet. Skipping runtime RBAC bootstrap."
+                return 0
+        fi
+
+        # Prefer subscriber deployment SA when present, fall back to common SA names.
+        if kubectl -n "$infra_namespace" get deployment subscriber &> /dev/null; then
+            infra_sa=$(kubectl -n "$infra_namespace" get deployment subscriber -o jsonpath='{.spec.template.spec.serviceAccountName}' 2>/dev/null || true)
+        fi
+
+        if [ -z "$infra_sa" ]; then
+            for candidate_sa in litmus-exp argo-chaos default; do
+                if kubectl -n "$infra_namespace" get serviceaccount "$candidate_sa" &> /dev/null; then
+                    infra_sa="$candidate_sa"
+                    break
+                fi
+            done
+        fi
+
+        if [ -z "$infra_sa" ]; then
+            print_info "No suitable ServiceAccount found in $infra_namespace yet. Skipping runtime RBAC bootstrap."
+            return 0
+        fi
+
+        print_info "Using ServiceAccount $infra_namespace/$infra_sa"
+
+        print_section "Applying cluster-scope watcher permissions for subscriber"
+        kubectl create clusterrolebinding infra-cluster-role-binding-${infra_namespace}-${infra_sa} \
+                --clusterrole=infra-cluster-role \
+                --serviceaccount="${infra_namespace}:${infra_sa}" \
+                --dry-run=client -o yaml | kubectl apply -f -
+
+        print_section "Applying namespace pod-read permissions for subscriber"
+        kubectl -n "$infra_namespace" create role subscriber-pod-reader \
+            --verb=get,list,watch \
+            --resource=pods \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+        kubectl -n "$infra_namespace" create rolebinding subscriber-pod-reader-binding \
+            --role=subscriber-pod-reader \
+            --serviceaccount="${infra_namespace}:${infra_sa}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+        if kubectl -n "$infra_namespace" get deployment subscriber &> /dev/null; then
+                print_section "Restarting subscriber to pick updated RBAC"
+                kubectl -n "$infra_namespace" rollout restart deployment/subscriber || true
+        else
+                print_info "Subscriber deployment not found in $infra_namespace (yet)."
+        fi
+
+        print_success "Runtime RBAC bootstrap check complete"
 }
 
 # ============================================================================
@@ -567,9 +650,9 @@ deploy_manifest() {
 
     # Sync Langfuse values from AI_Ops .env into cluster config/secret
     sync_langfuse_env_from_dotenv
-    
-    # Sync MongoDB connection to use minikube host IP
-    sync_mongodb_connection_to_cluster
+
+    # Sync install-agent image overrides consumed by GraphQL workflow processing
+    sync_install_agent_env_from_dotenv
     
     # Apply Litmus configuration fixes for offline/minikube environments
     print_info "Applying Litmus configuration fixes..."
@@ -625,7 +708,8 @@ sync_envs_if_namespace_exists() {
         print_header "Syncing Env to Running Cluster"
         sync_azure_env_from_dotenv
         sync_langfuse_env_from_dotenv
-        sync_mongodb_connection_to_cluster
+        sync_install_agent_env_from_dotenv
+        ensure_litmus_exp_runtime_rbac
         print_info "Restarting GraphQL Server to pick env changes"
         kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE" || true
     fi
@@ -680,12 +764,12 @@ main() {
     cleanup_generated_code
     
     [ "$SKIP_BUILD" = false ] && { build_all_images; load_to_minikube; } || print_warning "Skipping build"
-    [ "$SKIP_DEPLOY" = false ] && { create_namespace; deploy_manifest; sync_langfuse_env_from_dotenv; sync_azure_env_from_dotenv; kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE"; verify_pods; } || print_warning "Skipping deploy"
+    [ "$SKIP_DEPLOY" = false ] && { create_namespace; deploy_manifest; sync_langfuse_env_from_dotenv; sync_azure_env_from_dotenv; sync_install_agent_env_from_dotenv; ensure_litmus_exp_runtime_rbac; kubectl rollout restart deployment/litmusportal-server -n "$NAMESPACE"; verify_pods; } || print_warning "Skipping deploy"
     
     display_info
     display_next
     
-    print_header "âœ“ Pipeline Complete!"
+    print_header "✓ Pipeline Complete!"
     log_to_file "========== Build Completed =========="
 }
 

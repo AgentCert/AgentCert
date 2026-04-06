@@ -767,6 +767,7 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 					meta       v1alpha1.ChaosEngine
 					annotation = make(map[string]string)
 					probes     []v1alpha1.ProbeAttributes
+					refProbes  []v1alpha1.ProbeAttributes
 					httpProbe  HTTPProbeAttributes
 					cmdProbe   CMDProbeAttributes
 					promProbe  PROMProbeAttributes
@@ -795,6 +796,13 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 							for _, annotationKey := range manifestAnnotation {
 								probe, err := p.probeOperator.GetProbeByName(ctx, annotationKey.Name, projectID)
 								if err != nil {
+									if errors.Is(err, mongo.ErrNoDocuments) {
+										logrus.WithFields(logrus.Fields{
+											"probeName": annotationKey.Name,
+											"projectID": projectID,
+										}).Warn("skipping stale probeRef entry: probe was deleted")
+										continue
+									}
 									return argoTypes.Workflow{}, fmt.Errorf("failed to fetch probe details, error: %s", err.Error())
 								}
 								probeManifestString, err := p.GenerateProbeManifest(probe.GetOutputProbe(), annotationKey.Mode)
@@ -823,7 +831,7 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 										}
 									}
 
-									probes = append(probes, v1alpha1.ProbeAttributes{
+									refProbes = append(refProbes, v1alpha1.ProbeAttributes{
 										Name: httpProbe.Name,
 										Type: httpProbe.Type,
 										HTTPProbeInputs: &v1alpha1.HTTPProbeInputs{
@@ -840,7 +848,7 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 										return argoTypes.Workflow{}, fmt.Errorf("failed to unmarshal cmd probe, error: %s", err.Error())
 									}
 
-									probes = append(probes, v1alpha1.ProbeAttributes{
+									refProbes = append(refProbes, v1alpha1.ProbeAttributes{
 										Name: cmdProbe.Name,
 										Type: cmdProbe.Type,
 										CmdProbeInputs: &v1alpha1.CmdProbeInputs{
@@ -857,7 +865,7 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 										return argoTypes.Workflow{}, fmt.Errorf("failed to unmarshal prom probe, error: %s", err.Error())
 									}
 
-									probes = append(probes, v1alpha1.ProbeAttributes{
+									refProbes = append(refProbes, v1alpha1.ProbeAttributes{
 										Name: promProbe.Name,
 										Type: promProbe.Type,
 										PromProbeInputs: &v1alpha1.PromProbeInputs{
@@ -894,7 +902,7 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 										}
 									}
 
-									probes = append(probes, v1alpha1.ProbeAttributes{
+									refProbes = append(refProbes, v1alpha1.ProbeAttributes{
 										Name: k8sProbe.Name,
 										Type: k8sProbe.Type,
 										K8sProbeInputs: &v1alpha1.K8sProbeInputs{
@@ -913,6 +921,10 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 								}
 							}
 						}
+					}
+
+					if len(refProbes) > 0 {
+						probes = refProbes
 					}
 
 					if len(meta.Spec.Experiments) > 0 {
@@ -959,6 +971,7 @@ func (p *probeService) GenerateCronExperimentManifestWithProbes(manifest string,
 					meta       v1alpha1.ChaosEngine
 					annotation = make(map[string]string)
 					probes     []v1alpha1.ProbeAttributes
+					refProbes  []v1alpha1.ProbeAttributes
 					httpProbe  HTTPProbeAttributes
 					cmdProbe   CMDProbeAttributes
 					promProbe  PROMProbeAttributes
@@ -986,6 +999,13 @@ func (p *probeService) GenerateCronExperimentManifestWithProbes(manifest string,
 						for _, annotationKey := range manifestAnnotation {
 							probe, err := p.probeOperator.GetProbeByName(ctx, annotationKey.Name, projectID)
 							if err != nil {
+								if errors.Is(err, mongo.ErrNoDocuments) {
+									logrus.WithFields(logrus.Fields{
+										"probeName": annotationKey.Name,
+										"projectID": projectID,
+									}).Warn("skipping stale probeRef entry: probe was deleted")
+									continue
+								}
 								return argoTypes.CronWorkflow{}, fmt.Errorf("failed to fetch probe details, error: %s", err.Error())
 							}
 
@@ -996,7 +1016,7 @@ func (p *probeService) GenerateCronExperimentManifestWithProbes(manifest string,
 									return argoTypes.CronWorkflow{}, fmt.Errorf("failed to unmarshal http probe, error: %s", err.Error())
 								}
 
-								probes = append(probes, v1alpha1.ProbeAttributes{
+								refProbes = append(refProbes, v1alpha1.ProbeAttributes{
 									Name: httpProbe.Name,
 									Type: httpProbe.Type,
 									HTTPProbeInputs: &v1alpha1.HTTPProbeInputs{
@@ -1012,7 +1032,7 @@ func (p *probeService) GenerateCronExperimentManifestWithProbes(manifest string,
 									return argoTypes.CronWorkflow{}, fmt.Errorf("failed to unmarshal cmd probe, error: %s", err.Error())
 								}
 
-								probes = append(probes, v1alpha1.ProbeAttributes{
+								refProbes = append(refProbes, v1alpha1.ProbeAttributes{
 									Name: cmdProbe.Name,
 									Type: cmdProbe.Type,
 									CmdProbeInputs: &v1alpha1.CmdProbeInputs{
@@ -1028,7 +1048,7 @@ func (p *probeService) GenerateCronExperimentManifestWithProbes(manifest string,
 									return argoTypes.CronWorkflow{}, fmt.Errorf("failed to unmarshal prom probe, error: %s", err.Error())
 								}
 
-								probes = append(probes, v1alpha1.ProbeAttributes{
+								refProbes = append(refProbes, v1alpha1.ProbeAttributes{
 									Name: promProbe.Name,
 									Type: promProbe.Type,
 									PromProbeInputs: &v1alpha1.PromProbeInputs{
@@ -1045,7 +1065,7 @@ func (p *probeService) GenerateCronExperimentManifestWithProbes(manifest string,
 									return argoTypes.CronWorkflow{}, fmt.Errorf("failed to unmarshal k8s probe, error: %s", err.Error())
 								}
 
-								probes = append(probes, v1alpha1.ProbeAttributes{
+								refProbes = append(refProbes, v1alpha1.ProbeAttributes{
 									Name: k8sProbe.Name,
 									Type: k8sProbe.Type,
 									K8sProbeInputs: &v1alpha1.K8sProbeInputs{
@@ -1063,6 +1083,10 @@ func (p *probeService) GenerateCronExperimentManifestWithProbes(manifest string,
 								})
 							}
 						}
+					}
+
+					if len(refProbes) > 0 {
+						probes = refProbes
 					}
 
 					if len(meta.Spec.Experiments) > 0 {

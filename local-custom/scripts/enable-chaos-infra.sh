@@ -5,7 +5,22 @@
 
 set -euo pipefail
 
-MANIFEST="/mnt/c/Users/sanjsingh/Downloads/Studies/AgentCert-Framework/local-custom/agentcert-framwork-litmus-chaos-enable.yml"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if [ -z "${MANIFEST:-}" ]; then
+  CANDIDATE_MANIFESTS=(
+    "$REPO_ROOT/local-custom/agentcert-framwork-litmus-chaos-enable.yml"
+    "$REPO_ROOT/local-custom/k8s/litmus-installation.yaml"
+  )
+  for candidate in "${CANDIDATE_MANIFESTS[@]}"; do
+    if [ -f "$candidate" ]; then
+      MANIFEST="$candidate"
+      break
+    fi
+  done
+else
+  MANIFEST="$MANIFEST"
+fi
 NAMESPACE="litmus-exp"
 
 info() { echo "[INFO] $1"; }

@@ -7,7 +7,7 @@ This document describes the changes made to automatically deploy **MCP (Model Co
 | MCP Tool | Image | Service Port | Purpose |
 |----------|-------|-------------|---------|
 | **kubernetes-mcp-server** | `quay.io/containers/kubernetes_mcp_server:latest` | `8081` | Provides Kubernetes cluster read access (pods, deployments, CRDs, logs) via the MCP protocol |
-| **prometheus-mcp-server** | `ghcr.io/pab1it0/prometheus-mcp-server:latest` | `9090` | Exposes Prometheus metrics via the MCP protocol for observability |
+| **prometheus-mcp-server** | `agentcert/prometheus-mcp-server:latest` | `9090` | Exposes Prometheus metrics via the MCP protocol for observability |
 
 These tools enable AI agents (e.g., GitHub Copilot, Claude) to query the chaos infrastructure cluster state and metrics through the MCP protocol, supporting automated chaos experiment analysis and certification workflows.
 
@@ -104,7 +104,7 @@ Added three new fields to the `Configuration` struct:
 
 ```go
 KubernetesMcpServerImage    string `split_words:"true" default:"quay.io/containers/kubernetes_mcp_server:latest"`
-PrometheusMcpServerImage    string `split_words:"true" default:"ghcr.io/pab1it0/prometheus-mcp-server:latest"`
+PrometheusMcpServerImage    string `split_words:"true" default:"agentcert/prometheus-mcp-server:latest"`
 PrometheusMcpUrl            string `split_words:"true" default:"http://prometheus.monitoring.svc.cluster.local:9090"`
 ```
 
@@ -133,7 +133,7 @@ Added environment variables to the `litmusportal-server` (GraphQL server) contai
 - name: KUBERNETES_MCP_SERVER_IMAGE
   value: "quay.io/containers/kubernetes_mcp_server:latest"
 - name: PROMETHEUS_MCP_SERVER_IMAGE
-  value: "ghcr.io/pab1it0/prometheus-mcp-server:latest"
+  value: "agentcert/prometheus-mcp-server:latest"
 - name: PROMETHEUS_MCP_URL
   value: "http://prometheus.monitoring.svc.cluster.local:9090"
 ```
@@ -145,13 +145,13 @@ Updated `INFRA_DEPLOYMENTS` to include MCP tool health monitoring:
   value: '["app=chaos-exporter", "name=chaos-operator", "app=workflow-controller", "app=event-tracker", "app=kubernetes-mcp-server", "app=prometheus-mcp-server"]'
 ```
 
-#### `local-custom/config/.env`
+#### `local-custom/scripts/.env`
 
 Added matching environment variables:
 
 ```
 KUBERNETES_MCP_SERVER_IMAGE=quay.io/containers/kubernetes_mcp_server:latest
-PROMETHEUS_MCP_SERVER_IMAGE=ghcr.io/pab1it0/prometheus-mcp-server:latest
+PROMETHEUS_MCP_SERVER_IMAGE=agentcert/prometheus-mcp-server:latest
 PROMETHEUS_MCP_URL=http://prometheus.monitoring.svc.cluster.local:9090
 INFRA_DEPLOYMENTS='["app=chaos-exporter", "name=chaos-operator", "app=event-tracker","app=workflow-controller","app=kubernetes-mcp-server","app=prometheus-mcp-server"]'
 ```
@@ -175,7 +175,7 @@ INFRA_DEPLOYMENTS='["app=chaos-exporter", "name=chaos-operator", "app=event-trac
 |-------------|--------|---------------|
 | `#{INFRA_NAMESPACE}` | User-provided or default `litmus` | `litmus` |
 | `#{KUBERNETES_MCP_SERVER_IMAGE}` | `utils.Config.KubernetesMcpServerImage` | `quay.io/containers/kubernetes_mcp_server:latest` |
-| `#{PROMETHEUS_MCP_SERVER_IMAGE}` | `utils.Config.PrometheusMcpServerImage` | `ghcr.io/pab1it0/prometheus-mcp-server:latest` |
+| `#{PROMETHEUS_MCP_SERVER_IMAGE}` | `utils.Config.PrometheusMcpServerImage` | `agentcert/prometheus-mcp-server:latest` |
 | `#{PROMETHEUS_MCP_URL}` | `utils.Config.PrometheusMcpUrl` | `http://prometheus.monitoring.svc.cluster.local:9090` |
 | `#{TOLERATIONS}` | User-provided infra tolerations | (YAML block or empty) |
 | `#{NODE_SELECTOR}` | User-provided node selector | (YAML block or empty) |
@@ -266,7 +266,7 @@ Other pods within the cluster can reach the MCP tools at:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KUBERNETES_MCP_SERVER_IMAGE` | `quay.io/containers/kubernetes_mcp_server:latest` | Docker image for the Kubernetes MCP server |
-| `PROMETHEUS_MCP_SERVER_IMAGE` | `ghcr.io/pab1it0/prometheus-mcp-server:latest` | Docker image for the Prometheus MCP server |
+| `PROMETHEUS_MCP_SERVER_IMAGE` | `agentcert/prometheus-mcp-server:latest` | Docker image for the Prometheus MCP server |
 | `PROMETHEUS_MCP_URL` | `http://prometheus.monitoring.svc.cluster.local:9090` | Prometheus endpoint URL that the Prometheus MCP server queries |
 
 ### Customizing Images

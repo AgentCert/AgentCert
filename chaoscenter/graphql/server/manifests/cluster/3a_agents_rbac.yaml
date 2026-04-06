@@ -64,6 +64,16 @@ rules:
     resources: [ "pods", "namespaces", "nodes", "services" ]
     verbs: [ "get", "list", "watch" ]
 
+  # for dynamic app onboarding via Helm across arbitrary namespaces
+  - apiGroups: [ "" ]
+    resources: [ "namespaces" ]
+    verbs: [ "create", "patch", "update" ]
+
+  # helm stores release metadata as secrets in the target app namespace
+  - apiGroups: [ "" ]
+    resources: [ "secrets" ]
+    verbs: [ "get", "list", "watch", "create", "update", "patch", "delete" ]
+
   - apiGroups: [ "litmuschaos.io" ]
     resources: [ "chaosengines", "chaosschedules", "chaosresults", "chaosschedules" ]
     verbs: [ "get", "list", "create", "delete", "update", "watch", "patch" ]

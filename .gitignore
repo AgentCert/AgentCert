@@ -50,3 +50,7 @@ server_errors.log
 
 # Output artifacts
 output/
+
+# Personal analysis docs
+docs/Trace_optimization_analysis.md
+docs/Code_change_impact_analysis.md

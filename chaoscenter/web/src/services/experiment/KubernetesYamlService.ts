@@ -658,7 +658,14 @@ export class KubernetesYamlService extends ExperimentYamlService {
       if (template.inputs?.artifacts?.[0].raw?.data) {
         const chaosEngineCR = parse(template.inputs.artifacts[0].raw.data ?? '') as ChaosEngine;
         if (chaosEngineCR.kind === 'ChaosEngine') {
-          if (chaosEngineCR.spec?.experiments[0].spec.probe !== undefined) {
+          const probesInSpec = chaosEngineCR.spec?.experiments?.[0]?.spec?.probe;
+          const hasProbeInSpec = Array.isArray(probesInSpec) ? probesInSpec.length > 0 : probesInSpec !== undefined;
+          const probeRef = chaosEngineCR.metadata?.annotations?.probeRef;
+          const hasProbeRef = typeof probeRef === 'string' && probeRef.trim() !== '';
+
+          // Show warning only when probes are still embedded in ChaosEngine spec
+          // and no probeRef annotation exists for analytics mapping.
+          if (hasProbeInSpec && !hasProbeRef) {
             doesProbeExists = true;
           }
         }
@@ -1143,6 +1150,13 @@ function updateContainerImage(image: string, registry: ImageRegistry | undefined
 
   // If no registry is provided, use the default image
   if (!registry || !registry.repo) {
+    return image;
+  }
+
+  // Only override images that originate from the default "litmuschaos" org.
+  // Images from other organizations (e.g., agentcert) should be preserved as-is
+  // to avoid rewriting them to a wrong registry/org.
+  if (!image.includes('/litmuschaos/')) {
     return image;
   }
 
