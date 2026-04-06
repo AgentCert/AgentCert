@@ -1916,6 +1916,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 				faultName := exp.Name
 
 				faultAttrs := []attribute.KeyValue{
+					attribute.String("experiment.id", workflow.ExperimentID),
 					attribute.String("fault.name", faultName),
 					attribute.String("fault.target_namespace", meta.Spec.Appinfo.Appns),
 					attribute.String("fault.target_label", meta.Spec.Appinfo.Applabel),
@@ -2404,6 +2405,14 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	}
 	logrus.WithFields(logFields).Infof("[Tracing] Final traceID to use: %s", traceID)
 
+	// G2 fix: stamp experiment.id and experiment.run_id onto the long-running experiment-run-end span
+	if observability.OTELTracerEnabled() {
+		observability.SetExperimentSpanAttributes(traceID,
+			attribute.String("experiment.id", event.ExperimentID),
+			attribute.String("experiment.run_id", event.ExperimentRunID),
+		)
+	}
+
 	var metricsPtr *types.ExperimentRunMetrics
 	if isCompleted {
 		metricsPtr = &workflowRunMetrics
@@ -2419,6 +2428,8 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				}
 
 				verdictAttrs := []attribute.KeyValue{
+					attribute.String("experiment.id", event.ExperimentID),
+					attribute.String("experiment.run_id", event.ExperimentRunID),
 					attribute.String("fault.verdict", node.ChaosExp.ExperimentVerdict),
 					attribute.String("fault.probe_success_pct", node.ChaosExp.ProbeSuccessPercentage),
 					attribute.String("fault.status", node.ChaosExp.ExperimentStatus),
