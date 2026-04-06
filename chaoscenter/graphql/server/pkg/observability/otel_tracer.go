@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,11 +47,24 @@ func InitOTELTracer(ctx context.Context) error {
 		return nil
 	}
 
-	// Build exporter options — the OTLP HTTP exporter reads OTEL_EXPORTER_OTLP_ENDPOINT
-	// and OTEL_EXPORTER_OTLP_HEADERS automatically from environment, but we set endpoint
-	// explicitly for clarity.
+	// Build exporter options
 	exporterOpts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpointURL(endpoint + "/v1/traces"),
+	}
+
+	// Explicitly parse OTEL_EXPORTER_OTLP_HEADERS and add them as options
+	// (WithEndpointURL may bypass automatic env-var header detection).
+	if hdrs := os.Getenv("OTEL_EXPORTER_OTLP_HEADERS"); hdrs != "" {
+		headerMap := make(map[string]string)
+		for _, pair := range splitOTLPHeaders(hdrs) {
+			if k, v, ok := splitHeaderKV(pair); ok {
+				headerMap[k] = v
+			}
+		}
+		if len(headerMap) > 0 {
+			exporterOpts = append(exporterOpts, otlptracehttp.WithHeaders(headerMap))
+			fmt.Printf("[OTEL] Injecting %d header(s) from OTEL_EXPORTER_OTLP_HEADERS\n", len(headerMap))
+		}
 	}
 
 	exporter, err := otlptracehttp.New(ctx, exporterOpts...)
@@ -80,6 +94,11 @@ func InitOTELTracer(ctx context.Context) error {
 
 	otelTracerProvider = tp
 	otel.SetTracerProvider(tp)
+
+	// Capture OTEL export errors instead of silently discarding
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		fmt.Printf("[OTEL ERROR] %v\n", err)
+	}))
 
 	fmt.Printf("[OTEL] TracerProvider initialized (endpoint: %s)\n", endpoint)
 	return nil
@@ -161,6 +180,16 @@ func EndExperimentSpan(traceID string) {
 
 	if ok && span != nil {
 		span.End()
+		// Force-flush so the span is exported immediately
+		if otelTracerProvider != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := otelTracerProvider.ForceFlush(ctx); err != nil {
+				fmt.Printf("[OTEL ERROR] ForceFlush failed: %v\n", err)
+			} else {
+				fmt.Println("[OTEL] ForceFlush succeeded after EndExperimentSpan")
+			}
+		}
 	}
 }
 
@@ -249,4 +278,25 @@ func MarshalJSON(v interface{}) string {
 		return fmt.Sprintf("%v", v)
 	}
 	return string(b)
+}
+
+// splitOTLPHeaders splits comma-separated header pairs.
+func splitOTLPHeaders(raw string) []string {
+	var parts []string
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return parts
+}
+
+// splitHeaderKV splits a "Key=Value" header pair on the first '='.
+func splitHeaderKV(pair string) (string, string, bool) {
+	idx := strings.Index(pair, "=")
+	if idx < 1 {
+		return "", "", false
+	}
+	return strings.TrimSpace(pair[:idx]), strings.TrimSpace(pair[idx+1:]), true
 }

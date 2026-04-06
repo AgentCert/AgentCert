@@ -189,6 +189,11 @@ $gqlLauncher = @"
 $commonEnv
 `$env:LITMUS_AUTH_GRPC_ENDPOINT = "localhost"
 `$env:LITMUS_AUTH_GRPC_PORT = "3030"
+`$env:OTEL_EXPORTER_OTLP_ENDPOINT = "https://us.cloud.langfuse.com/api/public/otel"
+`$env:OTEL_EXPORTER_OTLP_HEADERS = "Authorization=Basic cGstbGYtYmExMDgxYTktNzg0OS00MjdmLThhMWMtMmEyZWUwNjkwMGMxOnNrLWxmLTcyNjk0YmQ3LTRhNTktNDMwZC1iODcwLTAxODMxMTRjMDJmZQ=="
+`$env:LANGFUSE_HOST = "https://us.cloud.langfuse.com"
+`$env:LANGFUSE_PUBLIC_KEY = "pk-lf-ba1081a9-7849-427f-8a1c-2a2ee06900c1"
+`$env:LANGFUSE_SECRET_KEY = "sk-lf-72694bd7-4a59-430d-b870-0183114c02fe"
 Set-Location "$gqlPath"
 .\server.exe
 "@
