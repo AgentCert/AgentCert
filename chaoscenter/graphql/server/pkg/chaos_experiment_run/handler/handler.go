@@ -1480,9 +1480,9 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 		namespace = *infra.InfraNamespace
 	}
 
-	// OTEL path: create a root span for the experiment run
+	// OTEL path: emit instant start span + create long-running end span
 	if observability.OTELTracerEnabled() {
-		observability.StartExperimentSpan(ctx, notifyID,
+		startAttrs := []attribute.KeyValue{
 			attribute.String("experiment.id", experimentID),
 			attribute.String("experiment.name", experimentName),
 			attribute.String("experiment.fault_name", "chaos-workflow"),
@@ -1492,8 +1492,15 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 			attribute.String("infra.namespace", namespace),
 			attribute.String("experiment.phase", "injection"),
 			attribute.String("experiment.priority", "high"),
-		)
-		logrus.Infof("[OTEL] Started experiment span: traceID=%s experiment=%s", notifyID, experimentName)
+		}
+
+		// Instant span — exported immediately, appears FIRST in Langfuse
+		observability.EmitExperimentStartSpan(ctx, startAttrs...)
+		logrus.Infof("[OTEL] Emitted experiment-run-start span: traceID=%s experiment=%s", notifyID, experimentName)
+
+		// Long-running span — ended later by scoreExperimentRun, appears LAST
+		observability.StartExperimentSpan(ctx, notifyID, startAttrs...)
+		logrus.Infof("[OTEL] Started experiment-run-end span: traceID=%s experiment=%s", notifyID, experimentName)
 		return nil
 	}
 
