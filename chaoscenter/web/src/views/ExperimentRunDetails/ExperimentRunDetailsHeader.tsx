@@ -59,7 +59,9 @@ export default function ExperimentRunDetailsHeader({
                     {title ?? <Icon name="steps-spinner" size={22} color={Color.GREY_800} />}
                   </Heading>
                   {phase && <StatusBadgeV2 status={phase} entity={StatusBadgeEntity.ExperimentRun} />}
-                  {phase === ExperimentRunStatus.COMPLETED && (
+                  {(phase === ExperimentRunStatus.COMPLETED ||
+                    phase === ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE ||
+                    phase === ExperimentRunStatus.COMPLETED_WITH_ERROR) && (
                     <Text
                       font={{ variation: FontVariation.SMALL_SEMI }}
                       color={Color.PRIMARY_7}

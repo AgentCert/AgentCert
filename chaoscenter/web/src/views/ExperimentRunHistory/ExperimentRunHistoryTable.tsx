@@ -182,7 +182,11 @@ const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistory
                     className={css.menuItem}
                   />
                   <MenuItem
-                    disabled={data.experimentStatus !== ExperimentRunStatus.COMPLETED}
+                    disabled={
+                      data.experimentStatus !== ExperimentRunStatus.COMPLETED &&
+                      data.experimentStatus !== ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE &&
+                      data.experimentStatus !== ExperimentRunStatus.COMPLETED_WITH_ERROR
+                    }
                     text={getString('generateCertificate')}
                     className={css.menuItem}
                     onClick={() => openCertDialog()}
