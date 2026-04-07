@@ -1496,11 +1496,11 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 
 		// Long-running root span — ended later by scoreExperimentRun, appears LAST
 		spanCtx, _ := observability.StartExperimentSpan(ctx, notifyID, startAttrs...)
-		logrus.Infof("[OTEL] Started experiment-run-end span: traceID=%s experiment=%s", notifyID, experimentName)
+		logrus.Infof("[OTEL] Started experiment-run span: traceID=%s experiment=%s", notifyID, experimentName)
 
 		// Instant child span — shares the same traceID as the root span
 		observability.EmitExperimentStartSpan(spanCtx, startAttrs...)
-		logrus.Infof("[OTEL] Emitted experiment-run-start span: traceID=%s experiment=%s", notifyID, experimentName)
+		logrus.Infof("[OTEL] Emitted experiment-triggered span: traceID=%s experiment=%s", notifyID, experimentName)
 		return nil
 	}
 
@@ -2405,7 +2405,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	}
 	logrus.WithFields(logFields).Infof("[Tracing] Final traceID to use: %s", traceID)
 
-	// G2 fix: stamp experiment.id and experiment.run_id onto the long-running experiment-run-end span
+	// G2 fix: stamp experiment.id and experiment.run_id onto the long-running experiment-run span
 	if observability.OTELTracerEnabled() {
 		observability.SetExperimentSpanAttributes(traceID,
 			attribute.String("experiment.id", event.ExperimentID),
