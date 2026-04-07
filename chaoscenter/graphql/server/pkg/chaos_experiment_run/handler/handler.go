@@ -1494,13 +1494,13 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 			attribute.String("experiment.priority", "high"),
 		}
 
-		// Instant span — exported immediately, appears FIRST in Langfuse
-		observability.EmitExperimentStartSpan(ctx, startAttrs...)
-		logrus.Infof("[OTEL] Emitted experiment-run-start span: traceID=%s experiment=%s", notifyID, experimentName)
-
-		// Long-running span — ended later by scoreExperimentRun, appears LAST
-		observability.StartExperimentSpan(ctx, notifyID, startAttrs...)
+		// Long-running root span — ended later by scoreExperimentRun, appears LAST
+		spanCtx, _ := observability.StartExperimentSpan(ctx, notifyID, startAttrs...)
 		logrus.Infof("[OTEL] Started experiment-run-end span: traceID=%s experiment=%s", notifyID, experimentName)
+
+		// Instant child span — shares the same traceID as the root span
+		observability.EmitExperimentStartSpan(spanCtx, startAttrs...)
+		logrus.Infof("[OTEL] Emitted experiment-run-start span: traceID=%s experiment=%s", notifyID, experimentName)
 		return nil
 	}
 
