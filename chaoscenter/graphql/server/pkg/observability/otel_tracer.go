@@ -124,25 +124,25 @@ func GetOTELTracer() trace.Tracer {
 }
 
 // EmitExperimentStartSpan creates and immediately ends an instant span named
-// "experiment-run-start". Because it ends right away, the OTEL exporter flushes
+// "experiment-triggered". Because it ends right away, the OTEL exporter flushes
 // it to Langfuse immediately, making it the FIRST span in the trace timeline.
 // It carries only identity/initial metadata (experiment ID, infra ID, etc.).
 func EmitExperimentStartSpan(ctx context.Context, attrs ...attribute.KeyValue) {
 	tracer := GetOTELTracer()
-	_, span := tracer.Start(ctx, "experiment-run-start",
+	_, span := tracer.Start(ctx, "experiment-triggered",
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(attrs...),
 	)
 	span.End() // end immediately → exported right away → appears first in Langfuse
 }
 
-// StartExperimentSpan creates the long-running root span ("experiment-run-end")
+// StartExperimentSpan creates the long-running root span ("experiment-run")
 // for an experiment run and stores it in the active span map keyed by traceID
 // (typically the notifyID). This span is ended later by EndExperimentSpan()
-// when the experiment completes, so it appears last in the trace timeline.
+// when the experiment completes, covering the full experiment lifecycle.
 func StartExperimentSpan(ctx context.Context, traceID string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
 	tracer := GetOTELTracer()
-	spanCtx, span := tracer.Start(ctx, "experiment-run-end",
+	spanCtx, span := tracer.Start(ctx, "experiment-run",
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(attrs...),
 	)
