@@ -371,6 +371,7 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	}
 
 	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
+	injectExperimentContextArgs(workflowManifest.Spec.Templates)
 
 	if workflowManifest.Labels == nil {
 		workflowManifest.Labels = map[string]string{
@@ -694,6 +695,7 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	}
 
 	applyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	injectExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 
 	if strings.TrimSpace(cronExperimentManifest.Spec.Schedule) == "" {
 		return errors.New("failed to process cron workflow, cron syntax not provided in manifest")
@@ -1270,6 +1272,54 @@ func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
 			"image":       targetImage,
 			"pull_policy": targetPullPolicy,
 		}).Info("[Install Agent Patch] Applied dynamic install-agent image override")
+	}
+}
+
+// injectExperimentContextArgs appends --set flags to the install-agent template
+// so that Argo Workflow template variables (experiment_id, run_id, workflow_name)
+// are passed through to the flash-agent Helm chart as ConfigMap values.
+//
+// Argo resolves {{workflow.labels.workflow_id}}, {{workflow.uid}}, and
+// {{workflow.labels.subject}} at runtime before the install-agent container starts.
+// These --set values override the empty defaults in values.yaml, flowing through:
+//
+//	Helm --set → ConfigMap → env var → flash-agent reads os.environ["EXPERIMENT_ID"]
+func injectExperimentContextArgs(templates []v1alpha1.Template) {
+	experimentSetArgs := []string{
+		"--set", "agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}",
+		"--set", "agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}",
+		"--set", "agent.config.WORKFLOW_NAME={{workflow.labels.subject}}",
+	}
+
+	for i := range templates {
+		t := &templates[i]
+		if t.Container == nil {
+			continue
+		}
+
+		isInstallAgentTemplate := t.Name == "install-agent" ||
+			strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
+		if !isInstallAgentTemplate {
+			continue
+		}
+
+		// Check if experiment context args are already present (idempotent)
+		alreadyHas := false
+		for _, arg := range t.Container.Args {
+			if strings.Contains(arg, "EXPERIMENT_ID=") {
+				alreadyHas = true
+				break
+			}
+		}
+		if alreadyHas {
+			continue
+		}
+
+		t.Container.Args = append(t.Container.Args, experimentSetArgs...)
+		logrus.WithFields(logrus.Fields{
+			"template": t.Name,
+			"args":     experimentSetArgs,
+		}).Info("[Experiment Context] Injected --set args for experiment context")
 	}
 }
 
