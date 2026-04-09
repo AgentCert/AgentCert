@@ -177,11 +177,14 @@ export DEFAULT_APP_HUB_GIT_URL="https://github.com/agentcert/app-charts"
 export DEFAULT_APP_HUB_BRANCH_NAME="main"
 export DEFAULT_APP_HUB_PATH="/tmp/default"
 
-# OTEL / Langfuse tracing for GraphQL server (PR #84)
+# OTEL / Langfuse tracing for GraphQL server
 # The Go OTEL tracer in otel_tracer.go reads these at startup.
 # If OTEL_EXPORTER_OTLP_ENDPOINT is empty, tracing is silently disabled.
-export OTEL_EXPORTER_OTLP_ENDPOINT="http://100.78.130.20:3001/api/public/otel"
-export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic cGstbGYtNzhiM2QyMTAtOTY5NS00MWIzLThkMjktZDBiMWRkZDFmZjRkOnNrLWxmLWFkMjExMmIyLTY0MjEtNGFjMS1hYmVhLTUxZDNkZGE1NDkwMg=="
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://us.cloud.langfuse.com/api/public/otel"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic cGstbGYtYmExMDgxYTktNzg0OS00MjdmLThhMWMtMmEyZWUwNjkwMGMxOnNrLWxmLTcyNjk0YmQ3LTRhNTktNDMwZC1iODcwLTAxODMxMTRjMDJmZQ=="
+export LANGFUSE_HOST="https://us.cloud.langfuse.com"
+export LANGFUSE_PUBLIC_KEY="pk-lf-ba1081a9-7849-427f-8a1c-2a2ee06900c1"
+export LANGFUSE_SECRET_KEY="sk-lf-72694bd7-4a59-430d-b870-0183114c02fe"
 
 # NOTE: CHAOS_CENTER_UI_ENDPOINT is intentionally NOT set here.
 # The Go server auto-detects the machine's outbound IP address on the
