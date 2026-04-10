@@ -409,6 +409,28 @@ func normalizeInstallTemplates(templates []v1alpha1.Template) bool {
 	return updated
 }
 
+// ensureInstallTimeoutParam appends the "installTimeout" global workflow
+// parameter with a sensible default when it is not already declared.
+// Without this, Argo validation rejects the workflow immediately because
+// normalizeInstallTemplates rewrites -timeout= args to reference
+// {{workflow.parameters.installTimeout}}.
+func ensureInstallTimeoutParam(params *v1alpha1.Arguments) {
+	const paramName = "installTimeout"
+	const defaultValue = "15m"
+
+	for _, p := range params.Parameters {
+		if p.Name == paramName {
+			return // already declared
+		}
+	}
+
+	params.Parameters = append(params.Parameters, v1alpha1.Parameter{
+		Name:  paramName,
+		Value: v1alpha1.AnyStringPtr(defaultValue),
+	})
+	logrus.WithField("default", defaultValue).Info("added missing installTimeout workflow parameter")
+}
+
 func normalizeLabelSelector(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1810,7 +1832,9 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, errors.New("failed to unmarshal workflow manifest")
 	}
 
-	normalizeInstallTemplates(workflowManifest.Spec.Templates)
+	if normalizeInstallTemplates(workflowManifest.Spec.Templates) {
+		ensureInstallTimeoutParam(&workflowManifest.Spec.Arguments)
+	}
 
 	var resScore float64 = 0
 
@@ -2157,7 +2181,9 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 		return errors.New("failed to unmarshal experiment manifest")
 	}
 
-	normalizeInstallTemplates(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	if normalizeInstallTemplates(cronExperimentManifest.Spec.WorkflowSpec.Templates) {
+		ensureInstallTimeoutParam(&cronExperimentManifest.Spec.WorkflowSpec.Arguments)
+	}
 
 	// Detect container runtime once for all ChaosEngine templates in this cron workflow
 	var (
