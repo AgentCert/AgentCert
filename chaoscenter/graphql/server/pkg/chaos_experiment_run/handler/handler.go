@@ -316,11 +316,9 @@ func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clients
 
 func normalizeInstallTemplateArgs(args []string) ([]string, bool) {
 	const timeoutArg = "-timeout={{workflow.parameters.installTimeout}}"
-	const waitArg = "-wait=false"
 
 	normalized := make([]string, 0, len(args)+1)
 	hasTimeout := false
-	hasWaitSetting := false
 	changed := false
 
 	for i := 0; i < len(args); i++ {
@@ -332,20 +330,12 @@ func normalizeInstallTemplateArgs(args []string) ([]string, bool) {
 		lower := strings.ToLower(arg)
 		switch {
 		case lower == "-wait" || lower == "--wait":
+			// Strip -wait flags; the deployer binary does not support them
 			changed = true
-			if !hasWaitSetting {
-				hasWaitSetting = true
-				normalized = append(normalized, waitArg)
-			}
 			continue
 		case strings.HasPrefix(lower, "-wait=") || strings.HasPrefix(lower, "--wait="):
-			if !hasWaitSetting {
-				hasWaitSetting = true
-				normalized = append(normalized, waitArg)
-			}
-			if lower != strings.ToLower(waitArg) {
-				changed = true
-			}
+			// Strip -wait=... flags; the deployer binary does not support them
+			changed = true
 			continue
 		case lower == "-timeout" || lower == "--timeout":
 			changed = true
@@ -375,11 +365,6 @@ func normalizeInstallTemplateArgs(args []string) ([]string, bool) {
 
 	if !hasTimeout {
 		normalized = append(normalized, timeoutArg)
-		changed = true
-	}
-
-	if !hasWaitSetting {
-		normalized = append(normalized, waitArg)
 		changed = true
 	}
 
