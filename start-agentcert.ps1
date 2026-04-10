@@ -137,7 +137,7 @@ Write-Status "Preparing service launchers..."
 # Common environment variables
 $commonEnv = @"
 `$env:VERSION = "3.0.0"
-`$env:INFRA_DEPLOYMENTS = "false"
+# INFRA_DEPLOYMENTS is set below in the MCP server images section
 `$env:DB_SERVER = "mongodb://localhost:27017"
 `$env:JWT_SECRET = "litmus-portal@123"
 `$env:DB_USER = "admin"
@@ -160,6 +160,15 @@ $commonEnv = @"
 `$env:LITMUS_CHAOS_EXPORTER_IMAGE = "litmuschaos/chaos-exporter:3.0.0"
 `$env:CONTAINER_RUNTIME_EXECUTOR = "k8sapi"
 `$env:WORKFLOW_HELPER_IMAGE_VERSION = "3.0.0"
+# Install-agent image (used by service.go applyInstallAgentTemplateOverrides)
+`$env:INSTALL_AGENT_IMAGE = "agentcert/agentcert-install-agent:latest"
+`$env:INSTALL_AGENT_IMAGE_PULL_POLICY = "IfNotPresent"
+# MCP server images (used by infra namespace manifests)
+`$env:KUBERNETES_MCP_SERVER_IMAGE = "quay.io/containers/kubernetes_mcp_server:latest"
+`$env:PROMETHEUS_MCP_SERVER_IMAGE = "agentcert/prometheus-mcp-server:latest"
+`$env:PROMETHEUS_MCP_URL = "http://prometheus.monitoring.svc.cluster.local:9090"
+# Infra deployment labels (used for readiness checks on subscriber connect)
+`$env:INFRA_DEPLOYMENTS = '["app=chaos-exporter", "name=chaos-operator", "app=event-tracker","app=workflow-controller","app=kubernetes-mcp-server","app=prometheus-mcp-server"]'
 `$env:DEFAULT_AGENT_HUB_GIT_URL = "https://github.com/agentcert/agent-charts"
 `$env:DEFAULT_AGENT_HUB_BRANCH_NAME = "main"
 `$env:DEFAULT_AGENT_HUB_PATH = "$env:TEMP\default"
