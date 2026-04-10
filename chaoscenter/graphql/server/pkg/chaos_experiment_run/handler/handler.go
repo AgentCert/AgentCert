@@ -416,7 +416,7 @@ func normalizeInstallTemplates(templates []v1alpha1.Template) bool {
 // {{workflow.parameters.installTimeout}}.
 func ensureInstallTimeoutParam(params *v1alpha1.Arguments) {
 	const paramName = "installTimeout"
-	const defaultValue = "900s"
+	const defaultValue = "900"
 
 	for _, p := range params.Parameters {
 		if p.Name == paramName {
