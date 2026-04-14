@@ -87,6 +87,27 @@ func GetAgentChartsData(chartsPath string) ([]*model.AgentHubCategory, error) {
 				Capabilities: agent.Capabilities,
 				IsDeployed:   false, // Will be enriched later
 			}
+
+			// Populate injection metadata from CSV (Item #3)
+			if agent.InstallTemplateName != "" {
+				s := agent.InstallTemplateName
+				entry.InstallTemplateName = &s
+			}
+			if agent.InstallImage != "" {
+				s := agent.InstallImage
+				entry.InstallImage = &s
+			}
+			if len(agent.ContextInjection) > 0 {
+				ci := make([]*model.ContextInjectionMapping, 0, len(agent.ContextInjection))
+				for _, m := range agent.ContextInjection {
+					ci = append(ci, &model.ContextInjectionMapping{
+						HelmPath: m.HelmPath,
+						Source:   m.Source,
+					})
+				}
+				entry.ContextInjection = ci
+			}
+
 			category.Agents = append(category.Agents, entry)
 		}
 

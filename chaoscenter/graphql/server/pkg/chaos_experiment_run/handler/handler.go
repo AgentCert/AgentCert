@@ -380,8 +380,21 @@ func normalizeInstallTemplates(templates []v1alpha1.Template) bool {
 			continue
 		}
 
-		if templates[i].Name != "install-application" && templates[i].Name != "install-agent" {
-			continue
+		// Phase 1 dual matching: check annotation first, fall back to name-based.
+		// Once all manifests carry the annotation (after Phase 2 of Item #1),
+		// the name-based fallback can be removed.
+		isInstallTemplate := false
+		if templates[i].Metadata.Annotations != nil {
+			if installType, ok := templates[i].Metadata.Annotations["agentcert.io/install-type"]; ok {
+				isInstallTemplate = installType == "application" || installType == "agent"
+			}
+		}
+		if !isInstallTemplate {
+			// Fallback: name-based matching for existing manifests without annotations
+			if templates[i].Name != "install-application" && templates[i].Name != "install-agent" {
+				continue
+			}
+			logrus.WithField("template", templates[i].Name).Debug("[normalizeInstallTemplates] matched by name (no annotation) — legacy manifest")
 		}
 
 		normalized, changed := normalizeInstallTemplateArgs(templates[i].Container.Args)

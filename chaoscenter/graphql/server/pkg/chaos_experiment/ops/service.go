@@ -1300,6 +1300,16 @@ func applyInstallAgentTemplateOverridesFromMetadata(templates []v1alpha1.Templat
 			t.Container.ImagePullPolicy = corev1.PullPolicy(envPullPolicy)
 			changed = true
 		}
+
+		// Inject install-type annotation so handler.go can match by annotation
+		// instead of by name (Item #2 — annotation-based matching).
+		if t.Metadata.Annotations == nil {
+			t.Metadata.Annotations = make(map[string]string)
+		}
+		if _, exists := t.Metadata.Annotations["agentcert.io/install-type"]; !exists {
+			t.Metadata.Annotations["agentcert.io/install-type"] = "agent"
+			changed = true
+		}
 	}
 
 	if changed {
