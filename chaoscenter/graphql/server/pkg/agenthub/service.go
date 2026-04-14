@@ -245,3 +245,27 @@ func derefStr(s *string) string {
 	}
 	return *s
 }
+
+// GetAgentInjectionMetadata returns the injection metadata for agents that have
+// contextInjection defined in their chartserviceversion entry.
+// Returns a map of installTemplateName/installImage → AgentEntry for matching.
+// This is called by the experiment ops service at save time.
+// If the CSV has not been synced yet or is unreadable, returns nil (caller falls
+// back to hardcoded behavior).
+func GetAgentInjectionMetadata() []AgentEntry {
+	chartsPath := getAgentChartsPath()
+	entries, err := GetAllAgentEntries(chartsPath)
+	if err != nil {
+		log.WithError(err).Warn("[AgentHub] failed to read agent entries for injection metadata — caller should use fallback")
+		return nil
+	}
+
+	// Only return entries that actually have injection metadata
+	var result []AgentEntry
+	for _, e := range entries {
+		if len(e.ContextInjection) > 0 {
+			result = append(result, e)
+		}
+	}
+	return result
+}

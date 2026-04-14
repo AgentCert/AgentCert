@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbChaosExperimentRun "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment_run"
@@ -1225,22 +1226,94 @@ exit 0`,
 
 // applyInstallAgentTemplateOverrides enforces a configurable install-agent image
 // and pull policy for all template-based workflow manifests.
+//
+// Phase 1 (metadata-driven with fallback):
+//   - Try reading agent metadata from chartserviceversion.yaml
+//   - If metadata exists → match templates by installTemplateName / installImage
+//   - If metadata missing (CSV not synced, parse error) → fall back to hardcoded matching
 func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
-	targetImage := strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE"))
-	if targetImage == "" {
-		targetImage = "agentcert/agentcert-install-agent:latest"
+	envImage := strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE"))
+	envPullPolicy := strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE_PULL_POLICY"))
+	if envPullPolicy == "" {
+		envPullPolicy = string(corev1.PullIfNotPresent)
 	}
-
-	targetPullPolicy := strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE_PULL_POLICY"))
-	if targetPullPolicy == "" {
-		targetPullPolicy = string(corev1.PullIfNotPresent)
-	}
-
-	// Guard against invalid values and keep behavior deterministic.
-	switch corev1.PullPolicy(targetPullPolicy) {
+	switch corev1.PullPolicy(envPullPolicy) {
 	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
 	default:
-		targetPullPolicy = string(corev1.PullIfNotPresent)
+		envPullPolicy = string(corev1.PullIfNotPresent)
+	}
+
+	// Try metadata-driven path
+	agentEntries := agenthub.GetAgentInjectionMetadata()
+	if len(agentEntries) > 0 {
+		applyInstallAgentTemplateOverridesFromMetadata(templates, agentEntries, envImage, envPullPolicy)
+		return
+	}
+
+	// Fallback: hardcoded matching (will be removed in Phase 2)
+	logrus.Warn("[Install Agent Patch] CSV metadata not available — using hardcoded fallback")
+	applyInstallAgentTemplateOverridesFallback(templates, envImage, envPullPolicy)
+}
+
+// applyInstallAgentTemplateOverridesFromMetadata uses agent CSV metadata to match
+// and override install templates. Each agent entry declares its own installTemplateName
+// and installImage.
+func applyInstallAgentTemplateOverridesFromMetadata(templates []v1alpha1.Template, agents []agenthub.AgentEntry, envImage, envPullPolicy string) {
+	changed := false
+	for i := range templates {
+		t := &templates[i]
+		if t.Container == nil {
+			continue
+		}
+
+		// Find an agent entry that matches this template
+		var matched *agenthub.AgentEntry
+		for j := range agents {
+			a := &agents[j]
+			if a.InstallTemplateName != "" && t.Name == a.InstallTemplateName {
+				matched = a
+				break
+			}
+			if a.InstallImage != "" && strings.Contains(strings.TrimSpace(t.Container.Image), a.InstallImage) {
+				matched = a
+				break
+			}
+		}
+		if matched == nil {
+			continue
+		}
+
+		// Determine target image: env override > CSV metadata > current image (no-op)
+		targetImage := envImage
+		if targetImage == "" {
+			targetImage = matched.InstallImage
+		}
+		if targetImage == "" {
+			continue
+		}
+
+		if strings.TrimSpace(t.Container.Image) != targetImage {
+			t.Container.Image = targetImage
+			changed = true
+		}
+		if t.Container.ImagePullPolicy != corev1.PullPolicy(envPullPolicy) {
+			t.Container.ImagePullPolicy = corev1.PullPolicy(envPullPolicy)
+			changed = true
+		}
+	}
+
+	if changed {
+		logrus.WithField("source", "csv-metadata").Info("[Install Agent Patch] Applied install-agent image override from CSV metadata")
+	}
+}
+
+// applyInstallAgentTemplateOverridesFallback is the original hardcoded matching logic.
+// Retained for backward compatibility when CSV metadata is not yet available.
+// TODO(phase2): Remove this function once CSV metadata is confirmed stable in production.
+func applyInstallAgentTemplateOverridesFallback(templates []v1alpha1.Template, envImage, envPullPolicy string) {
+	targetImage := envImage
+	if targetImage == "" {
+		targetImage = "agentcert/agentcert-install-agent:latest"
 	}
 
 	changed := false
@@ -1250,7 +1323,6 @@ func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
 			continue
 		}
 
-		// Only override the agent installer template, never app installer templates.
 		isInstallAgentTemplate := t.Name == "install-agent" || strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
 		if !isInstallAgentTemplate {
 			continue
@@ -1261,8 +1333,8 @@ func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
 			changed = true
 		}
 
-		if t.Container.ImagePullPolicy != corev1.PullPolicy(targetPullPolicy) {
-			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
+		if t.Container.ImagePullPolicy != corev1.PullPolicy(envPullPolicy) {
+			t.Container.ImagePullPolicy = corev1.PullPolicy(envPullPolicy)
 			changed = true
 		}
 	}
@@ -1270,21 +1342,93 @@ func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
 	if changed {
 		logrus.WithFields(logrus.Fields{
 			"image":       targetImage,
-			"pull_policy": targetPullPolicy,
-		}).Info("[Install Agent Patch] Applied dynamic install-agent image override")
+			"pull_policy": envPullPolicy,
+			"source":      "hardcoded-fallback",
+		}).Info("[Install Agent Patch] Applied dynamic install-agent image override (fallback)")
 	}
 }
 
-// injectExperimentContextArgs appends --set flags to the install-agent template
+// injectExperimentContextArgs appends --set flags to install-agent templates
 // so that Argo Workflow template variables (experiment_id, run_id, workflow_name)
-// are passed through to the flash-agent Helm chart as ConfigMap values.
+// are passed through to the agent Helm chart as ConfigMap values.
 //
-// Argo resolves {{workflow.labels.workflow_id}}, {{workflow.uid}}, and
-// {{workflow.labels.subject}} at runtime before the install-agent container starts.
-// These --set values override the empty defaults in values.yaml, flowing through:
-//
-//	Helm --set → ConfigMap → env var → flash-agent reads os.environ["EXPERIMENT_ID"]
+// Phase 1 (metadata-driven with fallback):
+//   - Try building --set args from chartserviceversion contextInjection metadata
+//   - If metadata missing → fall back to hardcoded agent.config.* paths
 func injectExperimentContextArgs(templates []v1alpha1.Template) {
+	// Try metadata-driven path
+	agentEntries := agenthub.GetAgentInjectionMetadata()
+	if len(agentEntries) > 0 {
+		injectExperimentContextArgsFromMetadata(templates, agentEntries)
+		return
+	}
+
+	// Fallback: hardcoded --set paths (will be removed in Phase 2)
+	logrus.Warn("[Experiment Context] CSV metadata not available — using hardcoded fallback")
+	injectExperimentContextArgsFallback(templates)
+}
+
+// injectExperimentContextArgsFromMetadata builds --set args from CSV contextInjection
+// entries. Each agent declares which helmPath maps to which Argo template variable.
+func injectExperimentContextArgsFromMetadata(templates []v1alpha1.Template, agents []agenthub.AgentEntry) {
+	for i := range templates {
+		t := &templates[i]
+		if t.Container == nil {
+			continue
+		}
+
+		// Find matching agent
+		var matched *agenthub.AgentEntry
+		for j := range agents {
+			a := &agents[j]
+			if a.InstallTemplateName != "" && t.Name == a.InstallTemplateName {
+				matched = a
+				break
+			}
+			if a.InstallImage != "" && strings.Contains(strings.TrimSpace(t.Container.Image), a.InstallImage) {
+				matched = a
+				break
+			}
+		}
+		if matched == nil {
+			continue
+		}
+
+		// Check idempotency — if any helmPath from this agent is already present, skip
+		alreadyHas := false
+		if len(matched.ContextInjection) > 0 {
+			checkKey := matched.ContextInjection[0].HelmPath + "="
+			for _, arg := range t.Container.Args {
+				if strings.Contains(arg, checkKey) {
+					alreadyHas = true
+					break
+				}
+			}
+		}
+		if alreadyHas {
+			continue
+		}
+
+		// Build --set args from metadata
+		var setArgs []string
+		for _, ci := range matched.ContextInjection {
+			setArgs = append(setArgs, "--set", ci.HelmPath+"="+ci.Source)
+		}
+
+		t.Container.Args = append(t.Container.Args, setArgs...)
+		logrus.WithFields(logrus.Fields{
+			"template": t.Name,
+			"agent":    matched.Name,
+			"args":     setArgs,
+			"source":   "csv-metadata",
+		}).Info("[Experiment Context] Injected --set args from CSV metadata")
+	}
+}
+
+// injectExperimentContextArgsFallback is the original hardcoded injection logic.
+// Retained for backward compatibility when CSV metadata is not yet available.
+// TODO(phase2): Remove this function once CSV metadata is confirmed stable in production.
+func injectExperimentContextArgsFallback(templates []v1alpha1.Template) {
 	experimentSetArgs := []string{
 		"--set", "agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}",
 		"--set", "agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}",
@@ -1319,7 +1463,8 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		logrus.WithFields(logrus.Fields{
 			"template": t.Name,
 			"args":     experimentSetArgs,
-		}).Info("[Experiment Context] Injected --set args for experiment context")
+			"source":   "hardcoded-fallback",
+		}).Info("[Experiment Context] Injected --set args for experiment context (fallback)")
 	}
 }
 
