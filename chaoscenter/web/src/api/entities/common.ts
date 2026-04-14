@@ -75,7 +75,8 @@ export interface Audit {
 // Experiment Types
 export enum ExperimentType {
   CRON = 'cronexperiment',
-  NON_CRON = 'experiment'
+  NON_CRON = 'experiment',
+  MULTI_RUN = 'multirunexperiment'
 }
 
 // Experiment Run Status

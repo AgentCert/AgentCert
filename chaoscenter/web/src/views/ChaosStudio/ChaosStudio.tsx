@@ -33,7 +33,7 @@ import { useStrings } from '@strings';
 import { getHash, getScope } from '@utils';
 import StudioOverviewView from '@views/StudioOverview';
 import { ParentComponentErrorWrapper } from '@errors';
-import experimentYamlService, { KubernetesYamlService } from 'services/experiment';
+import experimentYamlService from 'services/experiment';
 import { InfrastructureType } from '@api/entities';
 import StudioScheduleView from '@views/StudioSchedule';
 import LitmusBreadCrumbs from '@components/LitmusBreadCrumbs';
@@ -43,6 +43,7 @@ import MainNav from '@components/MainNav';
 import SideNav from '@components/SideNav';
 import StudioActionButtons from './StudioActionButtons';
 import css from './ChaosStudio.module.scss';
+
 interface ChaosStudioViewProps {
   saveChaosExperimentMutation: MutationFunction<SaveChaosExperimentResponse, SaveChaosExperimentRequest>;
   runChaosExperimentMutation: MutationFunction<RunChaosExperimentResponse, RunChaosExperimentRequest>;
@@ -207,6 +208,7 @@ export default function ChaosStudioView({
   };
 
   const runExperimentHandler = (): void => {
+    // Backend handles multi-run logic automatically based on experiment annotations
     runChaosExperimentMutation({
       variables: {
         projectID: scope.projectID,

@@ -632,6 +632,12 @@ minutesAfterTheHour: minute(s) after the hour
 minutesLabel: Minutes
 minutesParentheses: minute(s)
 mode: Mode
+multiRunSelectOption: Multi Run (Sequential runs)
+multiRunText: >-
+  The experiment will run multiple times sequentially. Each run starts only after
+  the previous one completes. Enter the maximum number of runs.
+multiRunMaxRunsLabel: Maximum Runs
+multiRunMaxRunsPlaceholder: Enter maximum number of runs (e.g., 5)
 moduleName: Chaos Module
 monitorCluster: >-
   Allows LitmusChaos to perform and monitor chaos in all namespaces available in
@@ -948,6 +954,10 @@ reEnterYourPassword: Re-enter your password
 reRunDesc: This will re-run the current experiment.
 reRunExperiment: Run Experiment
 reRunSuccessful: A new run scheduled successfully
+multiRunStarting: Starting multi-run experiment with {count} sequential runs
+multiRunProgress: Run {current} of {total} started
+multiRunCompleted: Run {current} of {total} completed. Starting next run...
+multiRunAllCompleted: All {total} runs completed successfully!
 readMore: ' Read more'
 recentExecutionResults: Recent Execution Results
 recentExecutions: Recent Executions

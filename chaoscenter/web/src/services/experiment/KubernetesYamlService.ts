@@ -514,6 +514,119 @@ export class KubernetesYamlService extends ExperimentYamlService {
     }
   }
 
+  /**
+   * Sets the multi-run configuration for an experiment.
+   * This stores maxRuns in the experiment metadata to enable sequential multi-run execution.
+   * @param key - The experiment key
+   * @param maxRuns - Maximum number of sequential runs (1-100)
+   */
+  async setMultiRunConfig(key: ChaosObjectStoresPrimaryKeys['experiments'], maxRuns: number): Promise<void> {
+    try {
+      const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
+      const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
+      const experiment = await store.get(key);
+      if (!experiment) return;
+
+      experiment.unsavedChanges = true;
+      
+      // Store multi-run config in experiment metadata
+      const manifest = experiment?.manifest as Workflow;
+      if (!manifest) return;
+
+      // Add multiRun annotation to metadata
+      if (!manifest.metadata.annotations) {
+        manifest.metadata.annotations = {};
+      }
+      manifest.metadata.annotations['litmuschaos.io/multiRunEnabled'] = 'true';
+      manifest.metadata.annotations['litmuschaos.io/maxRuns'] = String(maxRuns);
+      manifest.metadata.annotations['litmuschaos.io/currentRun'] = '0';
+
+      await store.put({ ...experiment, manifest }, key);
+      await tx.done;
+    } catch (_) {
+      this.handleIDBFailure();
+    }
+  }
+
+  /**
+   * Gets the multi-run configuration for an experiment.
+   * @param key - The experiment key
+   * @returns Object containing maxRuns and currentRun, or null if not configured
+   */
+  async getMultiRunConfig(key: ChaosObjectStoresPrimaryKeys['experiments']): Promise<{ maxRuns: number; currentRun: number } | null> {
+    try {
+      const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readonly');
+      const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
+      const experiment = await store.get(key);
+      if (!experiment) return null;
+
+      const manifest = experiment?.manifest as Workflow;
+      if (!manifest?.metadata?.annotations) return null;
+
+      const multiRunEnabled = manifest.metadata.annotations['litmuschaos.io/multiRunEnabled'];
+      if (multiRunEnabled !== 'true') return null;
+
+      const maxRuns = parseInt(manifest.metadata.annotations['litmuschaos.io/maxRuns'] || '1', 10);
+      const currentRun = parseInt(manifest.metadata.annotations['litmuschaos.io/currentRun'] || '0', 10);
+
+      return { maxRuns, currentRun };
+    } catch (_) {
+      this.handleIDBFailure();
+      return null;
+    }
+  }
+
+  /**
+   * Increments the current run counter for multi-run experiments.
+   * @param key - The experiment key
+   * @returns The new current run count, or -1 if failed
+   */
+  async incrementMultiRunCounter(key: ChaosObjectStoresPrimaryKeys['experiments']): Promise<number> {
+    try {
+      const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
+      const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
+      const experiment = await store.get(key);
+      if (!experiment) return -1;
+
+      const manifest = experiment?.manifest as Workflow;
+      if (!manifest?.metadata?.annotations) return -1;
+
+      const currentRun = parseInt(manifest.metadata.annotations['litmuschaos.io/currentRun'] || '0', 10);
+      const newCurrentRun = currentRun + 1;
+      manifest.metadata.annotations['litmuschaos.io/currentRun'] = String(newCurrentRun);
+
+      await store.put({ ...experiment, manifest }, key);
+      await tx.done;
+      return newCurrentRun;
+    } catch (_) {
+      this.handleIDBFailure();
+      return -1;
+    }
+  }
+
+  /**
+   * Resets the multi-run counter to 0 (for starting a fresh multi-run session).
+   * @param key - The experiment key
+   */
+  async resetMultiRunCounter(key: ChaosObjectStoresPrimaryKeys['experiments']): Promise<void> {
+    try {
+      const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
+      const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
+      const experiment = await store.get(key);
+      if (!experiment) return;
+
+      const manifest = experiment?.manifest as Workflow;
+      if (!manifest?.metadata?.annotations) return;
+
+      manifest.metadata.annotations['litmuschaos.io/currentRun'] = '0';
+
+      await store.put({ ...experiment, manifest }, key);
+      await tx.done;
+    } catch (_) {
+      this.handleIDBFailure();
+    }
+  }
+
   getTemplatesAndSteps(
     manifest: KubernetesExperimentManifest | undefined
   ): [Template[] | undefined, WorkflowStep[][] | undefined, WorkflowSpec | undefined] {
