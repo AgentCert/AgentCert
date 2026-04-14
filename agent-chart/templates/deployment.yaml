@@ -16,7 +16,7 @@ spec:
       containers:
         - name: agent
           image: "{{ .Values.agent.containerImage.registry }}/{{ .Values.agent.containerImage.repository }}:{{ .Values.agent.containerImage.tag }}"
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ .Values.agent.containerImage.pullPolicy | default "IfNotPresent" }}
 
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
@@ -46,10 +46,83 @@ spec:
             - name: MONGO_URI
               value: {{ .Values.env.mongoUri | quote }}
 
+            # LiteLLM Proxy Configuration
+            {{- if .Values.agent.config.LITELLM_URL }}
+            - name: LITELLM_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.agent.name }}-metadata
+                  key: LITELLM_URL
+            {{- end }}
+
+            {{- if .Values.agent.secret.LITELLM_MASTER_KEY }}
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.agent.name }}-secret
+                  key: LITELLM_MASTER_KEY
+            {{- end }}
+
+            {{- if .Values.agent.config.MODEL_ALIAS }}
+            - name: MODEL_ALIAS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.agent.name }}-metadata
+                  key: MODEL_ALIAS
+            {{- end }}
+
+{{- range $env := .Values.agent.deploymentEnv }}
+            - name: {{ $env.name }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ $.Values.agent.name }}-metadata
+                  key: {{ $env.key }}
+{{- end }}
+
+{{- if .Values.sidecar.enabled }}
+            # Override OPENAI_BASE_URL to route through agent-sidecar
+            - name: OPENAI_BASE_URL
+              value: "http://localhost:{{ .Values.sidecar.port }}/v1"
+{{- end }}
+
           volumeMounts:
             - name: agent-metadata
               mountPath: /etc/agent/metadata
               readOnly: true
+
+{{- if .Values.sidecar.enabled }}
+        # ── agent-sidecar: transparent metadata-injection proxy ──────
+        - name: {{ .Values.sidecar.name }}
+          image: "{{ .Values.sidecar.image.registry }}/{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag }}"
+          imagePullPolicy: {{ .Values.sidecar.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - containerPort: {{ .Values.sidecar.port }}
+              protocol: TCP
+          env:
+            - name: SIDECAR_PORT
+              value: {{ .Values.sidecar.port | quote }}
+            - name: UPSTREAM_URL
+              value: {{ .Values.sidecar.upstream | quote }}
+            - name: INJECTION_MODE
+              value: {{ .Values.sidecar.injectionMode | default "openai-metadata" | quote }}
+            - name: EXPERIMENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.agent.name }}-metadata
+                  key: EXPERIMENT_ID
+            - name: EXPERIMENT_RUN_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.agent.name }}-metadata
+                  key: EXPERIMENT_RUN_ID
+            - name: WORKFLOW_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.agent.name }}-metadata
+                  key: WORKFLOW_NAME
+          resources:
+            {{- toYaml .Values.sidecar.resources | nindent 12 }}
+{{- end }}
 
       volumes:
         - name: agent-metadata
