@@ -22,7 +22,6 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
-	data_store "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/data-store"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -2821,8 +2820,8 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					}
 					
 					// Trigger next run using fresh context with auth token
-					// IMPORTANT: Must pass data_store.Store (not nil) to actually send the workflow to subscriber
-					_, err = handler.RunChaosWorkFlow(newCtx, projID, updatedExperiment, data_store.Store)
+					// IMPORTANT: Must pass store.Store (not nil) to actually send the workflow to subscriber
+					_, err = handler.RunChaosWorkFlow(newCtx, projID, updatedExperiment, store.Store)
 					if err != nil {
 						logrus.Errorf("[Multi-Run] Failed to trigger run %d for %s: %v", nextRun, expID, err)
 					} else {
