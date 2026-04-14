@@ -1,5 +1,5 @@
 import React, { FormEvent } from 'react';
-import { Button, ButtonVariation, Container, Layout, RadioButtonGroup, Text } from '@harnessio/uicore';
+import { Button, ButtonVariation, Container, Layout, RadioButtonGroup, Text, TextInput } from '@harnessio/uicore';
 import { Color, FontVariation } from '@harnessio/design-system';
 import { Form, Formik } from 'formik';
 import { useParams } from 'react-router-dom';
@@ -17,6 +17,7 @@ interface SchedulePanelInterface extends ExpressionBreakdownInterface {
   type: ExperimentType;
   expression: string;
   selectedScheduleTab?: string;
+  maxRuns?: number;
 }
 
 interface StudioScheduleViewProps {
@@ -55,7 +56,8 @@ export default function StudioScheduleView({ mode }: StudioScheduleViewProps): R
             expression: initialCronExpression,
             ...getBreakdownValues(initialCronExpression),
             selectedScheduleTab: getSelectedTab(initialCronExpression),
-            type: initialExperimentType ?? ExperimentType.NON_CRON
+            type: initialExperimentType ?? ExperimentType.NON_CRON,
+            maxRuns: 1
           }}
           onSubmit={values => {
             if (values.type === ExperimentType.NON_CRON && initialExperimentType === ExperimentType.CRON) {
@@ -78,6 +80,11 @@ export default function StudioScheduleView({ mode }: StudioScheduleViewProps): R
                 .then(() => {
                   setUnsavedChanges();
                 });
+            } else if (values.type === ExperimentType.MULTI_RUN) {
+              // Store maxRuns in experiment metadata for multi-run execution
+              (experimentHandler as KubernetesYamlService)?.setMultiRunConfig(experimentKey, values.maxRuns ?? 1).then(() => {
+                updateSearchParams({ experimentType: ExperimentType.MULTI_RUN, maxRuns: String(values.maxRuns ?? 1), unsavedChanges: 'true' });
+              });
             }
           }}
         >
@@ -118,6 +125,36 @@ export default function StudioScheduleView({ mode }: StudioScheduleViewProps): R
                         </Layout.Vertical>
                       ),
                       value: ExperimentType.CRON
+                    },
+                    {
+                      label: (
+                        <Layout.Vertical spacing={'small'}>
+                          <Text font={{ variation: FontVariation.H6 }}>{getString('multiRunSelectOption')}</Text>
+                          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_600}>
+                            {getString('multiRunText')}
+                          </Text>
+                          {formikProps.values.type === ExperimentType.MULTI_RUN && (
+                            <Layout.Vertical spacing={'medium'} padding={{ top: 'medium' }}>
+                              <Text font={{ variation: FontVariation.FORM_LABEL }}>{getString('multiRunMaxRunsLabel')}</Text>
+                              <TextInput
+                                name="maxRuns"
+                                type="number"
+                                min={1}
+                                max={100}
+                                placeholder={getString('multiRunMaxRunsPlaceholder')}
+                                value={String(formikProps.values.maxRuns ?? 1)}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                  const value = parseInt(e.target.value, 10);
+                                  formikProps.setFieldValue('maxRuns', isNaN(value) ? 1 : Math.max(1, Math.min(100, value)));
+                                }}
+                                style={{ width: '300px' }}
+                              />
+                            </Layout.Vertical>
+                          )}
+                        </Layout.Vertical>
+                      ),
+                      value: ExperimentType.MULTI_RUN,
+                      disabled: formikProps.initialValues.type === ExperimentType.CRON && mode === StudioMode.EDIT
                     }
                   ]}
                   className={css.radioButton}

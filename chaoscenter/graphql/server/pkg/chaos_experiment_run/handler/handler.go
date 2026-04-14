@@ -41,6 +41,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	k8srbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -1789,6 +1790,25 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, err
 	}
 
+	// Check if this is a multi-run experiment and block concurrent runs
+	if len(workflow.Revision) > 0 {
+		manifest := workflow.Revision[0].ExperimentManifest
+		multiRunEnabled := gjson.Get(manifest, "metadata.annotations.litmuschaos\\.io/multiRunEnabled").String()
+		
+		if multiRunEnabled == "true" {
+			// Query for any running experiment runs for this experiment
+			runningRuns, err := dbChaosExperimentRun.NewChaosExperimentRunOperator(c.mongodbOperator).GetExperimentRuns(bson.D{
+				{"experiment_id", workflow.ExperimentID},
+				{"is_removed", false},
+				{"completed", false},
+				{"phase", string(model.ExperimentRunStatusRunning)},
+			})
+			if err == nil && len(runningRuns) > 0 {
+				return nil, errors.New("multi-run experiment already has a running instance. Please wait for it to complete before starting another run")
+			}
+		}
+	}
+
 	var (
 		workflowManifest v1alpha1.Workflow
 	)
@@ -2007,10 +2027,23 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		txnOpts = options.Transaction().SetWriteConcern(wc).SetReadConcern(rc)
 	)
 
-	tkn := ctx.Value(authorization.AuthKey).(string)
-	username, err := authorization.GetUsername(tkn)
-	if err != nil {
-		return nil, err
+	// Get username from auth token or fall back to experiment's UpdatedBy username for system-triggered runs (e.g., multi-run)
+	var username string
+	if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok && tkn != "" {
+		username, err = authorization.GetUsername(tkn)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// System-triggered run (e.g., multi-run): use experiment's last updater or default to "system"
+		if workflow.Audit.UpdatedBy.Username != "" {
+			username = workflow.Audit.UpdatedBy.Username
+		} else if workflow.Audit.CreatedBy.Username != "" {
+			username = workflow.Audit.CreatedBy.Username
+		} else {
+			username = "system"
+		}
+		logrus.Infof("[Multi-Run] Using username '%s' for system-triggered run", username)
 	}
 
 	session, err := mongodb.MgoClient.StartSession()
@@ -2687,6 +2720,133 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	}
 
 	session.EndSession(ctx)
+
+	// Multi-run triggering: if experiment completed successfully and is a multi-run experiment, trigger next run
+	if isCompleted && len(experiment.Revision) > 0 {
+		manifest := experiment.Revision[len(experiment.Revision)-1].ExperimentManifest
+		
+		// Debug: Log raw annotation values
+		logrus.WithFields(logFields).Infof("[Multi-Run Debug] Checking manifest for multi-run annotations...")
+		
+		multiRunEnabled := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunEnabled`).String()
+		maxRunsStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/maxRuns`).String()
+		currentRunStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/currentRun`).String()
+		
+		logrus.WithFields(logFields).Infof("[Multi-Run Debug] multiRunEnabled='%s', maxRuns='%s', currentRun='%s'", 
+			multiRunEnabled, maxRunsStr, currentRunStr)
+		
+		if multiRunEnabled == "true" {
+			maxRuns := 1
+			if parsed, err := strconv.Atoi(maxRunsStr); err == nil && parsed > 1 {
+				maxRuns = parsed
+			}
+			
+			currentRun := 0
+			if parsed, err := strconv.Atoi(currentRunStr); err == nil {
+				currentRun = parsed
+			}
+			// This completed run means currentRun should be incremented
+			currentRun++
+			
+			logrus.WithFields(logFields).Infof("[Multi-Run] Experiment completed. multiRunEnabled=%s, currentRun=%d, maxRuns=%d", 
+				multiRunEnabled, currentRun, maxRuns)
+			
+			if currentRun < maxRuns {
+				// More runs needed - update manifest with new currentRun and trigger next
+				logrus.WithFields(logFields).Infof("[Multi-Run] Triggering run %d/%d...", currentRun+1, maxRuns)
+				
+				// Update the experiment manifest with incremented currentRun
+				updatedManifest, err := sjson.Set(manifest, "metadata.annotations.litmuschaos\\.io/currentRun", strconv.Itoa(currentRun))
+				if err != nil {
+					logrus.WithFields(logFields).Errorf("[Multi-Run] Failed to update manifest currentRun: %v", err)
+				} else {
+					// Update revision in database
+					experiment.Revision[len(experiment.Revision)-1].ExperimentManifest = updatedManifest
+					
+					filter := bson.D{{"experiment_id", experiment.ExperimentID}}
+					update := bson.D{
+						{"$set", bson.D{
+							{"revision", experiment.Revision},
+							{"updated_at", time.Now().UnixMilli()},
+						}},
+					}
+					if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx, filter, update); err != nil {
+						logrus.WithFields(logFields).Errorf("[Multi-Run] Failed to update experiment revision: %v", err)
+					}
+				}
+				
+				// Trigger next run in a goroutine after a delay
+				// Capture values for goroutine
+				expID := experiment.ExperimentID
+				projID := experiment.ProjectID
+				nextRun := currentRun + 1
+				totalRuns := maxRuns
+				handler := c
+				// Extract auth token from context and store it for the goroutine
+				// We cannot use the original context because it will be canceled when this function returns
+				var authToken string
+				if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok {
+					authToken = tkn
+				}
+				
+				go func() {
+					defer func() {
+						if r := recover(); r != nil {
+							logrus.Errorf("[Multi-Run] PANIC in trigger goroutine: %v", r)
+						}
+					}()
+					
+					logrus.Infof("[Multi-Run] Goroutine started, waiting 20s before triggering run %d/%d for experiment %s", nextRun, totalRuns, expID)
+					
+					// Wait 20 seconds for Kubernetes to clean up pods
+					time.Sleep(20 * time.Second)
+					
+					logrus.Infof("[Multi-Run] 20s delay complete, fetching experiment %s", expID)
+					
+					// Re-fetch experiment with updated manifest
+					updatedExperiment, err := handler.chaosExperimentOperator.GetExperiment(context.Background(), bson.D{{"experiment_id", expID}})
+					if err != nil {
+						logrus.Errorf("[Multi-Run] Failed to fetch updated experiment %s: %v", expID, err)
+						return
+					}
+					
+					logrus.Infof("[Multi-Run] Experiment fetched, calling RunChaosWorkFlow for %s", expID)
+					
+					// Create a fresh context with the auth token for the new run
+					// Using context.Background() ensures the context won't be canceled
+					newCtx := context.Background()
+					if authToken != "" {
+						newCtx = context.WithValue(newCtx, authorization.AuthKey, authToken)
+					}
+					
+					// Trigger next run using fresh context with auth token
+					// IMPORTANT: Must pass store.Store (not nil) to actually send the workflow to subscriber
+					_, err = handler.RunChaosWorkFlow(newCtx, projID, updatedExperiment, store.Store)
+					if err != nil {
+						logrus.Errorf("[Multi-Run] Failed to trigger run %d for %s: %v", nextRun, expID, err)
+					} else {
+						logrus.Infof("[Multi-Run] Successfully triggered run %d/%d for %s", nextRun, totalRuns, expID)
+					}
+				}()
+			} else {
+				logrus.WithFields(logFields).Infof("[Multi-Run] All %d runs completed!", maxRuns)
+				
+				// Reset currentRun to 0 for next batch
+				updatedManifest, err := sjson.Set(manifest, "metadata.annotations.litmuschaos\\.io/currentRun", "0")
+				if err == nil {
+					experiment.Revision[len(experiment.Revision)-1].ExperimentManifest = updatedManifest
+					filter := bson.D{{"experiment_id", experiment.ExperimentID}}
+					update := bson.D{
+						{"$set", bson.D{
+							{"revision", experiment.Revision},
+							{"updated_at", time.Now().UnixMilli()},
+						}},
+					}
+					_ = c.chaosExperimentOperator.UpdateChaosExperiment(ctx, filter, update)
+				}
+			}
+		}
+	}
 
 	return fmt.Sprintf("Experiment run received for for ExperimentID: %s, ExperimentRunID: %s", event.ExperimentID, event.ExperimentRunID), nil
 }

@@ -520,6 +520,14 @@ export interface StringsMap {
   'monthlyMessage': unknown
   'monthsParentheses': unknown
   'mostRecentDirection': unknown
+  'multiRunAllCompleted': unknown
+  'multiRunCompleted': unknown
+  'multiRunMaxRunsLabel': unknown
+  'multiRunMaxRunsPlaceholder': unknown
+  'multiRunProgress': unknown
+  'multiRunSelectOption': unknown
+  'multiRunStarting': unknown
+  'multiRunText': unknown
   'mustBeInteger': PrimitiveObject<'field'>
   'mustBePositive': PrimitiveObject<'field'>
   'myProfile': unknown
