@@ -15,6 +15,7 @@ Env vars read at startup:
   EXPERIMENT_ID       – injected via Argo template variable
   EXPERIMENT_RUN_ID   – injected via Argo template variable
   WORKFLOW_NAME       – injected via Argo template variable
+  AGENT_ID            – injected via Helm --set agentId=<uuid> at deploy time
 """
 
 import json
@@ -30,7 +31,7 @@ INJECTION_MODE = os.environ.get("INJECTION_MODE", "openai-metadata").lower()
 
 # Experiment context – read once at startup, immutable for pod lifetime
 EXPERIMENT_CONTEXT = {}
-for _key in ("EXPERIMENT_ID", "EXPERIMENT_RUN_ID", "WORKFLOW_NAME"):
+for _key in ("EXPERIMENT_ID", "EXPERIMENT_RUN_ID", "WORKFLOW_NAME", "AGENT_ID"):
     _val = os.environ.get(_key, "")
     if _val:
         EXPERIMENT_CONTEXT[_key.lower()] = _val
