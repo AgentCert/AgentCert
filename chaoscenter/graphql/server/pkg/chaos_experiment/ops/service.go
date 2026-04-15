@@ -14,6 +14,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 	"github.com/sirupsen/logrus"
 
+	agentRegistry "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 
@@ -56,15 +57,17 @@ type chaosExperimentService struct {
 	chaosInfrastructureOperator *dbChaosInfra.Operator
 	chaosExperimentRunOperator  *dbChaosExperimentRun.Operator
 	probeService                probe.Service
+	agentRegistryOperator       agentRegistry.Operator
 }
 
 // NewChaosExperimentService returns a new instance of the chaos workflow service
-func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service) Service {
+func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator) Service {
 	return &chaosExperimentService{
 		chaosExperimentOperator:     chaosWorkflowOperator,
 		chaosInfrastructureOperator: clusterOperator,
 		chaosExperimentRunOperator:  chaosExperimentRunOperator,
 		probeService:                probeService,
+		agentRegistryOperator:       agentRegOp,
 	}
 }
 
@@ -373,6 +376,31 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 
 	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	injectExperimentContextArgs(workflowManifest.Spec.Templates)
+
+	// Inject agentId as a workflow-level parameter so that install-agent
+	// can forward it via --set agentId={{workflow.parameters.agentId}}.
+	if c.agentRegistryOperator != nil {
+		if infra, err := c.chaosInfrastructureOperator.GetInfra(workflow.InfraID); err == nil && infra.InfraNamespace != nil {
+			if agent, err := c.agentRegistryOperator.GetAgentByNamespace(ctx, *infra.InfraNamespace); err == nil && agent != nil {
+				agentIDStr := agent.AgentID
+				// Ensure the parameter is not duplicated
+				hasAgentID := false
+				for _, p := range workflowManifest.Spec.Arguments.Parameters {
+					if p.Name == "agentId" {
+						hasAgentID = true
+						break
+					}
+				}
+				if !hasAgentID {
+					workflowManifest.Spec.Arguments.Parameters = append(workflowManifest.Spec.Arguments.Parameters, v1alpha1.Parameter{
+						Name:  "agentId",
+						Value: v1alpha1.AnyStringPtr(agentIDStr),
+					})
+					logrus.WithField("agentId", agentIDStr).Info("injected agentId workflow parameter")
+				}
+			}
+		}
+	}
 
 	if workflowManifest.Labels == nil {
 		workflowManifest.Labels = map[string]string{
@@ -1443,6 +1471,7 @@ func injectExperimentContextArgsFallback(templates []v1alpha1.Template) {
 		"--set", "agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}",
 		"--set", "agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}",
 		"--set", "agent.config.WORKFLOW_NAME={{workflow.labels.subject}}",
+		"--set", "agentId={{workflow.parameters.agentId}}",
 	}
 
 	for i := range templates {

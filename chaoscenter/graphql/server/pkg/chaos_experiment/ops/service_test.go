@@ -37,7 +37,7 @@ var (
 	probeService               = probe.NewProbeService(probeOperator)
 )
 
-var chaosExperimentRunTestService = NewChaosExperimentService(chaosExperimentOperator, infraOperator, chaosExperimentRunOperator, probeService)
+var chaosExperimentRunTestService = NewChaosExperimentService(chaosExperimentOperator, infraOperator, chaosExperimentRunOperator, probeService, nil)
 
 func TestMain(m *testing.M) {
 	gin.SetMode(gin.TestMode)
@@ -82,12 +82,13 @@ func TestNewChaosExperimentService(t *testing.T) {
 				chaosInfrastructureOperator: infraOperator,
 				chaosExperimentRunOperator:  chaosExperimentRunOperator,
 				probeService:                probeService,
+				agentRegistryOperator:       nil,
 			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := NewChaosExperimentService(tc.args.chaosWorkflowOperator, tc.args.clusterOperator, tc.args.chaosExperimentRunOperator, tc.args.probeService); !reflect.DeepEqual(got, tc.want) {
+			if got := NewChaosExperimentService(tc.args.chaosWorkflowOperator, tc.args.clusterOperator, tc.args.chaosExperimentRunOperator, tc.args.probeService, nil); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("NewChaosExperimentService() = %v, want %v", got, tc.want)
 			}
 		})
