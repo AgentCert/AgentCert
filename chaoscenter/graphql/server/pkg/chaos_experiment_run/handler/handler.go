@@ -15,6 +15,7 @@ import (
 
 	probe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/handler"
 
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
 
 	probeUtils "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/utils"
@@ -67,6 +68,7 @@ type ChaosExperimentRunHandler struct {
 	chaosExperimentRunOperator *dbChaosExperimentRun.Operator
 	probeService               probe.Service
 	mongodbOperator            mongodb.MongoOperator
+	agentRegistryOperator      agent_registry.Operator
 }
 
 type rbacRequirement struct {
@@ -97,6 +99,7 @@ func NewChaosExperimentRunHandler(
 	chaosExperimentRunOperator *dbChaosExperimentRun.Operator,
 	probeService probe.Service,
 	mongodbOperator mongodb.MongoOperator,
+	agentRegOp agent_registry.Operator,
 ) *ChaosExperimentRunHandler {
 	return &ChaosExperimentRunHandler{
 		chaosExperimentRunService:  chaosExperimentRunService,
@@ -106,6 +109,7 @@ func NewChaosExperimentRunHandler(
 		chaosExperimentRunOperator: chaosExperimentRunOperator,
 		probeService:               probeService,
 		mongodbOperator:            mongodbOperator,
+		agentRegistryOperator:      agentRegOp,
 	}
 }
 
@@ -1852,6 +1856,30 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 
 	if normalizeInstallTemplates(workflowManifest.Spec.Templates) {
 		ensureInstallTimeoutParam(&workflowManifest.Spec.Arguments)
+	}
+
+	// Inject agentId as a workflow-level parameter for re-runs
+	if c.agentRegistryOperator != nil {
+		if infra.InfraNamespace != nil {
+			if agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, *infra.InfraNamespace); agentErr == nil && agent != nil {
+				hasAgentID := false
+				for _, p := range workflowManifest.Spec.Arguments.Parameters {
+					if p.Name == "agentId" {
+						hasAgentID = true
+						break
+					}
+				}
+				if !hasAgentID {
+					workflowManifest.Spec.Arguments.Parameters = append(workflowManifest.Spec.Arguments.Parameters, v1alpha1.Parameter{
+						Name:  "agentId",
+						Value: v1alpha1.AnyStringPtr(agent.AgentID),
+					})
+					logrus.WithField("agentId", agent.AgentID).Info("injected agentId workflow parameter (re-run)")
+				}
+			} else if agentErr != nil {
+				logrus.WithError(agentErr).Warn("failed to lookup agent by namespace for agentId injection")
+			}
+		}
 	}
 
 	var resScore float64 = 0

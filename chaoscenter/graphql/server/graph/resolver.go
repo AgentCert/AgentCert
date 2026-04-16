@@ -93,7 +93,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 
 	//handler
 	chaosExperimentHandler := handler.NewChaosExperimentHandler(chaosExperimentService, chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
-	choasExperimentRunHandler := runHandler.NewChaosExperimentRunHandler(chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
+	choasExperimentRunHandler := runHandler.NewChaosExperimentRunHandler(chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator, agentRegistryOperator)
 
 	config := generated.Config{
 		Resolvers: &Resolver{
