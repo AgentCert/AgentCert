@@ -2837,12 +2837,12 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 						}
 					}()
 					
-					logrus.Infof("[Multi-Run] Goroutine started, waiting 20s before triggering run %d/%d for experiment %s", nextRun, totalRuns, expID)
+					logrus.Infof("[Multi-Run] Goroutine started, waiting 30m before triggering run %d/%d for experiment %s", nextRun, totalRuns, expID)
 					
-					// Wait 20 seconds for Kubernetes to clean up pods
-					time.Sleep(20 * time.Second)
+					// Wait 30 minutes between runs to allow system stabilisation
+					time.Sleep(30 * time.Minute)
 					
-					logrus.Infof("[Multi-Run] 20s delay complete, fetching experiment %s", expID)
+					logrus.Infof("[Multi-Run] 30m delay complete, fetching experiment %s", expID)
 					
 					// Re-fetch experiment with updated manifest
 					updatedExperiment, err := handler.chaosExperimentOperator.GetExperiment(context.Background(), bson.D{{"experiment_id", expID}})
