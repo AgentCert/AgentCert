@@ -10,13 +10,23 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// ContextInjectionMapping represents a single Helm --set arg pair that the server
+// injects into the install template at experiment-save time.
+type ContextInjectionMapping struct {
+	HelmPath string `yaml:"helmPath"`
+	Source   string `yaml:"source"`
+}
+
 // AgentEntry represents a single agent in the chartserviceversion YAML.
 type AgentEntry struct {
-	Name         string   `yaml:"name"`
-	DisplayName  string   `yaml:"displayName"`
-	Description  string   `yaml:"description"`
-	Version      string   `yaml:"version"`
-	Capabilities []string `yaml:"capabilities"`
+	Name                string                    `yaml:"name"`
+	DisplayName         string                    `yaml:"displayName"`
+	Description         string                    `yaml:"description"`
+	Version             string                    `yaml:"version"`
+	Capabilities        []string                  `yaml:"capabilities"`
+	InstallTemplateName string                    `yaml:"installTemplateName,omitempty"`
+	InstallImage        string                    `yaml:"installImage,omitempty"`
+	ContextInjection    []ContextInjectionMapping `yaml:"contextInjection,omitempty"`
 }
 
 // AgentCSVSpec is the spec section of the agent chartserviceversion YAML.
@@ -77,6 +87,27 @@ func GetAgentChartsData(chartsPath string) ([]*model.AgentHubCategory, error) {
 				Capabilities: agent.Capabilities,
 				IsDeployed:   false, // Will be enriched later
 			}
+
+			// Populate injection metadata from CSV (Item #3)
+			if agent.InstallTemplateName != "" {
+				s := agent.InstallTemplateName
+				entry.InstallTemplateName = &s
+			}
+			if agent.InstallImage != "" {
+				s := agent.InstallImage
+				entry.InstallImage = &s
+			}
+			if len(agent.ContextInjection) > 0 {
+				ci := make([]*model.ContextInjectionMapping, 0, len(agent.ContextInjection))
+				for _, m := range agent.ContextInjection {
+					ci = append(ci, &model.ContextInjectionMapping{
+						HelmPath: m.HelmPath,
+						Source:   m.Source,
+					})
+				}
+				entry.ContextInjection = ci
+			}
+
 			category.Agents = append(category.Agents, entry)
 		}
 
@@ -84,6 +115,27 @@ func GetAgentChartsData(chartsPath string) ([]*model.AgentHubCategory, error) {
 	}
 
 	return categories, nil
+}
+
+// GetAllAgentEntries reads all agent entries from the chartserviceversion files,
+// preserving the full metadata including contextInjection, installTemplateName,
+// and installImage. Used by the experiment service for metadata-driven injection.
+func GetAllAgentEntries(chartsPath string) ([]AgentEntry, error) {
+	csvFiles, err := findCSVFiles(chartsPath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading agent charts directory %s: %w", chartsPath, err)
+	}
+
+	var entries []AgentEntry
+	for _, csvFile := range csvFiles {
+		csv, err := readAgentCSV(csvFile)
+		if err != nil {
+			log.WithError(err).Errorf("failed to read agent CSV file: %s", csvFile)
+			continue
+		}
+		entries = append(entries, csv.Spec.Agents...)
+	}
+	return entries, nil
 }
 
 // findCSVFiles finds all chartserviceversion.yaml files in the charts directory.

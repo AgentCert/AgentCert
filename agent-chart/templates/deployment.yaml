@@ -103,6 +103,8 @@ spec:
               value: {{ .Values.sidecar.port | quote }}
             - name: UPSTREAM_URL
               value: {{ .Values.sidecar.upstream | quote }}
+            - name: INJECTION_MODE
+              value: {{ .Values.sidecar.injectionMode | default "openai-metadata" | quote }}
             - name: EXPERIMENT_ID
               valueFrom:
                 configMapKeyRef:
@@ -118,6 +120,10 @@ spec:
                 configMapKeyRef:
                   name: {{ .Values.agent.name }}-metadata
                   key: WORKFLOW_NAME
+            {{- if .Values.agentId }}
+            - name: AGENT_ID
+              value: {{ .Values.agentId | quote }}
+            {{- end }}
           resources:
             {{- toYaml .Values.sidecar.resources | nindent 12 }}
 {{- end }}

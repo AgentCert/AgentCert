@@ -8,9 +8,14 @@ experiment context. The agent has ZERO awareness of experiment IDs.
 Env vars read at startup:
   SIDECAR_PORT        – listen port (default 4001)
   UPSTREAM_URL        – real LiteLLM base URL (e.g. http://litellm:4000)
+  INJECTION_MODE      – how to inject context (default "openai-metadata")
+                        "openai-metadata" : merge into JSON body metadata dict
+                        "http-header"     : add X-Experiment-* request headers
+                        "none"            : pure passthrough, no injection
   EXPERIMENT_ID       – injected via Argo template variable
   EXPERIMENT_RUN_ID   – injected via Argo template variable
   WORKFLOW_NAME       – injected via Argo template variable
+  AGENT_ID            – injected via Helm --set agentId=<uuid> at deploy time
 """
 
 import json
@@ -22,10 +27,11 @@ from urllib.error import HTTPError, URLError
 
 SIDECAR_PORT = int(os.environ.get("SIDECAR_PORT", "4001"))
 UPSTREAM_URL = os.environ.get("UPSTREAM_URL", "http://localhost:4000").rstrip("/")
+INJECTION_MODE = os.environ.get("INJECTION_MODE", "openai-metadata").lower()
 
 # Experiment context – read once at startup, immutable for pod lifetime
 EXPERIMENT_CONTEXT = {}
-for _key in ("EXPERIMENT_ID", "EXPERIMENT_RUN_ID", "WORKFLOW_NAME"):
+for _key in ("EXPERIMENT_ID", "EXPERIMENT_RUN_ID", "WORKFLOW_NAME", "AGENT_ID"):
     _val = os.environ.get(_key, "")
     if _val:
         EXPERIMENT_CONTEXT[_key.lower()] = _val
@@ -39,9 +45,14 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = self._read_body()
+        extra_headers = {}
         if body and EXPERIMENT_CONTEXT:
-            body = self._inject_metadata(body)
-        self._proxy(body)
+            if INJECTION_MODE == "openai-metadata":
+                body = self._inject_metadata(body)
+            elif INJECTION_MODE == "http-header":
+                extra_headers = self._build_context_headers()
+            # "none" or unknown → pure passthrough
+        self._proxy(body, extra_headers=extra_headers)
 
     def do_GET(self):
         self._proxy(None)
@@ -79,7 +90,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
             pass  # non-JSON body – forward as-is
         return body
 
-    def _proxy(self, body):
+    @staticmethod
+    def _build_context_headers() -> dict:
+        """Return experiment context as X-Experiment-* HTTP headers."""
+        return {
+            f"X-Experiment-{k.replace('_', '-').title()}": v
+            for k, v in EXPERIMENT_CONTEXT.items()
+        }
+
+    def _proxy(self, body, *, extra_headers=None):
         upstream = f"{UPSTREAM_URL}{self.path}"
 
         # Forward headers, skipping hop-by-hop
@@ -88,6 +107,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
             for k, v in self.headers.items()
             if k.lower() not in _HOP_HEADERS
         }
+        if extra_headers:
+            headers.update(extra_headers)
         if body is not None:
             headers["Content-Length"] = str(len(body))
 
@@ -117,7 +138,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"[agent-sidecar] Starting on :{SIDECAR_PORT} → {UPSTREAM_URL}", flush=True)
+    print(f"[agent-sidecar] Starting on :{SIDECAR_PORT} → {UPSTREAM_URL}  mode={INJECTION_MODE}", flush=True)
     if EXPERIMENT_CONTEXT:
         print(f"[agent-sidecar] Injecting: {list(EXPERIMENT_CONTEXT.keys())}", flush=True)
     else:

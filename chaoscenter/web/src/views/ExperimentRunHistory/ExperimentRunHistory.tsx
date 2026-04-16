@@ -16,6 +16,11 @@ import { useRouteWithBaseUrl } from '@hooks';
 import { StudioTabs } from '@models';
 import { MemoisedExperimentRunHistoryTable } from './ExperimentRunHistoryTable';
 
+interface MultiRunConfig {
+  maxRuns: number;
+  currentRun: number;
+}
+
 interface ExperimentRunHistoryViewProps {
   statusDropDown: React.ReactElement;
   dateRangePicker: React.ReactElement;
@@ -28,6 +33,7 @@ interface ExperimentRunHistoryViewProps {
   loading: boolean;
   areFiltersSet: boolean;
   experimentRunsExists: boolean | undefined;
+  multiRunConfig?: MultiRunConfig | null;
 }
 
 const ExperimentRunHistoryView = ({
@@ -41,7 +47,8 @@ const ExperimentRunHistoryView = ({
   experimentRunsColumnGraphData,
   loading,
   areFiltersSet,
-  experimentRunsExists
+  experimentRunsExists,
+  multiRunConfig
 }: ExperimentRunHistoryViewProps): React.ReactElement => {
   const scope = getScope();
   const paths = useRouteWithBaseUrl();
@@ -112,10 +119,26 @@ const ExperimentRunHistoryView = ({
       </Layout.Vertical>
       <Layout.Vertical margin={{ top: 'xlarge' }} spacing={'medium'} padding={{ left: 'small', right: 'small' }}>
         <Layout.Horizontal flex={{ justifyContent: 'space-between' }}>
-          <Text font={{ variation: FontVariation.H5 }}>
-            {getString('experimentRuns')}
-            {` (${experimentRunsTableData?.pagination?.itemCount ?? ''})`}
-          </Text>
+          <Layout.Horizontal spacing={'medium'} flex={{ alignItems: 'center' }}>
+            <Text font={{ variation: FontVariation.H5 }}>
+              {getString('experimentRuns')}
+              {` (${experimentRunsTableData?.pagination?.itemCount ?? ''})`}
+            </Text>
+            {multiRunConfig && (
+              <Text
+                font={{ variation: FontVariation.BODY }}
+                color={Color.PRIMARY_7}
+                style={{
+                  backgroundColor: 'var(--primary-1)',
+                  padding: '4px 12px',
+                  borderRadius: '4px',
+                  fontWeight: 600
+                }}
+              >
+                Multi-Run: {Math.min(experimentRunsTableData?.pagination?.itemCount ?? 0, multiRunConfig.maxRuns)}/{multiRunConfig.maxRuns}
+              </Text>
+            )}
+          </Layout.Horizontal>
           <Layout.Horizontal spacing={'medium'}>{/* {statusDropDown} */}</Layout.Horizontal>
         </Layout.Horizontal>
         <Container height={'calc(100vh - 444px)'}>

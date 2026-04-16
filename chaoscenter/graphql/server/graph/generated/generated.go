@@ -92,16 +92,19 @@ type ComplexityRoot struct {
 	}
 
 	AgentHubEntry struct {
-		AgentID          func(childComplexity int) int
-		Capabilities     func(childComplexity int) int
-		DeploymentStatus func(childComplexity int) int
-		Description      func(childComplexity int) int
-		DisplayName      func(childComplexity int) int
-		HelmReleaseName  func(childComplexity int) int
-		IsDeployed       func(childComplexity int) int
-		Name             func(childComplexity int) int
-		Namespace        func(childComplexity int) int
-		Version          func(childComplexity int) int
+		AgentID             func(childComplexity int) int
+		Capabilities        func(childComplexity int) int
+		ContextInjection    func(childComplexity int) int
+		DeploymentStatus    func(childComplexity int) int
+		Description         func(childComplexity int) int
+		DisplayName         func(childComplexity int) int
+		HelmReleaseName     func(childComplexity int) int
+		InstallImage        func(childComplexity int) int
+		InstallTemplateName func(childComplexity int) int
+		IsDeployed          func(childComplexity int) int
+		Name                func(childComplexity int) int
+		Namespace           func(childComplexity int) int
+		Version             func(childComplexity int) int
 	}
 
 	AgentHubStatus struct {
@@ -279,6 +282,11 @@ type ComplexityRoot struct {
 		Registry   func(childComplexity int) int
 		Repository func(childComplexity int) int
 		Tag        func(childComplexity int) int
+	}
+
+	ContextInjectionMapping struct {
+		HelmPath func(childComplexity int) int
+		Source   func(childComplexity int) int
 	}
 
 	DeleteAgentResponse struct {
@@ -1392,6 +1400,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.AgentHubEntry.Capabilities(childComplexity), true
 
+	case "AgentHubEntry.contextInjection":
+		if e.complexity.AgentHubEntry.ContextInjection == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.ContextInjection(childComplexity), true
+
 	case "AgentHubEntry.deploymentStatus":
 		if e.complexity.AgentHubEntry.DeploymentStatus == nil {
 			break
@@ -1419,6 +1434,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AgentHubEntry.HelmReleaseName(childComplexity), true
+
+	case "AgentHubEntry.installImage":
+		if e.complexity.AgentHubEntry.InstallImage == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.InstallImage(childComplexity), true
+
+	case "AgentHubEntry.installTemplateName":
+		if e.complexity.AgentHubEntry.InstallTemplateName == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.InstallTemplateName(childComplexity), true
 
 	case "AgentHubEntry.isDeployed":
 		if e.complexity.AgentHubEntry.IsDeployed == nil {
@@ -2329,6 +2358,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ContainerImage.Tag(childComplexity), true
+
+	case "ContextInjectionMapping.helmPath":
+		if e.complexity.ContextInjectionMapping.HelmPath == nil {
+			break
+		}
+
+		return e.complexity.ContextInjectionMapping.HelmPath(childComplexity), true
+
+	case "ContextInjectionMapping.source":
+		if e.complexity.ContextInjectionMapping.Source == nil {
+			break
+		}
+
+		return e.complexity.ContextInjectionMapping.Source(childComplexity), true
 
 	case "DeleteAgentResponse.message":
 		if e.complexity.DeleteAgentResponse.Message == nil {
@@ -10269,6 +10312,17 @@ extend type Mutation {
 # ──────────────────────────────────────────────────
 
 """
+A single Helm --set mapping that the server injects into the install template
+at experiment-save time, e.g. helmPath="agent.config.EXPERIMENT_ID" source="{{workflow.labels.workflow_id}}".
+"""
+type ContextInjectionMapping {
+  """Helm values path (e.g. agent.config.EXPERIMENT_ID)"""
+  helmPath: String!
+  """Argo template variable or literal value"""
+  source: String!
+}
+
+"""
 Represents a single agent entry in the AgentHub catalogue.
 Combines static chart metadata with live deployment status.
 """
@@ -10283,6 +10337,12 @@ type AgentHubEntry {
   version: String!
   """List of capabilities this agent supports"""
   capabilities: [String!]!
+  """Template name used to identify the install step in workflow manifests"""
+  installTemplateName: String
+  """Default container image for the install step"""
+  installImage: String
+  """Helm --set mappings for experiment context injection"""
+  contextInjection: [ContextInjectionMapping!]
   """Whether this agent is currently deployed in the cluster"""
   isDeployed: Boolean!
   """Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)"""
@@ -15372,6 +15432,12 @@ func (ec *executionContext) fieldContext_AgentHubCategory_agents(_ context.Conte
 				return ec.fieldContext_AgentHubEntry_version(ctx, field)
 			case "capabilities":
 				return ec.fieldContext_AgentHubEntry_capabilities(ctx, field)
+			case "installTemplateName":
+				return ec.fieldContext_AgentHubEntry_installTemplateName(ctx, field)
+			case "installImage":
+				return ec.fieldContext_AgentHubEntry_installImage(ctx, field)
+			case "contextInjection":
+				return ec.fieldContext_AgentHubEntry_contextInjection(ctx, field)
 			case "isDeployed":
 				return ec.fieldContext_AgentHubEntry_isDeployed(ctx, field)
 			case "deploymentStatus":
@@ -15604,6 +15670,135 @@ func (ec *executionContext) fieldContext_AgentHubEntry_capabilities(_ context.Co
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_installTemplateName(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_installTemplateName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.InstallTemplateName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_installTemplateName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_installImage(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_installImage(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.InstallImage, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_installImage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_contextInjection(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_contextInjection(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ContextInjection, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.ContextInjectionMapping)
+	fc.Result = res
+	return ec.marshalOContextInjectionMapping2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContextInjectionMappingᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_contextInjection(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "helmPath":
+				return ec.fieldContext_ContextInjectionMapping_helmPath(ctx, field)
+			case "source":
+				return ec.fieldContext_ContextInjectionMapping_source(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ContextInjectionMapping", field.Name)
 		},
 	}
 	return fc, nil
@@ -21429,6 +21624,94 @@ func (ec *executionContext) _ContainerImage_tag(ctx context.Context, field graph
 func (ec *executionContext) fieldContext_ContainerImage_tag(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ContainerImage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ContextInjectionMapping_helmPath(ctx context.Context, field graphql.CollectedField, obj *model.ContextInjectionMapping) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ContextInjectionMapping_helmPath(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.HelmPath, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ContextInjectionMapping_helmPath(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ContextInjectionMapping",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ContextInjectionMapping_source(ctx context.Context, field graphql.CollectedField, obj *model.ContextInjectionMapping) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ContextInjectionMapping_source(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Source, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ContextInjectionMapping_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ContextInjectionMapping",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -55069,6 +55352,12 @@ func (ec *executionContext) _AgentHubEntry(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "installTemplateName":
+			out.Values[i] = ec._AgentHubEntry_installTemplateName(ctx, field, obj)
+		case "installImage":
+			out.Values[i] = ec._AgentHubEntry_installImage(ctx, field, obj)
+		case "contextInjection":
+			out.Values[i] = ec._AgentHubEntry_contextInjection(ctx, field, obj)
 		case "isDeployed":
 			out.Values[i] = ec._AgentHubEntry_isDeployed(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -56203,6 +56492,50 @@ func (ec *executionContext) _ContainerImage(ctx context.Context, sel ast.Selecti
 			}
 		case "tag":
 			out.Values[i] = ec._ContainerImage_tag(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var contextInjectionMappingImplementors = []string{"ContextInjectionMapping"}
+
+func (ec *executionContext) _ContextInjectionMapping(ctx context.Context, sel ast.SelectionSet, obj *model.ContextInjectionMapping) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, contextInjectionMappingImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ContextInjectionMapping")
+		case "helmPath":
+			out.Values[i] = ec._ContextInjectionMapping_helmPath(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "source":
+			out.Values[i] = ec._ContextInjectionMapping_source(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -62987,6 +63320,16 @@ func (ec *executionContext) unmarshalNContainerImageInput2ᚖgithubᚗcomᚋlitm
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNContextInjectionMapping2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContextInjectionMapping(ctx context.Context, sel ast.SelectionSet, v *model.ContextInjectionMapping) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ContextInjectionMapping(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNCreateChaosHubRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCreateChaosHubRequest(ctx context.Context, v interface{}) (model.CreateChaosHubRequest, error) {
 	res, err := ec.unmarshalInputCreateChaosHubRequest(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -65285,6 +65628,53 @@ func (ec *executionContext) unmarshalOContainerImageInput2ᚖgithubᚗcomᚋlitm
 	}
 	res, err := ec.unmarshalInputContainerImageInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOContextInjectionMapping2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContextInjectionMappingᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ContextInjectionMapping) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNContextInjectionMapping2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐContextInjectionMapping(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOCreateEnvironmentRequest2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCreateEnvironmentRequest(ctx context.Context, v interface{}) (*model.CreateEnvironmentRequest, error) {

@@ -155,6 +155,19 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   const isCronEnabled =
     experimentRunsWithExecutionData && experimentType === ExperimentType.CRON && cronEnabled(parsedManifest);
 
+  // Extract multi-run configuration from manifest annotations
+  const multiRunConfig = React.useMemo(() => {
+    if (!parsedManifest?.metadata?.annotations) return null;
+    const annotations = parsedManifest.metadata.annotations;
+    const multiRunEnabled = annotations['litmuschaos.io/multiRunEnabled'];
+    const maxRuns = parseInt(annotations['litmuschaos.io/maxRuns'] || '1', 10);
+    const currentRun = parseInt(annotations['litmuschaos.io/currentRun'] || '0', 10);
+    if (multiRunEnabled === 'true' && maxRuns > 1) {
+      return { maxRuns, currentRun };
+    }
+    return null;
+  }, [parsedManifest]);
+
   const rightSideBarV2 = (
     <RightSideBarV2
       refetchExperimentRuns={refetchExperimentRuns}
@@ -178,6 +191,7 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       experimentRunsColumnGraphData={experimentRunsColumnGraphData}
       areFiltersSet={areFiltersSet}
       experimentRunsExists={experimentRunsExists}
+      multiRunConfig={multiRunConfig}
     />
   );
 }
