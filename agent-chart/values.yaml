@@ -25,9 +25,9 @@ agent:
 
   containerImage:
     registry: docker.io
-    repository: nginx
+    repository: agentcert/flash-agent
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
 
   config:
     # --- LiteLLM Proxy ---
@@ -35,6 +35,12 @@ agent:
     MODEL_ALIAS: ""
     OPENAI_BASE_URL: ""
     OPENAI_API_KEY: ""
+
+    # --- Blind-observer mode ---
+    # When "false", flash-agent excludes chaos tools (chaosengines,
+    # chaosresults, argo_workflows) from MCP calls and strips chaos
+    # sections from the LLM prompt.  Default "true" preserves full mode.
+    MCP_INCLUDE_CHAOS_TOOLS: "false"
 
     # --- Experiment context (injected by install-agent via Argo template variables) ---
     # Empty defaults: agent works with or without experiment context.
@@ -63,9 +69,15 @@ agent:
 
 # ── agent-sidecar: transparent metadata-injection proxy ──────────────
 # When enabled, a lightweight sidecar container intercepts agent→LiteLLM
-# requests, injects experiment context (EXPERIMENT_ID, EXPERIMENT_RUN_ID,
-# WORKFLOW_NAME) into the metadata field, and forwards to upstream.
-# The agent has ZERO awareness of experiment context.
+# requests, injects agent identity into the metadata field, and forwards
+# to upstream. The agent has ZERO awareness of experiment context.
+#
+# IMPORTANT: Experiment context (EXPERIMENT_ID, EXPERIMENT_RUN_ID,
+# WORKFLOW_NAME) is intentionally NOT passed to the sidecar by default.
+# This enforces the "blind observer" principle — the flash-agent must
+# detect anomalies from system signals, not from prior knowledge of
+# what faults are being injected.
+# See: docs/Flash-agent-data-leakage-analysis.md
 sidecar:
   enabled: true
   name: agent-sidecar
@@ -79,6 +91,11 @@ sidecar:
   upstream: ""
   # Injection mode: "openai-metadata" | "http-header" | "none"
   injectionMode: "openai-metadata"
+  # Comma-separated allowlist of metadata keys to inject.
+  # Default: "AGENT_ID" (routing/billing only).
+  # To restore legacy behaviour (NOT recommended):
+  #   "AGENT_ID,EXPERIMENT_ID,EXPERIMENT_RUN_ID,WORKFLOW_NAME"
+  allowedMetadataKeys: "AGENT_ID"
   resources:
     limits:
       cpu: "100m"

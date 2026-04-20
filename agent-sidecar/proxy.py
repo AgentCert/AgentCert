@@ -3,7 +3,7 @@ agent-sidecar – Transparent metadata-injection HTTP proxy.
 ==========================================================
 
 Sits between any LLM agent and LiteLLM to enrich requests with
-experiment context. The agent has ZERO awareness of experiment IDs.
+agent identity. The agent has ZERO awareness of experiment IDs.
 
 Env vars read at startup:
   SIDECAR_PORT        – listen port (default 4001)
@@ -12,10 +12,19 @@ Env vars read at startup:
                         "openai-metadata" : merge into JSON body metadata dict
                         "http-header"     : add X-Experiment-* request headers
                         "none"            : pure passthrough, no injection
-  EXPERIMENT_ID       – injected via Argo template variable
-  EXPERIMENT_RUN_ID   – injected via Argo template variable
-  WORKFLOW_NAME       – injected via Argo template variable
   AGENT_ID            – injected via Helm --set agentId=<uuid> at deploy time
+
+  ALLOWED_METADATA_KEYS – comma-separated allowlist of env-var names to inject.
+                          Default: "AGENT_ID" (routing/billing only).
+                          To restore legacy behaviour (NOT recommended):
+                          "AGENT_ID,EXPERIMENT_ID,EXPERIMENT_RUN_ID,WORKFLOW_NAME"
+
+Security note:
+  Experiment context (EXPERIMENT_ID, EXPERIMENT_RUN_ID, WORKFLOW_NAME) is
+  intentionally excluded by default to enforce the "blind observer" principle.
+  The flash-agent must detect anomalies from system signals, not from
+  prior knowledge of what faults are being injected.
+  See: docs/Flash-agent-data-leakage-analysis.md
 """
 
 import json
@@ -29,12 +38,23 @@ SIDECAR_PORT = int(os.environ.get("SIDECAR_PORT", "4001"))
 UPSTREAM_URL = os.environ.get("UPSTREAM_URL", "http://localhost:4000").rstrip("/")
 INJECTION_MODE = os.environ.get("INJECTION_MODE", "openai-metadata").lower()
 
-# Experiment context – read once at startup, immutable for pod lifetime
+# Metadata allowlist – controls which env vars are injected into LLM requests.
+# Default: only AGENT_ID (routing/billing). Experiment context is excluded to
+# prevent the flash-agent from receiving prior knowledge of fault injection.
+_ALLOWED_KEYS_RAW = os.environ.get("ALLOWED_METADATA_KEYS", "AGENT_ID")
+ALLOWED_METADATA_KEYS = frozenset(
+    k.strip().upper() for k in _ALLOWED_KEYS_RAW.split(",") if k.strip()
+)
+
+# Metadata context – read once at startup, immutable for pod lifetime.
+# Only keys present in ALLOWED_METADATA_KEYS are included.
+_ALL_KNOWN_KEYS = ("AGENT_ID", "EXPERIMENT_ID", "EXPERIMENT_RUN_ID", "WORKFLOW_NAME")
 EXPERIMENT_CONTEXT = {}
-for _key in ("EXPERIMENT_ID", "EXPERIMENT_RUN_ID", "WORKFLOW_NAME", "AGENT_ID"):
-    _val = os.environ.get(_key, "")
-    if _val:
-        EXPERIMENT_CONTEXT[_key.lower()] = _val
+for _key in _ALL_KNOWN_KEYS:
+    if _key in ALLOWED_METADATA_KEYS:
+        _val = os.environ.get(_key, "")
+        if _val:
+            EXPERIMENT_CONTEXT[_key.lower()] = _val
 
 # Headers to strip (hop-by-hop)
 _HOP_HEADERS = frozenset(("host", "transfer-encoding"))
@@ -139,10 +159,14 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 def main():
     print(f"[agent-sidecar] Starting on :{SIDECAR_PORT} → {UPSTREAM_URL}  mode={INJECTION_MODE}", flush=True)
+    print(f"[agent-sidecar] Allowed metadata keys: {sorted(ALLOWED_METADATA_KEYS)}", flush=True)
     if EXPERIMENT_CONTEXT:
         print(f"[agent-sidecar] Injecting: {list(EXPERIMENT_CONTEXT.keys())}", flush=True)
     else:
-        print("[agent-sidecar] No experiment context — transparent passthrough", flush=True)
+        print("[agent-sidecar] No metadata to inject — transparent passthrough", flush=True)
+    _filtered = [k for k in _ALL_KNOWN_KEYS if k not in ALLOWED_METADATA_KEYS and os.environ.get(k)]
+    if _filtered:
+        print(f"[agent-sidecar] Filtered out (present but not allowed): {_filtered}", flush=True)
 
     server = HTTPServer(("0.0.0.0", SIDECAR_PORT), ProxyHandler)
     try:

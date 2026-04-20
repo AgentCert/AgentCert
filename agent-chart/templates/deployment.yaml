@@ -71,6 +71,10 @@ spec:
                   key: MODEL_ALIAS
             {{- end }}
 
+            # Blind-observer mode: exclude chaos tools from MCP & LLM prompt
+            - name: MCP_INCLUDE_CHAOS_TOOLS
+              value: {{ .Values.agent.config.MCP_INCLUDE_CHAOS_TOOLS | default "true" | quote }}
+
 {{- range $env := .Values.agent.deploymentEnv }}
             - name: {{ $env.name }}
               valueFrom:
@@ -105,24 +109,13 @@ spec:
               value: {{ .Values.sidecar.upstream | quote }}
             - name: INJECTION_MODE
               value: {{ .Values.sidecar.injectionMode | default "openai-metadata" | quote }}
-            - name: EXPERIMENT_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: EXPERIMENT_ID
-            - name: EXPERIMENT_RUN_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: EXPERIMENT_RUN_ID
-            - name: WORKFLOW_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: WORKFLOW_NAME
             {{- if .Values.agentId }}
             - name: AGENT_ID
               value: {{ .Values.agentId | quote }}
+            {{- end }}
+            {{- if .Values.sidecar.allowedMetadataKeys }}
+            - name: ALLOWED_METADATA_KEYS
+              value: {{ .Values.sidecar.allowedMetadataKeys | quote }}
             {{- end }}
           resources:
             {{- toYaml .Values.sidecar.resources | nindent 12 }}
