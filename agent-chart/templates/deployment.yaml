@@ -71,6 +71,10 @@ spec:
                   key: MODEL_ALIAS
             {{- end }}
 
+            # Blind-observer mode: exclude chaos tools from MCP & LLM prompt
+            - name: MCP_INCLUDE_CHAOS_TOOLS
+              value: {{ .Values.agent.config.MCP_INCLUDE_CHAOS_TOOLS | default "true" | quote }}
+
 {{- range $env := .Values.agent.deploymentEnv }}
             - name: {{ $env.name }}
               valueFrom:

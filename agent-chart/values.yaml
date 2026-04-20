@@ -25,9 +25,9 @@ agent:
 
   containerImage:
     registry: docker.io
-    repository: nginx
+    repository: agentcert/flash-agent
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
 
   config:
     # --- LiteLLM Proxy ---
@@ -35,6 +35,12 @@ agent:
     MODEL_ALIAS: ""
     OPENAI_BASE_URL: ""
     OPENAI_API_KEY: ""
+
+    # --- Blind-observer mode ---
+    # When "false", flash-agent excludes chaos tools (chaosengines,
+    # chaosresults, argo_workflows) from MCP calls and strips chaos
+    # sections from the LLM prompt.  Default "true" preserves full mode.
+    MCP_INCLUDE_CHAOS_TOOLS: "false"
 
     # --- Experiment context (injected by install-agent via Argo template variables) ---
     # Empty defaults: agent works with or without experiment context.
