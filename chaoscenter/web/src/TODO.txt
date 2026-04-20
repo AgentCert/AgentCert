@@ -1,0 +1,2 @@
+agent_id, agentID fallsback to environment id if expreiment manifest has no agent id details. Need to rework on this after sanjeev changes are pushed
+data contracts needs to be provided by Ravi. After this latest changes, UI integration needs to be updated

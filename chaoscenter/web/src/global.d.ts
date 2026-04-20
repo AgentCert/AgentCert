@@ -9,6 +9,7 @@ declare interface Window {
 }
 
 declare const __DEV__: boolean;
+declare const __AGENTCERT_API_BASE_URL__: string;
 
 declare module 'strings/strings.en.yaml' {
   import { StringsMap } from './strings/types';

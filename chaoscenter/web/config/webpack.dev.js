@@ -12,7 +12,8 @@ const baseUrl = process.env.BASE_URL;
 const targetLocalHost = (process.env.TARGET_LOCALHOST && JSON.parse(process.env.TARGET_LOCALHOST)) ?? true; // set to false to target baseUrl environment instead of localhost
 const frontendPort = Number.parseInt(process.env.FRONTEND_PORT || '', 10) || 2001;
 const graphQLProxyPort = Number.parseInt(process.env.GQL_PROXY_PORT || '', 10) || 8080;
-const authProxyPort = Number.parseInt(process.env.AUTH_PROXY_PORT || '', 10) || 3030;
+const authProxyPort = Number.parseInt(process.env.AUTH_PROXY_PORT || '', 10) || 3000;
+const agentCertApiBaseUrl = process.env.AGENTCERT_API_BASE_URL || 'http://localhost:8000';
 
 const certificateExists = fs.existsSync(path.join(CONTEXT, 'certificates/localhost.pem'));
 
@@ -62,7 +63,8 @@ const devConfig = {
         secure: false,
         changeOrigin: true,
         logLevel: 'info'
-      }
+      },
+
     }
   },
   plugins: [
@@ -73,7 +75,8 @@ const devConfig = {
     }),
     new DefinePlugin({
       'process.env': '{}', // required for @blueprintjs/core
-      __DEV__: true
+      __DEV__: true,
+      __AGENTCERT_API_BASE_URL__: JSON.stringify(agentCertApiBaseUrl)
     })
   ]
 };

@@ -342,8 +342,17 @@ export interface StringsMap {
   'experiment': unknown
   'experimentActivity': unknown
   'experimentBuilder': unknown
+  'experimentCompleted': PrimitiveObject<'name'>
+  'experimentCompletedBucketing': PrimitiveObject<'name' | 'taskId'>
+  'experimentCompletedBucketingFailed': PrimitiveObject<'name'>
+  'experimentCompletedWithError': PrimitiveObject<'name' | 'taskId'>
+  'experimentCompletedWithErrorBucketingFailed': PrimitiveObject<'name'>
+  'experimentCompletedWithProbeFailure': PrimitiveObject<'name' | 'taskId'>
+  'experimentCompletedWithProbeFailureBucketingFailed': PrimitiveObject<'name'>
   'experimentDeleted': unknown
   'experimentDeletedSuccessfully': unknown
+  'experimentError': PrimitiveObject<'name' | 'taskId'>
+  'experimentErrorBucketingFailed': PrimitiveObject<'name'>
   'experimentID': unknown
   'experimentInFault': unknown
   'experimentIsRunning': unknown
@@ -354,6 +363,10 @@ export interface StringsMap {
   'experimentRunID': unknown
   'experimentRuns': unknown
   'experimentStopSuccessMessage': unknown
+  'experimentStopped': PrimitiveObject<'name' | 'taskId'>
+  'experimentStoppedBucketingFailed': PrimitiveObject<'name'>
+  'experimentTimeout': PrimitiveObject<'name' | 'taskId'>
+  'experimentTimeoutBucketingFailed': PrimitiveObject<'name'>
   'experimentType': unknown
   'experiments': unknown
   'expiresAt': unknown

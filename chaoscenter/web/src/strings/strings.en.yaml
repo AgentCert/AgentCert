@@ -432,6 +432,19 @@ experimentPreview: Experiment Preview
 experimentRunDetails: Experiment Run Details
 experimentRunID: Experiment Run ID
 experimentRuns: Experiment Runs
+experimentCompleted: 'Experiment "{{name}}" completed successfully!'
+experimentCompletedBucketing: 'Experiment "{{name}}" completed. Bucketing-extraction started (Reference ID: {{taskId}})'
+experimentCompletedBucketingFailed: 'Experiment "{{name}}" completed but bucketing-extraction failed to start'
+experimentCompletedWithProbeFailure: 'Experiment "{{name}}" completed with probe failure(s). Bucketing-extraction started (Reference ID: {{taskId}})'
+experimentCompletedWithProbeFailureBucketingFailed: 'Experiment "{{name}}" completed with probe failure(s) but bucketing-extraction failed to start'
+experimentCompletedWithError: 'Experiment "{{name}}" completed with error(s). Bucketing-extraction started (Reference ID: {{taskId}})'
+experimentCompletedWithErrorBucketingFailed: 'Experiment "{{name}}" completed with error(s) but bucketing-extraction failed to start'
+experimentError: 'Experiment "{{name}}" encountered an error. Bucketing-extraction started (Reference ID: {{taskId}})'
+experimentErrorBucketingFailed: 'Experiment "{{name}}" encountered an error but bucketing-extraction failed to start'
+experimentStopped: 'Experiment "{{name}}" was stopped. Bucketing-extraction started (Reference ID: {{taskId}})'
+experimentStoppedBucketingFailed: 'Experiment "{{name}}" was stopped but bucketing-extraction failed to start'
+experimentTimeout: 'Experiment "{{name}}" timed out. Bucketing-extraction started (Reference ID: {{taskId}})'
+experimentTimeoutBucketingFailed: 'Experiment "{{name}}" timed out but bucketing-extraction failed to start'
 experimentStopSuccessMessage: Experiment successfully stopped
 experimentType: Experiment Type
 experiments: Experiments
