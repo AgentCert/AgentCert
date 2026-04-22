@@ -11,6 +11,8 @@ spec:
     metadata:
       labels:
         app: {{ .Values.agent.name }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       serviceAccountName: {{ .Values.agent.name }}-sa
       containers:
