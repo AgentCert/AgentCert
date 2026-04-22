@@ -1096,6 +1096,8 @@ type FaultDetails struct {
 	Engine string `json:"engine"`
 	// csv consists chartserviceversion.yaml
 	CSV string `json:"csv"`
+	// groundTruth consists ground_truth.yaml
+	GroundTruth string `json:"groundTruth"`
 }
 
 // FaultInjectionConfig contains configuration for how and when a fault should be injected.

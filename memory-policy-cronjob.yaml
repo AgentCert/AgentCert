@@ -1,0 +1,115 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: memory-policy-syncer
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: memory-policy-syncer
+rules:
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["list", "get"]
+- apiGroups: [""]
+  resources: ["limitranges"]
+  verbs: ["create", "update", "patch", "get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: memory-policy-syncer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: memory-policy-syncer
+subjects:
+- kind: ServiceAccount
+  name: memory-policy-syncer
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: memory-policy-script
+  namespace: kube-system
+data:
+  apply_memory_policy.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    POLICY_NAME="container-memory-policy"
+    MAX_MEMORY="10Gi"
+    MIN_MEMORY="128Mi"
+    DEFAULT_MEMORY="1Gi"
+    DEFAULT_REQUEST="256Mi"
+    MAX_RATIO="40"
+    
+    get_all_namespaces() {
+      kubectl get ns -o jsonpath='{.items[*].metadata.name}'
+    }
+    
+    apply_policy_to_namespace() {
+      local ns="$1"
+      kubectl apply -f - <<EOF
+    apiVersion: v1
+    kind: LimitRange
+    metadata:
+      name: ${POLICY_NAME}
+      namespace: ${ns}
+    spec:
+      limits:
+      - type: Container
+        max:
+          memory: ${MAX_MEMORY}
+        min:
+          memory: ${MIN_MEMORY}
+        default:
+          memory: ${DEFAULT_MEMORY}
+        defaultRequest:
+          memory: ${DEFAULT_REQUEST}
+        maxLimitRequestRatio:
+          memory: "${MAX_RATIO}"
+    EOF
+    }
+    
+    main() {
+      local ns_list
+      ns_list=$(get_all_namespaces)
+      for ns in $ns_list; do
+        apply_policy_to_namespace "$ns" 2>/dev/null && echo "✓ Applied to $ns" || echo "✗ Failed for $ns"
+      done
+    }
+    
+    main
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: memory-policy-syncer
+  namespace: kube-system
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: memory-policy-syncer
+          restartPolicy: OnFailure
+          containers:
+          - name: syncer
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              bash /scripts/apply_memory_policy.sh
+            volumeMounts:
+            - name: script
+              mountPath: /scripts
+          volumes:
+          - name: script
+            configMap:
+              name: memory-policy-script
+              defaultMode: 0755

@@ -232,6 +232,7 @@ func GitPlainOpen(repoPath string) error {
 // Unlike GitClone, this does not use GetClonePath — callers control the destination.
 func ClonePublicRepoToPath(repoURL, branch, clonePath string) error {
 	os.RemoveAll(clonePath)
+	branch = strings.TrimSpace(branch)
 	_, err := git.PlainClone(clonePath, false, &git.CloneOptions{
 		URL:           repoURL,
 		Progress:      nil,
@@ -246,6 +247,13 @@ func ClonePublicRepoToPath(repoURL, branch, clonePath string) error {
 			ReferenceName: plumbing.NewTagReferenceName(branch),
 			SingleBranch:  true,
 		})
+		if err != nil {
+			// Final fallback: clone default remote HEAD when explicit ref lookup fails.
+			_, err = git.PlainClone(clonePath, false, &git.CloneOptions{
+				URL:      repoURL,
+				Progress: nil,
+			})
+		}
 	}
 	return err
 }
@@ -260,10 +268,12 @@ func PullRepoAtPath(clonePath, branch string) error {
 	if err != nil {
 		return fmt.Errorf("error getting worktree: %w", err)
 	}
-	err = workTree.Pull(&git.PullOptions{
-		RemoteName:    "origin",
-		ReferenceName: plumbing.NewBranchReferenceName(branch),
-	})
+	branch = strings.TrimSpace(branch)
+	pullOptions := &git.PullOptions{RemoteName: "origin"}
+	if branch != "" {
+		pullOptions.ReferenceName = plumbing.NewBranchReferenceName(branch)
+	}
+	err = workTree.Pull(pullOptions)
 	if err == git.NoErrAlreadyUpToDate {
 		log.Info("repo already up-to-date at ", clonePath)
 		return nil

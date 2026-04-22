@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
@@ -56,6 +57,10 @@ func getAppHubBranch() string {
 	return branch
 }
 
+func isCustomAppHubMode() bool {
+	return strings.EqualFold(strings.TrimSpace(utils.Config.AppHubSourceMode), "custom")
+}
+
 // getDefaultBasePath returns the OS-appropriate base path for default hub clones.
 func getDefaultBasePath() string {
 	if runtime.GOOS == "windows" {
@@ -67,19 +72,33 @@ func getDefaultBasePath() string {
 // getAppChartsPath returns the filesystem path where app charts are cloned.
 // Aligns with GetClonePath in chaoshub/ops which clones default hubs to {basePath}/{HubName}.
 func getAppChartsPath() string {
-	path := utils.Config.DefaultAppHubPath
+	path := strings.TrimSpace(utils.Config.DefaultAppHubPath)
 	if path == "" {
 		path = getDefaultBasePath()
 	}
+
+	if isCustomAppHubMode() {
+		candidate := filepath.Join(path, "charts")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate
+		}
+		return path
+	}
+
 	return filepath.Join(path, DefaultAppHubName, "charts")
 }
 
 // getAppClonePath returns the filesystem path for the app hub clone.
 func getAppClonePath() string {
-	path := utils.Config.DefaultAppHubPath
+	path := strings.TrimSpace(utils.Config.DefaultAppHubPath)
 	if path == "" {
 		path = getDefaultBasePath()
 	}
+
+	if isCustomAppHubMode() {
+		return path
+	}
+
 	return filepath.Join(path, DefaultAppHubName)
 }
 
@@ -197,6 +216,11 @@ func (s *appHubService) GetAppHubStatus(ctx context.Context, projectID string) (
 // SyncDefaultAppHub is a background goroutine that periodically clones/pulls
 // the app-charts repo, analogous to SyncDefaultChaosHubs.
 func (s *appHubService) SyncDefaultAppHub() {
+	if isCustomAppHubMode() {
+		log.WithField("path", getAppClonePath()).Info("app hub source mode is custom; skipping default git sync")
+		return
+	}
+
 	log.Info("starting default app hub sync goroutine")
 	for {
 		repoURL := getAppHubGitURL()

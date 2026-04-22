@@ -119,6 +119,14 @@ class LLMQuantitativeExtraction(BaseModelWrapper):
         default_factory=list,
         description="List of tool calls with name, arguments, success status",
     )
+    ground_truth_evaluation: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Inline GT evaluation block produced by the LLM when GROUND_TRUTH_JSON "
+            "was appended to the prompt by the sidecar. Extracted directly from "
+            "the ground_truth_evaluation key in the llm_analysis JSON output."
+        ),
+    )
 
 
 class LLMQualitativeExtraction(BaseModelWrapper):

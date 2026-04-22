@@ -129,6 +129,15 @@ func main() {
 		// Don't fail startup if OTEL is not configured
 	}
 
+	// Emit an explicit startup mode so trace path is unambiguous in runtime logs.
+	if observability.OTELTracerEnabled() {
+		log.Println("[Observability] Mode: OTEL enabled (trace events via OTEL exporter; Langfuse REST remains active for direct Langfuse flows)")
+	} else if observability.GetLangfuseTracer().IsEnabled() {
+		log.Println("[Observability] Mode: Langfuse-only (OTEL disabled; traces/observations/scores via Langfuse REST)")
+	} else {
+		log.Println("[Observability] Mode: tracing disabled (no OTEL endpoint and no Langfuse credentials)")
+	}
+
 	enableHTTPSConnection, err := strconv.ParseBool(utils.Config.EnableInternalTls)
 	if err != nil {
 		log.Errorf("unable to parse boolean value %v", err)
@@ -225,6 +234,9 @@ func main() {
 		log.Infof("Received signal %v, shutting down tracers...", sig)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		if err := observability.GetLangfuseTracer().Close(shutdownCtx); err != nil {
+			log.Errorf("Langfuse tracer shutdown error: %v", err)
+		}
 		if err := observability.ShutdownOTELTracer(shutdownCtx); err != nil {
 			log.Errorf("OTEL tracer shutdown error: %v", err)
 		}

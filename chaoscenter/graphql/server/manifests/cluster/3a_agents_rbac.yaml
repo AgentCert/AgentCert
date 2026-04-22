@@ -74,6 +74,12 @@ rules:
     resources: [ "secrets" ]
     verbs: [ "get", "list", "watch", "create", "update", "patch", "delete" ]
 
+  # Helm charts can reference ConfigMaps from other namespaces (for example monitoring)
+  # during render/install, so read access must be cluster-wide.
+  - apiGroups: [ "" ]
+    resources: [ "configmaps" ]
+    verbs: [ "get", "list", "watch" ]
+
   - apiGroups: [ "litmuschaos.io" ]
     resources: [ "chaosengines", "chaosschedules", "chaosresults", "chaosschedules" ]
     verbs: [ "get", "list", "create", "delete", "update", "watch", "patch" ]

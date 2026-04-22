@@ -45,9 +45,11 @@ agent:
     # --- Experiment context (injected by install-agent via Argo template variables) ---
     # Empty defaults: agent works with or without experiment context.
     # When running inside an Argo Workflow, install-agent passes:
+    #   --set agent.config.NOTIFY_ID={{workflow.labels.notify_id}}
     #   --set agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}
     #   --set agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}
     #   --set agent.config.WORKFLOW_NAME={{workflow.labels.subject}}
+    NOTIFY_ID: ""
     EXPERIMENT_ID: ""
     EXPERIMENT_RUN_ID: ""
     WORKFLOW_NAME: ""
@@ -60,6 +62,8 @@ agent:
       key: OPENAI_BASE_URL
     - name: OPENAI_API_KEY
       key: OPENAI_API_KEY
+    - name: NOTIFY_ID
+      key: NOTIFY_ID
     - name: EXPERIMENT_ID
       key: EXPERIMENT_ID
     - name: EXPERIMENT_RUN_ID
@@ -81,11 +85,14 @@ agent:
 sidecar:
   enabled: true
   name: agent-sidecar
+  # Optional logical role label for Langfuse metadata (e.g., flash-agent, app-agent).
+  # Leave empty if not needed; can be overridden by user values.
+  agentRole: ""
   image:
     registry: docker.io
     repository: agentcert/agent-sidecar
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   port: 4001
   # The real LiteLLM proxy URL — sidecar forwards enriched requests here
   upstream: ""
@@ -110,8 +117,21 @@ resources:
     memory: "512Mi"
 
 rbac:
-  create: true
-  rules:
-    - apiGroups: [""]
-      resources: ["pods"]
-      verbs: ["get", "list", "watch", "delete"]
+  cluster:
+    create: true
+    rules:
+      # Read access to pods and logs
+      - apiGroups: [""]
+        resources: ["pods", "pods/log", "pods/status", "events"]
+        verbs: ["get", "list", "watch"]
+      # Read access to higher-level resources
+      - apiGroups: ["apps"]
+        resources: ["deployments", "replicasets", "statefulsets"]
+        verbs: ["get", "list", "watch"]
+
+cronjob:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  restartPolicy: OnFailure

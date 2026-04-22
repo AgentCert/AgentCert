@@ -171,11 +171,18 @@ type CapabilityDefinition struct {
 
 // RegisterAgent registers a new agent with the platform.
 func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentRequest) (*Agent, error) {
+	// Idempotency: check BEFORE validation so that re-runs on the same namespace+name
+	// return the existing record without hitting the duplicate-name validation error.
+	if existing, err := s.operator.GetAgentByNamespace(ctx, input.Namespace); err == nil && existing != nil && existing.Name == input.Name {
+		fmt.Printf("Agent %s already registered in namespace %s with ID %s, returning existing\n", input.Name, input.Namespace, existing.AgentID)
+		return existing, nil
+	}
+
 	// Validate input
 	if err := s.validator.ValidateRegistration(ctx, input); err != nil {
 		return nil, err
 	}
-	
+
 	// Generate UUID for agentId
 	agentID := uuid.New().String()
 	

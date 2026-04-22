@@ -10,27 +10,22 @@
 #   LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
 
 model_list:
-  - model_name: gpt-4.1-mini
+  # model_name = AZURE_OPENAI_DEPLOYMENT from .env (e.g. gpt-4, claude-3-5-sonnet, etc.)
+  # build-litellm.sh substitutes LITELLM_MODEL_NAME at apply time.
+  # Agents send model=<deployment-name>; no alias layer — traces show the real model.
+  - model_name: LITELLM_MODEL_NAME
     litellm_params:
-      model: azure/gpt-4.1-mini
+      model: os.environ/AZURE_MODEL
       api_base: os.environ/AZURE_API_BASE
       api_key: os.environ/AZURE_API_KEY
-      api_version: "2025-01-01-preview"
+      api_version: os.environ/AZURE_API_VERSION
     model_info:
-      base_model: azure/gpt-4.1-mini
-
-  # Alias so agents can use "gpt-4o-mini" as MODEL_ALIAS
-  - model_name: gpt-4o-mini
-    litellm_params:
-      model: azure/gpt-4.1-mini
-      api_base: os.environ/AZURE_API_BASE
-      api_key: os.environ/AZURE_API_KEY
-      api_version: "2025-01-01-preview"
-    model_info:
-      base_model: azure/gpt-4.1-mini
+      base_model: os.environ/AZURE_MODEL
 
 litellm_settings:
-  drop_params: true
+  # Keep custom metadata fields (trace_id, generation_name, etc.) so
+  # Langfuse callback can group all calls under one canonical trace.
+  drop_params: false
   set_verbose: false
   # Langfuse callback — all LLM calls are traced automatically.
   # Flash Agent sends extra_body.metadata on each call for rich trace context.

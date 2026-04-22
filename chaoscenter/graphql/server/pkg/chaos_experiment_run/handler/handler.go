@@ -25,6 +25,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
+	ops "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/ops"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -43,6 +44,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	corev1 "k8s.io/api/core/v1"
 	k8srbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -432,6 +434,116 @@ func ensureInstallTimeoutParam(params *v1alpha1.Arguments) {
 		Value: v1alpha1.AnyStringPtr(defaultValue),
 	})
 	logrus.WithField("default", defaultValue).Info("added missing installTimeout workflow parameter")
+}
+
+func applyPreCleanupWaitPatchToWorkflowSpec(spec *v1alpha1.WorkflowSpec) {
+	if spec == nil || len(spec.Templates) == 0 {
+		return
+	}
+
+	waitRaw := strings.TrimSpace(utils.Config.PreCleanupWaitSeconds)
+	if waitRaw == "" {
+		waitRaw = strings.TrimSpace(os.Getenv("PRE_CLEANUP_WAIT_SECONDS"))
+	}
+	if waitRaw == "" {
+		waitRaw = "0"
+	}
+
+	waitSec, err := strconv.Atoi(waitRaw)
+	if err != nil || waitSec < 0 {
+		waitSec = 0
+	}
+
+	entrypoint := spec.Entrypoint
+	if entrypoint == "" {
+		return
+	}
+
+	var rootTemplate *v1alpha1.Template
+	for i := range spec.Templates {
+		if spec.Templates[i].Name == entrypoint {
+			rootTemplate = &spec.Templates[i]
+			break
+		}
+	}
+	if rootTemplate == nil || len(rootTemplate.Steps) == 0 {
+		return
+	}
+
+	waitTemplateName := "dynamic-pre-cleanup-wait"
+	for _, t := range spec.Templates {
+		if t.Name == waitTemplateName {
+			return
+		}
+	}
+
+	insertIdx := -1
+	for i, group := range rootTemplate.Steps {
+		for _, step := range group.Steps {
+			name := strings.ToLower(strings.TrimSpace(step.Name))
+			if name == "cleanup-chaos-resources" || strings.Contains(name, "cleanup-chaos-resources") {
+				insertIdx = i
+				break
+			}
+		}
+		if insertIdx >= 0 {
+			break
+		}
+	}
+
+	if insertIdx < 0 {
+		for i, group := range rootTemplate.Steps {
+			for _, step := range group.Steps {
+				name := strings.ToLower(strings.TrimSpace(step.Name))
+				if strings.HasPrefix(name, "cleanup-") || (strings.Contains(name, "cleanup") && strings.Contains(name, "resource")) {
+					insertIdx = i
+					break
+				}
+			}
+			if insertIdx >= 0 {
+				break
+			}
+		}
+	}
+
+	if insertIdx < 0 {
+		insertIdx = len(rootTemplate.Steps) - 1
+		if insertIdx < 0 {
+			return
+		}
+	}
+
+	waitTpl := v1alpha1.Template{
+		Name: waitTemplateName,
+		Container: &corev1.Container{
+			Image:   "busybox:1.36",
+			Command: []string{"sh", "-c"},
+			Args:    []string{fmt.Sprintf("echo '[pre-cleanup-wait] sleeping for %d seconds'; sleep %d; echo '[pre-cleanup-wait] done'", waitSec, waitSec)},
+		},
+	}
+	spec.Templates = append(spec.Templates, waitTpl)
+
+	waitStepGroup := v1alpha1.ParallelSteps{
+		Steps: []v1alpha1.WorkflowStep{{
+			Name:     waitTemplateName,
+			Template: waitTemplateName,
+		}},
+	}
+
+	newSteps := make([]v1alpha1.ParallelSteps, 0, len(rootTemplate.Steps)+1)
+	for i, group := range rootTemplate.Steps {
+		if i == insertIdx {
+			newSteps = append(newSteps, waitStepGroup)
+		}
+		newSteps = append(newSteps, group)
+	}
+	rootTemplate.Steps = newSteps
+
+	logrus.WithFields(logrus.Fields{
+		"entrypoint":          entrypoint,
+		"wait_seconds":        waitSec,
+		"insert_before_index": insertIdx,
+	}).Info("[Pre-Cleanup Wait Patch] Injected dynamic pre-cleanup wait step in run handler")
 }
 
 func normalizeLabelSelector(raw string) []string {
@@ -1499,10 +1611,14 @@ func (c *ChaosExperimentRunHandler) ListExperimentRun(projectID string, request 
 // traceExperimentExecution logs fault execution to observability backend.
 // When OTEL is enabled, creates an OTEL root span for the experiment run.
 // Falls back to Langfuse REST when OTEL is not configured.
-func traceExperimentExecution(ctx context.Context, notifyID string, experimentID string, experimentName string, infra dbChaosInfra.ChaosInfra, projectID string) error {
+func traceExperimentExecution(ctx context.Context, notifyID string, experimentID string, experimentName string, experimentType string, infra dbChaosInfra.ChaosInfra, projectID string, traceAgentID string, traceAgentName string, traceAgentPlatform string) error {
 	namespace := ""
 	if infra.InfraNamespace != nil {
 		namespace = *infra.InfraNamespace
+	}
+	serviceAccount := ""
+	if infra.ServiceAccount != nil {
+		serviceAccount = *infra.ServiceAccount
 	}
 
 	// OTEL path: emit instant start span + create long-running end span
@@ -1510,13 +1626,21 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 		startAttrs := []attribute.KeyValue{
 			attribute.String("experiment.id", experimentID),
 			attribute.String("experiment.name", experimentName),
+			attribute.String("experiment.type", experimentType),
 			attribute.String("experiment.fault_name", "chaos-workflow"),
 			attribute.String("experiment.session_id", notifyID),
+			attribute.String("experiment.run_key", notifyID),
 			attribute.String("infra.id", infra.InfraID),
+			attribute.String("infra.name", infra.Name),
+			attribute.String("infra.platform_name", infra.PlatformName),
 			attribute.String("project.id", projectID),
 			attribute.String("infra.namespace", namespace),
+			attribute.String("infra.service_account", serviceAccount),
 			attribute.String("experiment.phase", "injection"),
 			attribute.String("experiment.priority", "high"),
+			attribute.String("agent.id", traceAgentID),
+			attribute.String("agent.name", traceAgentName),
+			attribute.String("agent.platform_name", traceAgentPlatform),
 		}
 
 		// Long-running root span — ended later by scoreExperimentRun, appears LAST
@@ -1526,6 +1650,40 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 		// Instant child span — shares the same traceID as the root span
 		observability.EmitExperimentStartSpan(spanCtx, startAttrs...)
 		logrus.Infof("[OTEL] Emitted experiment-triggered span: traceID=%s experiment=%s", notifyID, experimentName)
+
+		// Upsert Langfuse trace metadata (name, userId, sessionId, agentid) via REST
+		// alongside OTEL spans. OTEL alone cannot set trace-level metadata in Langfuse.
+		// Two upserts are needed:
+		//   1. UUID form (notifyID with hyphens) — covers the LLM generation trace from LiteLLM
+		//   2. Hex form (notifyID without hyphens) — covers the OTEL spans trace (Langfuse stores OTEL
+		//      traces using the raw 32-char hex trace ID, which differs from the UUID string)
+		if lft := observability.GetLangfuseTracer(); lft.IsEnabled() {
+			details := &observability.ExperimentExecutionDetails{
+				TraceID:             notifyID,
+				ExperimentID:        experimentID,
+				ExperimentName:      experimentName,
+				ExperimentType:      experimentType,
+				FaultName:           "chaos-workflow",
+				SessionID:           notifyID,
+				AgentID:             traceAgentID,
+				AgentName:           traceAgentName,
+				AgentPlatform:       traceAgentPlatform,
+				AgentServiceAccount: serviceAccount,
+				ProjectID:           projectID,
+				Namespace:           namespace,
+				Phase:               "injection",
+				Priority:            "high",
+			}
+			// Upsert 1: UUID trace (LLM generations)
+			_ = lft.TraceExperimentExecution(ctx, details)
+			// Upsert 2: hex trace (OTEL spans) — same content, hex trace ID
+			hexTraceID := strings.ReplaceAll(notifyID, "-", "")
+			if len(hexTraceID) == 32 {
+				hexDetails := *details
+				hexDetails.TraceID = hexTraceID
+				_ = lft.TraceExperimentExecution(ctx, &hexDetails)
+			}
+		}
 		return nil
 	}
 
@@ -1535,9 +1693,13 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 		TraceID:        notifyID,
 		ExperimentID:   experimentID,
 		ExperimentName: experimentName,
+		ExperimentType: experimentType,
 		FaultName:      "chaos-workflow",
 		SessionID:      notifyID,
-		AgentID:        infra.InfraID,
+		AgentID:        traceAgentID,
+		AgentName:      traceAgentName,
+		AgentPlatform:  traceAgentPlatform,
+		AgentServiceAccount: serviceAccount,
 		ProjectID:      projectID,
 		Namespace:      namespace,
 		Phase:          "injection",
@@ -1563,10 +1725,115 @@ func completeExperimentExecution(ctx context.Context, notifyID string, experimen
 	})
 }
 
+func isTerminalWorkflowNodePhase(phase string) bool {
+	phase = strings.ToLower(strings.TrimSpace(phase))
+	switch phase {
+	case "succeeded", "failed", "error", "completed", "skipped", "omitted":
+		return true
+	default:
+		return false
+	}
+}
+
+func syncWorkflowNodeSpans(ctx context.Context, traceID string, event model.ExperimentRunRequest, executionData types.ExecutionData, agentOp agent_registry.Operator) {
+	if traceID == "" {
+		return
+	}
+
+	for nodeID, node := range executionData.Nodes {
+		if node.Name == "" {
+			continue
+		}
+		// Skip Argo internal StepGroup nodes ([0], [1], etc.) — they are
+		// workflow step-group wrappers, not real executable steps.
+		if node.Type == "StepGroup" {
+			continue
+		}
+
+		stepAttrs := []attribute.KeyValue{
+			attribute.String("experiment.id", event.ExperimentID),
+			attribute.String("experiment.run_id", event.ExperimentRunID),
+			attribute.String("experiment.name", event.ExperimentName),
+			attribute.String("experiment.type", executionData.ExperimentType),
+			attribute.String("workflow.notify_id", traceID),
+			attribute.String("workflow.node.id", nodeID),
+			attribute.String("workflow.node.name", node.Name),
+			attribute.String("workflow.node.phase", node.Phase),
+			attribute.String("workflow.node.type", node.Type),
+			attribute.String("workflow.node.message", node.Message),
+			attribute.String("workflow.phase", executionData.Phase),
+			attribute.String("workflow.event_type", executionData.EventType),
+		}
+
+		if executionData.Namespace != "" {
+			stepAttrs = append(stepAttrs, attribute.String("workflow.namespace", executionData.Namespace))
+		}
+		if executionData.Name != "" {
+			stepAttrs = append(stepAttrs, attribute.String("workflow.name", executionData.Name))
+		}
+		if node.StartedAt != "" {
+			stepAttrs = append(stepAttrs, attribute.String("workflow.node.started_at", node.StartedAt))
+		}
+		if node.FinishedAt != "" {
+			stepAttrs = append(stepAttrs, attribute.String("workflow.node.finished_at", node.FinishedAt))
+		}
+		if len(node.Children) > 0 {
+			stepAttrs = append(stepAttrs, attribute.Int("workflow.node.children", len(node.Children)))
+		}
+		if node.ChaosExp != nil {
+			if node.ChaosExp.ExperimentName != "" {
+				stepAttrs = append(stepAttrs, attribute.String("fault.name", node.ChaosExp.ExperimentName))
+			}
+			if node.ChaosExp.EngineName != "" {
+				stepAttrs = append(stepAttrs, attribute.String("fault.engine_name", node.ChaosExp.EngineName))
+			}
+			if node.ChaosExp.Namespace != "" {
+				stepAttrs = append(stepAttrs, attribute.String("fault.namespace", node.ChaosExp.Namespace))
+			}
+			if node.ChaosExp.ExperimentStatus != "" {
+				stepAttrs = append(stepAttrs, attribute.String("fault.status", node.ChaosExp.ExperimentStatus))
+			}
+			if node.ChaosExp.ExperimentVerdict != "" {
+				stepAttrs = append(stepAttrs, attribute.String("fault.verdict", node.ChaosExp.ExperimentVerdict))
+			}
+		}
+
+		terminal := node.FinishedAt != "" || isTerminalWorkflowNodePhase(node.Phase)
+		// Emit a child span for every workflow node (install-application,
+		// install-agent, chaos faults, cleanup steps, etc.) so the full
+		// experiment lifecycle is visible in Langfuse / OTEL.
+		if observability.OTELTracerEnabled() {
+			observability.UpsertWorkflowNodeSpan(traceID, nodeID, node.Name, terminal, stepAttrs...)
+		}
+
+		// When install-agent completes successfully, the agent has just registered
+		// itself in MongoDB with a fresh agent_id. Look it up and back-fill the
+		// agent.id / agent.name attributes on the root experiment-run span so the
+		// trace reflects the actual deployed agent identity.
+		if terminal &&
+			strings.ToLower(node.Phase) == "succeeded" &&
+			strings.Contains(strings.ToLower(node.Name), "install-agent") &&
+			agentOp != nil &&
+			executionData.Namespace != "" {
+			if freshAgent, lookupErr := agentOp.GetAgentByNamespace(ctx, executionData.Namespace); lookupErr == nil && freshAgent != nil {
+				updateAttrs := []attribute.KeyValue{
+					attribute.String("agent.id", freshAgent.AgentID),
+					attribute.String("agent.name", freshAgent.Name),
+				}
+				if freshAgent.Vendor != "" {
+					updateAttrs = append(updateAttrs, attribute.String("agent.platform_name", freshAgent.Vendor))
+				}
+				observability.SetExperimentSpanAttributes(traceID, updateAttrs...)
+				logrus.Infof("[OTEL] Updated agent.id on experiment span after install-agent: agentID=%s traceID=%s", freshAgent.AgentID, traceID)
+			}
+		}
+	}
+}
+
 // traceExperimentObservation logs continuous workflow events.
 // When OTEL is enabled, adds events to the active experiment span.
 // Falls back to Langfuse REST when OTEL is not configured.
-func traceExperimentObservation(ctx context.Context, traceID string, event model.ExperimentRunRequest, executionData types.ExecutionData, metrics *types.ExperimentRunMetrics) {
+func traceExperimentObservation(ctx context.Context, traceID string, event model.ExperimentRunRequest, executionData types.ExecutionData, metrics *types.ExperimentRunMetrics, agentOp agent_registry.Operator) {
 	if traceID == "" {
 		return
 	}
@@ -1607,10 +1874,16 @@ func traceExperimentObservation(ctx context.Context, traceID string, event model
 
 		observability.AddExperimentEvent(traceID, observationName, eventAttrs...)
 
+		// Upsert a child span for every workflow node on every event so spans
+		// open as soon as the node starts (not just at completion).
+		syncWorkflowNodeSpans(ctx, traceID, event, executionData, agentOp)
+
 		// Also update the span's top-level attributes with latest phase
 		observability.SetExperimentSpanAttributes(traceID,
 			attribute.String("experiment.phase", executionData.Phase),
 			attribute.String("experiment.event_type", executionData.EventType),
+			attribute.String("experiment.type", executionData.ExperimentType),
+			attribute.String("experiment.run_id", event.ExperimentRunID),
 		)
 
 		logrus.Infof("[OTEL] Added event '%s' to span: traceID=%s", observationName, traceID)
@@ -1673,6 +1946,11 @@ func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.Expe
 		return
 	}
 
+	langfuseTraceID := traceID
+	if observability.OTELTracerEnabled() {
+		langfuseTraceID = observability.LinkedLangfuseTraceID(traceID)
+	}
+
 	// OTEL path: set final metric attributes and end the experiment span
 	if observability.OTELTracerEnabled() {
 		observability.SetExperimentSpanAttributes(traceID,
@@ -1704,13 +1982,13 @@ func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.Expe
 
 	// Langfuse REST scores — submitted regardless of OTEL (scores need REST API)
 	tracer := observability.GetLangfuseTracer()
-	if !tracer.IsEnabled() {
+	if !tracer.IsEnabled() || langfuseTraceID == "" {
 		return
 	}
 
 	// Score 1: Resiliency Score
 	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
-		TraceID: traceID,
+		TraceID: langfuseTraceID,
 		Name:    "resiliency_score",
 		Value:   metrics.ResiliencyScore,
 		Comment: fmt.Sprintf("Overall resiliency score (0-100 scale) for experiment phase: %s", status),
@@ -1723,7 +2001,7 @@ func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.Expe
 		passedScore = 0
 	}
 	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
-		TraceID: traceID,
+		TraceID: langfuseTraceID,
 		Name:    "experiments_passed_percentage",
 		Value:   passedScore,
 		Comment: fmt.Sprintf("Percentage of experiments passed: %d/%d", metrics.ExperimentsPassed, metrics.TotalExperiments),
@@ -1736,7 +2014,7 @@ func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.Expe
 		failedScore = 0
 	}
 	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
-		TraceID: traceID,
+		TraceID: langfuseTraceID,
 		Name:    "experiments_failed_percentage",
 		Value:   failedScore,
 		Comment: fmt.Sprintf("Percentage of experiments failed: %d/%d", metrics.ExperimentsFailed, metrics.TotalExperiments),
@@ -1749,7 +2027,7 @@ func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.Expe
 		awaitedScore = 0
 	}
 	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
-		TraceID: traceID,
+		TraceID: langfuseTraceID,
 		Name:    "experiments_awaited_percentage",
 		Value:   awaitedScore,
 		Comment: fmt.Sprintf("Percentage of experiments awaited: %d/%d", metrics.ExperimentsAwaited, metrics.TotalExperiments),
@@ -1762,7 +2040,7 @@ func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.Expe
 		stoppedScore = 0
 	}
 	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
-		TraceID: traceID,
+		TraceID: langfuseTraceID,
 		Name:    "experiments_stopped_percentage",
 		Value:   stoppedScore,
 		Comment: fmt.Sprintf("Percentage of experiments stopped: %d/%d", metrics.ExperimentsStopped, metrics.TotalExperiments),
@@ -1775,7 +2053,7 @@ func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.Expe
 		naScore = 0
 	}
 	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
-		TraceID: traceID,
+		TraceID: langfuseTraceID,
 		Name:    "experiments_na_percentage",
 		Value:   naScore,
 		Comment: fmt.Sprintf("Percentage of experiments not applicable: %d/%d", metrics.ExperimentsNA, metrics.TotalExperiments),
@@ -1784,7 +2062,7 @@ func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.Expe
 
 	// Score 7: Total Experiments Count
 	_ = tracer.ScoreExperimentExecution(ctx, &observability.ExperimentScoreDetails{
-		TraceID: traceID,
+		TraceID: langfuseTraceID,
 		Name:    "total_experiments_count",
 		Value:   float64(metrics.TotalExperiments),
 		Comment: fmt.Sprintf("Total number of experiments executed"),
@@ -1833,8 +2111,28 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	currentTime := time.Now().UnixMilli()
 	notifyID = uuid.New().String()
 
+	traceAgentID := infra.InfraID
+	traceAgentName := infra.Name
+	traceAgentPlatform := infra.PlatformName
+	if c.agentRegistryOperator != nil && infra.InfraNamespace != nil {
+		agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, *infra.InfraNamespace)
+		if agentErr != nil {
+			logrus.WithError(agentErr).Warn("failed to lookup agent for observability trace identity")
+		} else if agent != nil {
+			if strings.TrimSpace(agent.AgentID) != "" {
+				traceAgentID = agent.AgentID
+			}
+			if strings.TrimSpace(agent.Name) != "" {
+				traceAgentName = agent.Name
+			}
+			if strings.TrimSpace(agent.Vendor) != "" {
+				traceAgentPlatform = agent.Vendor
+			}
+		}
+	}
+
 	// Trace experiment execution start to observability backend
-	traceExperimentExecution(ctx, notifyID, workflow.ExperimentID, workflow.Name, infra, projectID)
+	traceExperimentExecution(ctx, notifyID, workflow.ExperimentID, workflow.Name, string(workflow.ExperimentType), infra, projectID, traceAgentID, traceAgentName, traceAgentPlatform)
 
 	if len(workflow.Revision) == 0 {
 		return nil, errors.New("no revisions found")
@@ -1857,29 +2155,40 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	if normalizeInstallTemplates(workflowManifest.Spec.Templates) {
 		ensureInstallTimeoutParam(&workflowManifest.Spec.Arguments)
 	}
+	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
 
-	// Inject agentId as a workflow-level parameter for re-runs
+	// Inject agentId as a workflow-level parameter for re-runs.
+	// Always ensure the parameter exists (even as empty string) so that
+	// {{workflow.parameters.agentId}} is resolvable by Argo.
 	if c.agentRegistryOperator != nil {
+		agentIDStr := ""
 		if infra.InfraNamespace != nil {
-			if agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, *infra.InfraNamespace); agentErr == nil && agent != nil {
-				hasAgentID := false
-				for _, p := range workflowManifest.Spec.Arguments.Parameters {
-					if p.Name == "agentId" {
-						hasAgentID = true
-						break
-					}
-				}
-				if !hasAgentID {
-					workflowManifest.Spec.Arguments.Parameters = append(workflowManifest.Spec.Arguments.Parameters, v1alpha1.Parameter{
-						Name:  "agentId",
-						Value: v1alpha1.AnyStringPtr(agent.AgentID),
-					})
-					logrus.WithField("agentId", agent.AgentID).Info("injected agentId workflow parameter (re-run)")
-				}
-			} else if agentErr != nil {
-				logrus.WithError(agentErr).Warn("failed to lookup agent by namespace for agentId injection")
+			agentNS := ops.ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)
+			if agentNS == "" {
+				agentNS = *infra.InfraNamespace
+			}
+			if agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, agentNS); agentErr == nil && agent != nil {
+				agentIDStr = agent.AgentID
+				logrus.WithField("agentId", agentIDStr).Info("resolved agentId from registry (re-run)")
+			} else {
+				logrus.WithField("namespace", agentNS).Info("no agent record found for re-run; agentId will be empty")
 			}
 		}
+		found := false
+		for i, p := range workflowManifest.Spec.Arguments.Parameters {
+			if p.Name == "agentId" {
+				workflowManifest.Spec.Arguments.Parameters[i].Value = v1alpha1.AnyStringPtr(agentIDStr)
+				found = true
+				break
+			}
+		}
+		if !found {
+			workflowManifest.Spec.Arguments.Parameters = append(workflowManifest.Spec.Arguments.Parameters, v1alpha1.Parameter{
+				Name:  "agentId",
+				Value: v1alpha1.AnyStringPtr(agentIDStr),
+			})
+		}
+		logrus.WithField("agentId", agentIDStr).Info("injected agentId workflow parameter (re-run)")
 	}
 
 	var resScore float64 = 0
@@ -2243,6 +2552,7 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 	if normalizeInstallTemplates(cronExperimentManifest.Spec.WorkflowSpec.Templates) {
 		ensureInstallTimeoutParam(&cronExperimentManifest.Spec.WorkflowSpec.Arguments)
 	}
+	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 
 	// Detect container runtime once for all ChaosEngine templates in this cron workflow
 	var (
@@ -2465,33 +2775,35 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 
 	}
 
-	traceID := event.ExperimentRunID
-	logrus.WithFields(logFields).Infof("[Tracing] Initial traceID from event.ExperimentRunID: %s", traceID)
-	
-	if event.NotifyID != nil && *event.NotifyID != "" {
-		traceID = *event.NotifyID
-		logrus.WithFields(logFields).Infof("[Tracing] Using NotifyID from event: %s", traceID)
-	} else {
-		logrus.WithFields(logFields).Warn("[Tracing] No NotifyID in event, attempting database lookup")
-		// Fallback: try to get NotifyID from database if event doesn't have it
-		experimentRun, dbErr := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{
-			{"experiment_run_id", event.ExperimentRunID},
-		})
-		if dbErr == nil && experimentRun.ExperimentRunID != "" {
-			if experimentRun.NotifyID != nil && *experimentRun.NotifyID != "" {
-				traceID = *experimentRun.NotifyID
-				logrus.WithFields(logFields).Infof("[Tracing] Found NotifyID from database: %s", traceID)
-			} else {
-				logrus.WithFields(logFields).Warn("[Tracing] Database query succeeded but NotifyID is empty")
-			}
-		} else {
-			logrus.WithFields(logFields).Warnf("[Tracing] Database query failed or returned nil: %v", dbErr)
+	traceID := strings.TrimSpace(event.ExperimentRunID)
+	notifyID := ""
+	if event.NotifyID != nil {
+		notifyID = strings.TrimSpace(*event.NotifyID)
+	}
+	if notifyID == "" && event.ExperimentRunID != "" {
+		// Fallback: recover notifyID from DB for older/partial event payloads.
+		experimentRun, dbErr := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{{"experiment_run_id", event.ExperimentRunID}})
+		if dbErr == nil && experimentRun.ExperimentRunID != "" && experimentRun.NotifyID != nil {
+			notifyID = strings.TrimSpace(*experimentRun.NotifyID)
 		}
 	}
-	logrus.WithFields(logFields).Infof("[Tracing] Final traceID to use: %s", traceID)
+	if notifyID != "" {
+		// Canonical key: notifyID so workflow observations and LLM generations
+		// stitch under the same parent trace from experiment trigger onward.
+		traceID = notifyID
+	}
+
+	if traceID == "" {
+		logrus.WithFields(logFields).Warn("[Tracing] Missing both experimentRunID and notifyID for trace key")
+	}
+	logrus.WithFields(logFields).Infof("[Tracing] Final canonical traceID (notifyID preferred): %s", traceID)
 
 	// G2 fix: stamp experiment.id and experiment.run_id onto the long-running experiment-run span
 	if observability.OTELTracerEnabled() {
+		if traceID != "" && event.ExperimentRunID != "" && traceID != event.ExperimentRunID {
+			// Move any span state keyed by experiment_run_id under canonical notifyID.
+			observability.RebindExperimentSpan(event.ExperimentRunID, traceID)
+		}
 		observability.SetExperimentSpanAttributes(traceID,
 			attribute.String("experiment.id", event.ExperimentID),
 			attribute.String("experiment.run_id", event.ExperimentRunID),
@@ -2538,10 +2850,18 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 		}
 	}
 
-	// Also submit per-fault observations via Langfuse REST for Langfuse-native consumers
-	if !observability.OTELTracerEnabled() && isCompleted {
+	// Also submit per-fault observations via Langfuse REST for Langfuse-native consumers.
+	// In OTEL mode, attach them to the active OTEL-exported trace ID for proper stitching.
+	if isCompleted {
 		tracer := observability.GetLangfuseTracer()
 		if tracer.IsEnabled() {
+			langfuseTraceID := traceID
+			if observability.OTELTracerEnabled() {
+				langfuseTraceID = observability.LinkedLangfuseTraceID(traceID)
+			}
+			if langfuseTraceID == "" {
+				langfuseTraceID = traceID
+			}
 			for _, node := range executionData.Nodes {
 				if node.Type == "ChaosEngine" && node.ChaosExp != nil {
 					faultName := node.ChaosExp.ExperimentName
@@ -2549,7 +2869,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 						faultName = node.ChaosExp.EngineName
 					}
 					_ = tracer.TraceExperimentObservation(ctx, &observability.ExperimentObservationDetails{
-						TraceID:   traceID,
+						TraceID:   langfuseTraceID,
 						Name:      fmt.Sprintf("fault-verdict: %s", faultName),
 						Type:      "SPAN",
 						StartTime: node.StartedAt,
@@ -2568,6 +2888,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 						Metadata: map[string]interface{}{
 							"nodePhase": node.Phase,
 							"type":      "fault-verdict",
+							"source":    "rest-bridge",
 						},
 					})
 				}
@@ -2575,7 +2896,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 		}
 	}
 
-	traceExperimentObservation(ctx, traceID, event, executionData, metricsPtr)
+	traceExperimentObservation(ctx, traceID, event, executionData, metricsPtr, c.agentRegistryOperator)
 	if isCompleted {
 		scoreExperimentRun(ctx, traceID, metricsPtr, executionData.Phase)
 	}

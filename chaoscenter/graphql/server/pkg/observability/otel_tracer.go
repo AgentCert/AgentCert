@@ -31,6 +31,7 @@ var otelTracerProvider *sdktrace.TracerProvider
 var (
 	activeSpans   = make(map[string]trace.Span)
 	activeCtxs    = make(map[string]context.Context)
+	activeNodeSpans = make(map[string]trace.Span)
 	activeSpansMu sync.Mutex
 )
 
@@ -140,9 +141,36 @@ func EmitExperimentStartSpan(ctx context.Context, attrs ...attribute.KeyValue) {
 // for an experiment run and stores it in the active span map keyed by traceID
 // (typically the notifyID). This span is ended later by EndExperimentSpan()
 // when the experiment completes, covering the full experiment lifecycle.
+//
+// The notifyID UUID is converted to a 32-char hex OTEL trace ID (hyphens stripped)
+// so that OTEL spans and LiteLLM generations (keyed by the same notifyID) land
+// in the same Langfuse trace.
 func StartExperimentSpan(ctx context.Context, traceID string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
 	tracer := GetOTELTracer()
-	spanCtx, span := tracer.Start(ctx, "experiment-run",
+
+	// Inject the notifyID as the OTEL trace ID.
+	// UUID "58b4a037-5af5-..." → hex "58b4a0375af5..." (32 chars, valid OTEL trace ID).
+	// Use context.Background() (not the caller's ctx) so that any existing local span
+	// in the gRPC handler context does NOT override our phantom remote parent.
+	injectCtx := ctx
+	hexID := strings.ReplaceAll(traceID, "-", "")
+	if len(hexID) == 32 {
+		if otelTraceID, err := trace.TraceIDFromHex(hexID); err == nil {
+			if phantomSpanID, err2 := trace.SpanIDFromHex(hexID[:16]); err2 == nil {
+				remoteCtx := trace.NewSpanContext(trace.SpanContextConfig{
+					TraceID:    otelTraceID,
+					SpanID:     phantomSpanID,
+					TraceFlags: trace.FlagsSampled,
+					Remote:     true,
+				})
+				// context.Background() strips any inherited local span so the phantom
+				// parent (with the desired trace ID) is used unconditionally.
+				injectCtx = trace.ContextWithRemoteSpanContext(context.Background(), remoteCtx)
+			}
+		}
+	}
+
+	spanCtx, span := tracer.Start(injectCtx, "experiment-run",
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(attrs...),
 	)
@@ -168,15 +196,58 @@ func GetExperimentSpan(traceID string) (context.Context, trace.Span) {
 	return activeCtxs[traceID], span
 }
 
+// LinkedLangfuseTraceID returns the active OTEL trace ID when available so
+// Langfuse REST observations/scores can attach to the same OTEL-exported trace.
+// Falls back to the caller-provided logical trace key when no active span exists.
+func LinkedLangfuseTraceID(traceID string) string {
+	traceID = strings.TrimSpace(traceID)
+	if traceID == "" {
+		return ""
+	}
+
+	activeSpansMu.Lock()
+	span, ok := activeSpans[traceID]
+	activeSpansMu.Unlock()
+	if !ok || span == nil {
+		return traceID
+	}
+
+	spanCtx := span.SpanContext()
+	if !spanCtx.IsValid() {
+		return traceID
+	}
+
+	otelTraceID := strings.TrimSpace(spanCtx.TraceID().String())
+	if otelTraceID == "" {
+		return traceID
+	}
+
+	return otelTraceID
+}
+
 // EndExperimentSpan ends the active experiment span and removes it from the map.
 func EndExperimentSpan(traceID string) {
 	activeSpansMu.Lock()
 	span, ok := activeSpans[traceID]
+	nodeSpans := make([]trace.Span, 0)
+	nodePrefix := workflowNodeSpanKey(traceID, "")
+	for key, nodeSpan := range activeNodeSpans {
+		if strings.HasPrefix(key, nodePrefix) {
+			nodeSpans = append(nodeSpans, nodeSpan)
+			delete(activeNodeSpans, key)
+		}
+	}
 	if ok {
 		delete(activeSpans, traceID)
 		delete(activeCtxs, traceID)
 	}
 	activeSpansMu.Unlock()
+
+	for _, nodeSpan := range nodeSpans {
+		if nodeSpan != nil {
+			nodeSpan.End()
+		}
+	}
 
 	if ok && span != nil {
 		span.End()
@@ -212,6 +283,58 @@ func SetExperimentSpanAttributes(traceID string, attrs ...attribute.KeyValue) {
 
 	if ok && span != nil {
 		span.SetAttributes(attrs...)
+	}
+}
+
+// RebindExperimentSpan moves active span state from oldTraceID to newTraceID.
+// This is used when an experiment starts keyed by notifyID and later receives
+// the canonical experiment_run_id from workflow events.
+func RebindExperimentSpan(oldTraceID string, newTraceID string) {
+	oldTraceID = strings.TrimSpace(oldTraceID)
+	newTraceID = strings.TrimSpace(newTraceID)
+	if oldTraceID == "" || newTraceID == "" || oldTraceID == newTraceID {
+		return
+	}
+
+	activeSpansMu.Lock()
+	defer activeSpansMu.Unlock()
+
+	if _, exists := activeSpans[newTraceID]; exists {
+		return
+	}
+
+	if span, ok := activeSpans[oldTraceID]; ok {
+		activeSpans[newTraceID] = span
+		delete(activeSpans, oldTraceID)
+	}
+
+	if spanCtx, ok := activeCtxs[oldTraceID]; ok {
+		activeCtxs[newTraceID] = spanCtx
+		delete(activeCtxs, oldTraceID)
+	}
+
+	oldPrefix := oldTraceID + ":"
+	for key, span := range activeSpans {
+		if strings.HasPrefix(key, oldPrefix) {
+			suffix := strings.TrimPrefix(key, oldPrefix)
+			newKey := newTraceID + ":" + suffix
+			if _, exists := activeSpans[newKey]; !exists {
+				activeSpans[newKey] = span
+			}
+			delete(activeSpans, key)
+		}
+	}
+
+	oldNodePrefix := oldTraceID + ":node:"
+	for key, span := range activeNodeSpans {
+		if strings.HasPrefix(key, oldNodePrefix) {
+			suffix := strings.TrimPrefix(key, oldNodePrefix)
+			newKey := newTraceID + ":node:" + suffix
+			if _, exists := activeNodeSpans[newKey]; !exists {
+				activeNodeSpans[newKey] = span
+			}
+			delete(activeNodeSpans, key)
+		}
 	}
 }
 
@@ -255,6 +378,62 @@ func EndFaultSpan(traceID string, faultName string, attrs ...attribute.KeyValue)
 	if ok && span != nil {
 		span.SetAttributes(attrs...)
 		span.End()
+	}
+}
+
+func workflowNodeSpanKey(traceID, nodeID string) string {
+	return traceID + ":node:" + nodeID
+}
+
+func isTerminalPhase(phase string) bool {
+	phase = strings.ToLower(strings.TrimSpace(phase))
+	switch phase {
+	case "succeeded", "failed", "error", "completed", "skipped", "omitted":
+		return true
+	default:
+		return false
+	}
+}
+
+// UpsertWorkflowNodeSpan creates or updates a child span for a workflow node.
+// When terminal is true, the span is ended and removed from the active map.
+func UpsertWorkflowNodeSpan(traceID string, nodeID string, nodeName string, terminal bool, attrs ...attribute.KeyValue) {
+	activeSpansMu.Lock()
+	parentCtx, parentOK := activeCtxs[traceID]
+	key := workflowNodeSpanKey(traceID, nodeID)
+	nodeSpan, nodeOK := activeNodeSpans[key]
+	activeSpansMu.Unlock()
+
+	if !parentOK || parentCtx == nil || nodeID == "" {
+		return
+	}
+
+	if !nodeOK || nodeSpan == nil {
+		// If no active span exists and the node is already terminal, skip it.
+		// This prevents zero-duration duplicate spans: on every workflow event all
+		// previously-completed nodes are re-reported; without this guard we would
+		// create a new span and end it immediately every time.
+		if terminal {
+			return
+		}
+		tracer := GetOTELTracer()
+		_, span := tracer.Start(parentCtx, "workflow-step: "+nodeName,
+			trace.WithSpanKind(trace.SpanKindInternal),
+			trace.WithAttributes(attrs...),
+		)
+		activeSpansMu.Lock()
+		activeNodeSpans[key] = span
+		activeSpansMu.Unlock()
+		nodeSpan = span
+	} else {
+		nodeSpan.SetAttributes(attrs...)
+	}
+
+	if terminal {
+		nodeSpan.End()
+		activeSpansMu.Lock()
+		delete(activeNodeSpans, key)
+		activeSpansMu.Unlock()
 	}
 }
 

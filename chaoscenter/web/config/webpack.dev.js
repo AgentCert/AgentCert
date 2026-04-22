@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { merge } = require('webpack-merge');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const { DefinePlugin } = require('webpack');
@@ -13,6 +14,7 @@ const targetLocalHost = (process.env.TARGET_LOCALHOST && JSON.parse(process.env.
 const frontendPort = Number.parseInt(process.env.FRONTEND_PORT || '', 10) || 2001;
 const graphQLProxyPort = Number.parseInt(process.env.GQL_PROXY_PORT || '', 10) || 8080;
 const authProxyPort = Number.parseInt(process.env.AUTH_PROXY_PORT || '', 10) || 3030;
+const webpackCacheDir = process.env.WEBPACK_CACHE_DIR || path.join(os.tmpdir(), 'litmus-webpack-cache');
 
 const certificateExists = fs.existsSync(path.join(CONTEXT, 'certificates/localhost.pem'));
 
@@ -23,8 +25,12 @@ if (!certificateExists) {
 
 const devConfig = {
   mode: 'development',
-  devtool: 'cheap-module-source-map',
-  cache: { type: 'filesystem' },
+  // Faster startup in dev, especially on WSL-backed workspaces.
+  devtool: 'eval-cheap-module-source-map',
+  cache: {
+    type: 'filesystem',
+    cacheDirectory: webpackCacheDir
+  },
   output: {
     filename: '[name].js',
     chunkFilename: '[name].[id].js'

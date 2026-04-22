@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentCert Azure Deployment Presentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .slide {
+            background: white;
+            border-radius: 10px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            page-break-after: always;
+        }
+        
+        .slide h1 {
+            color: #667eea;
+            font-size: 42px;
+            margin-bottom: 10px;
+        }
+        
+        .slide h2 {
+            color: #764ba2;
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        
+        .slide-number {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        .diagram {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .zone {
+            display: inline-block;
+            padding: 20px;
+            margin: 10px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            min-width: 200px;
+        }
+        
+        .zone-blue { background: #3498db; }
+        .zone-green { background: #2ecc71; }
+        .zone-purple { background: #9b59b6; }
+        .zone-orange { background: #e67e22; }
+        
+        .component-box {
+            background: white;
+            border: 2px solid #667eea;
+            padding: 15px;
+            margin: 10px;
+            border-radius: 8px;
+            display: inline-block;
+            text-align: center;
+            font-weight: 500;
+            min-width: 150px;
+        }
+        
+        .flow {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-left: 4px solid #667eea;
+        }
+        
+        table {
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+        }
+        
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        
+        ul {
+            margin: 15px 0 15px 30px;
+        }
+        
+        li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        
+        .checklist {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .checklist-item {
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+        
+        .checklist-item:before {
+            content: "☐ ";
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .print-hint {
+            background: #fff3cd;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .detailed-diagram {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin: 24px 0;
+            align-items: start;
+        }
+
+        .arch-column {
+            background: #f8faff;
+            border: 1px solid #d9e3ff;
+            border-radius: 10px;
+            padding: 16px;
+            min-height: 300px;
+        }
+
+        .arch-column h3 {
+            color: #4057b2;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .arch-chip {
+            display: block;
+            background: white;
+            border: 1px solid #bfd0ff;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            line-height: 1.4;
+            color: #334;
+        }
+
+        .note-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .note-card {
+            background: #f7f7fb;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .step-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .step-card {
+            background: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 18px;
+            min-height: 150px;
+        }
+
+        .step-card strong {
+            color: #4057b2;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .small-text {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .azure-board {
+            border: 1px solid #cfd9f6;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+            padding: 24px;
+            margin: 24px 0;
+        }
+
+        .board-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+            color: #4057b2;
+            font-weight: 700;
+        }
+
+        .board-layout {
+            display: grid;
+            grid-template-columns: 1.1fr 2.6fr 0.95fr;
+            gap: 18px;
+            align-items: stretch;
+        }
+
+        .board-panel {
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid #d9e3ff;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .board-panel h3 {
+            color: #304a9a;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .board-stack {
+            display: grid;
+            gap: 10px;
+        }
+
+        .stack-box {
+            background: white;
+            border: 1px solid #bfd0ff;
+            border-radius: 10px;
+            padding: 12px;
+            color: #24324d;
+            line-height: 1.45;
+        }
+
+        .aks-shell {
+            border: 2px solid #7aa8ff;
+            border-radius: 14px;
+            padding: 16px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            min-height: 100%;
+        }
+
+        .aks-shell h3 {
+            margin-bottom: 12px;
+        }
+
+        .namespace-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .namespace-box {
+            border: 1px solid #bfd0ff;
+            border-radius: 12px;
+            padding: 14px;
+            background: #f9fbff;
+        }
+
+        .namespace-box h4 {
+            color: #4057b2;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .namespace-box ul {
+            margin: 0 0 0 18px;
+        }
+
+        .namespace-box li {
+            margin: 6px 0;
+            font-size: 14px;
+        }
+
+        .managed-service {
+            background: white;
+            border: 1px solid #bfd0ff;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .foundation-row {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr 1fr 1fr;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .foundation-box {
+            border-radius: 10px;
+            background: #edf3ff;
+            border: 1px solid #bfd0ff;
+            padding: 10px 12px;
+            font-size: 13px;
+            color: #32425c;
+        }
+
+        .data-model-layout {
+            display: grid;
+            grid-template-columns: 1.55fr 1fr;
+            gap: 20px;
+            margin: 24px 0;
+        }
+
+        .entity-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+
+        .entity-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+            border: 1px solid #cad8ff;
+            border-radius: 12px;
+            padding: 14px;
+            min-height: 160px;
+        }
+
+        .entity-card h3 {
+            color: #314ca0;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .entity-card p {
+            font-size: 13px;
+            color: #556277;
+            line-height: 1.5;
+            margin-top: 8px;
+        }
+
+        .key-list {
+            font-size: 13px;
+            color: #334;
+            line-height: 1.5;
+        }
+
+        .relationship-box {
+            background: #f8f9fd;
+            border: 1px solid #d6ddf6;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .relationship-box h3 {
+            color: #314ca0;
+            margin-bottom: 12px;
+        }
+
+        .relationship-box ul {
+            margin: 0 0 14px 18px;
+        }
+
+        .relationship-box li {
+            font-size: 14px;
+            margin: 7px 0;
+        }
+
+        @media (max-width: 900px) {
+            .detailed-diagram,
+            .note-grid,
+            .step-grid,
+            .checklist,
+            .board-layout,
+            .namespace-grid,
+            .foundation-row,
+            .data-model-layout,
+            .entity-grid,
+            div[style*="grid-template-columns: 1fr 1fr 1fr"],
+            div[style*="grid-template-columns: 1fr 1fr"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
+        
+        @media print {
+            body {
+                background: white;
+            }
+            .print-hint {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="print-hint">
+            <strong>💡 Tip:</strong> Open this in your browser and use <strong>Ctrl+P</strong> (or Cmd+P) to print to PDF for a presentation-ready document. 
+            You can then import into PowerPoint or present directly from PDF.
+        </div>
+
+        <!-- SLIDE 1: TITLE -->
+        <div class="slide">
+            <div class="slide-number">1 / 17</div>
+            <h1>AgentCert Azure Production Deployment</h1>
+            <p class="subtitle">End-to-End Architecture & Component Stack</p>
+            <div style="margin-top: 60px; text-align: center;">
+                <div style="font-size: 60px; margin-bottom: 30px;">🚀</div>
+                <p style="font-size: 18px; color: #666;">April 2026</p>
+                <p style="font-size: 14px; color: #999; margin-top: 40px;">AgentCert • AI Agent Benchmarking for Chaos Engineering</p>
+            </div>
+        </div>
+
+        <!-- SLIDE 2: ARCHITECTURE ZONES -->
+        <div class="slide">
+            <div class="slide-number">2 / 17</div>
+            <h2>Deployment Architecture Zones</h2>
+            <div class="diagram">
+                <div class="zone zone-blue">
+                    <strong>🔐 User Entry Zone</strong><br>
+                    Azure DNS → App Gateway WAF → Ingress
+                </div>
+                <br>
+                <div class="zone zone-green">
+                    <strong>⚙️ Compute Zone</strong><br>
+                    AKS Cluster<br>(All workloads)
+                </div>
+                <br>
+                <div class="zone zone-purple">
+                    <strong>🗄️ Azure Services</strong><br>
+                    ACR, Key Vault, Cosmos DB,<br>OpenAI, Storage, Monitor
+                </div>
+                <br>
+                <div class="zone zone-orange">
+                    <strong>📊 Observability</strong><br>
+                    Langfuse, Azure Monitor
+                </div>
+            </div>
+            <p style="margin-top: 30px; text-align: center; color: #666;"><strong>Key Point:</strong> Users → Secure Gateway → AKS Cluster → Azure Managed Services</p>
+        </div>
+
+        <!-- SLIDE 3: DETAILED TOPOLOGY -->
+        <div class="slide">
+            <div class="slide-number">3 / 17</div>
+            <h2>Detailed Azure Deployment Topology</h2>
+            <p class="small-text">This layout mirrors the style of a cloud reference diagram: Infosys-hosted traffic enters through Azure edge services, lands in AKS, and fans out to control-plane, experiment-plane, and benchmark workloads, with managed services aligned on the right rail.</p>
+            <div class="azure-board">
+                <div class="board-header">
+                    <div>Infosys Hosted Platform</div>
+                    <div>Azure Region</div>
+                </div>
+                <div class="board-layout">
+                    <div class="board-panel">
+                        <h3>Entry and Network</h3>
+                        <div class="board-stack">
+                            <div class="stack-box">Users, operators, CI/CD pipelines</div>
+                            <div class="stack-box">Azure DNS</div>
+                            <div class="stack-box">Application Gateway + WAF<br><span class="small-text">TLS termination, L7 policies, public entry</span></div>
+                            <div class="stack-box">AGIC or NGINX Ingress</div>
+                        </div>
+                    </div>
+                    <div class="aks-shell">
+                        <h3>AKS Cluster</h3>
+                        <div class="namespace-grid">
+                            <div class="namespace-box">
+                                <h4>litmus-chaos</h4>
+                                <ul>
+                                    <li>Frontend</li>
+                                    <li>Auth server</li>
+                                    <li>GraphQL server</li>
+                                    <li>Registry and control APIs</li>
+                                </ul>
+                            </div>
+                            <div class="namespace-box">
+                                <h4>litmus-exp</h4>
+                                <ul>
+                                    <li>subscriber</li>
+                                    <li>event-tracker</li>
+                                    <li>workflow-controller</li>
+                                    <li>chaos-operator and chaos-exporter</li>
+                                </ul>
+                            </div>
+                            <div class="namespace-box">
+                                <h4>Agent namespaces</h4>
+                                <ul>
+                                    <li>flash-agent</li>
+                                    <li>install-agent and install-app</li>
+                                    <li>target applications</li>
+                                    <li>agent-sidecar where enabled</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="foundation-row">
+                            <div class="foundation-box">Service mesh or internal networking, namespace quotas, RBAC, rollout policies</div>
+                            <div class="foundation-box">Prometheus MCP server</div>
+                            <div class="foundation-box">Kubernetes MCP server</div>
+                            <div class="foundation-box">LiteLLM integration path</div>
+                        </div>
+                    </div>
+                    <div class="board-panel">
+                        <h3>Azure Managed Services</h3>
+                        <div class="managed-service">Azure Container Registry<br><span class="small-text">All platform and agent images</span></div>
+                        <div class="managed-service">Key Vault<br><span class="small-text">JWT, DB, Langfuse, Azure OpenAI secrets</span></div>
+                        <div class="managed-service">MongoDB or Cosmos DB for MongoDB<br><span class="small-text">Projects, environments, agents, apps, experiments, runs</span></div>
+                        <div class="managed-service">Azure OpenAI<br><span class="small-text">Model inference via LiteLLM and agent runtimes</span></div>
+                        <div class="managed-service">Langfuse<br><span class="small-text">Trace, score, and observation backend</span></div>
+                        <div class="managed-service">Azure Monitor and Storage<br><span class="small-text">Metrics, logs, exports, artifacts, backups</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="flow">
+                <strong>Primary traffic path:</strong> Operator request -> Azure DNS -> Application Gateway + WAF -> Ingress -> GraphQL control plane -> Litmus execution controllers -> benchmark agent and target workload -> MongoDB, Langfuse, and Monitor-backed evidence.
+            </div>
+            <div class="note-grid">
+                <div class="note-card"><strong>Isolation boundary</strong><br><span class="small-text">The control plane, execution plane, and benchmark workloads are separated so controller instability does not immediately take out the operator-facing UI.</span></div>
+                <div class="note-card"><strong>Operational fit</strong><br><span class="small-text">The diagram maps directly to namespace ownership, node-pool sizing, rollout sequencing, and runbook responsibilities for production support.</span></div>
+                <div class="note-card"><strong>Managed dependency rail</strong><br><span class="small-text">Images, secrets, database state, model endpoints, traces, and long-term evidence live in managed Azure services rather than as ad hoc cluster add-ons.</span></div>
+            </div>
+        </div>
+
+        <!-- SLIDE 3: EDGE & SECURITY -->
+        <div class="slide">
+            <div class="slide-number">4 / 17</div>
+            <h2>Edge Layer: DNS, WAF, Ingress</h2>
+            <div class="diagram">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 20px;">
+                    <div class="component-box">📍 Azure DNS</div>
+                    <div style="font-weight: bold;">→</div>
+                    <div class="component-box">🛡️ App Gateway + WAF</div>
+                    <div style="font-weight: bold;">→</div>
+                    <div class="component-box">🚪 AKS Ingress</div>
+                </div>
+            </div>
+            <div class="flow">
+                <strong>Flow:</strong> User Request → DNS Resolution → TLS Termination + Security Policies → Service Routing
+            </div>
+            <ul>
+                <li><strong>Azure DNS:</strong> Public domain resolution</li>
+                <li><strong>App Gateway with WAF:</strong> TLS termination, DDoS protection, L7 routing</li>
+                <li><strong>AKS Ingress:</strong> Routes requests to backend microservices</li>
+                <li><strong>Recommended hardening:</strong> Private link for backend services, cert rotation, and path-based routing for UI, API, and health endpoints</li>
+            </ul>
+        </div>
+
+        <!-- SLIDE 4: AKS WORKLOADS -->
+        <div class="slide">
+            <div class="slide-number">5 / 17</div>
+            <h2>Core Compute: AKS Cluster</h2>
+            <div class="diagram" style="text-align: left;">
+                <strong style="font-size: 18px;">📦 Azure Kubernetes Service Workloads:</strong>
+                <table>
+                    <tr>
+                        <th>Pod / Service</th>
+                        <th>Namespace</th>
+                        <th>Technology</th>
+                        <th>Role</th>
+                    </tr>
+                    <tr>
+                        <td>Frontend</td>
+                        <td>litmus-chaos</td>
+                        <td>React / TypeScript</td>
+                        <td>Web UI</td>
+                    </tr>
+                    <tr>
+                        <td>GraphQL API</td>
+                        <td>litmus-chaos</td>
+                        <td>Go / gqlgen / Gin</td>
+                        <td>Core API & orchestration</td>
+                    </tr>
+                    <tr>
+                        <td>Auth Service</td>
+                        <td>litmus-chaos</td>
+                        <td>Go / REST + gRPC</td>
+                        <td>User auth & JWT tokens</td>
+                    </tr>
+                    <tr>
+                        <td>Event Tracker</td>
+                        <td>litmus-exp</td>
+                        <td>Go controllers</td>
+                        <td>Infrastructure event streaming</td>
+                    </tr>
+                    <tr>
+                        <td>LitmusChaos + Argo</td>
+                        <td>litmus-exp</td>
+                        <td>Workflow engine</td>
+                        <td>Chaos orchestration</td>
+                    </tr>
+                    <tr>
+                        <td>Agents</td>
+                        <td>Agent namespaces</td>
+                        <td>Helm + Agent Framework</td>
+                        <td>Remediation execution</td>
+                    </tr>
+                    <tr>
+                        <td>Agent Sidecar</td>
+                        <td>Agent namespaces</td>
+                        <td>Python</td>
+                        <td>Trace injection & metadata</td>
+                    </tr>
+                    <tr>
+                        <td>LiteLLM Proxy</td>
+                        <td>Shared integration namespace</td>
+                        <td>Python / FastAPI</td>
+                        <td>LLM gateway with callbacks</td>
+                    </tr>
+                    <tr>
+                        <td>OTEL Exporters</td>
+                        <td>Control-plane services</td>
+                        <td>Go / OTEL SDK</td>
+                        <td>Trace bridge to Langfuse</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="note-grid">
+                <div class="note-card"><strong>Control plane</strong><br><span class="small-text">Serves the UI and APIs, validates benchmark definitions, stores run metadata, and coordinates downstream execution.</span></div>
+                <div class="note-card"><strong>Execution plane</strong><br><span class="small-text">Owns Litmus workflows, event propagation, and workflow-controller health. It should be monitored separately from the UI/API tier.</span></div>
+                <div class="note-card"><strong>Benchmark plane</strong><br><span class="small-text">Hosts agents and target applications so teams can apply quotas, cleanup policies, and namespace-specific access controls.</span></div>
+            </div>
+        </div>
+
+        <!-- SLIDE 5: DATA LAYER -->
+        <div class="slide">
+            <div class="slide-number">6 / 17</div>
+            <h2>Data, Secrets & Storage</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                <div class="component-box" style="border: 3px solid #2ecc71; color: #333; padding: 20px; background: #f0fdf4;">
+                    <strong style="color: #2ecc71;">📊 Database</strong><br><br>
+                    Azure Cosmos DB<br>(MongoDB API)<br><br>
+                    <small>Stores: Users, runs, experiment metadata, config</small>
+                </div>
+                <div class="component-box" style="border: 3px solid #3498db; color: #333; padding: 20px; background: #f0f8ff;">
+                    <strong style="color: #3498db;">🔐 Key Vault</strong><br><br>
+                    API Keys, DB Creds,<br>JWT Secret, Langfuse Keys<br><br>
+                    <small>Access: Managed Identity</small>
+                </div>
+                <div class="component-box" style="border: 3px solid #e67e22; color: #333; padding: 20px; background: #fff8f0;">
+                    <strong style="color: #e67e22;">💾 Storage</strong><br><br>
+                    Azure Blob Storage<br><br>
+                    <small>Stores: Workflow artifacts, exports, backups</small>
+                </div>
+            </div>
+            <div class="flow" style="margin-top: 30px;">
+                <strong>Security:</strong> All database connections secured with credentials from Key Vault. Optional private endpoints for network isolation.
+            </div>
+            <p class="small-text">Recommended production split: MongoDB or Cosmos DB for MongoDB stores users, projects, environments, agents, apps, experiments, runs, probes, and infrastructure state; Blob Storage keeps exported evidence and backups; Key Vault owns secrets and certificate material.</p>
+        </div>
+
+        <!-- SLIDE 7: MONGODB DATA MODEL -->
+        <div class="slide">
+            <div class="slide-number">7 / 17</div>
+            <h2>MongoDB Data Model</h2>
+            <p class="small-text">The control plane persists benchmark configuration, inventory, and run evidence primarily in the litmus database, with agent and app registry documents extending the core Litmus collections.</p>
+            <div class="data-model-layout">
+                <div>
+                    <div class="entity-grid">
+                        <div class="entity-card">
+                            <h3>project</h3>
+                            <div class="key-list">_id<br>name<br>members[].user_id<br>members[].role<br>state</div>
+                            <p>Top-level tenant boundary for experiments, environments, apps, and agents.</p>
+                        </div>
+                        <div class="entity-card">
+                            <h3>environment</h3>
+                            <div class="key-list">environment_id<br>project_id<br>name<br>type<br>infra_ids[]</div>
+                            <p>Groups one or more infrastructure targets under a project.</p>
+                        </div>
+                        <div class="entity-card">
+                            <h3>chaosInfrastructures</h3>
+                            <div class="key-list">infra_id<br>project_id<br>name<br>infra_scope<br>status</div>
+                            <p>Represents cluster or execution targets used by Litmus and benchmark runs.</p>
+                        </div>
+                        <div class="entity-card">
+                            <h3>apps_registrations</h3>
+                            <div class="key-list">appId<br>projectId<br>environmentId<br>name<br>namespace<br>status</div>
+                            <p>Application inventory for targets under test, including namespace and deployment method.</p>
+                        </div>
+                        <div class="entity-card">
+                            <h3>agentRegistry</h3>
+                            <div class="key-list">agentId<br>projectId<br>name<br>vendor<br>capabilities[]<br>endpoint<br>status</div>
+                            <p>Registered AI agents, their endpoints, Helm release metadata, and Langfuse sync settings.</p>
+                        </div>
+                        <div class="entity-card">
+                            <h3>chaosExperiments</h3>
+                            <div class="key-list">experiment_id<br>project_id<br>infra_id<br>experiment_type<br>revision[]<br>recent_experiment_run_details[]</div>
+                            <p>Benchmark definitions, manifests, revisions, probes, and recent run summaries.</p>
+                        </div>
+                        <div class="entity-card">
+                            <h3>chaosExperimentRuns</h3>
+                            <div class="key-list">experiment_run_id<br>experiment_id<br>project_id<br>infra_id<br>phase<br>execution_data<br>resiliency_score</div>
+                            <p>Per-run execution evidence including phase, scores, fault counts, and notify IDs.</p>
+                        </div>
+                        <div class="entity-card">
+                            <h3>chaosProbes</h3>
+                            <div class="key-list">probe metadata<br>fault mappings<br>audit fields</div>
+                            <p>Stores reusable probe definitions and fault-to-probe mappings for experiments.</p>
+                        </div>
+                        <div class="entity-card">
+                            <h3>Supporting collections</h3>
+                            <div class="key-list">chaosHubs<br>imageRegistry<br>serverConfig<br>gitops<br>faultStudios<br>user</div>
+                            <p>Reference data, image registries, governance settings, and workflow composition metadata.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="relationship-box">
+                    <h3>Core relationships</h3>
+                    <ul>
+                        <li><strong>project 1:N environment</strong> through <strong>project_id</strong></li>
+                        <li><strong>environment 1:N apps_registrations</strong> through <strong>environmentId</strong></li>
+                        <li><strong>project 1:N agentRegistry</strong> through <strong>projectId</strong></li>
+                        <li><strong>project 1:N chaosExperiments</strong> through <strong>project_id</strong></li>
+                        <li><strong>chaosExperiments 1:N chaosExperimentRuns</strong> through <strong>experiment_id</strong></li>
+                        <li><strong>chaosInfrastructures 1:N chaosExperiments and runs</strong> through <strong>infra_id</strong></li>
+                    </ul>
+                    <h3>Design notes</h3>
+                    <ul>
+                        <li>Core Litmus collections use snake_case field names such as <strong>project_id</strong> and <strong>experiment_id</strong>.</li>
+                        <li>Newer agent and app registry collections use camelCase keys such as <strong>projectId</strong>, <strong>agentId</strong>, and <strong>appId</strong>.</li>
+                        <li>Recent run snapshots are denormalized into <strong>chaosExperiments.recent_experiment_run_details</strong> for fast dashboard queries.</li>
+                        <li>Detailed LLM traces and scoring observations are stored in Langfuse, while MongoDB keeps the platform state and run linkage keys.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 6: LLM INTEGRATION -->
+        <div class="slide">
+            <div class="slide-number">8 / 17</div>
+            <h2>LLM Integration & Observability</h2>
+            <div class="diagram">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                    <div class="component-box">Agent / LLM Call</div>
+                    <div style="font-weight: bold;">↓</div>
+                    <div class="component-box" style="border: 2px solid #2ecc71;">LiteLLM Proxy</div>
+                    <div style="font-weight: bold;">↓</div>
+                    <div class="component-box" style="border: 2px solid #e74c3c;">Azure OpenAI</div>
+                    <div style="font-weight: bold;">↓</div>
+                    <div style="display: flex; gap: 20px; justify-content: center;">
+                        <div class="component-box" style="border: 2px solid #f39c12;">Success Callback</div>
+                        <div style="font-weight: bold;">→</div>
+                        <div class="component-box" style="border: 2px solid #9b59b6;">Langfuse</div>
+                    </div>
+                </div>
+            </div>
+            <ul style="margin-top: 30px;">
+                <li><strong>Azure OpenAI:</strong> GPT and embedding model deployments</li>
+                <li><strong>LiteLLM Proxy:</strong> Centralized gateway, retries, auth abstraction, Langfuse callbacks</li>
+                <li><strong>Langfuse:</strong> Trace storage, evaluation results, performance dashboards</li>
+                <li><strong>OTEL Bridge:</strong> Links Langfuse REST traces to OTEL span context</li>
+                <li><strong>Agent Sidecar:</strong> Adds sticky trace IDs and agent metadata so benchmark evidence stays grouped by run and experiment</li>
+            </ul>
+        </div>
+
+        <!-- SLIDE 8: RUNTIME FLOW -->
+        <div class="slide">
+            <div class="slide-number">9 / 17</div>
+            <h2>Detailed Deployment & Runtime Flow</h2>
+            <div class="step-grid">
+                <div class="step-card"><strong>1. Build & Publish</strong>Repository scripts build GraphQL, auth, sidecar, LiteLLM, flash-agent, and install-agent images, then push them into Azure Container Registry.</div>
+                <div class="step-card"><strong>2. Bootstrap Cluster</strong>Namespaces, RBAC, CRDs, service accounts, and Litmus controllers are established before rollout and restart logic is allowed to patch live workloads.</div>
+                <div class="step-card"><strong>3. Deploy Control Plane</strong>Frontend, auth, and GraphQL services are rolled out first so users, APIs, and registry workflows become available.</div>
+                <div class="step-card"><strong>4. Activate Execution Plane</strong>subscriber, event-tracker, workflow-controller, chaos-operator, and chaos-exporter turn benchmark requests into Litmus workflow runs.</div>
+                <div class="step-card"><strong>5. Run Benchmark</strong>A benchmark definition links a target application, an agent, and a fault plan. The target is stressed, the agent reacts, and the platform records time-to-detect and time-to-recover.</div>
+                <div class="step-card"><strong>6. Capture Evidence</strong>OTEL spans, Langfuse traces, LiteLLM callbacks, Kubernetes logs, and Mongo-backed run state are correlated into a final verdict and audit trail.</div>
+            </div>
+            <div class="flow">
+                <strong>Why this matters:</strong> The flow separates build-time concerns, cluster bootstrap, execution control, and evidence capture so failed deployments or controller issues can be isolated faster.
+            </div>
+        </div>
+
+        <!-- SLIDE 7: CONTAINER REGISTRY -->
+        <div class="slide">
+            <div class="slide-number">10 / 17</div>
+            <h2>Container Registry: Azure ACR</h2>
+            <p style="margin-bottom: 20px;"><strong>All images stored in Azure Container Registry:</strong></p>
+            <ul>
+                <li><code>agentcert/litmusportal-server:3.0.0</code></li>
+                <li><code>agentcert/graphql-server:latest</code></li>
+                <li><code>agentcert/auth-service:latest</code></li>
+                <li><code>agentcert/agentcert-flash-agent:latest</code></li>
+                <li><code>agentcert/agentcert-install-agent:latest</code></li>
+                <li><code>agentcert/agent-sidecar:latest</code></li>
+                <li><code>agentcert/agentcert-litellm-proxy:latest</code></li>
+                <li><code>litmuschaos/* (supporting images)</code></li>
+            </ul>
+            <div class="flow" style="margin-top: 30px;">
+                <strong>Deployment Flow:</strong> GitHub Actions → Build & Test → Push to ACR → AKS pulls images (authenticated via Key Vault)
+            </div>
+        </div>
+
+        <!-- SLIDE 8: OBSERVABILITY -->
+        <div class="slide">
+            <div class="slide-number">11 / 17</div>
+            <h2>Azure Monitor & Logging</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="component-box" style="border: 3px solid #3498db; color: #333; background: #f0f8ff; padding: 25px;">
+                    <strong style="color: #3498db;">Azure Monitor</strong><br><br>
+                    ✓ Pod metrics<br>
+                    ✓ Container logs<br>
+                    ✓ Custom dashboards<br>
+                    ✓ Alert rules<br>
+                </div>
+                <div class="component-box" style="border: 3px solid #9b59b6; color: #333; background: #f5f0ff; padding: 25px;">
+                    <strong style="color: #9b59b6;">Langfuse</strong><br><br>
+                    ✓ LLM traces<br>
+                    ✓ Evaluation scores<br>
+                    ✓ Agent decisions<br>
+                    ✓ Performance trends<br>
+                </div>
+            </div>
+            <div class="flow" style="margin-top: 30px;">
+                <strong>Key Metrics to Monitor:</strong> API latency, error rates, pod restarts, LLM token usage, trace quality scores
+            </div>
+            <p class="small-text">For production support, also watch ReplicaSet creation, workflow queue depth, controller restart counts, and namespace quota pressure because cluster control-plane issues can block rollouts before application logs show useful errors.</p>
+        </div>
+
+        <!-- SLIDE 9: CI/CD -->
+        <div class="slide">
+            <div class="slide-number">12 / 17</div>
+            <h2>Build & Release Pipeline</h2>
+            <div class="diagram">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                    <div class="component-box">📝 Code Push</div>
+                    <div style="font-weight: bold;">↓</div>
+                    <div class="component-box">🔨 GitHub Actions</div>
+                    <div style="font-weight: bold;">↓</div>
+                    <div class="component-box">🐳 Build Docker<br>Push to ACR</div>
+                    <div style="font-weight: bold;">↓</div>
+                    <div class="component-box">⚙️ Helm Deploy<br>to AKS</div>
+                    <div style="font-weight: bold;">↓</div>
+                    <div class="component-box">✅ Health Checks<br>& Smoke Tests</div>
+                </div>
+            </div>
+            <div class="flow" style="margin-top: 30px;">
+                <strong>Pipeline Tools:</strong> GitHub Actions + Azure DevOps + Helm + kubectl
+            </div>
+        </div>
+
+        <!-- SLIDE 10: SECURITY -->
+        <div class="slide">
+            <div class="slide-number">13 / 17</div>
+            <h2>Security & Optional Hardening</h2>
+            <p style="margin-bottom: 20px;"><strong>✅ Implemented:</strong></p>
+            <ul style="margin-bottom: 30px;">
+                <li>Key Vault for secrets management</li>
+                <li>ACR image scanning</li>
+                <li>AKS network policies</li>
+            </ul>
+            <p style="margin-bottom: 20px;"><strong>Optional Hardening Layers:</strong></p>
+            <ul>
+                <li><strong>VNet Private Endpoints</strong> — Isolate Cosmos DB, Key Vault, Azure OpenAI</li>
+                <li><strong>Network Security Groups (NSGs)</strong> — Restrict pod-to-service traffic</li>
+                <li><strong>Microsoft Entra ID</strong> — SSO for operators and service identities</li>
+                <li><strong>Pod Security Standards</strong> — Container isolation and privilege restrictions</li>
+            </ul>
+        </div>
+
+        <!-- SLIDE 13: OPERATIONS -->
+        <div class="slide">
+            <div class="slide-number">14 / 17</div>
+            <h2>Operations, Scaling & Recovery</h2>
+            <div class="note-grid">
+                <div class="note-card"><strong>Scaling model</strong><br><span class="small-text">Scale frontend and API pods independently from experiment controllers. Use separate node pools if benchmark loads are materially heavier than control-plane traffic.</span></div>
+                <div class="note-card"><strong>Recovery model</strong><br><span class="small-text">Preserve MongoDB state, Langfuse traces, Helm values, and exported benchmark evidence so failed runs can be replayed and audited after an outage.</span></div>
+                <div class="note-card"><strong>Support model</strong><br><span class="small-text">Keep runbooks for namespace bootstrap, rollout failures, controller health, ACR pull issues, Key Vault access, and Langfuse or OTEL ingestion breaks.</span></div>
+            </div>
+            <ul style="margin-top: 24px;">
+                <li><strong>Node pools:</strong> Consider dedicated pools for control plane, experiment controllers, and agent workloads when memory and CPU shapes differ.</li>
+                <li><strong>Backups:</strong> Protect MongoDB state, exported workflow artifacts, and production Helm values on a defined retention schedule.</li>
+                <li><strong>SLOs:</strong> Track API latency, rollout success, benchmark completion rate, controller restart frequency, and trace correlation quality.</li>
+                <li><strong>Day-2 operations:</strong> Periodically validate namespace quotas, certificate expiry, ACR pull permissions, and workload image freshness.</li>
+            </ul>
+        </div>
+
+        <!-- SLIDE 11: CHECKLIST -->
+        <div class="slide">
+            <div class="slide-number">15 / 17</div>
+            <h2>Production Deployment Checklist</h2>
+            <div class="checklist" style="margin-bottom: 30px;">
+                <div style="margin-bottom: 20px;">
+                    <p style="font-weight: bold; margin-bottom: 10px;">Pre-Deployment:</p>
+                    <div class="checklist-item">Azure subscription & resource group</div>
+                    <div class="checklist-item">AKS cluster (1.27+, multi-zone)</div>
+                    <div class="checklist-item">Cosmos DB or MongoDB provisioned</div>
+                    <div class="checklist-item">Container Registry (ACR)</div>
+                    <div class="checklist-item">Key Vault with all secrets</div>
+                    <div class="checklist-item">Azure OpenAI resource & deployments</div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <p style="font-weight: bold; margin-bottom: 10px;">Deployment:</p>
+                    <div class="checklist-item">Docker images built & pushed</div>
+                    <div class="checklist-item">Helm charts configured</div>
+                    <div class="checklist-item">Secrets synced to Key Vault</div>
+                    <div class="checklist-item">Helm install/upgrade executed</div>
+                    <div class="checklist-item">Health checks pass</div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <p style="font-weight: bold; margin-bottom: 10px;">Post-Deployment:</p>
+                    <div class="checklist-item">DNS points to App Gateway</div>
+                    <div class="checklist-item">TLS certificate installed</div>
+                    <div class="checklist-item">Monitoring dashboards active</div>
+                    <div class="checklist-item">Backup strategy enabled</div>
+                    <div class="checklist-item">DR plan documented</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 12: COST SUMMARY -->
+        <div class="slide">
+            <div class="slide-number">16 / 17</div>
+            <h2>Production Resource Estimates</h2>
+            <table>
+                <tr>
+                    <th>Component</th>
+                    <th>SKU / Configuration</th>
+                    <th>Monthly Cost (Approx)</th>
+                </tr>
+                <tr>
+                    <td>AKS Cluster</td>
+                    <td>3 nodes, Standard_D2s_v3</td>
+                    <td>$300–400</td>
+                </tr>
+                <tr>
+                    <td>Cosmos DB MongoDB</td>
+                    <td>400 RU/s, multi-region option</td>
+                    <td>$200–500</td>
+                </tr>
+                <tr>
+                    <td>Azure OpenAI</td>
+                    <td>gpt-4.1-mini + embeddings</td>
+                    <td>$50–500 (usage-based)</td>
+                </tr>
+                <tr>
+                    <td>Azure Container Registry</td>
+                    <td>Premium tier</td>
+                    <td>$100–200</td>
+                </tr>
+                <tr>
+                    <td>Key Vault</td>
+                    <td>Standard tier</td>
+                    <td>$10</td>
+                </tr>
+                <tr>
+                    <td>Azure Monitor</td>
+                    <td>Ingestion + 30-day retention</td>
+                    <td>$50–200</td>
+                </tr>
+                <tr>
+                    <td>App Gateway</td>
+                    <td>Standard tier with WAF</td>
+                    <td>$30–50</td>
+                </tr>
+                <tr>
+                    <td>Storage Account</td>
+                    <td>Blob, geo-redundant</td>
+                    <td>$20–100</td>
+                </tr>
+                <tr style="background: #fffacd; font-weight: bold;">
+                    <td colspan="2">Total (Baseline Estimate)</td>
+                    <td>~$750–2000/month</td>
+                </tr>
+            </table>
+            <p style="margin-top: 20px; color: #666; font-size: 14px;"><em>Note: Costs vary by region, load, and usage patterns. Use Azure Cost Estimator for exact projections.</em></p>
+        </div>
+
+        <!-- SLIDE 13: SUMMARY -->
+        <div class="slide">
+            <div class="slide-number">17 / 17</div>
+            <h1>Summary & Next Steps</h1>
+            <p class="subtitle">Your Deployment Roadmap</p>
+            
+            <p style="font-weight: bold; margin-top: 30px; margin-bottom: 15px;">✅ What We've Covered:</p>
+            <ul style="margin-bottom: 30px;">
+                <li>Detailed Azure deployment topology with namespace separation</li>
+                <li>Edge security (DNS, WAF, Ingress)</li>
+                <li>Core compute (AKS workloads &amp; microservices)</li>
+                <li>MongoDB and Cosmos DB data model for platform state and run evidence</li>
+                <li>Data layer (Cosmos DB, Key Vault, Storage)</li>
+                <li>LLM integration (Azure OpenAI + LiteLLM + Langfuse)</li>
+                <li>Observability (Azure Monitor &amp; Langfuse)</li>
+                <li>CI/CD pipeline and runtime evidence flow</li>
+                <li>Operational scaling, recovery, and support considerations</li>
+            </ul>
+            
+            <p style="font-weight: bold; margin-bottom: 15px;">→ Next Steps:</p>
+            <ol style="margin-bottom: 30px;">
+                <li>Provision Azure resources (AKS, Cosmos DB, ACR, Key Vault)</li>
+                <li>Configure Helm values for production environment</li>
+                <li>Set up Azure Monitor dashboards and alert rules</li>
+                <li>Run dry-run deployment in staging environment</li>
+                <li>Plan cutover and rollback strategy</li>
+                <li>Train operations team on runbooks</li>
+            </ol>
+            
+            <div style="margin-top: 60px; text-align: center; padding: 30px; background: #f0f8ff; border-radius: 8px; border-left: 4px solid #3498db;">
+                <p style="font-size: 24px; color: #3498db; margin-bottom: 10px;">🚀 Ready to Deploy?</p>
+                <p style="color: #666;">Contact your Azure & DevOps team to begin resource provisioning.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Print-friendly mode detection
+        if (window.location.search.includes('print')) {
+            window.print();
+        }
+    </script>
+</body>
+</html>

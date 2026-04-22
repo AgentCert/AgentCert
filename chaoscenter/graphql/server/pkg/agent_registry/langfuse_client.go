@@ -46,6 +46,7 @@ type ExperimentTrace struct {
 	FaultName         string                 `json:"faultName,omitempty"`
 	SessionID         string                 `json:"sessionId,omitempty"`    // Experiment run session
 	AgentID           string                 `json:"agentId,omitempty"`      // Agent deploying the fault
+	UserID            string                 `json:"userId,omitempty"`       // Langfuse user ID (infra/agent identifier)
 	ProjectID         string                 `json:"projectId,omitempty"`    // AgentCert Project ID
 	LangfuseOrgID     string                 `json:"langfuseOrgId,omitempty"`    // Langfuse Organization ID from env
 	LangfuseProjectID string                 `json:"langfuseProjectId,omitempty"` // Langfuse Project ID from env

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
@@ -57,6 +58,10 @@ func getAgentHubBranch() string {
 	return branch
 }
 
+func isCustomAgentHubMode() bool {
+	return strings.EqualFold(strings.TrimSpace(utils.Config.AgentHubSourceMode), "custom")
+}
+
 // getDefaultBasePath returns the OS-appropriate base path for default hub clones.
 // On Windows it uses os.TempDir(), on Linux/Mac it uses /tmp.
 func getDefaultBasePath() string {
@@ -69,19 +74,33 @@ func getDefaultBasePath() string {
 // getAgentChartsPath returns the filesystem path where agent charts are cloned.
 // Aligns with GetClonePath in chaoshub/ops which clones default hubs to {basePath}/{HubName}.
 func getAgentChartsPath() string {
-	path := utils.Config.DefaultAgentHubPath
+	path := strings.TrimSpace(utils.Config.DefaultAgentHubPath)
 	if path == "" {
 		path = getDefaultBasePath()
 	}
+
+	if isCustomAgentHubMode() {
+		candidate := filepath.Join(path, "charts")
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return candidate
+		}
+		return path
+	}
+
 	return filepath.Join(path, DefaultAgentHubName, "charts")
 }
 
 // getAgentClonePath returns the filesystem path for the agent hub clone.
 func getAgentClonePath() string {
-	path := utils.Config.DefaultAgentHubPath
+	path := strings.TrimSpace(utils.Config.DefaultAgentHubPath)
 	if path == "" {
 		path = getDefaultBasePath()
 	}
+
+	if isCustomAgentHubMode() {
+		return path
+	}
+
 	return filepath.Join(path, DefaultAgentHubName)
 }
 
@@ -190,6 +209,11 @@ func (s *agentHubService) GetAgentHubStatus(ctx context.Context, projectID strin
 // SyncDefaultAgentHub is a background goroutine that periodically clones/pulls
 // the agent-charts repo, analogous to SyncDefaultChaosHubs.
 func (s *agentHubService) SyncDefaultAgentHub() {
+	if isCustomAgentHubMode() {
+		log.WithField("path", getAgentClonePath()).Info("agent hub source mode is custom; skipping default git sync")
+		return
+	}
+
 	log.Info("starting default agent hub sync goroutine")
 	for {
 		repoURL := getAgentHubGitURL()

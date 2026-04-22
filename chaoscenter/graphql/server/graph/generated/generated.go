@@ -412,10 +412,10 @@ type ComplexityRoot struct {
 	}
 
 	FaultDetails struct {
-		CSV    func(childComplexity int) int
-		Engine func(childComplexity int) int
-		Fault  func(childComplexity int) int
-	}
+                CSV         func(childComplexity int) int
+                Engine      func(childComplexity int) int
+                Fault       func(childComplexity int) int
+                GroundTruth func(childComplexity int) int
 
 	FaultInjectionConfig struct {
 		Duration       func(childComplexity int) int
@@ -2995,6 +2995,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.FaultDetails.Fault(childComplexity), true
+
+	case "FaultDetails.groundTruth":
+		if e.complexity.FaultDetails.GroundTruth == nil {
+			break
+		}
+
+		return e.complexity.FaultDetails.GroundTruth(childComplexity), true
 
 	case "FaultInjectionConfig.duration":
 		if e.complexity.FaultInjectionConfig.Duration == nil {
@@ -9500,6 +9507,10 @@ type FaultDetails {
   csv consists chartserviceversion.yaml
   """
   csv: String!
+  """
+  groundTruth consists ground_truth.yaml
+  """
+  groundTruth: String!
 }
 
 type GetChaosHubStatsResponse{
@@ -25772,6 +25783,49 @@ func (ec *executionContext) fieldContext_FaultDetails_csv(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _FaultDetails_groundTruth(ctx context.Context, field graphql.CollectedField, obj *model.FaultDetails) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultDetails_groundTruth(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.GroundTruth, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultDetails_groundTruth(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultDetails",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
 func (ec *executionContext) _FaultInjectionConfig_injectionType(ctx context.Context, field graphql.CollectedField, obj *model.FaultInjectionConfig) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_FaultInjectionConfig_injectionType(ctx, field)
 	if err != nil {
@@ -43599,6 +43653,8 @@ func (ec *executionContext) fieldContext_Query_getChaosFault(ctx context.Context
 				return ec.fieldContext_FaultDetails_engine(ctx, field)
 			case "csv":
 				return ec.fieldContext_FaultDetails_csv(ctx, field)
+			case "groundTruth":
+				return ec.fieldContext_FaultDetails_groundTruth(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FaultDetails", field.Name)
 		},
@@ -57321,6 +57377,11 @@ func (ec *executionContext) _FaultDetails(ctx context.Context, sel ast.Selection
 			}
 		case "csv":
 			out.Values[i] = ec._FaultDetails_csv(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "groundTruth":
+			out.Values[i] = ec._FaultDetails_groundTruth(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
