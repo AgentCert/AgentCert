@@ -26,34 +26,44 @@ import { StudioTabs } from '@models';
 import { MenuCell } from './ExperimentDashboardV2TableMenu';
 import css from './ExperimentDashboardV2.module.scss';
 
-const CronDetails = ({ cronSyntax }: Pick<ExperimentDetails, 'cronSyntax'>): React.ReactElement => (
-  <DarkPopover
-    position="top"
-    usePortal={true}
-    disabled={!cronSyntax}
-    interactionKind={PopoverInteractionKind.HOVER}
-    content={
-      <Layout.Vertical padding={'medium'}>
-        <Text font={{ size: 'small' }} color={Color.WHITE}>
-          {cronSyntax ? cronstrue.toString(cronSyntax.toString()) : '--'}
+const CronDetails = ({ cronSyntax, multiRunEnabled }: Pick<ExperimentDetails, 'cronSyntax' | 'multiRunEnabled'>): React.ReactElement => {
+  // Determine display type: Multi-Run > Cron > Non-Cron
+  const getDisplayType = () => {
+    if (multiRunEnabled) return { label: 'Multi-Run', icon: 'play' as const };
+    if (cronSyntax) return { label: 'Cron', icon: 'repeat' as const };
+    return { label: 'Non-Cron', icon: 'play' as const };
+  };
+  const displayType = getDisplayType();
+  
+  return (
+    <DarkPopover
+      position="top"
+      usePortal={true}
+      disabled={!cronSyntax && !multiRunEnabled}
+      interactionKind={PopoverInteractionKind.HOVER}
+      content={
+        <Layout.Vertical padding={'medium'}>
+          <Text font={{ size: 'small' }} color={Color.WHITE}>
+            {multiRunEnabled ? 'Multi-Run Experiment (runs sequentially)' : cronSyntax ? cronstrue.toString(cronSyntax.toString()) : '--'}
+          </Text>
+        </Layout.Vertical>
+      }
+    >
+      <Container flex={{ justifyContent: 'flex-start' }}>
+        <Icon width={14} size={cronSyntax ? 10 : 14} color={Color.GREY_500} name={displayType.icon} />
+        <Text
+          margin={{ left: 'small' }}
+          font={{ size: 'small' }}
+          style={{ lineHeight: 1 }}
+          color={Color.GREY_500}
+          lineClamp={1}
+        >
+          {displayType.label}
         </Text>
-      </Layout.Vertical>
-    }
-  >
-    <Container flex={{ justifyContent: 'flex-start' }}>
-      <Icon width={14} size={cronSyntax ? 10 : 14} color={Color.GREY_500} name={cronSyntax ? 'repeat' : 'play'} />
-      <Text
-        margin={{ left: 'small' }}
-        font={{ size: 'small' }}
-        style={{ lineHeight: 1 }}
-        color={Color.GREY_500}
-        lineClamp={1}
-      >
-        {cronSyntax ? 'Cron' : 'Non-Cron'}
-      </Text>
-    </Container>
-  </DarkPopover>
-);
+      </Container>
+    </DarkPopover>
+  );
+};
 
 const ChaosInfrastructureDetails = ({
   infrastructure
@@ -136,7 +146,7 @@ const ExperimentDashboardV2Table = ({
         Cell: ({ row: { original: data } }: { row: Row<ExperimentDetails> }) => {
           return (
             <Layout.Vertical spacing={'xsmall'} onClick={killEvent}>
-              <CronDetails cronSyntax={data.cronSyntax} />
+              <CronDetails cronSyntax={data.cronSyntax} multiRunEnabled={data.multiRunEnabled} />
               <ChaosInfrastructureDetails infrastructure={data.infrastructure} />
             </Layout.Vertical>
           );
