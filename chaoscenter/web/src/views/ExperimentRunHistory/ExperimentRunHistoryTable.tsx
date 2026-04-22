@@ -6,7 +6,7 @@ import type { Column, Row, UseExpandedRowProps } from 'react-table';
 import { Classes, Menu, MenuItem, Position } from '@blueprintjs/core';
 import { useHistory } from 'react-router-dom';
 import { getDetailedTime, getColorBasedOnResilienceScore, killEvent } from '@utils';
-import type { ExperimentRunDetails, ExperimentRunHistoryTableProps } from '@controllers/ExperimentRunHistory';
+import type { ExperimentRunDetails, ExperimentRunHistoryTableProps, DataExtractionStatus } from '@controllers/ExperimentRunHistory';
 import { useStrings } from '@strings';
 import { useRouteWithBaseUrl } from '@hooks';
 import CopyButton from '@components/CopyButton';
@@ -17,7 +17,7 @@ import CertificateReportDialog from '@components/CertificateReportDialog/Certifi
 import { MemoisedExperimentRunFaultsTable } from './ExperimentRunFaultTable';
 import css from './ExperimentRunHistoryTable.module.scss';
 
-const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistoryTableProps): React.ReactElement => {
+const ExperimentRunHistoryTable = ({ content, pagination, dataExtractionStatuses }: ExperimentRunHistoryTableProps): React.ReactElement => {
   const { getString } = useStrings();
   const history = useHistory();
   const paths = useRouteWithBaseUrl();
@@ -138,6 +138,41 @@ const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistory
         }
       },
       {
+        Header: 'Data Extraction',
+        id: 'dataExtraction',
+        Cell: ({ row: { original: data } }: { row: Row<ExperimentRunDetails> }) => {
+          const extraction: DataExtractionStatus | undefined = dataExtractionStatuses?.[data.experimentRunID];
+          if (!extraction) {
+            return (
+              <Text font={{ size: 'small' }} color={Color.GREY_400}>—</Text>
+            );
+          }
+          const status = extraction.status;
+          if (status === 'COMPLETED') {
+            return (
+              <Text font={{ size: 'medium', weight: 'semi-bold' }} color={Color.GREEN_600} title="Data extraction completed">
+                ✓
+              </Text>
+            );
+          }
+          if (status === 'FAILED') {
+            return (
+              <Text font={{ size: 'medium', weight: 'semi-bold' }} color={Color.RED_600} title="Data extraction failed">
+                ✗
+              </Text>
+            );
+          }
+          // PENDING, RUNNING, NOT_FOUND, UNKNOWN — yellow indicator
+          const label = status === 'RUNNING' ? 'Running' : status === 'PENDING' ? 'Pending' : status === 'NOT_FOUND' ? 'Not started' : 'Unknown';
+          return (
+            <Text font={{ size: 'medium', weight: 'semi-bold' }} color={Color.YELLOW_700} title={`Data extraction: ${label}`}>
+              ●
+            </Text>
+          );
+        },
+        disableSortBy: true
+      },
+      {
         Header: '',
         id: 'duration',
         Cell: ({ row: { original: data } }: { row: Row<ExperimentRunDetails> }) => {
@@ -206,7 +241,7 @@ const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistory
       }
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dataExtractionStatuses]);
 
   return (
     <TableV2<ExperimentRunDetails>
@@ -229,5 +264,5 @@ const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistory
 };
 
 export const MemoisedExperimentRunHistoryTable = React.memo(ExperimentRunHistoryTable, (prev, current) => {
-  return isEqual(prev.content, current.content);
+  return isEqual(prev.content, current.content) && prev.dataExtractionStatuses === current.dataExtractionStatuses;
 });

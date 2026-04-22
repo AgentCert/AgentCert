@@ -7,7 +7,7 @@ import { listExperimentRunForHistory } from '@api/core';
 import { getScope, getColorBasedOnResilienceScore, cronEnabled } from '@utils';
 import ExperimentRunHistoryView from '@views/ExperimentRunHistory';
 import { useStrings } from '@strings';
-import { ExperimentRun, ExperimentRunStatus, ExperimentType } from '@api/entities';
+import { ExperimentRun, ExperimentType } from '@api/entities';
 import type { ColumnData } from '@components/ColumnChart/ColumnChart.types';
 import {
   initialExperimentRunFilterState,
@@ -16,6 +16,7 @@ import {
   useUpdateSearchParams,
   useRouteWithBaseUrl
 } from '@hooks';
+import type { DataExtractionStatus } from './types';
 import RightSideBarV2 from '@components/RightSideBarV2';
 import type { UseRouteDefinitionsProps } from '@routes/RouteDefinitions';
 import {
@@ -126,8 +127,58 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   }, [experimentName]),
     [experimentName];
 
+  // Fetch data extraction status for all runs on load and when run IDs change
+  const [dataExtractionStatuses, setDataExtractionStatuses] = React.useState<Record<string, DataExtractionStatus>>({});
+
+  // Stable key derived from run IDs — prevents re-fetching on every GraphQL poll
+  const runIdsKey = React.useMemo(
+    () => (experimentRunsWithExecutionData ?? []).map(r => r.experimentRunID).sort().join(','),
+    [experimentRunsWithExecutionData]
+  );
+
+  React.useEffect(() => {
+    if (!experimentRunsWithExecutionData || experimentRunsWithExecutionData.length === 0) return;
+
+    const runs = experimentRunsWithExecutionData;
+
+    const fetchStatuses = async (): Promise<void> => {
+      const results: Record<string, DataExtractionStatus> = {};
+
+      await Promise.allSettled(
+        runs.map(async run => {
+          if (!run.experimentRunID || !run.experimentID) return;
+          try {
+            const resp = await fetch(
+              `/agentcert-api/api/v1/tasks?experiment_id=${encodeURIComponent(run.experimentID)}&experiment_run_id=${encodeURIComponent(run.experimentRunID)}`,
+              { headers: { 'Accept': 'application/json' } }
+            );
+            if (resp.ok) {
+              const data = await resp.json();
+              results[run.experimentRunID] = {
+                status: (data.status ?? '').toUpperCase(),
+                stage: data.stage ?? 'pending'
+              };
+            } else if (resp.status === 404) {
+              results[run.experimentRunID] = { status: 'NOT_FOUND', stage: 'pending' };
+            } else {
+              results[run.experimentRunID] = { status: 'UNKNOWN', stage: 'pending' };
+            }
+          } catch {
+            results[run.experimentRunID] = { status: 'UNKNOWN', stage: 'pending' };
+          }
+        })
+      );
+
+      setDataExtractionStatuses(results);
+    };
+
+    fetchStatuses();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runIdsKey]);
+
   const experimentRunsTableData: ExperimentRunHistoryTableProps | undefined = experimentRunsWithExecutionData && {
     content: generateExperimentRunTableContent(experimentRunsWithExecutionData),
+    dataExtractionStatuses,
     pagination: {
       gotoPage: event => setPage(event),
       itemCount: totalExperimentRuns ?? 0,

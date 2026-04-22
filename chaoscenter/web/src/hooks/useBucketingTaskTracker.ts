@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BUCKETING_POLL_INTERVAL_MS,
-  BUCKETING_POLL_TIMEOUT_MS,
-  BUCKETING_USE_STUB_POLL_RESPONSE,
-  BUCKETING_STUB_DELAY_MS
+  BUCKETING_POLL_TIMEOUT_MS
 } from '@configs/bucketingConfig';
 
 export type BucketingTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'unknown';
@@ -23,46 +21,6 @@ export interface BucketingTaskTrackerResult {
   getTaskStatus: (experimentRunID: string) => BucketingTaskEntry | undefined;
   /** Register a new task for an experiment run */
   registerTask: (experimentRunID: string, taskId: string, pollUrl: string) => void;
-}
-
-/**
- * TODO: Remove this function once the actual /api/v1/tasks/{task_id} API is implemented.
- * Returns a mock COMPLETED response matching the API spec for stub task IDs.
- */
-function buildStubCompletedResponse(entry: BucketingTaskEntry): Record<string, unknown> {
-  const now = new Date().toISOString();
-  return {
-    task_id: entry.taskId,
-    agent_id: 'stub-agent',
-    experiment_id: 'stub-experiment',
-    run_id: 'stub-run',
-    status: 'COMPLETED',
-    stage: 'done',
-    created_at: now,
-    updated_at: now,
-    started_at: now,
-    completed_at: now,
-    result: {
-      total_observations: 0,
-      total_faults_detected: 0,
-      faults: [],
-      storage_paths: {
-        traces_dir: '',
-        fault_buckets_dir: '',
-        metrics_dir: '',
-        summary: '',
-        log: ''
-      },
-      token_usage: {
-        bucketing_input_tokens: 0,
-        bucketing_output_tokens: 0,
-        extraction_input_tokens: 0,
-        extraction_output_tokens: 0,
-        total_tokens: 0
-      },
-      processing_time_seconds: 0
-    }
-  };
 }
 
 /**
@@ -102,8 +60,6 @@ export function useBucketingTaskTracker(): BucketingTaskTrackerResult {
 
     if (activeTasks.length === 0) return;
 
-    const baseUrl = (typeof __AGENTCERT_API_BASE_URL__ !== 'undefined' && __AGENTCERT_API_BASE_URL__) || '';
-
     const updates: Record<string, BucketingTaskEntry> = {};
 
     await Promise.allSettled(
@@ -115,23 +71,8 @@ export function useBucketingTaskTracker(): BucketingTaskTrackerResult {
           return;
         }
 
-        // TODO: Remove this stub block once the actual /api/v1/tasks/{task_id} API is implemented.
-        if (BUCKETING_USE_STUB_POLL_RESPONSE && entry.taskId.startsWith('stub-')) {
-          if (now - entry.registeredAt < BUCKETING_STUB_DELAY_MS) {
-            // Simulate RUNNING state until the stub delay elapses
-            if (entry.status !== 'running') {
-              updates[runID] = { ...entry, status: 'running', stage: 'running_pipeline' };
-            }
-            return;
-          }
-          const stubData = buildStubCompletedResponse(entry);
-          console.info(`[stub] Returning mock COMPLETED for task ${entry.taskId}`, stubData);
-          updates[runID] = { ...entry, status: 'completed', stage: 'done' };
-          return;
-        }
-
         try {
-          const response = await fetch(`${baseUrl}${entry.pollUrl}`);
+          const response = await fetch(`/agentcert-api${entry.pollUrl}`);
           if (!response.ok) return;
           const data = await response.json();
           const apiStatus: string = data.status ?? '';

@@ -1,6 +1,11 @@
 import type { PaginationProps } from '@harnessio/uicore';
 import type { ExperimentRunFaultStatus, ExperimentRunStatus, UserDetails } from '@api/entities';
 
+export interface DataExtractionStatus {
+  status: string; // PENDING | RUNNING | COMPLETED | FAILED | NOT_FOUND | UNKNOWN
+  stage: string;  // pending | acquiring_trace | running_pipeline | done
+}
+
 interface ProbeStatus {
   passed: number;
   failed: number;
@@ -38,4 +43,5 @@ export interface ExperimentRunDetails {
 export interface ExperimentRunHistoryTableProps {
   content: Array<ExperimentRunDetails>;
   pagination?: PaginationProps;
+  dataExtractionStatuses?: Record<string, DataExtractionStatus>;
 }

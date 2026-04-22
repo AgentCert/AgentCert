@@ -13,7 +13,7 @@ const targetLocalHost = (process.env.TARGET_LOCALHOST && JSON.parse(process.env.
 const frontendPort = Number.parseInt(process.env.FRONTEND_PORT || '', 10) || 2001;
 const graphQLProxyPort = Number.parseInt(process.env.GQL_PROXY_PORT || '', 10) || 8080;
 const authProxyPort = Number.parseInt(process.env.AUTH_PROXY_PORT || '', 10) || 3000;
-const agentCertApiBaseUrl = process.env.AGENTCERT_API_BASE_URL || 'http://localhost:8000';
+const agentCertApiBaseUrl = process.env.AGENTCERT_API_BASE_URL || '';
 
 const certificateExists = fs.existsSync(path.join(CONTEXT, 'certificates/localhost.pem'));
 
@@ -60,6 +60,13 @@ const devConfig = {
           : targetLocalHost
           ? `http://localhost:${authProxyPort}`
           : `${baseUrl}/auth`,
+        secure: false,
+        changeOrigin: true,
+        logLevel: 'info'
+      },
+      '/agentcert-api': {
+        pathRewrite: { '^/agentcert-api': '' },
+        target: agentCertApiBaseUrl,
         secure: false,
         changeOrigin: true,
         logLevel: 'info'

@@ -23,6 +23,7 @@ interface BucketingExtractionRequest {
   llm_batch_size?: number;
   storage_config?: {
     type: 'local' | 'mongodb' | 'hybrid' | 'blob_storage';
+    container_name?: string;
   };
 }
 
@@ -57,8 +58,6 @@ export async function submitBucketingExtraction(
   experimentId: string,
   runId: string
 ): Promise<BucketingExtractionResponse> {
-  const baseUrl = (typeof __AGENTCERT_API_BASE_URL__ !== 'undefined' && __AGENTCERT_API_BASE_URL__) || '';
-
   const requestBody: BucketingExtractionRequest = {
     agent_id: agentId,
     experiment_id: experimentId,
@@ -67,26 +66,14 @@ export async function submitBucketingExtraction(
       type: 'langfuse'
     },
     llm_batch_size: 5,
-    storage_config: { type: 'local' }
+    storage_config: { type: 'local', container_name: '' }
   };
 
-  let response: Response;
-  try {
-    response = await fetch(`${baseUrl}/api/v1/bucketing-extraction`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
-  } catch (networkError) {
-    // Network error (connection refused / server unreachable) — return stub
-    console.warn('Bucketing-extraction API unreachable, using stub response:', networkError);
-    const stubId = `stub-${experimentId}-${Date.now()}`;
-    return {
-      status: 'accepted',
-      task_id: stubId,
-      poll_url: `/api/v1/tasks/${stubId}`
-    };
-  }
+  const response = await fetch('/agentcert-api/api/v1/bucketing-extraction', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(requestBody)
+  });
 
   if (response.status === 409) {
     // TASK_ALREADY_ACTIVE — extract existing task_id from error response
@@ -99,18 +86,10 @@ export async function submitBucketingExtraction(
         poll_url: `/api/v1/tasks/${existingTaskId}`
       };
     }
-    // Could not extract task_id from 409 — fall through to stub
   }
 
   if (!response.ok) {
-    // API returned non-success status — return stub
-    console.warn(`Bucketing-extraction API unavailable (${response.status}), using stub response`);
-    const stubId = `stub-${experimentId}-${Date.now()}`;
-    return {
-      status: 'accepted',
-      task_id: stubId,
-      poll_url: `/api/v1/tasks/${stubId}`
-    };
+    throw new Error(`Bucketing-extraction API returned ${response.status}`);
   }
 
   return response.json();

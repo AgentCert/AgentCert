@@ -24,7 +24,7 @@ metadata:
   name: litmus-portal-admin-config
   namespace: litmus-chaos
 data:
-  DB_SERVER: mongodb://root:1234@172.22.174.61:27017/admin
+  DB_SERVER: mongodb://root:1234@192.168.65.254:27017/admin
   VERSION: "ci"
   SKIP_SSL_VERIFY: "false"
   DEX_ENABLED: "false"

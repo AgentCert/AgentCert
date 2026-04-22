@@ -18,7 +18,7 @@
   div[class*='TableV2--cells'],
   div[class*='TableV2--header'] {
     display: grid !important;
-    grid-template-columns: 2.5rem 1.6fr 0.9fr 1fr 1.5fr 6rem 2.5rem;
+    grid-template-columns: 2.5rem 1.6fr 0.9fr 1fr 1.5fr 6rem 6rem 2.5rem;
   }
 
   :global {
