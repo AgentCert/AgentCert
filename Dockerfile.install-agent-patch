@@ -1,0 +1,17 @@
+# Layers the current agent-chart on top of the install-agent base image.
+# The base image (from a separate repo) ships its own /charts/flash-agent/
+# which may contain stale templates (cronjob.yaml, secret.yaml, etc.) that
+# no longer exist in this repo's agent-chart/. The rm -rf below is CRITICAL
+# to avoid helm install failures from orphaned template files.
+#
+# Rebuilt automatically by .github/workflows/build-install-agent.yml
+# whenever agent-chart/** changes.
+
+FROM agentcert/agentcert-install-agent:latest
+USER root
+RUN rm -rf /charts/flash-agent/templates /charts/flash-agent/values.yaml /charts/flash-agent/Chart.yaml
+COPY agent-chart/templates/ /charts/flash-agent/templates/
+COPY agent-chart/values.yaml /charts/flash-agent/values.yaml
+COPY agent-chart/Chart.yaml /charts/flash-agent/Chart.yaml
+RUN chown -R appuser:appuser /charts/flash-agent
+USER appuser
