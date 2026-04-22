@@ -1,0 +1,50 @@
+.certProgressDialog {
+  width: 560px !important;
+  max-width: 90vw !important;
+  padding-bottom: 0 !important;
+
+  :global(.bp3-dialog-body) {
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+  }
+}
+
+.body {
+  min-height: 180px;
+}
+
+.details {
+  background: var(--grey-50);
+  border-radius: 6px;
+  padding: var(--spacing-medium);
+}
+
+.errorText {
+  word-break: break-word;
+}
+
+.errorBlock {
+  background: var(--red-50, #fff5f5);
+  border-radius: 6px;
+  padding: var(--spacing-medium);
+  word-break: break-word;
+}
+
+.resultBlock {
+  background: var(--green-50, #f0fff4);
+  border-radius: 6px;
+  padding: var(--spacing-medium);
+}
+
+.resultPre {
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--grey-100);
+  padding: var(--spacing-small);
+  border-radius: 4px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -14,6 +14,7 @@ import { GenericErrorHandler } from '@errors';
 import { getScope } from '@utils';
 import { useRouteWithBaseUrl } from '@hooks';
 import { StudioTabs } from '@models';
+import CertificationProgressDialog from '@components/CertificationProgressDialog/CertificationProgressDialog';
 import { MemoisedExperimentRunHistoryTable } from './ExperimentRunHistoryTable';
 
 interface MultiRunConfig {
@@ -58,6 +59,8 @@ const ExperimentRunHistoryView = ({
   const { experimentID } = useParams<{ experimentID: string }>();
 
   const headerTitle = loading && !experimentName ? undefined : experimentName ?? experimentID;
+
+  const [certDialogOpen, setCertDialogOpen] = React.useState(false);
 
   const breadcrumbs = [
     {
@@ -112,9 +115,16 @@ const ExperimentRunHistoryView = ({
                 cursor: certificateEnabled ? 'pointer' : 'not-allowed',
                 opacity: certificateEnabled ? 1 : 0.6
               }}
+              onClick={certificateEnabled ? () => setCertDialogOpen(true) : undefined}
             >
               Download Certificate
             </Text>
+            <CertificationProgressDialog
+              isOpen={certDialogOpen}
+              onClose={() => setCertDialogOpen(false)}
+              experimentID={experimentID}
+              experimentName={experimentName}
+            />
             {experimentRunSearchBar}
             {dateRangePicker}
           </Layout.Horizontal>
