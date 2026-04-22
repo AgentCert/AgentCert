@@ -4,29 +4,6 @@ agent-sidecar - Transparent metadata-injection HTTP proxy.
 
 Sits between any LLM agent and LiteLLM to enrich requests with
 agent identity. The agent has ZERO awareness of experiment IDs.
-
-<<<<<<< Updated upstream
-Env vars read at startup:
-  SIDECAR_PORT        – listen port (default 4001)
-  UPSTREAM_URL        – real LiteLLM base URL (e.g. http://litellm:4000)
-  INJECTION_MODE      – how to inject context (default "openai-metadata")
-                        "openai-metadata" : merge into JSON body metadata dict
-                        "http-header"     : add X-Experiment-* request headers
-                        "none"            : pure passthrough, no injection
-  AGENT_ID            – injected via Helm --set agentId=<uuid> at deploy time
-
-  ALLOWED_METADATA_KEYS – comma-separated allowlist of env-var names to inject.
-                          Default: "AGENT_ID" (routing/billing only).
-                          To restore legacy behaviour (NOT recommended):
-                          "AGENT_ID,EXPERIMENT_ID,EXPERIMENT_RUN_ID,WORKFLOW_NAME"
-
-Security note:
-  Experiment context (EXPERIMENT_ID, EXPERIMENT_RUN_ID, WORKFLOW_NAME) is
-  intentionally excluded by default to enforce the "blind observer" principle.
-  The flash-agent must detect anomalies from system signals, not from
-  prior knowledge of what faults are being injected.
-  See: docs/Flash-agent-data-leakage-analysis.md
-=======
 Context is loaded dynamically on every request from the ConfigMap
 volume mount so long-running pods use fresh experiment IDs.
 
@@ -35,7 +12,6 @@ Env vars (startup config):
     UPSTREAM_URL   - real LiteLLM base URL (e.g. http://litellm:4000)
     INJECTION_MODE - openai-metadata | http-header | none
     CONFIG_MOUNT   - ConfigMap mount path (default /etc/agent/metadata)
->>>>>>> Stashed changes
 """
 
 import json
@@ -49,25 +25,6 @@ SIDECAR_PORT = int(os.environ.get("SIDECAR_PORT", "4001"))
 UPSTREAM_URL = (os.environ.get("UPSTREAM_URL") or "http://localhost:4000").rstrip("/")
 INJECTION_MODE = (os.environ.get("INJECTION_MODE") or "openai-metadata").strip().lower()
 
-<<<<<<< Updated upstream
-# Metadata allowlist – controls which env vars are injected into LLM requests.
-# Default: only AGENT_ID (routing/billing). Experiment context is excluded to
-# prevent the flash-agent from receiving prior knowledge of fault injection.
-_ALLOWED_KEYS_RAW = os.environ.get("ALLOWED_METADATA_KEYS", "AGENT_ID")
-ALLOWED_METADATA_KEYS = frozenset(
-    k.strip().upper() for k in _ALLOWED_KEYS_RAW.split(",") if k.strip()
-)
-
-# Metadata context – read once at startup, immutable for pod lifetime.
-# Only keys present in ALLOWED_METADATA_KEYS are included.
-_ALL_KNOWN_KEYS = ("AGENT_ID", "EXPERIMENT_ID", "EXPERIMENT_RUN_ID", "WORKFLOW_NAME")
-EXPERIMENT_CONTEXT = {}
-for _key in _ALL_KNOWN_KEYS:
-    if _key in ALLOWED_METADATA_KEYS:
-        _val = os.environ.get(_key, "")
-        if _val:
-            EXPERIMENT_CONTEXT[_key.lower()] = _val
-=======
 # Directory where the agent-metadata ConfigMap is mounted.
 # The same ConfigMap is mounted by the agent container; sidecar gets its own
 # volumeMount pointing here so it sees live updates within ~60 s.
@@ -86,7 +43,6 @@ _CONTEXT_KEYS = (
 _CONTEXT_LOCK = Lock()
 _LAST_CONTEXT: dict[str, str] = {}
 _LAST_TRACE_ID: str = ""
->>>>>>> Stashed changes
 
 # Headers to strip (hop-by-hop)
 _HOP_HEADERS = frozenset(("host", "transfer-encoding"))
@@ -414,21 +370,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 
 def main():
-<<<<<<< Updated upstream
-    print(f"[agent-sidecar] Starting on :{SIDECAR_PORT} → {UPSTREAM_URL}  mode={INJECTION_MODE}", flush=True)
-    print(f"[agent-sidecar] Allowed metadata keys: {sorted(ALLOWED_METADATA_KEYS)}", flush=True)
-    if EXPERIMENT_CONTEXT:
-        print(f"[agent-sidecar] Injecting: {list(EXPERIMENT_CONTEXT.keys())}", flush=True)
-    else:
-        print("[agent-sidecar] No metadata to inject — transparent passthrough", flush=True)
-    _filtered = [k for k in _ALL_KNOWN_KEYS if k not in ALLOWED_METADATA_KEYS and os.environ.get(k)]
-    if _filtered:
-        print(f"[agent-sidecar] Filtered out (present but not allowed): {_filtered}", flush=True)
-
-=======
     print(f"[agent-sidecar] Starting on :{SIDECAR_PORT} -> {UPSTREAM_URL} mode={INJECTION_MODE}", flush=True)
     print(f"[agent-sidecar] Config mount: {CONFIG_MOUNT} (dynamic per-request reads)", flush=True)
->>>>>>> Stashed changes
     server = HTTPServer(("0.0.0.0", SIDECAR_PORT), ProxyHandler)
     try:
         server.serve_forever()

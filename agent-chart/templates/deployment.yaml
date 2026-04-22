@@ -115,8 +115,6 @@ spec:
               value: {{ .Values.sidecar.upstream | quote }}
             - name: INJECTION_MODE
               value: {{ .Values.sidecar.injectionMode | default "openai-metadata" | quote }}
-<<<<<<< Updated upstream
-=======
             - name: CONFIG_MOUNT
               value: "/etc/agent/metadata"
             - name: AGENT_NAME
@@ -138,22 +136,14 @@ spec:
                 configMapKeyRef:
                   name: {{ .Values.agent.name }}-metadata
                   key: WORKFLOW_NAME
->>>>>>> Stashed changes
             {{- if .Values.agentId }}
             - name: AGENT_ID
               value: {{ .Values.agentId | quote }}
             {{- end }}
-<<<<<<< Updated upstream
-            {{- if .Values.sidecar.allowedMetadataKeys }}
-            - name: ALLOWED_METADATA_KEYS
-              value: {{ .Values.sidecar.allowedMetadataKeys | quote }}
-            {{- end }}
-=======
           volumeMounts:
             - name: agent-metadata
               mountPath: /etc/agent/metadata
               readOnly: true
->>>>>>> Stashed changes
           resources:
             {{- toYaml .Values.sidecar.resources | nindent 12 }}
 {{- end }}
