@@ -7,7 +7,7 @@ import { listExperimentRunForHistory } from '@api/core';
 import { getScope, getColorBasedOnResilienceScore, cronEnabled } from '@utils';
 import ExperimentRunHistoryView from '@views/ExperimentRunHistory';
 import { useStrings } from '@strings';
-import { ExperimentRun, ExperimentType } from '@api/entities';
+import { ExperimentRun, ExperimentRunStatus, ExperimentType } from '@api/entities';
 import type { ColumnData } from '@components/ColumnChart/ColumnChart.types';
 import {
   initialExperimentRunFilterState,

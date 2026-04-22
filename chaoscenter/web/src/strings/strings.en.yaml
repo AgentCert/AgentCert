@@ -433,7 +433,7 @@ experimentRunDetails: Experiment Run Details
 experimentRunID: Experiment Run ID
 experimentRuns: Experiment Runs
 experimentCompleted: 'Experiment "{{name}}" completed successfully!'
-experimentCompletedBucketing: 'Experiment "{{name}}" completed. Bucketing-extraction started (Reference ID: {{taskId}})'
+experimentCompletedBucketing: 'Experiment "{{name}}" completed successfully with reference/task id {{taskId}}'
 experimentCompletedBucketingFailed: 'Experiment "{{name}}" completed but bucketing-extraction failed to start'
 experimentCompletedWithProbeFailure: 'Experiment "{{name}}" completed with probe failure(s). Bucketing-extraction started (Reference ID: {{taskId}})'
 experimentCompletedWithProbeFailureBucketingFailed: 'Experiment "{{name}}" completed with probe failure(s) but bucketing-extraction failed to start'

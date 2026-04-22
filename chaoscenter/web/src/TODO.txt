@@ -1,2 +1,15 @@
 agent_id, agentID fallsback to environment id if expreiment manifest has no agent id details. Need to rework on this after sanjeev changes are pushed
 data contracts needs to be provided by Ravi. After this latest changes, UI integration needs to be updated
+remove whereever there is stubId
+
+Remove this line frm useexperimentcompletiontoast.tsx
+ if (!response.ok) {
+    // TODO: Remove this stub once the bucketing-extraction API is live
+    console.warn(`Bucketing-extraction API unavailable (${response.status}), using stub response`);
+    const stubId = `stub-${experimentId}-${Date.now()}`;
+    return {
+      status: 'accepted',
+      task_id: stubId,
+      poll_url: `/api/v1/tasks/${stubId}`
+    };
+  }

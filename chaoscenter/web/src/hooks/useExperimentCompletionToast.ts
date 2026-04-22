@@ -3,6 +3,29 @@ import { useToaster } from '@harnessio/uicore';
 import { useStrings } from '@strings';
 import { ExperimentRunStatus } from '@api/entities';
 
+interface BucketingExtractionRequest {
+  agent_id: string;
+  experiment_id: string;
+  run_id: string;
+  trace_source: {
+    type: 'file';
+    file_path: string;
+  } | {
+    type: 'langfuse';
+    base_url?: string;
+    public_key?: string;
+    secret_key?: string;
+    from_timestamp?: string;
+    page_size?: number;
+    max_pages?: number;
+    include_observations?: boolean;
+  };
+  llm_batch_size?: number;
+  storage_config?: {
+    type: 'local' | 'mongodb' | 'hybrid' | 'blob_storage';
+  };
+}
+
 interface BucketingExtractionResponse {
   status: string;
   task_id: string;
@@ -15,40 +38,72 @@ interface UseExperimentCompletionToastProps {
   experimentID: string | undefined;
   runID: string | undefined;
   agentID: string | undefined;
+  onTaskRegistered?: (experimentRunID: string, taskId: string, pollUrl: string) => void;
 }
 
-async function submitBucketingExtraction(
+export function extractAgentIDFromManifest(manifest: string | undefined): string | undefined {
+  if (!manifest) return undefined;
+  try {
+    const parsed = JSON.parse(manifest);
+    const params: { name: string; value?: string }[] = parsed?.spec?.arguments?.parameters ?? [];
+    return params.find(p => p.name === 'agentId')?.value;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function submitBucketingExtraction(
   agentId: string,
   experimentId: string,
   runId: string
 ): Promise<BucketingExtractionResponse> {
   const baseUrl = (typeof __AGENTCERT_API_BASE_URL__ !== 'undefined' && __AGENTCERT_API_BASE_URL__) || '';
-  const response = await fetch(`${baseUrl}/api/v1/bucketing-extraction`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      agent_id: agentId,
-      experiment_id: experimentId,
-      run_id: runId,
-      trace_source: {
-        type: 'langfuse'
-      },
-      llm_batch_size: 5,
-      storage_config: { type: 'local' }
-    })
-  });
 
-  if (response.status === 409) {
-    const body = await response.json();
+  const requestBody: BucketingExtractionRequest = {
+    agent_id: agentId,
+    experiment_id: experimentId,
+    run_id: runId,
+    trace_source: {
+      type: 'langfuse'
+    },
+    llm_batch_size: 5,
+    storage_config: { type: 'local' }
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/api/v1/bucketing-extraction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    });
+  } catch (networkError) {
+    // Network error (connection refused / server unreachable) — return stub
+    console.warn('Bucketing-extraction API unreachable, using stub response:', networkError);
+    const stubId = `stub-${experimentId}-${Date.now()}`;
     return {
       status: 'accepted',
-      task_id: body.detail.details.task_id,
-      poll_url: `/api/v1/tasks/${body.detail.details.task_id}`
+      task_id: stubId,
+      poll_url: `/api/v1/tasks/${stubId}`
     };
   }
 
+  if (response.status === 409) {
+    // TASK_ALREADY_ACTIVE — extract existing task_id from error response
+    const body = await response.json();
+    const existingTaskId = body?.task_id ?? body?.detail?.task_id ?? body?.detail?.details?.task_id;
+    if (existingTaskId) {
+      return {
+        status: 'accepted',
+        task_id: existingTaskId,
+        poll_url: `/api/v1/tasks/${existingTaskId}`
+      };
+    }
+    // Could not extract task_id from 409 — fall through to stub
+  }
+
   if (!response.ok) {
-    // TODO: Remove this stub once the bucketing-extraction API is live
+    // API returned non-success status — return stub
     console.warn(`Bucketing-extraction API unavailable (${response.status}), using stub response`);
     const stubId = `stub-${experimentId}-${Date.now()}`;
     return {
@@ -71,7 +126,8 @@ export function useExperimentCompletionToast({
   experimentName,
   experimentID,
   runID,
-  agentID
+  agentID,
+  onTaskRegistered
 }: UseExperimentCompletionToastProps): void {
   const { showSuccess, showError, showWarning } = useToaster();
   const { getString } = useStrings();
@@ -81,13 +137,13 @@ export function useExperimentCompletionToast({
     const prev = prevPhaseRef.current;
     prevPhaseRef.current = phase;
 
-    // Only fire when transitioning FROM a non-terminal state
-    if (!phase || !experimentName) return;
+    // Only fire when transitioning FROM a non-terminal state.
+    // prev === undefined means page just loaded — skip to avoid firing on every page load.
+    if (!phase || !experimentName || prev === undefined) return;
     const wasRunning =
       prev === ExperimentRunStatus.RUNNING ||
       prev === ExperimentRunStatus.QUEUED ||
-      prev === ExperimentRunStatus.NA ||
-      prev === undefined;
+      prev === ExperimentRunStatus.NA;
     if (!wasRunning) return;
 
     // Check if current phase is terminal
@@ -154,6 +210,9 @@ export function useExperimentCompletionToast({
       submitBucketingExtraction(agentID, experimentID, runID)
         .then(resp => {
           config.toastFn(getString(config.successKey as any, { name, taskId: resp.task_id }));
+          if (onTaskRegistered) {
+            onTaskRegistered(runID, resp.task_id, resp.poll_url);
+          }
         })
         .catch(() => {
           config.toastFn(getString(config.failKey as any, { name }));

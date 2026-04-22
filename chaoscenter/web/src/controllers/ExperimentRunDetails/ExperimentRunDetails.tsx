@@ -3,7 +3,7 @@ import React from 'react';
 import { useParams } from 'react-router-dom';
 import { ExecutionData, ExperimentType, ExperimentRunStatus } from '@api/entities';
 import { cronEnabled, getScope } from '@utils';
-import { useExperimentCompletionToast } from '@hooks';
+import { useExperimentCompletionToast, extractAgentIDFromManifest, useBucketingTaskTracker } from '@hooks';
 import ExperimentRunDetailsView from '@views/ExperimentRunDetails';
 import RightSideBarV2 from '@components/RightSideBarV2';
 import { getExperimentRun } from '@api/core/experiments/getExperimentRun';
@@ -28,25 +28,23 @@ export default function ExperimentRunDetailsController(): React.ReactElement {
 
   const specificRunData = listExperimentRunData?.getExperimentRun;
 
-  // Extract agentId from the experiment manifest workflow parameters.
-  // Falls back to infraID if agentId param is not present (agent not registered).
-  const agentID = React.useMemo(() => {
-    if (!specificRunData?.experimentManifest) return undefined;
-    try {
-      const manifest = JSON.parse(specificRunData.experimentManifest);
-      const params: { name: string; value?: string }[] = manifest?.spec?.arguments?.parameters ?? [];
-      return params.find(p => p.name === 'agentId')?.value;
-    } catch {
-      return undefined;
-    }
-  }, [specificRunData?.experimentManifest]);
+  const agentID = React.useMemo(
+    () => extractAgentIDFromManifest(specificRunData?.experimentManifest),
+    [specificRunData?.experimentManifest]
+  );
+
+  // TODO: Remove infraID/experimentID fallback once all experiments have agentId in manifest
+  const resolvedAgentID = agentID ?? specificRunData?.infra?.infraID ?? experimentID;
+
+  const { registerTask } = useBucketingTaskTracker();
 
   useExperimentCompletionToast({
     phase: specificRunData?.phase,
     experimentName: specificRunData?.experimentName,
     experimentID,
     runID: specificRunData?.experimentRunID ?? runID,
-    agentID: agentID ?? specificRunData?.infra?.infraID
+    agentID: resolvedAgentID,
+    onTaskRegistered: registerTask
   });
 
   React.useEffect(() => {

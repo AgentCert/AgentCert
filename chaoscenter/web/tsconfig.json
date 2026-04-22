@@ -6,6 +6,7 @@
       "@images/*": ["images/*"],
       "@components/*": ["components/*"],
       "@config": ["config"],
+      "@configs/*": ["configs/*"],
       "@context": ["context"],
       "@constants/*": ["constants/*"],
       "@controllers/*": ["controllers/*"],
