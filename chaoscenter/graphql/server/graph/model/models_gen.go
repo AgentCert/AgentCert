@@ -140,6 +140,12 @@ type AgentHubEntry struct {
 	Version string `json:"version"`
 	// List of capabilities this agent supports
 	Capabilities []string `json:"capabilities"`
+	// Template name used to identify the install step in workflow manifests
+	InstallTemplateName *string `json:"installTemplateName,omitempty"`
+	// Default container image for the install step
+	InstallImage *string `json:"installImage,omitempty"`
+	// Helm --set mappings for experiment context injection
+	ContextInjection []*ContextInjectionMapping `json:"contextInjection,omitempty"`
 	// Whether this agent is currently deployed in the cluster
 	IsDeployed bool `json:"isDeployed"`
 	// Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)
@@ -605,6 +611,15 @@ type ContainerImageInput struct {
 	Repository string `json:"repository"`
 	// Image tag
 	Tag string `json:"tag"`
+}
+
+// A single Helm --set mapping that the server injects into the install template
+// at experiment-save time, e.g. helmPath="agent.config.EXPERIMENT_ID" source="{{workflow.labels.workflow_id}}".
+type ContextInjectionMapping struct {
+	// Helm values path (e.g. agent.config.EXPERIMENT_ID)
+	HelmPath string `json:"helmPath"`
+	// Argo template variable or literal value
+	Source string `json:"source"`
 }
 
 // Defines the details required for creating a chaos hub
@@ -1081,6 +1096,8 @@ type FaultDetails struct {
 	Engine string `json:"engine"`
 	// csv consists chartserviceversion.yaml
 	CSV string `json:"csv"`
+	// groundTruth consists ground_truth.yaml
+	GroundTruth string `json:"groundTruth"`
 }
 
 // FaultInjectionConfig contains configuration for how and when a fault should be injected.

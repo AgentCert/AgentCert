@@ -6,6 +6,17 @@
 # ──────────────────────────────────────────────────
 
 """
+A single Helm --set mapping that the server injects into the install template
+at experiment-save time, e.g. helmPath="agent.config.EXPERIMENT_ID" source="{{workflow.labels.workflow_id}}".
+"""
+type ContextInjectionMapping {
+  """Helm values path (e.g. agent.config.EXPERIMENT_ID)"""
+  helmPath: String!
+  """Argo template variable or literal value"""
+  source: String!
+}
+
+"""
 Represents a single agent entry in the AgentHub catalogue.
 Combines static chart metadata with live deployment status.
 """
@@ -20,6 +31,12 @@ type AgentHubEntry {
   version: String!
   """List of capabilities this agent supports"""
   capabilities: [String!]!
+  """Template name used to identify the install step in workflow manifests"""
+  installTemplateName: String
+  """Default container image for the install step"""
+  installImage: String
+  """Helm --set mappings for experiment context injection"""
+  contextInjection: [ContextInjectionMapping!]
   """Whether this agent is currently deployed in the cluster"""
   isDeployed: Boolean!
   """Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)"""

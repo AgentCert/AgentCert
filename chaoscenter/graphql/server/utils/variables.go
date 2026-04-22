@@ -22,6 +22,12 @@ type Configuration struct {
 	PrometheusMcpServerImage    string   `split_words:"true" default:"agentcert/prometheus-mcp-server:latest"`
 	PrometheusMcpUrl            string   `split_words:"true" default:"http://prometheus.monitoring.svc.cluster.local:9090"`
 	WorkflowHelperImageVersion  string   `required:"true" split_words:"true"`
+	InstallApplicationImage     string   `split_words:"true" default:"agentcert/agentcert-install-app:latest"`
+	InstallApplicationImagePullPolicy string `split_words:"true" default:"IfNotPresent"`
+	InstallAgentImage           string   `split_words:"true" default:"agentcert/agentcert-install-agent:latest"`
+	InstallAgentImagePullPolicy string   `split_words:"true" default:"IfNotPresent"`
+	FlashAgentImage             string   `split_words:"true" default:"agentcert/agentcert-flash-agent:latest"`
+	AgentSidecarImage           string   `split_words:"true" default:"agentcert/agent-sidecar:latest"`
 	ChaosCenterUiEndpoint       string   `split_words:"true" default:"https://localhost:8080"`
 	TlsCertB64                  string   `split_words:"true"`
 	LitmusAuthGrpcEndpoint      string   `split_words:"true" default:"localhost"`
@@ -43,14 +49,17 @@ type Configuration struct {
 	TlsKeyPath                  string   `split_words:"true"`
 	CaCertTlsPath               string   `split_words:"true"`
 	DefaultAgentChartPath       string   `split_words:"true"`
+	AgentHubSourceMode          string   `split_words:"true" default:"default"`
 	DefaultAgentHubGitURL       string   `split_words:"true" default:"https://github.com/agentcert/agent-charts"`
 	DefaultAgentHubBranchName   string   `split_words:"true" default:"main"`
 	DefaultAgentHubPath         string   `split_words:"true" default:"/tmp/default-agents/"`
+	AppHubSourceMode            string   `split_words:"true" default:"default"`
 	DefaultAppHubGitURL         string   `split_words:"true" default:"https://github.com/agentcert/app-charts"`
 	DefaultAppHubBranchName     string   `split_words:"true" default:"main"`
 	DefaultAppHubPath           string   `split_words:"true" default:"/tmp/default-apps/"`
 	HelmBinary                  string   `split_words:"true" default:"helm"`
 	HelmTimeout                 string   `split_words:"true" default:"5m"`
+	PreCleanupWaitSeconds       string   `split_words:"true" default:"0"`
 	AllowedOrigins              []string `split_words:"true" default:"^(http://|https://|)litmuschaos.io(:[0-9]+|)?,^(http://|https://|)localhost(:[0-9]+|)"`
 }
 

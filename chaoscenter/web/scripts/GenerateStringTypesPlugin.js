@@ -71,7 +71,17 @@ async function generateStringTypes({ input, output, context, preProcess, partial
     typesContent = await preProcess(typesContent);
   }
 
-  return fs.promises.writeFile(path.resolve(context, output), typesContent, 'utf8');
+  const outputPath = path.resolve(context, output);
+  try {
+    const existing = await fs.promises.readFile(outputPath, 'utf8');
+    if (existing === typesContent) {
+      return;
+    }
+  } catch (e) {
+    // Ignore missing file or read errors and proceed to write.
+  }
+
+  return fs.promises.writeFile(outputPath, typesContent, 'utf8');
 }
 
 class GenerateStringTypesPlugin {

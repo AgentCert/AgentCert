@@ -36,9 +36,11 @@ agent:
     # --- Experiment context (injected by install-agent via Argo template variables) ---
     # Empty defaults: agent works with or without experiment context.
     # When running inside an Argo Workflow, install-agent passes:
+    #   --set agent.config.NOTIFY_ID={{workflow.labels.notify_id}}
     #   --set agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}
     #   --set agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}
     #   --set agent.config.WORKFLOW_NAME={{workflow.labels.subject}}
+    NOTIFY_ID: ""
     EXPERIMENT_ID: ""
     EXPERIMENT_RUN_ID: ""
     WORKFLOW_NAME: ""
@@ -51,6 +53,8 @@ agent:
       key: OPENAI_BASE_URL
     - name: OPENAI_API_KEY
       key: OPENAI_API_KEY
+    - name: NOTIFY_ID
+      key: NOTIFY_ID
     - name: EXPERIMENT_ID
       key: EXPERIMENT_ID
     - name: EXPERIMENT_RUN_ID
@@ -66,14 +70,16 @@ agent:
 sidecar:
   enabled: true
   name: agent-sidecar
+  agentRole: ""
   image:
     registry: docker.io
     repository: agentcert/agent-sidecar
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
   port: 4001
   # The real LiteLLM proxy URL — sidecar forwards enriched requests here
   upstream: ""
+  injectionMode: "openai-metadata"
   resources:
     limits:
       cpu: "100m"

@@ -20,6 +20,8 @@ type LangfuseTracer struct {
 	projectID   string // Langfuse Project ID
 	mu          sync.RWMutex
 	traceChan   chan *agent_registry.ExperimentTrace
+	workerDone  chan struct{}
+	closed      bool
 }
 
 var (
@@ -59,6 +61,7 @@ func InitializeLangfuseTracer() error {
 		orgID:     orgID,
 		projectID: projectID,
 		traceChan: make(chan *agent_registry.ExperimentTrace, 100),
+		workerDone: make(chan struct{}),
 	}
 
 	// Start background worker to process traces
@@ -91,17 +94,21 @@ func (t *LangfuseTracer) TraceExperimentExecution(ctx context.Context, details *
 	if !t.IsEnabled() {
 		return nil // Silently skip if tracing is disabled
 	}
+	if details == nil || details.TraceID == "" || details.ExperimentName == "" {
+		return fmt.Errorf("invalid trace execution details")
+	}
 
 	// Create trace from execution details
 	now := time.Now()
 	trace := &agent_registry.ExperimentTrace{
 		TraceID:           details.TraceID,
-		Name:              details.TraceID,
+		Name:              details.ExperimentName,
 		ExperimentID:      details.ExperimentID,
 		ExperimentName:    details.ExperimentName,
 		FaultName:         details.FaultName,
 		SessionID:         details.SessionID,
 		AgentID:           details.AgentID,
+		UserID:            details.AgentID,
 		ProjectID:         details.ProjectID,
 		LangfuseOrgID:     t.orgID,
 		LangfuseProjectID: t.projectID,
@@ -110,30 +117,52 @@ func (t *LangfuseTracer) TraceExperimentExecution(ctx context.Context, details *
 		Status:            "RUNNING",
 		Input: map[string]interface{}{
 			"experimentName": details.ExperimentName,
+			"experimentType": details.ExperimentType,
 			"faultName":      details.FaultName,
+			"agentName":      details.AgentName,
+			"agentPlatform":  details.AgentPlatform,
+			"serviceAccount": details.AgentServiceAccount,
 			"namespace":      details.Namespace,
 			"phase":          details.Phase,
 			"priority":       details.Priority,
 		},
 		Metadata: map[string]interface{}{
-			"phase":    details.Phase,
-			"priority": details.Priority,
+			"agent_name":      details.AgentName,
+			"agent_platform":  details.AgentPlatform,
+			"agent_id":        details.AgentID,
+			"service_account": details.AgentServiceAccount,
+			"experimentType": details.ExperimentType,
+			"phase":          details.Phase,
+			"priority":       details.Priority,
 		},
 	}
 
-	// Send trace to channel for async processing
+	// Send trace to channel for async processing.
+	// Keep the read lock during send so Close() cannot close the channel mid-send.
+	t.mu.RLock()
+	if t.closed {
+		t.mu.RUnlock()
+		return nil
+	}
 	select {
 	case t.traceChan <- trace:
-		// Successfully queued - give Langfuse a moment to process
-		time.Sleep(100 * time.Millisecond)
+		t.mu.RUnlock()
+		return nil
 	case <-ctx.Done():
+		t.mu.RUnlock()
 		return ctx.Err()
 	default:
+		t.mu.RUnlock()
 		// Channel full, log warning but don't block
-		fmt.Printf("[Observability] Langfuse trace queue full, dropping trace: %s\n", details.TraceID)
+		fmt.Printf("[Observability] Langfuse trace queue full, sending synchronously: %s\n", details.TraceID)
+		syncCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		if err := t.client.TraceExperiment(syncCtx, trace); err != nil {
+			fmt.Printf("[Observability] Failed to synchronously submit trace %s: %v\n", details.TraceID, err)
+			return err
+		}
+		return nil
 	}
-
-	return nil
 }
 
 // CompleteExperimentExecution logs the completion of an experiment/fault execution.
@@ -142,10 +171,32 @@ func (t *LangfuseTracer) CompleteExperimentExecution(ctx context.Context, traceI
 	if !t.IsEnabled() {
 		return nil
 	}
+	if traceID == "" || endDetails == nil {
+		return fmt.Errorf("invalid completion details")
+	}
 
 	now := time.Now().Format(time.RFC3339)
 
-	// Log completion as an observation so the trace remains single per experiment
+	// Update root trace with final output via upsert (same TraceID)
+	updateCtx, updateCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer updateCancel()
+	if err := t.client.TraceExperiment(updateCtx, &agent_registry.ExperimentTrace{
+		TraceID: traceID,
+		Name:    endDetails.ExperimentName,
+		Output: map[string]interface{}{
+			"status":       endDetails.Status,
+			"result":       endDetails.Result,
+			"errorMessage": endDetails.ErrorMessage,
+		},
+		Metadata: map[string]interface{}{
+			"completedAt": now,
+			"finalStatus": endDetails.Status,
+		},
+	}); err != nil {
+		fmt.Printf("[Observability] Failed to update trace output for %s: %v\n", traceID, err)
+	}
+
+	// Also log completion as an observation
 	t.TraceExperimentObservation(ctx, &ExperimentObservationDetails{
 		TraceID:   traceID,
 		Name:      fmt.Sprintf("completion: %s", endDetails.ExperimentName),
@@ -246,18 +297,18 @@ func (t *LangfuseTracer) Close(ctx context.Context) error {
 	}
 
 	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	// Close channel to signal worker to stop after processing remaining traces
+	if t.closed {
+		t.mu.Unlock()
+		return nil
+	}
+	t.closed = true
 	close(t.traceChan)
-
-	// Wait for remaining traces to be processed or timeout
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
+	workerDone := t.workerDone
+	t.mu.Unlock()
 
 	select {
-	case <-timeout.C:
-		return fmt.Errorf("timeout waiting for traces to flush")
+	case <-workerDone:
+		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -265,6 +316,7 @@ func (t *LangfuseTracer) Close(ctx context.Context) error {
 
 // traceWorker is a background goroutine that processes traces asynchronously.
 func (t *LangfuseTracer) traceWorker() {
+	defer close(t.workerDone)
 	for trace := range t.traceChan {
 		// Create a timeout context for each trace submission
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -283,9 +335,13 @@ type ExperimentExecutionDetails struct {
 	TraceID        string
 	ExperimentID   string
 	ExperimentName string
+	ExperimentType string
 	FaultName      string
 	SessionID      string
 	AgentID        string
+	AgentName      string
+	AgentPlatform  string
+	AgentServiceAccount string
 	ProjectID      string
 	Namespace      string
 	Phase          string // e.g., "injection", "post-chaos"

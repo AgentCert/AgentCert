@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -12,6 +13,7 @@ import (
 
 	dbSchemaProbe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/probe"
 
+	"github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
@@ -37,7 +39,7 @@ var (
 	probeService               = probe.NewProbeService(probeOperator)
 )
 
-var chaosExperimentRunTestService = NewChaosExperimentService(chaosExperimentOperator, infraOperator, chaosExperimentRunOperator, probeService)
+var chaosExperimentRunTestService = NewChaosExperimentService(chaosExperimentOperator, infraOperator, chaosExperimentRunOperator, probeService, nil)
 
 func TestMain(m *testing.M) {
 	gin.SetMode(gin.TestMode)
@@ -82,12 +84,13 @@ func TestNewChaosExperimentService(t *testing.T) {
 				chaosInfrastructureOperator: infraOperator,
 				chaosExperimentRunOperator:  chaosExperimentRunOperator,
 				probeService:                probeService,
+				agentRegistryOperator:       nil,
 			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := NewChaosExperimentService(tc.args.chaosWorkflowOperator, tc.args.clusterOperator, tc.args.chaosExperimentRunOperator, tc.args.probeService); !reflect.DeepEqual(got, tc.want) {
+			if got := NewChaosExperimentService(tc.args.chaosWorkflowOperator, tc.args.clusterOperator, tc.args.chaosExperimentRunOperator, tc.args.probeService, nil); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("NewChaosExperimentService() = %v, want %v", got, tc.want)
 			}
 		})
@@ -348,6 +351,141 @@ func Test_chaosExperimentService_ProcessExperiment(t *testing.T) {
 				return
 			}
 		})
+	}
+}
+
+func Test_applyRBACPatch_InsertsBeforeInstallApplication(t *testing.T) {
+	workflowJSON, err := loadYAMLData("../model/mocks/workflow.yaml")
+	if err != nil {
+		t.Fatalf("failed to load workflow mock: %v", err)
+	}
+
+	var wf v1alpha1.Workflow
+	if err := json.Unmarshal([]byte(workflowJSON), &wf); err != nil {
+		t.Fatalf("failed to unmarshal workflow: %v", err)
+	}
+
+	svc, ok := chaosExperimentRunTestService.(*chaosExperimentService)
+	if !ok {
+		t.Fatal("expected *chaosExperimentService implementation")
+	}
+
+	if err := svc.applyRBACPatch(&wf); err != nil {
+		t.Fatalf("applyRBACPatch() returned error: %v", err)
+	}
+
+	var root *v1alpha1.Template
+	for i := range wf.Spec.Templates {
+		if wf.Spec.Templates[i].Name == wf.Spec.Entrypoint {
+			root = &wf.Spec.Templates[i]
+			break
+		}
+	}
+	if root == nil {
+		t.Fatal("entrypoint template not found")
+	}
+
+	rbacIndex := -1
+	installIndex := -1
+	for i, stepGroup := range root.Steps {
+		for _, step := range stepGroup.Steps {
+			switch step.Name {
+			case "apply-workload-rbac":
+				rbacIndex = i
+			case "install-application":
+				installIndex = i
+			}
+		}
+	}
+
+	if rbacIndex == -1 {
+		t.Fatal("apply-workload-rbac step was not injected")
+	}
+	if installIndex == -1 {
+		t.Fatal("install-application step not found in mock workflow")
+	}
+	if rbacIndex >= installIndex {
+		t.Fatalf("expected apply-workload-rbac before install-application, got rbac index %d and install index %d", rbacIndex, installIndex)
+	}
+}
+
+func Test_applyRBACPatch_ReordersExistingStepBeforeInstallApplication(t *testing.T) {
+	workflowJSON, err := loadYAMLData("../model/mocks/workflow.yaml")
+	if err != nil {
+		t.Fatalf("failed to load workflow mock: %v", err)
+	}
+
+	var wf v1alpha1.Workflow
+	if err := json.Unmarshal([]byte(workflowJSON), &wf); err != nil {
+		t.Fatalf("failed to unmarshal workflow: %v", err)
+	}
+
+	svc, ok := chaosExperimentRunTestService.(*chaosExperimentService)
+	if !ok {
+		t.Fatal("expected *chaosExperimentService implementation")
+	}
+
+	if err := svc.applyRBACPatch(&wf); err != nil {
+		t.Fatalf("initial applyRBACPatch() returned error: %v", err)
+	}
+
+	var root *v1alpha1.Template
+	for i := range wf.Spec.Templates {
+		if wf.Spec.Templates[i].Name == wf.Spec.Entrypoint {
+			root = &wf.Spec.Templates[i]
+			break
+		}
+	}
+	if root == nil {
+		t.Fatal("entrypoint template not found")
+	}
+
+	// Simulate stale ordering from older manifests by moving apply-workload-rbac to the end.
+	filteredSteps := make([]v1alpha1.ParallelSteps, 0, len(root.Steps))
+	for _, stepGroup := range root.Steps {
+		newGroup := v1alpha1.ParallelSteps{Steps: make([]v1alpha1.WorkflowStep, 0, len(stepGroup.Steps))}
+		for _, step := range stepGroup.Steps {
+			if step.Name != "apply-workload-rbac" {
+				newGroup.Steps = append(newGroup.Steps, step)
+			}
+		}
+		if len(newGroup.Steps) > 0 {
+			filteredSteps = append(filteredSteps, newGroup)
+		}
+	}
+	filteredSteps = append(filteredSteps, v1alpha1.ParallelSteps{Steps: []v1alpha1.WorkflowStep{{
+		Name:     "apply-workload-rbac",
+		Template: "apply-workload-rbac",
+	}}})
+	root.Steps = filteredSteps
+
+	if err := svc.applyRBACPatch(&wf); err != nil {
+		t.Fatalf("reordering applyRBACPatch() returned error: %v", err)
+	}
+
+	rbacIndex := -1
+	installIndex := -1
+	rbacCount := 0
+	for i, stepGroup := range root.Steps {
+		for _, step := range stepGroup.Steps {
+			switch step.Name {
+			case "apply-workload-rbac":
+				rbacCount++
+				rbacIndex = i
+			case "install-application":
+				installIndex = i
+			}
+		}
+	}
+
+	if rbacCount != 1 {
+		t.Fatalf("expected exactly one apply-workload-rbac step, got %d", rbacCount)
+	}
+	if installIndex == -1 || rbacIndex == -1 {
+		t.Fatalf("expected both install-application and apply-workload-rbac steps, got install=%d rbac=%d", installIndex, rbacIndex)
+	}
+	if rbacIndex >= installIndex {
+		t.Fatalf("expected apply-workload-rbac before install-application, got rbac index %d and install index %d", rbacIndex, installIndex)
 	}
 }
 

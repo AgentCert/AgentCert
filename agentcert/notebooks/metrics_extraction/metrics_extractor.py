@@ -120,6 +120,14 @@ Extract the following fields (use null/None for missing values):
    - response_summary: Brief summary of the response (optional)
    - timestamp: Timestamp of the call (optional)
 
+6. **Ground Truth Evaluation** (only if a GROUND TRUTH block appears at the end of the data):
+   - ground_truth_evaluation: Extract the full ground_truth_evaluation JSON object
+     if the agent's output contains one, or produce it yourself by comparing
+     the chaos_faults[] results against the provided GROUND TRUTH block.
+     Include: detection_rate (0.0-1.0), faults_detected (int), faults_missed (list),
+     false_positives (list), per_fault list with fault_name + detected + verdict_match.
+     Set to null if no GROUND TRUTH block is present in the data.
+
 Look for patterns like:
 - "Session ID: <uuid>"
 - "'TTD': <number>" or "Time to Detection: <number>"
@@ -130,8 +138,10 @@ Look for patterns like:
 - "Framework overhead: <number>"
 - Timestamps like [HH:MM:SS] or datetime strings
 - Agent tool calls in format: tool_name(arg1, arg2)
+- JSON blocks: "chaos_faults": [{"fault_name": "...", ...}]
+- GROUND TRUTH block appended at end of data
 
-Return a JSON object with all extracted metrics. Ensure tool_calls is a list of dicts with the specified fields."""
+Return a JSON object with all extracted metrics. Ensure tool_calls is a list of dicts with the specified fields. Set ground_truth_evaluation to null when no GROUND TRUTH block is present."""
 
     QUALITATIVE_PROMPT = """You are an expert IT Operations analyst evaluating an IT-Ops agent's performance quality.
 

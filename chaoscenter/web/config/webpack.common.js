@@ -10,6 +10,9 @@ const HTMLWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 const CONTEXT = process.cwd();
+const isDevConfig = process.argv.some(arg => arg.includes('webpack.dev.js'));
+const includeMonacoPlugin = !isDevConfig || process.env.ENABLE_MONACO_IN_DEV === 'true';
+const includeStringTypesPlugin = !isDevConfig || process.env.ENABLE_STRING_TYPES_IN_DEV === 'true';
 
 module.exports = {
   target: 'web',
@@ -129,10 +132,14 @@ module.exports = {
     new DefinePlugin({
       'process.env': '{}' // required for @blueprintjs/core
     }),
-    new GenerateStringTypesPlugin({
-      input: 'src/strings/strings.en.yaml',
-      output: 'src/strings/types.ts'
-    }),
+    ...(includeStringTypesPlugin
+      ? [
+          new GenerateStringTypesPlugin({
+            input: 'src/strings/strings.en.yaml',
+            output: 'src/strings/types.ts'
+          })
+        ]
+      : []),
     new HTMLWebpackPlugin({
       template: 'src/index.html',
       filename: 'index.html',
@@ -142,23 +149,27 @@ module.exports = {
       retryDelay: 1000,
       maxRetries: 5
     }),
-    new MonacoWebpackPlugin({
-      // Available options: https://github.com/microsoft/monaco-editor/tree/main/webpack-plugin#options
-      languages: ['json', 'yaml', 'shell', 'powershell', 'python'],
-      // This will define a global monaco object that is used in editor components.
-      globalAPI: true,
-      filename: '[name].worker.[contenthash:6].js',
-      customLanguages: [
-        {
-          label: 'yaml',
-          entry: 'monaco-yaml',
-          worker: {
-            id: 'monaco-yaml/yamlWorker',
-            entry: 'monaco-yaml/yaml.worker'
-          }
-        }
-      ]
-    }),
+    ...(includeMonacoPlugin
+      ? [
+          new MonacoWebpackPlugin({
+            // Available options: https://github.com/microsoft/monaco-editor/tree/main/webpack-plugin#options
+            languages: ['json', 'yaml', 'shell', 'powershell', 'python'],
+            // This will define a global monaco object that is used in editor components.
+            globalAPI: true,
+            filename: '[name].worker.[contenthash:6].js',
+            customLanguages: [
+              {
+                label: 'yaml',
+                entry: 'monaco-yaml',
+                worker: {
+                  id: 'monaco-yaml/yamlWorker',
+                  entry: 'monaco-yaml/yaml.worker'
+                }
+              }
+            ]
+          })
+        ]
+      : []),
     new CopyWebpackPlugin({
       patterns: [
         {

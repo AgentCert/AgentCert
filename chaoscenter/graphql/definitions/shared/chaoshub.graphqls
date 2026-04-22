@@ -580,6 +580,10 @@ type FaultDetails {
   csv consists chartserviceversion.yaml
   """
   csv: String!
+  """
+  groundTruth consists ground_truth.yaml
+  """
+  groundTruth: String!
 }
 
 type GetChaosHubStatsResponse{

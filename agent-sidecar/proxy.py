@@ -1,42 +1,164 @@
 """
-agent-sidecar – Transparent metadata-injection HTTP proxy.
+agent-sidecar - Transparent metadata-injection HTTP proxy.
 ==========================================================
 
 Sits between any LLM agent and LiteLLM to enrich requests with
-experiment context. The agent has ZERO awareness of experiment IDs.
+agent identity. The agent has ZERO awareness of experiment IDs.
+Context is loaded dynamically on every request from the ConfigMap
+volume mount so long-running pods use fresh experiment IDs.
 
-Env vars read at startup:
-  SIDECAR_PORT        – listen port (default 4001)
-  UPSTREAM_URL        – real LiteLLM base URL (e.g. http://litellm:4000)
-  INJECTION_MODE      – how to inject context (default "openai-metadata")
-                        "openai-metadata" : merge into JSON body metadata dict
-                        "http-header"     : add X-Experiment-* request headers
-                        "none"            : pure passthrough, no injection
-  EXPERIMENT_ID       – injected via Argo template variable
-  EXPERIMENT_RUN_ID   – injected via Argo template variable
-  WORKFLOW_NAME       – injected via Argo template variable
+Env vars (startup config):
+    SIDECAR_PORT   - listen port (default 4001)
+    UPSTREAM_URL   - real LiteLLM base URL (e.g. http://litellm:4000)
+    INJECTION_MODE - openai-metadata | http-header | none
+    CONFIG_MOUNT   - ConfigMap mount path (default /etc/agent/metadata)
 """
 
 import json
 import os
-import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from threading import Lock
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 SIDECAR_PORT = int(os.environ.get("SIDECAR_PORT", "4001"))
-UPSTREAM_URL = os.environ.get("UPSTREAM_URL", "http://localhost:4000").rstrip("/")
-INJECTION_MODE = os.environ.get("INJECTION_MODE", "openai-metadata").lower()
+UPSTREAM_URL = (os.environ.get("UPSTREAM_URL") or "http://localhost:4000").rstrip("/")
+INJECTION_MODE = (os.environ.get("INJECTION_MODE") or "openai-metadata").strip().lower()
 
-# Experiment context – read once at startup, immutable for pod lifetime
-EXPERIMENT_CONTEXT = {}
-for _key in ("EXPERIMENT_ID", "EXPERIMENT_RUN_ID", "WORKFLOW_NAME"):
-    _val = os.environ.get(_key, "")
-    if _val:
-        EXPERIMENT_CONTEXT[_key.lower()] = _val
+# Directory where the agent-metadata ConfigMap is mounted.
+# The same ConfigMap is mounted by the agent container; sidecar gets its own
+# volumeMount pointing here so it sees live updates within ~60 s.
+CONFIG_MOUNT = os.environ.get("CONFIG_MOUNT", "/etc/agent/metadata")
+
+_CONTEXT_KEYS = (
+    "NOTIFY_ID",
+    "EXPERIMENT_ID",
+    "EXPERIMENT_RUN_ID",
+    "WORKFLOW_NAME",
+    "AGENT_NAME",
+    "AGENT_ROLE",
+    "AGENT_ID",
+)
+
+_CONTEXT_LOCK = Lock()
+_LAST_CONTEXT: dict[str, str] = {}
+_LAST_TRACE_ID: str = ""
 
 # Headers to strip (hop-by-hop)
 _HOP_HEADERS = frozenset(("host", "transfer-encoding"))
+
+
+def _load_ground_truth_metadata() -> tuple:
+    """Read GROUND_TRUTH_JSON from the ConfigMap mount and decode it.
+
+    Returns (fault_names: list, expected_output: str | None).
+    The agent (flash-agent or any other) has no knowledge of this file.
+    Reading here keeps all experiment/evaluation context in the sidecar.
+    """
+    import base64
+    gt_b64 = ""
+    file_path = os.path.join(CONFIG_MOUNT, "GROUND_TRUTH_JSON")
+    try:
+        with open(file_path) as fh:
+            gt_b64 = fh.read().strip()
+    except (FileNotFoundError, IOError):
+        gt_b64 = os.environ.get("GROUND_TRUTH_JSON", "")
+    if not gt_b64:
+        return [], None
+    try:
+        gt_data = json.loads(base64.b64decode(gt_b64).decode("utf-8"))
+        fault_names = list(gt_data.keys())
+        expected_output = json.dumps(gt_data, ensure_ascii=False)
+        return fault_names, expected_output
+    except Exception as exc:
+        print(f"[agent-sidecar] Could not decode GROUND_TRUTH_JSON: {exc}", flush=True)
+        return [], None
+
+
+def _load_context() -> dict:
+    """Read experiment context from ConfigMap mount with env-var fallback.
+
+    Reading from files on each request means the sidecar always uses the
+    current experiment's IDs even for long-running Deployment pods where
+    env vars were frozen at pod-startup time.
+    """
+    ctx = {}
+    for key in _CONTEXT_KEYS:
+        val = ""
+        file_path = os.path.join(CONFIG_MOUNT, key)
+        try:
+            with open(file_path) as fh:
+                val = fh.read().strip()
+        except (FileNotFoundError, IOError):
+            val = ""
+        if not val:
+            # Fall back to env var when the file is missing OR empty.
+            # AGENT_ID in particular starts empty in the ConfigMap and is
+            # only populated after helmUpgradeWithAgentID runs, so the env
+            # var (set from .Values.agentId) may carry the value first.
+            val = os.environ.get(key, "")
+        if val:
+            ctx[key.lower()] = val
+
+    with _CONTEXT_LOCK:
+        cached = dict(_LAST_CONTEXT)
+        merged = dict(ctx)
+
+        same_experiment = False
+        if ctx.get("notify_id") and ctx.get("notify_id") == cached.get("notify_id"):
+            same_experiment = True
+        elif ctx.get("experiment_run_id") and ctx.get("experiment_run_id") == cached.get("experiment_run_id"):
+            same_experiment = True
+        elif ctx.get("experiment_id") and ctx.get("experiment_id") == cached.get("experiment_id"):
+            same_experiment = True
+        elif ctx.get("workflow_name") and ctx.get("workflow_name") == cached.get("workflow_name"):
+            same_experiment = True
+
+        if cached and same_experiment:
+            for key, value in cached.items():
+                merged.setdefault(key, value)
+
+        if merged.get("notify_id") or merged.get("experiment_run_id"):
+            _LAST_CONTEXT.clear()
+            _LAST_CONTEXT.update(merged)
+
+        return merged
+
+
+def _remember_trace_id(trace_id: str, context: dict) -> None:
+    global _LAST_TRACE_ID
+
+    if not trace_id:
+        return
+
+    with _CONTEXT_LOCK:
+        if _LAST_TRACE_ID and _LAST_TRACE_ID != trace_id:
+            print(
+                "[agent-sidecar] trace_id switched "
+                f"from={_LAST_TRACE_ID} to={trace_id} "
+                f"experiment_id={context.get('experiment_id', '')} "
+                f"experiment_run_id={context.get('experiment_run_id', '')}"
+            )
+        _LAST_TRACE_ID = trace_id
+
+
+def _detect_generation_name(messages: list) -> str | None:
+    """Return a meaningful generation label based on the prompt content.
+
+    Langfuse uses generation_name to label individual spans within a trace,
+    so the kubernetes routing call and the analysis call show up as distinct
+    named observations rather than both appearing as 'litellm-acompletion'.
+    """
+    for msg in messages:
+        content = msg.get("content", "")
+        if not isinstance(content, str):
+            continue
+        lower = content.lower()
+        if "routing agent" in lower or "choose the best data source" in lower:
+            return "tool-selection"
+        if "expert system-analysis" in lower or "fault-injection" in lower:
+            return "llm-analysis"
+    return None
 
 
 class ProxyHandler(BaseHTTPRequestHandler):
@@ -44,13 +166,20 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = self._read_body()
+        context = _load_context()
         extra_headers = {}
-        if body and EXPERIMENT_CONTEXT:
+
+        # Always attempt injection even when context is empty — the agent may
+        # have already placed generation_name / step in metadata and we must
+        # not drop those.  When context IS populated (ConfigMap has live
+        # experiment IDs) we overwrite the canonical Langfuse fields with
+        # fresh values so stale startup-time env vars in the agent don't win.
+        if body:
             if INJECTION_MODE == "openai-metadata":
-                body = self._inject_metadata(body)
-            elif INJECTION_MODE == "http-header":
-                extra_headers = self._build_context_headers()
-            # "none" or unknown → pure passthrough
+                body = self._inject_metadata(body, context)
+            elif INJECTION_MODE == "http-header" and context:
+                extra_headers = self._build_context_headers(context)
+
         self._proxy(body, extra_headers=extra_headers)
 
     def do_GET(self):
@@ -72,35 +201,139 @@ class ProxyHandler(BaseHTTPRequestHandler):
         return self.rfile.read(length) if length > 0 else b""
 
     @staticmethod
-    def _inject_metadata(body: bytes) -> bytes:
-        """Merge experiment context into the top-level 'metadata' dict.
+    def _inject_metadata(body: bytes, context: dict) -> bytes:
+        """Merge live experiment context into the top-level 'metadata' dict.
 
         The OpenAI Python SDK sends ``extra_body={"metadata": {...}}``
         which becomes a top-level ``metadata`` key in the HTTP JSON body.
         LiteLLM reads this and forwards it to Langfuse.
+
+        Key Langfuse fields set here:
+          trace_id        – groups ALL LLM calls for this experiment run into
+                            ONE Langfuse trace (reads live from ConfigMap mount
+                            so it is always the current experiment's value)
+          trace_name      – human-readable trace / experiment name
+          generation_name – distinguishes "tool-selection" vs "llm-analysis"
+                            so both appear as named spans inside the trace
+          session_id      – experiment definition id
+          user_id         – experiment run id
+                    agent_name      – agent identity, dynamically injected from context
+                    agent_role      – optional agent role from context
         """
         try:
             data = json.loads(body)
-            if isinstance(data, dict):
-                metadata = data.setdefault("metadata", {})
-                metadata.update(EXPERIMENT_CONTEXT)
-                return json.dumps(data).encode("utf-8")
+            if not isinstance(data, dict):
+                return body
+
+            metadata = data.get("metadata")
+            if not isinstance(metadata, dict):
+                metadata = {}
+                data["metadata"] = metadata
+
+            # Spread raw context fields (notify_id, experiment_id, etc.)
+            metadata.update(context)
+
+            # Canonical Langfuse trace id – all LLM calls for this experiment
+            # run share the same id so they nest as observations in one trace.
+            #
+            # Priority: ConfigMap-fresh values ALWAYS beat whatever the agent
+            # sent in metadata.trace_id.  The agent's value may be frozen from
+            # pod-startup env vars and refer to an older experiment run.
+            canonical_trace_id = (
+                context.get("notify_id")          # ConfigMap-fresh, highest priority
+                or context.get("experiment_run_id")
+                or metadata.get("trace_id")        # agent-provided fallback (may be stale)
+            )
+            if canonical_trace_id:
+                metadata["trace_id"] = canonical_trace_id
+                _remember_trace_id(canonical_trace_id, context)
+            else:
+                print(
+                    "[agent-sidecar] missing trace_id for LLM request "
+                    f"experiment_id={context.get('experiment_id', '')} "
+                    f"experiment_run_id={context.get('experiment_run_id', '')}"
+                )
+
+            # Human-readable trace name — always use fresh ConfigMap value so
+            # Langfuse shows the current experiment name, not a stale one.
+            if context.get("workflow_name"):
+                metadata["trace_name"] = context["workflow_name"]
+
+            # Named span label – distinguishes the kubernetes routing call
+            # from the analysis call within the same trace.
+            if "generation_name" not in metadata:
+                gen_name = _detect_generation_name(data.get("messages", []))
+                if gen_name:
+                    metadata["generation_name"] = gen_name
+
+            # Langfuse session / user grouping.
+            # Use direct assignment (not setdefault) so the fresh ConfigMap
+            # value always wins over anything the agent already put in metadata.
+            if context.get("experiment_id"):
+                metadata["session_id"] = context["experiment_id"]
+            if context.get("experiment_run_id"):
+                metadata["user_id"] = context["experiment_run_id"]
+
+            # Agent identity for filtering/comparison across different agents.
+            # Use explicit keys (not just context spread) so naming is always
+            # consistent: agent_id, agent_name, agent_role (snake_case).
+            if "agent_id" in context:
+                metadata["agent_id"] = context["agent_id"]
+            if "agent_name" in context:
+                metadata.setdefault("agent_name", context["agent_name"])
+            if "agent_role" in context:
+                metadata.setdefault("agent_role", context["agent_role"])
+
+            # Ground truth – injected only for llm_analysis calls.
+            # The agent has zero awareness of fault names or expected output.
+            # The sidecar reads GROUND_TRUTH_JSON from the ConfigMap file
+            # (written by the GraphQL server at install time from the chaos hub)
+            # and injects it in two ways:
+            #   1. Into Langfuse metadata (expected_output, fault_names) so the
+            #      trace stores the reference for offline evaluation.
+            #   2. Appended to the last user message so the LLM sees the ground
+            #      truth and produces an inline ground_truth_evaluation block —
+            #      no separate post-processing step is needed.
+            gen_name = metadata.get("generation_name", "")
+            if gen_name in ("llm_analysis", "llm-analysis"):
+                fault_names, expected_output = _load_ground_truth_metadata()
+                if fault_names:
+                    metadata["fault_names"] = fault_names
+                if expected_output is not None:
+                    metadata["expected_output"] = expected_output
+                    # Append GT context to the last user message so the LLM
+                    # includes a ground_truth_evaluation section in its output.
+                    messages = data.get("messages", [])
+                    if messages and isinstance(messages, list):
+                        last_msg = messages[-1]
+                        if isinstance(last_msg, dict) and last_msg.get("role") == "user":
+                            existing = last_msg.get("content", "")
+                            last_msg["content"] = (
+                                existing
+                                + "\n\n"
+                                + "---\n"
+                                + "GROUND TRUTH (for self-evaluation only):\n"
+                                + expected_output
+                                + "\n---"
+                            )
+                            data["messages"] = messages[:-1] + [last_msg]
+
+            return json.dumps(data).encode("utf-8")
         except (json.JSONDecodeError, ValueError):
             pass  # non-JSON body – forward as-is
         return body
 
     @staticmethod
-    def _build_context_headers() -> dict:
+    def _build_context_headers(context: dict) -> dict:
         """Return experiment context as X-Experiment-* HTTP headers."""
         return {
             f"X-Experiment-{k.replace('_', '-').title()}": v
-            for k, v in EXPERIMENT_CONTEXT.items()
+            for k, v in context.items()
         }
 
     def _proxy(self, body, *, extra_headers=None):
         upstream = f"{UPSTREAM_URL}{self.path}"
 
-        # Forward headers, skipping hop-by-hop
         headers = {
             k: v
             for k, v in self.headers.items()
@@ -137,12 +370,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"[agent-sidecar] Starting on :{SIDECAR_PORT} → {UPSTREAM_URL}  mode={INJECTION_MODE}", flush=True)
-    if EXPERIMENT_CONTEXT:
-        print(f"[agent-sidecar] Injecting: {list(EXPERIMENT_CONTEXT.keys())}", flush=True)
-    else:
-        print("[agent-sidecar] No experiment context — transparent passthrough", flush=True)
-
+    print(f"[agent-sidecar] Starting on :{SIDECAR_PORT} -> {UPSTREAM_URL} mode={INJECTION_MODE}", flush=True)
+    print(f"[agent-sidecar] Config mount: {CONFIG_MOUNT} (dynamic per-request reads)", flush=True)
     server = HTTPServer(("0.0.0.0", SIDECAR_PORT), ProxyHandler)
     try:
         server.serve_forever()

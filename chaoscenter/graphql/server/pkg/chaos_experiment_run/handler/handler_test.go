@@ -44,7 +44,7 @@ var (
 	probeService               = new(dbProbeMocks.ProbeService)
 )
 
-var chaosExperimentRunHandler = NewChaosExperimentRunHandler(chaosExperimentRunService, infrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbMockOperator)
+var chaosExperimentRunHandler = NewChaosExperimentRunHandler(chaosExperimentRunService, infrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbMockOperator, nil)
 
 // TestMain is the entry point for testing
 func TestMain(m *testing.M) {
@@ -87,12 +87,13 @@ func TestNewChaosExperimentRunHandler(t *testing.T) {
 				chaosExperimentRunOperator: chaosExperimentRunOperator,
 				probeService:               probeService,
 				mongodbOperator:            mongodbMockOperator,
+				agentRegistryOperator:      nil,
 			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := NewChaosExperimentRunHandler(tc.args.chaosExperimentRunService, tc.args.infrastructureService, tc.args.gitOpsService, tc.args.chaosExperimentOperator, tc.args.chaosExperimentRunOperator, tc.args.probeService, tc.args.mongodbOperator); !reflect.DeepEqual(got, tc.want) {
+			if got := NewChaosExperimentRunHandler(tc.args.chaosExperimentRunService, tc.args.infrastructureService, tc.args.gitOpsService, tc.args.chaosExperimentOperator, tc.args.chaosExperimentRunOperator, tc.args.probeService, tc.args.mongodbOperator, nil); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("NewChaosExperimentRunHandler() = %v, want %v", got, tc.want)
 			}
 		})

@@ -508,10 +508,18 @@ func (c *chaosHubService) GetChaosFault(ctx context.Context, request model.Exper
 		faultYaml = []byte("")
 	}
 
+	//Get ground_truth.yaml data
+	groundTruthPath := basePath + "/" + "ground_truth.yaml"
+	groundTruthYaml, err := os.ReadFile(groundTruthPath)
+	if err != nil {
+		groundTruthYaml = []byte("")
+	}
+
 	return &model.FaultDetails{
-		CSV:    string(csvYaml),
-		Engine: string(engineYaml),
-		Fault:  string(faultYaml),
+		CSV:         string(csvYaml),
+		Engine:      string(engineYaml),
+		Fault:       string(faultYaml),
+		GroundTruth: string(groundTruthYaml),
 	}, nil
 }
 

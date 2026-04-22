@@ -66,12 +66,13 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	imageRegistryOperator := image_registry2.NewImageRegistryOperator(mongodbOperator)
 	EnvironmentOperator := environments.NewEnvironmentOperator(mongodbOperator)
 	probeOperator := dbSchemaProbe.NewChaosProbeOperator(mongodbOperator)
+	agentRegistryOperator := agent_registry.NewOperator(mongodbOperator.(*mongodb.MongoOperations).MongoClient.Database)
 
 	//service
 	probeService := probe.NewProbeService(probeOperator)
 	chaosHubService := chaoshub.NewService(chaosHubOperator)
 	chaosInfrastructureService := chaos_infrastructure.NewChaosInfrastructureService(chaosInfraOperator, EnvironmentOperator)
-	chaosExperimentService := chaos_experiment2.NewChaosExperimentService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator, probeService)
+	chaosExperimentService := chaos_experiment2.NewChaosExperimentService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator, probeService, agentRegistryOperator)
 	chaosExperimentRunService := chaos_experiment_run2.NewChaosExperimentRunService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator)
 	gitOpsService := gitops3.NewGitOpsService(gitopsOperator, chaosExperimentService, *chaosExperimentOperator)
 	imageRegistryService := image_registry.NewImageRegistryService(imageRegistryOperator)
@@ -82,7 +83,6 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	faultStudioService := fault_studio.NewService(faultStudioOperator, chaosHubOperator)
 
 	// Initialize Agent Registry dependencies
-	agentRegistryOperator := agent_registry.NewOperator(mongodbOperator.(*mongodb.MongoOperations).MongoClient.Database)
 	agentRegistryValidator := agent_registry.NewValidator(agentRegistryOperator)
 	langfuseClient := agent_registry.NewLangfuseClient("", "", "") // Empty config - disabled
 	agentRegistryService := agent_registry.NewService(agentRegistryOperator, agentRegistryValidator, langfuseClient, nil)
@@ -93,7 +93,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 
 	//handler
 	chaosExperimentHandler := handler.NewChaosExperimentHandler(chaosExperimentService, chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
-	choasExperimentRunHandler := runHandler.NewChaosExperimentRunHandler(chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
+	choasExperimentRunHandler := runHandler.NewChaosExperimentRunHandler(chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator, agentRegistryOperator)
 
 	config := generated.Config{
 		Resolvers: &Resolver{

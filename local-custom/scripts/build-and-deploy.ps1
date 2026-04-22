@@ -190,6 +190,47 @@ function Sync-AzureEnv {
     }
 }
 
+function Sync-InstallAgentEnv {
+    if (-not (Test-Path $LocalEnvFile)) {
+        Write-Warning ".env not found at $LocalEnvFile; skipping install-agent env sync"
+        return
+    }
+
+    Write-Section "Syncing install-agent env from .env to GraphQL deployment"
+
+    $installAgentImage = Get-EnvValue "INSTALL_AGENT_IMAGE" $LocalEnvFile
+    $installAgentPullPolicy = Get-EnvValue "INSTALL_AGENT_IMAGE_PULL_POLICY" $LocalEnvFile
+    $preCleanupWaitSeconds = Get-EnvValue "PRE_CLEANUP_WAIT_SECONDS" $LocalEnvFile
+
+    if (-not $installAgentImage -and -not $installAgentPullPolicy -and -not $preCleanupWaitSeconds) {
+        Write-Info "INSTALL_AGENT_IMAGE* and PRE_CLEANUP_WAIT_SECONDS not set in .env; skipping deployment env update"
+        return
+    }
+
+    if ($installAgentPullPolicy) {
+        if ($installAgentPullPolicy -notin @("Always", "IfNotPresent", "Never")) {
+            Write-Warning "Invalid INSTALL_AGENT_IMAGE_PULL_POLICY='$installAgentPullPolicy'. Using IfNotPresent"
+            $installAgentPullPolicy = "IfNotPresent"
+        }
+    }
+
+    if (-not $preCleanupWaitSeconds) {
+        $preCleanupWaitSeconds = "0"
+    }
+
+    $setArgs = @("set", "env", "deploy/litmusportal-server", "-n", $Namespace)
+    if ($installAgentImage) {
+        $setArgs += "INSTALL_AGENT_IMAGE=$installAgentImage"
+    }
+    if ($installAgentPullPolicy) {
+        $setArgs += "INSTALL_AGENT_IMAGE_PULL_POLICY=$installAgentPullPolicy"
+    }
+    $setArgs += "PRE_CLEANUP_WAIT_SECONDS=$preCleanupWaitSeconds"
+
+    & kubectl @setArgs 2>$null | Out-Null
+    Write-Success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE* PRE_CLEANUP_WAIT_SECONDS"
+}
+
 function Sync-LangfuseEnv {
     if (-not (Test-Path $LocalEnvFile)) {
         Write-Warning ".env not found at $LocalEnvFile; skipping Langfuse env sync"
@@ -646,6 +687,7 @@ function Main {
         Deploy-Manifest
         Sync-LangfuseEnv
         Sync-AzureEnv
+        Sync-InstallAgentEnv
         kubectl rollout restart deployment/litmusportal-server -n $Namespace
         Test-Pods
     } else {

@@ -31,6 +31,9 @@ type Operator interface {
 	
 	// GetAgentsByCapabilities retrieves agents that have all specified capabilities
 	GetAgentsByCapabilities(ctx context.Context, projectID string, capabilities []string) ([]*Agent, error)
+
+	// GetAgentByNamespace retrieves the first active agent deployed in a given namespace.
+	GetAgentByNamespace(ctx context.Context, namespace string) (*Agent, error)
 }
 
 // operatorImpl is the concrete implementation of the Operator interface.
@@ -87,6 +90,25 @@ func (o *operatorImpl) GetAgentByProjectAndName(ctx context.Context, projectID, 
 		return nil, err
 	}
 	
+	return &agent, nil
+}
+
+// GetAgentByNamespace retrieves the first active agent in the given namespace.
+func (o *operatorImpl) GetAgentByNamespace(ctx context.Context, namespace string) (*Agent, error) {
+	filter := bson.M{
+		"namespace": namespace,
+		"status":    bson.M{"$ne": "DELETED"},
+	}
+
+	var agent Agent
+	err := o.collection.FindOne(ctx, filter).Decode(&agent)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrAgentNotFound
+		}
+		return nil, err
+	}
+
 	return &agent, nil
 }
 

@@ -54,3 +54,4 @@ output/
 # Personal analysis docs
 docs/Trace_optimization_analysis.md
 docs/Code_change_impact_analysis.md
+"}{.container.args}{"\n"}{end} | grep -E install-application

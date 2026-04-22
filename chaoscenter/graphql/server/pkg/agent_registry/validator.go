@@ -208,6 +208,11 @@ func (v *validatorImpl) validateVersion(version string) error {
 // This function can be extended to load from configuration in the future.
 func loadCapabilitiesTaxonomy() map[string]bool {
 	capabilities := []string{
+		// High-level category capabilities (agents may register with these)
+		"chaos-engineering",
+		"fault-detection",
+		"fault-remediation",
+		"observability",
 		// Pod Chaos capabilities
 		"pod-delete",
 		"pod-cpu-hog",

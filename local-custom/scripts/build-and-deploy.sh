@@ -218,12 +218,21 @@ sync_langfuse_env_from_dotenv() {
     org_id=$(get_env_value "LANGFUSE_ORG_ID" "$env_file")
     project_id=$(get_env_value "LANGFUSE_PROJECT_ID" "$env_file")
 
+    # Derive OTEL endpoint + headers from Langfuse credentials for the GraphQL server.
+    # otel_tracer.go reads OTEL_EXPORTER_OTLP_ENDPOINT and OTEL_EXPORTER_OTLP_HEADERS.
+    local otel_endpoint otel_headers
+    if [ -n "$host" ] && [ -n "$public_key" ] && [ -n "$secret_key" ]; then
+        otel_endpoint="${host}/api/public/otel"
+        otel_headers="Authorization=Basic $(printf '%s' "$public_key:$secret_key" | base64 -w0)"
+    fi
+
     # Patch ConfigMap with non-sensitive values
-    if [ -n "$org_id" ] || [ -n "$project_id" ] || [ -n "$host" ]; then
+    if [ -n "$org_id" ] || [ -n "$project_id" ] || [ -n "$host" ] || [ -n "$otel_endpoint" ]; then
         local cm_patch="{\"data\":{"
         [ -n "$host" ] && cm_patch+="\"LANGFUSE_HOST\":\"$(json_escape "$host")\","
         [ -n "$org_id" ] && cm_patch+="\"LANGFUSE_ORG_ID\":\"$(json_escape "$org_id")\","
         [ -n "$project_id" ] && cm_patch+="\"LANGFUSE_PROJECT_ID\":\"$(json_escape "$project_id")\","
+        [ -n "$otel_endpoint" ] && cm_patch+="\"OTEL_EXPORTER_OTLP_ENDPOINT\":\"$(json_escape "$otel_endpoint")\","
         cm_patch=${cm_patch%,}
         cm_patch+="}}"
 
@@ -231,10 +240,11 @@ sync_langfuse_env_from_dotenv() {
     fi
 
     # Patch Secret with sensitive values
-    if [ -n "$secret_key" ] || [ -n "$public_key" ]; then
+    if [ -n "$secret_key" ] || [ -n "$public_key" ] || [ -n "$otel_headers" ]; then
         local sec_patch="{\"stringData\":{"
         [ -n "$secret_key" ] && sec_patch+="\"LANGFUSE_SECRET_KEY\":\"$(json_escape "$secret_key")\","
         [ -n "$public_key" ] && sec_patch+="\"LANGFUSE_PUBLIC_KEY\":\"$(json_escape "$public_key")\","
+        [ -n "$otel_headers" ] && sec_patch+="\"OTEL_EXPORTER_OTLP_HEADERS\":\"$(json_escape "$otel_headers")\","
         sec_patch=${sec_patch%,}
         sec_patch+="}}"
 
@@ -251,13 +261,19 @@ sync_install_agent_env_from_dotenv() {
     fi
 
     print_section "Syncing install-agent env from .env to GraphQL deployment"
-    local install_agent_image install_agent_pull_policy
+    local install_agent_image install_agent_pull_policy pre_cleanup_wait_seconds agent_sidecar_image
     install_agent_image=$(get_env_value "INSTALL_AGENT_IMAGE" "$env_file")
     install_agent_pull_policy=$(get_env_value "INSTALL_AGENT_IMAGE_PULL_POLICY" "$env_file")
+    pre_cleanup_wait_seconds=$(get_env_value "PRE_CLEANUP_WAIT_SECONDS" "$env_file")
+    agent_sidecar_image=$(get_env_value "AGENT_SIDECAR_IMAGE" "$env_file")
 
-    if [ -z "$install_agent_image" ] && [ -z "$install_agent_pull_policy" ]; then
+    if [ -z "$install_agent_image" ] && [ -z "$install_agent_pull_policy" ] && [ -z "$pre_cleanup_wait_seconds" ] && [ -z "$agent_sidecar_image" ]; then
         print_info "INSTALL_AGENT_IMAGE* not set in .env; skipping deployment env update"
         return 0
+    fi
+
+    if [ -z "$pre_cleanup_wait_seconds" ]; then
+        pre_cleanup_wait_seconds="0"
     fi
 
     # Validate pull policy when provided to avoid pushing invalid values.
@@ -274,9 +290,48 @@ sync_install_agent_env_from_dotenv() {
     local set_env_args=("deploy/litmusportal-server" "-n" "$NAMESPACE")
     [ -n "$install_agent_image" ] && set_env_args+=("INSTALL_AGENT_IMAGE=$install_agent_image")
     [ -n "$install_agent_pull_policy" ] && set_env_args+=("INSTALL_AGENT_IMAGE_PULL_POLICY=$install_agent_pull_policy")
+    [ -n "$agent_sidecar_image" ] && set_env_args+=("AGENT_SIDECAR_IMAGE=$agent_sidecar_image")
+    set_env_args+=("PRE_CLEANUP_WAIT_SECONDS=$pre_cleanup_wait_seconds")
 
     kubectl set env "${set_env_args[@]}" >/dev/null
-    print_success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE*"
+    print_success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE* AGENT_SIDECAR_IMAGE PRE_CLEANUP_WAIT_SECONDS"
+}
+
+sync_mongo_env_from_wsl() {
+    print_section "Syncing MongoDB env from local WSL"
+
+    local mongo_user mongo_pass mongo_auth_source mongo_host db_server
+    mongo_user=$(get_env_value "MONGODB_USERNAME" "$LOCAL_ENV_FILE")
+    mongo_pass=$(get_env_value "MONGODB_PASSWORD" "$LOCAL_ENV_FILE")
+    mongo_auth_source=$(get_env_value "MONGODB_AUTH_SOURCE" "$LOCAL_ENV_FILE")
+    mongo_host=$(get_minikube_host_ip)
+
+    [ -z "$mongo_user" ] && mongo_user="root"
+    [ -z "$mongo_pass" ] && mongo_pass="1234"
+    [ -z "$mongo_auth_source" ] && mongo_auth_source="admin"
+
+    if [ -z "$mongo_host" ]; then
+        mongo_host=$(get_env_value "MONGODB_HOST" "$LOCAL_ENV_FILE")
+    fi
+
+    if [ -z "$mongo_host" ]; then
+        print_warning "Unable to resolve MongoDB host from minikube or .env; skipping MongoDB env sync"
+        return 0
+    fi
+
+    db_server="mongodb://${mongo_user}:${mongo_pass}@${mongo_host}:27017/${mongo_auth_source}"
+
+    if kubectl -n "$NAMESPACE" get configmap litmus-portal-admin-config &>/dev/null; then
+        kubectl -n "$NAMESPACE" patch configmap litmus-portal-admin-config --type merge \
+            -p "{\"data\":{\"DB_SERVER\":\"$(json_escape "$db_server")\"}}" >/dev/null || true
+    fi
+
+    if kubectl -n "$NAMESPACE" get secret litmus-portal-admin-secret &>/dev/null; then
+        kubectl -n "$NAMESPACE" patch secret litmus-portal-admin-secret --type merge \
+            -p "{\"stringData\":{\"DB_USER\":\"$(json_escape "$mongo_user")\",\"DB_PASSWORD\":\"$(json_escape "$mongo_pass")\"}}" >/dev/null || true
+    fi
+
+    print_success "MongoDB runtime env synced (DB_SERVER host: $mongo_host)"
 }
 
 # ============================================================================
@@ -589,13 +644,38 @@ build_all_images() {
         "Auth Server" || exit 1
     
     echo ""
-    
-    build_image \
-        "$PROJECT_ROOT/chaoscenter/graphql/server/Dockerfile" \
-        "$PROJECT_ROOT/chaoscenter/graphql" \
-        "$GRAPHQL_SERVER_IMAGE" \
-        "GraphQL Server" || exit 1
-    
+
+    # GraphQL server is built with --no-cache because source files live on the
+    # Windows NTFS filesystem (accessed via WSL 9P mount).  Docker cannot
+    # reliably detect mtime changes across that boundary, so the COPY layer
+    # gets cache-hit even when Go source files have changed.
+    local dockerfile_path=$(wsl_path_convert "$PROJECT_ROOT/chaoscenter/graphql/server/Dockerfile")
+    local context_path=$(wsl_path_convert "$PROJECT_ROOT/chaoscenter/graphql")
+    local langfuse_host="" langfuse_public_key="" langfuse_secret_key="" langfuse_org_id="" langfuse_project_id=""
+    if [ -f "$LOCAL_ENV_FILE" ]; then
+        langfuse_host=$(get_env_value "LANGFUSE_HOST" "$LOCAL_ENV_FILE")
+        langfuse_public_key=$(get_env_value "LANGFUSE_PUBLIC_KEY" "$LOCAL_ENV_FILE")
+        langfuse_secret_key=$(get_env_value "LANGFUSE_SECRET_KEY" "$LOCAL_ENV_FILE")
+        langfuse_org_id=$(get_env_value "LANGFUSE_ORG_ID" "$LOCAL_ENV_FILE")
+        langfuse_project_id=$(get_env_value "LANGFUSE_PROJECT_ID" "$LOCAL_ENV_FILE")
+    fi
+    print_section "Building GraphQL Server (--no-cache)..."
+    local start=$(date +%s)
+    if docker build --no-cache -t "$GRAPHQL_SERVER_IMAGE" \
+        -f "$dockerfile_path" "$context_path" \
+        --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64 \
+        --build-arg LANGFUSE_HOST="$langfuse_host" \
+        --build-arg LANGFUSE_PUBLIC_KEY="$langfuse_public_key" \
+        --build-arg LANGFUSE_SECRET_KEY="$langfuse_secret_key" \
+        --build-arg LANGFUSE_ORG_ID="$langfuse_org_id" \
+        --build-arg LANGFUSE_PROJECT_ID="$langfuse_project_id" \
+        2>&1 | tee -a "$BUILD_LOG_FILE"; then
+        local elapsed=$(($(date +%s) - start))
+        print_success "GraphQL Server built (${elapsed}s)"
+    else
+        print_error "GraphQL Server build failed"; exit 1
+    fi
+
     print_success "All images built"
 }
 
@@ -624,6 +704,28 @@ load_to_minikube() {
     print_success "GraphQL Server loaded"
 }
 
+wait_for_deployment() {
+    local deployment_name="$1"
+    local namespace="$2"
+    local timeout_seconds="${3:-120}"
+    local elapsed=0
+
+    while [ "$elapsed" -lt "$timeout_seconds" ]; do
+        if kubectl get deployment "$deployment_name" -n "$namespace" >/dev/null 2>&1; then
+            if kubectl rollout status deployment/"$deployment_name" -n "$namespace" --timeout=20s >/dev/null 2>&1; then
+                print_success "Deployment ready: $deployment_name"
+                return 0
+            fi
+        fi
+
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    print_warning "Deployment not ready within ${timeout_seconds}s: $deployment_name"
+    return 1
+}
+
 # ============================================================================
 # DEPLOY
 # ============================================================================
@@ -636,6 +738,30 @@ create_namespace() {
     print_success "Namespace ready"
 }
 
+    ensure_required_namespaces() {
+        print_header "Ensuring Required Namespaces"
+
+        local required_namespaces=("$NAMESPACE" "litmus-exp")
+        local ns
+        for ns in "${required_namespaces[@]}"; do
+            if ! kubectl get namespace "$ns" &> /dev/null; then
+                print_info "Creating namespace: $ns"
+                kubectl create namespace "$ns" >/dev/null
+            fi
+
+            if kubectl wait --for=condition=Established namespace/"$ns" --timeout=20s &>/dev/null; then
+                print_success "Namespace ready: $ns"
+            else
+                # Fallback for clusters that do not report Established on Namespace.
+                if kubectl get namespace "$ns" &>/dev/null; then
+                    print_success "Namespace present: $ns"
+                else
+                    print_warning "Namespace $ns not confirmed yet"
+                fi
+            fi
+        done
+    }
+
 deploy_manifest() {
     print_header "Deploying Manifest"
     local manifest="$PROJECT_ROOT/local-custom/k8s/litmus-installation.yaml"
@@ -644,6 +770,14 @@ deploy_manifest() {
     print_info "Applying manifest..."
     kubectl apply -f "$manifest"
     sleep 3
+
+    # On first install, deployments may take time to appear after manifest apply.
+    print_info "Waiting for core deployments to be created..."
+    wait_for_deployment "litmusportal-auth-server" "$NAMESPACE" 120 || true
+    wait_for_deployment "litmusportal-server" "$NAMESPACE" 120 || true
+
+    # Sync MongoDB connection details from local WSL/minikube host mapping
+    sync_mongo_env_from_wsl
 
     # Sync Azure OpenAI values from local .env into cluster config/secret
     sync_azure_env_from_dotenv
@@ -660,10 +794,18 @@ deploy_manifest() {
     
     # Force new images (unique tag) onto the deployments with explicit image pull policy
     print_info "Updating Auth Server deployment with image: $AUTH_SERVER_IMAGE"
-    kubectl set image deployment/litmusportal-auth-server auth-server="$AUTH_SERVER_IMAGE" -n "$NAMESPACE" --record
+    if kubectl get deployment litmusportal-auth-server -n "$NAMESPACE" &>/dev/null; then
+        kubectl set image deployment/litmusportal-auth-server auth-server="$AUTH_SERVER_IMAGE" -n "$NAMESPACE" --record
+    else
+        print_warning "Auth server deployment not found yet, skipping image update"
+    fi
     
     print_info "Updating GraphQL Server deployment with image: $GRAPHQL_SERVER_IMAGE"
-    kubectl set image deployment/litmusportal-server graphql-server="$GRAPHQL_SERVER_IMAGE" -n "$NAMESPACE" --record
+    if kubectl get deployment litmusportal-server -n "$NAMESPACE" &>/dev/null; then
+        kubectl set image deployment/litmusportal-server graphql-server="$GRAPHQL_SERVER_IMAGE" -n "$NAMESPACE" --record
+    else
+        print_warning "GraphQL server deployment not found yet, skipping image update"
+    fi
     
     # Restart deployments to pick up the new image tag immediately
     print_info "Restarting deployments..."
@@ -706,6 +848,7 @@ verify_pods() {
 sync_envs_if_namespace_exists() {
     if kubectl get namespace "$NAMESPACE" &> /dev/null; then
         print_header "Syncing Env to Running Cluster"
+        sync_mongo_env_from_wsl
         sync_azure_env_from_dotenv
         sync_langfuse_env_from_dotenv
         sync_install_agent_env_from_dotenv
@@ -753,6 +896,7 @@ main() {
     log_to_file "========== Build Started =========="
     
     check_prerequisites
+        ensure_required_namespaces
     ensure_mongo_replset_host
 
     # Always sync envs to running cluster (if present)

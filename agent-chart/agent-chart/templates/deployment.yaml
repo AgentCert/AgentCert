@@ -72,15 +72,19 @@ spec:
             {{- end }}
 
 {{- range $env := .Values.agent.deploymentEnv }}
+{{- if not (and $.Values.sidecar.enabled (eq $env.name "OPENAI_BASE_URL")) }}
             - name: {{ $env.name }}
               valueFrom:
                 configMapKeyRef:
                   name: {{ $.Values.agent.name }}-metadata
                   key: {{ $env.key }}
 {{- end }}
+{{- end }}
 
 {{- if .Values.sidecar.enabled }}
-            # Override OPENAI_BASE_URL to route through agent-sidecar
+            # When sidecar is enabled, route all LLM calls through the sidecar proxy.
+            # OPENAI_BASE_URL is intentionally not loaded from ConfigMap above when
+            # sidecar is enabled (to avoid duplicate env vars where Python uses the first).
             - name: OPENAI_BASE_URL
               value: "http://localhost:{{ .Values.sidecar.port }}/v1"
 {{- end }}
@@ -103,21 +107,22 @@ spec:
               value: {{ .Values.sidecar.port | quote }}
             - name: UPSTREAM_URL
               value: {{ .Values.sidecar.upstream | quote }}
-            - name: EXPERIMENT_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: EXPERIMENT_ID
-            - name: EXPERIMENT_RUN_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: EXPERIMENT_RUN_ID
-            - name: WORKFLOW_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: WORKFLOW_NAME
+            - name: INJECTION_MODE
+              value: {{ .Values.sidecar.injectionMode | default "openai-metadata" | quote }}
+            - name: CONFIG_MOUNT
+              value: "/etc/agent/metadata"
+            - name: AGENT_NAME
+              value: {{ .Values.agent.name | quote }}
+            - name: AGENT_ROLE
+              value: {{ .Values.sidecar.agentRole | default "" | quote }}
+            {{- if .Values.agentId }}
+            - name: AGENT_ID
+              value: {{ .Values.agentId | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: agent-metadata
+              mountPath: /etc/agent/metadata
+              readOnly: true
           resources:
             {{- toYaml .Values.sidecar.resources | nindent 12 }}
 {{- end }}

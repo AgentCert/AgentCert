@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "webpack serve --config config/webpack.dev.js --port 2001",
+    "dev:full": "ENABLE_MONACO_IN_DEV=true ENABLE_STRING_TYPES_IN_DEV=true webpack serve --config config/webpack.dev.js --port 2001",
     "build": "rm -rf dist && webpack --config config/webpack.prod.js",
     "lint": "eslint --ext .ts --ext .tsx src",
     "lint:staged": "sh scripts/eslint/eslint-staged.sh",
