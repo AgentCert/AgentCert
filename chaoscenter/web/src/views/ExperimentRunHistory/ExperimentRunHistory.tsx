@@ -34,6 +34,7 @@ interface ExperimentRunHistoryViewProps {
   areFiltersSet: boolean;
   experimentRunsExists: boolean | undefined;
   multiRunConfig?: MultiRunConfig | null;
+  certificateEnabled?: boolean;
 }
 
 const ExperimentRunHistoryView = ({
@@ -48,7 +49,8 @@ const ExperimentRunHistoryView = ({
   loading,
   areFiltersSet,
   experimentRunsExists,
-  multiRunConfig
+  multiRunConfig,
+  certificateEnabled
 }: ExperimentRunHistoryViewProps): React.ReactElement => {
   const scope = getScope();
   const paths = useRouteWithBaseUrl();
@@ -102,7 +104,17 @@ const ExperimentRunHistoryView = ({
       <Layout.Vertical spacing={'medium'} padding={{ left: 'small', right: 'small' }}>
         <Layout.Horizontal flex={{ justifyContent: 'space-between' }}>
           {statusDropDown}
-          <Layout.Horizontal spacing={'medium'}>
+          <Layout.Horizontal spacing={'medium'} flex={{ alignItems: 'center' }}>
+            <Text
+              font={{ size: 'normal', weight: 'semi-bold' }}
+              color={certificateEnabled ? Color.PRIMARY_7 : Color.GREY_400}
+              style={{
+                cursor: certificateEnabled ? 'pointer' : 'not-allowed',
+                opacity: certificateEnabled ? 1 : 0.6
+              }}
+            >
+              Download Certificate
+            </Text>
             {experimentRunSearchBar}
             {dateRangePicker}
           </Layout.Horizontal>

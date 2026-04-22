@@ -176,6 +176,15 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runIdsKey]);
 
+  // Certificate download enabled only when ALL runs have a terminal extraction status (COMPLETED or FAILED)
+  const certificateEnabled = React.useMemo(() => {
+    if (!experimentRunsWithExecutionData || experimentRunsWithExecutionData.length === 0) return false;
+    return experimentRunsWithExecutionData.every(run => {
+      const entry = dataExtractionStatuses[run.experimentRunID];
+      return entry && (entry.status === 'COMPLETED' || entry.status === 'FAILED');
+    });
+  }, [experimentRunsWithExecutionData, dataExtractionStatuses]);
+
   const experimentRunsTableData: ExperimentRunHistoryTableProps | undefined = experimentRunsWithExecutionData && {
     content: generateExperimentRunTableContent(experimentRunsWithExecutionData),
     dataExtractionStatuses,
@@ -243,6 +252,7 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       areFiltersSet={areFiltersSet}
       experimentRunsExists={experimentRunsExists}
       multiRunConfig={multiRunConfig}
+      certificateEnabled={certificateEnabled}
     />
   );
 }
