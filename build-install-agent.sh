@@ -3,6 +3,24 @@ set -e
 
 SERVER_NAMESPACE="litmus-chaos"
 SERVER_DEPLOYMENT="litmusportal-server"
+ENV_FILE="/mnt/d/Studies/AgentCert/local-custom/config/.env"
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--env-file)
+			ENV_FILE="${2:-}"
+			shift 2
+			;;
+		*)
+			shift
+			;;
+	esac
+done
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+	echo "[ERROR] Env file not found: ${ENV_FILE}" >&2
+	exit 1
+fi
 
 sync_live_server_env() {
 	if ! command -v kubectl >/dev/null 2>&1; then
@@ -60,7 +78,6 @@ echo "[OK] Images loaded into minikube"
 
 # Update .env with :latest tag instead of timestamped version
 # This ensures consistent deployment across restarts and scales
-ENV_FILE="/mnt/d/Studies/AgentCert/local-custom/config/.env"
 LATEST_IMAGE="agentcert/agentcert-install-agent:latest"
 sed -i "s|^INSTALL_AGENT_IMAGE=.*|INSTALL_AGENT_IMAGE=${LATEST_IMAGE}|" "${ENV_FILE}"
 echo "[OK] .env updated: INSTALL_AGENT_IMAGE=${LATEST_IMAGE}"

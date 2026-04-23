@@ -1582,6 +1582,12 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 		targetPullPolicy = string(corev1.PullIfNotPresent)
 	}
 
+	forcedSetArgs := []string{
+		"-set=monitoring.enabled=false",
+		"-set=mcpTools.kubernetesMcpServer.enabled=false",
+		"-set=mcpTools.prometheusMcpServer.enabled=false",
+	}
+
 	switch corev1.PullPolicy(targetPullPolicy) {
 	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
 	default:
@@ -1603,6 +1609,20 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 		if t.Container.ImagePullPolicy != corev1.PullPolicy(targetPullPolicy) {
 			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
 			changed = true
+		}
+
+		for _, forcedArg := range forcedSetArgs {
+			alreadyPresent := false
+			for _, existingArg := range t.Container.Args {
+				if existingArg == forcedArg {
+					alreadyPresent = true
+					break
+				}
+			}
+			if !alreadyPresent {
+				t.Container.Args = append(t.Container.Args, forcedArg)
+				changed = true
+			}
 		}
 	}
 
@@ -1861,6 +1881,9 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", "agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}",
 		"--set", "agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}",
 		"--set", "agent.config.WORKFLOW_NAME={{workflow.labels.experiment_name}}",
+		// Enforce blind-agent mode at install time so experiment runs do not rely
+		// on chart defaults or user-supplied values to hide chaos-specific MCP data.
+		"--set", "agent.config.MCP_INCLUDE_CHAOS_TOOLS=false",
 		"--set", fmt.Sprintf("agent.config.OPENAI_API_KEY=%s", openAIKey),
 		"--set", fmt.Sprintf("agent.secret.LITELLM_MASTER_KEY=%s", masterKey),
 		"--set", fmt.Sprintf("agent.config.OPENAI_BASE_URL=%s", openAIBaseURL),
@@ -1894,6 +1917,7 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		return strings.HasPrefix(arg, "config.openaiApiKey=") ||
 			strings.HasPrefix(arg, "config.openaiBaseUrl=") ||
 			strings.HasPrefix(arg, "agentId=") ||
+			strings.HasPrefix(arg, "agent.config.MCP_INCLUDE_CHAOS_TOOLS=") ||
 			strings.HasPrefix(arg, "agent.config.NOTIFY_ID=") ||
 			strings.HasPrefix(arg, "agent.config.EXPERIMENT_ID=") ||
 			strings.HasPrefix(arg, "agent.config.EXPERIMENT_RUN_ID=") ||

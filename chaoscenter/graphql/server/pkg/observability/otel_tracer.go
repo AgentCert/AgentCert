@@ -119,6 +119,14 @@ func OTELTracerEnabled() bool {
 	return otelTracerProvider != nil
 }
 
+// BlindTracesEnabled returns true when the BLIND_TRACES env var is set to "yes".
+// When enabled, OTEL fault spans omit all identifying fault attributes
+// (fault name, target namespace/label/kind, engine template/name, chaos params)
+// and replace them with opaque aliases (F1, F2, ...).
+func BlindTracesEnabled() bool {
+	return strings.EqualFold(os.Getenv("BLIND_TRACES"), "yes")
+}
+
 // GetOTELTracer returns a named tracer from the global TracerProvider.
 func GetOTELTracer() trace.Tracer {
 	return otel.Tracer(otelTracerName)
@@ -342,6 +350,14 @@ func RebindExperimentSpan(oldTraceID string, newTraceID string) {
 // Returns the child span (caller should call span.End() when fault execution data arrives).
 // The child span is stored in a separate map keyed by "traceID:faultName".
 func StartFaultSpan(traceID string, faultName string, attrs ...attribute.KeyValue) trace.Span {
+	return StartFaultSpanNamed(traceID, faultName, "fault: "+faultName, attrs...)
+}
+
+// StartFaultSpanNamed is like StartFaultSpan but lets the caller control the
+// visible span name independently from the map key (faultKey). Use this when
+// blind mode replaces the real fault name with an alias (e.g. "fault: F1") while
+// still needing to look up the span by the real name in EndFaultSpan.
+func StartFaultSpanNamed(traceID string, faultKey string, spanName string, attrs ...attribute.KeyValue) trace.Span {
 	activeSpansMu.Lock()
 	parentCtx, ok := activeCtxs[traceID]
 	activeSpansMu.Unlock()
@@ -351,14 +367,14 @@ func StartFaultSpan(traceID string, faultName string, attrs ...attribute.KeyValu
 	}
 
 	tracer := GetOTELTracer()
-	_, faultSpan := tracer.Start(parentCtx, "fault: "+faultName,
+	_, faultSpan := tracer.Start(parentCtx, spanName,
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(attrs...),
 	)
 
-	faultKey := traceID + ":" + faultName
+	faultKey2 := traceID + ":" + faultKey
 	activeSpansMu.Lock()
-	activeSpans[faultKey] = faultSpan
+	activeSpans[faultKey2] = faultSpan
 	activeSpansMu.Unlock()
 
 	return faultSpan

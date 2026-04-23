@@ -87,6 +87,11 @@ LANGFUSE_PROJECT_ID=
 AGENT_OTEL_EXPORTER_OTLP_ENDPOINT=
 AGENT_OTEL_EXPORTER_OTLP_HEADERS=
 
+# Blind Traces Mode
+# yes = OTEL fault spans use F1/F2 aliases; no identifying fault attributes emitted
+# no  = full fault details in OTEL spans (useful for local dev/debugging)
+BLIND_TRACES=yes
+
 # Azure OpenAI Configuration
 # Get these from Azure Portal > Azure OpenAI > Keys and Endpoint
 # Both AZURE_OPENAI_KEY and AZURE_OPENAI_API_KEY are supported; prefer AZURE_OPENAI_KEY

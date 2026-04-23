@@ -45,9 +45,20 @@ write_file() {
     echo "  [dry-run] would write $path:"
     echo "$content" | sed 's/^/    /'
   else
-    echo "$content" > "$path"
+    # Interpret embedded \n escapes so generated files have real newlines.
+    printf '%b\n' "$content" > "$path"
     ok "wrote $path"
   fi
+}
+
+dedupe_ipv4_list() {
+  # Input: space-delimited IPv4 list. Output: space-delimited unique IPv4 list.
+  echo "$1" \
+    | tr ' ' '\n' \
+    | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' \
+    | awk '!seen[$0]++' \
+    | tr '\n' ' ' \
+    | sed 's/ $//'
 }
 
 # ── Step 1: Discover Windows NAT gateway + real Windows DNS servers ─────────────
@@ -56,10 +67,11 @@ GATEWAY=$(ip route show default 2>/dev/null | awk '/default/ {print $3; exit}')
 [[ -z "$GATEWAY" ]] && die "No default route found — is WSL networking up?"
 info "  WSL NAT gateway: $GATEWAY"
 
-# Read the actual DNS servers Windows is using (from active interfaces).
+# Read DNS from active Windows interfaces that currently have a default gateway.
+# This avoids stale DNS from disconnected VPN/virtual adapters.
 # Try both the interop-PATH name and the full Windows path (needed under sudo
 # where WSL interop PATH entries may be stripped).
-_PS_CMD="Get-DnsClientServerAddress -AddressFamily IPv4 | Select-Object -ExpandProperty ServerAddresses | Sort-Object -Unique"
+_PS_CMD="Get-NetIPConfiguration | Where-Object { \$_.NetAdapter.Status -eq 'Up' -and \$_.IPv4DefaultGateway -ne \$null } | ForEach-Object { \$_.DNSServer.ServerAddresses } | Sort-Object -Unique"
 _PS_FULL="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
 _ps_bin=""
 command -v powershell.exe &>/dev/null && _ps_bin="powershell.exe"
@@ -77,15 +89,28 @@ fi
 
 if [[ -n "$WIN_DNS" ]]; then
   info "  Windows DNS servers (via powershell): $WIN_DNS"
-  # Use first Windows DNS as primary; gateway as last-resort fallback.
   PRIMARY_DNS=$(echo "$WIN_DNS" | awk '{print $1}')
-  ALL_DNS_SERVERS="$WIN_DNS"
 else
   warn "  Could not read Windows DNS via powershell.exe — falling back to gateway"
   PRIMARY_DNS="$GATEWAY"
-  ALL_DNS_SERVERS="$GATEWAY"
 fi
+
+# WSL resolver should prioritize active Windows DNS and keep WSL gateway fallback.
+WSL_DNS_SERVERS=$(dedupe_ipv4_list "$WIN_DNS $GATEWAY")
+if [[ -z "$WSL_DNS_SERVERS" ]]; then
+  WSL_DNS_SERVERS="$GATEWAY"
+fi
+
+# Docker-in-WSL resolver chain should start with WSL gateway (reachable from containers),
+# then host DNS, then public resolvers for resilience.
+DOCKER_DNS_SERVERS=$(dedupe_ipv4_list "$GATEWAY $WIN_DNS 1.1.1.1 8.8.8.8")
+if [[ -z "$DOCKER_DNS_SERVERS" ]]; then
+  DOCKER_DNS_SERVERS="$GATEWAY 1.1.1.1 8.8.8.8"
+fi
+
 info "  Primary DNS: $PRIMARY_DNS"
+info "  WSL DNS chain: $WSL_DNS_SERVERS"
+info "  Docker DNS chain: $DOCKER_DNS_SERVERS"
 
 # ── Step 2: WSL resolv.conf ───────────────────────────────────────────────────
 info "Step 2: Fixing WSL /etc/resolv.conf..."
@@ -98,9 +123,9 @@ if ! dry_run; then
   fi
 fi
 
-# Build resolv.conf with all discovered Windows DNS servers.
+# Build resolv.conf with WSL DNS chain (host DNS + gateway fallback).
 RESOLV_CONTENT="# Managed by setup-dns — do not edit manually."
-for srv in $ALL_DNS_SERVERS; do
+for srv in $WSL_DNS_SERVERS; do
   RESOLV_CONTENT="${RESOLV_CONTENT}\nnameserver $srv"
 done
 RESOLV_CONTENT="${RESOLV_CONTENT}\noptions edns0"
@@ -110,8 +135,8 @@ write_file /etc/resolv.conf "$RESOLV_CONTENT"
 info "Step 3: Fixing Docker daemon DNS..."
 mkdir -p /etc/docker
 
-# Build daemon.json with all discovered Windows DNS servers as a JSON array.
-DNS_JSON_ARRAY=$(echo "$ALL_DNS_SERVERS" | tr ' ' '\n' | awk '{printf "%s\"%s\"", (NR>1?", ":"["), $0} END{print "]"}')
+# Build daemon.json with Docker DNS chain as a JSON array.
+DNS_JSON_ARRAY=$(echo "$DOCKER_DNS_SERVERS" | tr ' ' '\n' | awk '{printf "%s\"%s\"", (NR>1?", ":"["), $0} END{print "]"}')
 write_file /etc/docker/daemon.json "{
   \"dns\": $DNS_JSON_ARRAY
 }"
@@ -158,7 +183,7 @@ fi
 if [[ $WSL_ONLY -eq 1 ]]; then
   info "Step 5: Skipping minikube CoreDNS (--wsl-only)"
 else
-  info "Step 5: Patching minikube CoreDNS to use $ALL_DNS_SERVERS..."
+  info "Step 5: Patching minikube CoreDNS to use $WSL_DNS_SERVERS..."
 
   if ! command -v kubectl &>/dev/null; then
     warn "kubectl not found — skipping CoreDNS patch (run again after minikube start)"
@@ -187,7 +212,7 @@ else
        ${MINIKUBE_HOST} host.minikube.internal
        fallthrough
     }
-    forward . ${ALL_DNS_SERVERS} {
+    forward . ${WSL_DNS_SERVERS} {
        max_concurrent 1000
     }
     cache 30 {
@@ -199,7 +224,7 @@ else
     loadbalance
 }"
 
-      info "  New CoreDNS forward: forward . $ALL_DNS_SERVERS"
+      info "  New CoreDNS forward: forward . $WSL_DNS_SERVERS"
 
       if dry_run; then
         echo "  [dry-run] would patch CoreDNS configmap and restart coredns deployment"
@@ -221,12 +246,14 @@ fi
 echo ""
 echo "─────────────────────────────────────────────────────"
 echo "[setup-dns] DNS chain configured:"
-echo "  Windows DNS      : $ALL_DNS_SERVERS"
+echo "  Windows DNS      : $WIN_DNS"
 echo "  WSL gateway      : $GATEWAY"
-echo "  /etc/resolv.conf : nameserver(s) $ALL_DNS_SERVERS"
-echo "  /etc/docker/daemon.json : dns $ALL_DNS_SERVERS"
+echo "  WSL DNS chain    : $WSL_DNS_SERVERS"
+echo "  Docker DNS chain : $DOCKER_DNS_SERVERS"
+echo "  /etc/resolv.conf : nameserver(s) $WSL_DNS_SERVERS"
+echo "  /etc/docker/daemon.json : dns $DOCKER_DNS_SERVERS"
 if [[ $WSL_ONLY -eq 0 ]]; then
-echo "  CoreDNS forward  : $ALL_DNS_SERVERS"
+echo "  CoreDNS forward  : $WSL_DNS_SERVERS"
 fi
 echo "  Boot hook        : /etc/wsl.conf [boot] command = setup-dns --wsl-only"
 echo ""

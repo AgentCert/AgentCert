@@ -22,7 +22,7 @@ agent:
 
   containerImage:
     registry: docker.io
-    repository: nginx
+    repository: agentcert/agentcert-flash-agent
     tag: latest
     pullPolicy: IfNotPresent
 

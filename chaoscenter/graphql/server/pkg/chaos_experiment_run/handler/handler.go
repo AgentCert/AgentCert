@@ -1781,14 +1781,16 @@ func syncWorkflowNodeSpans(ctx context.Context, traceID string, event model.Expe
 			stepAttrs = append(stepAttrs, attribute.Int("workflow.node.children", len(node.Children)))
 		}
 		if node.ChaosExp != nil {
-			if node.ChaosExp.ExperimentName != "" {
-				stepAttrs = append(stepAttrs, attribute.String("fault.name", node.ChaosExp.ExperimentName))
-			}
-			if node.ChaosExp.EngineName != "" {
-				stepAttrs = append(stepAttrs, attribute.String("fault.engine_name", node.ChaosExp.EngineName))
-			}
-			if node.ChaosExp.Namespace != "" {
-				stepAttrs = append(stepAttrs, attribute.String("fault.namespace", node.ChaosExp.Namespace))
+			if !observability.BlindTracesEnabled() {
+				if node.ChaosExp.ExperimentName != "" {
+					stepAttrs = append(stepAttrs, attribute.String("fault.name", node.ChaosExp.ExperimentName))
+				}
+				if node.ChaosExp.EngineName != "" {
+					stepAttrs = append(stepAttrs, attribute.String("fault.engine_name", node.ChaosExp.EngineName))
+				}
+				if node.ChaosExp.Namespace != "" {
+					stepAttrs = append(stepAttrs, attribute.String("fault.namespace", node.ChaosExp.Namespace))
+				}
 			}
 			if node.ChaosExp.ExperimentStatus != "" {
 				stepAttrs = append(stepAttrs, attribute.String("fault.status", node.ChaosExp.ExperimentStatus))
@@ -2211,6 +2213,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	wfParams := buildWorkflowParameterMap(workflowManifest.Spec.Arguments)
 
 	var probes []dbChaosExperimentRun.Probes
+	faultIdx := 0 // increments for each ChaosEngine processed; used for blind aliases (F1, F2, ...)
 	for i, template := range workflowManifest.Spec.Templates {
 		artifacts := template.Inputs.Artifacts
 		logrus.Infof("[Artifact Processing] Template %s has %d artifacts", template.Name, len(artifacts))
@@ -2293,45 +2296,57 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 			if observability.OTELTracerEnabled() && len(meta.Spec.Experiments) > 0 {
 				exp := meta.Spec.Experiments[0]
 				faultName := exp.Name
+				faultIdx++
+				faultAlias := fmt.Sprintf("F%d", faultIdx)
 
-				faultAttrs := []attribute.KeyValue{
-					attribute.String("experiment.id", workflow.ExperimentID),
-					attribute.String("fault.name", faultName),
-					attribute.String("fault.target_namespace", meta.Spec.Appinfo.Appns),
-					attribute.String("fault.target_label", meta.Spec.Appinfo.Applabel),
-					attribute.String("fault.target_kind", string(meta.Spec.Appinfo.AppKind)),
-					attribute.String("fault.engine_template", template.Name),
-				}
-
-				// Extract chaos params from experiment env vars
-				for _, envVar := range exp.Spec.Components.ENV {
-					switch envVar.Name {
-					case "TOTAL_CHAOS_DURATION":
-						faultAttrs = append(faultAttrs, attribute.String("fault.chaos_duration", envVar.Value))
-					case "CPU_CORES":
-						faultAttrs = append(faultAttrs, attribute.String("fault.cpu_cores", envVar.Value))
-					case "MEMORY_CONSUMPTION":
-						faultAttrs = append(faultAttrs, attribute.String("fault.memory_consumption", envVar.Value))
-					case "FILL_PERCENTAGE":
-						faultAttrs = append(faultAttrs, attribute.String("fault.fill_percentage", envVar.Value))
-					case "NETWORK_PACKET_LOSS_PERCENTAGE":
-						faultAttrs = append(faultAttrs, attribute.String("fault.network_loss_pct", envVar.Value))
-					case "CHAOS_INTERVAL":
-						faultAttrs = append(faultAttrs, attribute.String("fault.chaos_interval", envVar.Value))
+				if observability.BlindTracesEnabled() {
+					// Blind mode: span name uses alias, no identifying attributes
+					blindAttrs := []attribute.KeyValue{
+						attribute.String("experiment.id", workflow.ExperimentID),
+						attribute.String("fault.alias", faultAlias),
 					}
-				}
+					observability.StartFaultSpanNamed(notifyID, faultName, "fault: "+faultAlias, blindAttrs...)
+					logrus.Infof("[OTEL] Created per-fault span (blind): alias=%s", faultAlias)
+				} else {
+					faultAttrs := []attribute.KeyValue{
+						attribute.String("experiment.id", workflow.ExperimentID),
+						attribute.String("fault.name", faultName),
+						attribute.String("fault.target_namespace", meta.Spec.Appinfo.Appns),
+						attribute.String("fault.target_label", meta.Spec.Appinfo.Applabel),
+						attribute.String("fault.target_kind", string(meta.Spec.Appinfo.AppKind)),
+						attribute.String("fault.engine_template", template.Name),
+					}
 
-				// Add probe names
-				var probeNames []string
-				for _, p := range exp.Spec.Probe {
-					probeNames = append(probeNames, p.Name)
-				}
-				if len(probeNames) > 0 {
-					faultAttrs = append(faultAttrs, attribute.String("fault.probes", strings.Join(probeNames, ",")))
-				}
+					// Extract chaos params from experiment env vars
+					for _, envVar := range exp.Spec.Components.ENV {
+						switch envVar.Name {
+						case "TOTAL_CHAOS_DURATION":
+							faultAttrs = append(faultAttrs, attribute.String("fault.chaos_duration", envVar.Value))
+						case "CPU_CORES":
+							faultAttrs = append(faultAttrs, attribute.String("fault.cpu_cores", envVar.Value))
+						case "MEMORY_CONSUMPTION":
+							faultAttrs = append(faultAttrs, attribute.String("fault.memory_consumption", envVar.Value))
+						case "FILL_PERCENTAGE":
+							faultAttrs = append(faultAttrs, attribute.String("fault.fill_percentage", envVar.Value))
+						case "NETWORK_PACKET_LOSS_PERCENTAGE":
+							faultAttrs = append(faultAttrs, attribute.String("fault.network_loss_pct", envVar.Value))
+						case "CHAOS_INTERVAL":
+							faultAttrs = append(faultAttrs, attribute.String("fault.chaos_interval", envVar.Value))
+						}
+					}
 
-				observability.StartFaultSpan(notifyID, faultName, faultAttrs...)
-				logrus.Infof("[OTEL] Created per-fault span: fault=%s target=%s/%s", faultName, meta.Spec.Appinfo.AppKind, meta.Spec.Appinfo.Applabel)
+					// Add probe names
+					var probeNames []string
+					for _, p := range exp.Spec.Probe {
+						probeNames = append(probeNames, p.Name)
+					}
+					if len(probeNames) > 0 {
+						faultAttrs = append(faultAttrs, attribute.String("fault.probes", strings.Join(probeNames, ",")))
+					}
+
+					observability.StartFaultSpan(notifyID, faultName, faultAttrs...)
+					logrus.Infof("[OTEL] Created per-fault span: fault=%s target=%s/%s", faultName, meta.Spec.Appinfo.AppKind, meta.Spec.Appinfo.Applabel)
+				}
 			}
 
 			res, err := yaml.Marshal(&meta)
@@ -2824,21 +2839,32 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					faultName = node.ChaosExp.EngineName
 				}
 
-				verdictAttrs := []attribute.KeyValue{
-					attribute.String("experiment.id", event.ExperimentID),
-					attribute.String("experiment.run_id", event.ExperimentRunID),
-					attribute.String("fault.verdict", node.ChaosExp.ExperimentVerdict),
-					attribute.String("fault.probe_success_pct", node.ChaosExp.ProbeSuccessPercentage),
-					attribute.String("fault.status", node.ChaosExp.ExperimentStatus),
-					attribute.String("fault.engine_name", node.ChaosExp.EngineName),
-					attribute.String("fault.namespace", node.ChaosExp.Namespace),
-					attribute.String("fault.started_at", node.StartedAt),
-					attribute.String("fault.finished_at", node.FinishedAt),
-					attribute.String("fault.node_phase", node.Phase),
-				}
-
-				if node.ChaosExp.FailStep != "" {
-					verdictAttrs = append(verdictAttrs, attribute.String("fault.fail_step", node.ChaosExp.FailStep))
+				var verdictAttrs []attribute.KeyValue
+				if observability.BlindTracesEnabled() {
+					// Blind mode: only outcome attrs, no identifying fault/infra details
+					verdictAttrs = []attribute.KeyValue{
+						attribute.String("experiment.id", event.ExperimentID),
+						attribute.String("experiment.run_id", event.ExperimentRunID),
+						attribute.String("fault.verdict", node.ChaosExp.ExperimentVerdict),
+						attribute.String("fault.probe_success_pct", node.ChaosExp.ProbeSuccessPercentage),
+						attribute.String("fault.status", node.ChaosExp.ExperimentStatus),
+					}
+				} else {
+					verdictAttrs = []attribute.KeyValue{
+						attribute.String("experiment.id", event.ExperimentID),
+						attribute.String("experiment.run_id", event.ExperimentRunID),
+						attribute.String("fault.verdict", node.ChaosExp.ExperimentVerdict),
+						attribute.String("fault.probe_success_pct", node.ChaosExp.ProbeSuccessPercentage),
+						attribute.String("fault.status", node.ChaosExp.ExperimentStatus),
+						attribute.String("fault.engine_name", node.ChaosExp.EngineName),
+						attribute.String("fault.namespace", node.ChaosExp.Namespace),
+						attribute.String("fault.started_at", node.StartedAt),
+						attribute.String("fault.finished_at", node.FinishedAt),
+						attribute.String("fault.node_phase", node.Phase),
+					}
+					if node.ChaosExp.FailStep != "" {
+						verdictAttrs = append(verdictAttrs, attribute.String("fault.fail_step", node.ChaosExp.FailStep))
+					}
 				}
 
 				// End the per-fault child span with verdict attributes

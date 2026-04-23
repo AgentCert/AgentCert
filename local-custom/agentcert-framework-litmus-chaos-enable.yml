@@ -13,76 +13,964 @@ metadata:
 
 ---
 apiVersion: v1
-kind: ConfigMap
+kind: ServiceAccount
 metadata:
-  name: workflow-controller-configmap
+  name: argo-chaos
   namespace: litmus-exp
-data:
-  containerRuntimeExecutor: k8sapi
-  executor: |
-    imagePullPolicy: IfNotPresent
-  instanceID: 8771e5f5-8076-4e65-9370-a9c4cccda3b0
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argo-chaos-infra-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: infra-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: argo-chaos
+    namespace: litmus-exp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-chaos-ops-role-binding
+  namespace: litmus-exp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: infra-ops-role
+subjects:
+  - kind: ServiceAccount
+    name: argo-chaos
+    namespace: litmus-exp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: infra-cluster-role
+rules:
+  # ***********************************************************************************************
+  # Permissions needed for orchestration and monitoring chaos by chaos-operator and chaos-exporter
+  # ***********************************************************************************************
+
+  # for deriving the owner references of the operator pod
+  - apiGroups: [ "apps" ]
+    resources: [ "deployments", "replicasets"]
+    verbs: [ "get", "list" ]
+
+  # for the cleanup of jobs in abort scenarios
+  - apiGroups: [ "batch" ]
+    resources: [ "jobs" ]
+    verbs: [ "get", "list", "deletecollection" ]
+
+  # for creation and management of the chaos-runner pod
+  - apiGroups: [ "" ]
+    resources: [ "pods" ]
+    verbs: ["get", "create", "update", "patch", "delete", "list", "watch", "deletecollection" ]
+
+  # for creating of events and monitoring
+  - apiGroups: [ "" ]
+    resources: [ "events", "services" ]
+    verbs: ["get", "create", "update", "patch", "list", "watch" ]
+
+  # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow
+  - apiGroups: [ "litmuschaos.io" ]
+    resources: [ "chaosengines", "chaosexperiments", "chaosresults" ]
+    verbs: ["get", "create", "update", "patch", "delete", "list", "watch", "deletecollection" ]
+
+  # for validation of existance of chaosresult crd
+  - apiGroups: [ "apiextensions.k8s.io" ]
+    resources: [ "customresourcedefinitions" ]
+    verbs: [ "list", "get" ]
+
+  # for managing the finalizers to the primary resource
+  - apiGroups: [ "litmuschaos.io" ]
+    resources: [ "chaosengines/finalizers" ]
+    verbs: [ "update" ]
+
+  # for managing the leader elections in multi-replicas scenario
+  - apiGroups: [ "coordination.k8s.io" ]
+    resources: [ "leases" ]
+    verbs: [ "get","create","list","update","delete" ]
+
+  # ******************************************************************************************************
+  # Permissions needed to manage and communicate between control plane and execution plane by subscriber
+  # *******************************************************************************************************
+
+  - apiGroups: [ "batch" ]
+    resources: [ "jobs" ]
+    verbs: [ "get", "create", "patch", "update" ]
+
+  - apiGroups: [ "" ]
+    resources: [ "pods/log" ]
+    verbs: [ "get", "list", "watch" ]
+
+  - apiGroups: [ "" ]
+    resources: [ "pods", "namespaces", "nodes", "services" ]
+    verbs: [ "get", "list", "watch" ]
+
+  # for dynamic app onboarding via Helm across arbitrary namespaces
+  - apiGroups: [ "" ]
+    resources: [ "namespaces" ]
+    verbs: [ "create", "patch", "update" ]
+
+  # helm stores release metadata as secrets in the target app namespace
+  - apiGroups: [ "" ]
+    resources: [ "secrets" ]
+    verbs: [ "get", "list", "watch", "create", "update", "patch", "delete" ]
+
+  # Helm charts can reference ConfigMaps from other namespaces (for example monitoring)
+  # during render/install, so read access must be cluster-wide.
+  - apiGroups: [ "" ]
+    resources: [ "configmaps" ]
+    verbs: [ "get", "list", "watch" ]
+
+  - apiGroups: [ "litmuschaos.io" ]
+    resources: [ "chaosengines", "chaosschedules", "chaosresults", "chaosschedules" ]
+    verbs: [ "get", "list", "create", "delete", "update", "watch", "patch" ]
+
+  - apiGroups: [ "apps.openshift.io" ]
+    resources: [ "deploymentconfigs" ]
+    verbs: [ "get", "list" ]
+
+  - apiGroups: [ "apps" ]
+    resources: [ "deployments" ]
+    verbs: [ "delete" ]
+
+  - apiGroups: [ "apps" ]
+    resources: [ "deployments", "daemonsets", "replicasets", "statefulsets" ]
+    verbs: [ "get","list" ]
+
+  - apiGroups: [ "argoproj.io" ]
+    resources:
+      [
+        "workflows",
+        "workflows/finalizers",
+        "workflowtemplates",
+        "workflowtemplates/finalizers",
+        "cronworkflows",
+        "cronworkflows/finalizers",
+        "clusterworkflowtemplates",
+        "clusterworkflowtemplates/finalizers",
+        "rollouts",
+      ]
+    verbs: [ "get", "list", "create", "delete", "update", "watch", "patch" ]
+
+  # ************************************************************************
+  # Permissions needed to orchestrate the workflows by workflow controller
+  # ************************************************************************
+
+  - apiGroups: [ "" ]
+    resources: [ "pods", "pods/exec" ]
+    verbs: [ "create", "get", "list", "watch", "update", "patch", "delete" ]
+  - apiGroups: [ "" ]
+    resources: [ "persistentvolumeclaims" ]
+    verbs: [ "create", "delete" ]
+  - apiGroups: [ "argoproj.io" ]
+    resources: [ "workflows", "workflows/finalizers" ]
+    verbs: [ "get", "list", "watch", "update", "patch", "delete", "create" ]
+  - apiGroups: [ "argoproj.io" ]
+    resources: [ "workflowtemplates","workflowtemplates/finalizers","clusterworkflowtemplates","clusterworkflowtemplates/finalizers","workflowtasksets","workflowartifactgctasks" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "argoproj.io" ]
+    resources: [ "workflowtaskresults" ]
+    verbs: [ "list", "watch", "deletecollection" ]
+  - apiGroups: [ "" ]
+    resources: [ "serviceaccounts" ]
+    verbs: [ "get", "list" ]
+  - apiGroups: [ "argoproj.io" ]
+    resources: [ "cronworkflows", "cronworkflows/finalizers" ]
+    verbs: [ "get", "list", "watch", "update", "patch", "delete" ]
+  - apiGroups: [ "" ]
+    resources: [ "events" ]
+    verbs: [ "create", "patch" ]
+  - apiGroups: [ "policy" ]
+    resources: [ "poddisruptionbudgets" ]
+    verbs: [ "create", "get", "delete" ]
+
+  # ************************************************************************
+  # Permissions needed to for the event-tracker
+  # ************************************************************************
+
+  - apiGroups: [ "eventtracker.litmuschaos.io" ]
+    resources: [ "eventtrackerpolicies" ]
+    verbs: [ "create", "get", "list", "delete", "update", "patch", "watch" ]
+
+  - apiGroups: [ "eventtracker.litmuschaos.io" ]
+    resources: [ "eventtrackerpolicies/status" ]
+    verbs: [ "get","patch", "update" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: infra-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: infra-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: litmus-exp
+    namespace: litmus-exp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: infra-ops-role
+  namespace: litmus-exp
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "secrets" ]
+    verbs: [ "get", "create", "update", "patch" ]
+
+  - apiGroups: [ "" ]
+    resources: [ "configmaps"]
+    verbs: ["get", "create", "update", "patch", "list", "watch" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: infra-ops-role-binding
+  namespace: litmus-exp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: infra-ops-role
+subjects:
+  - kind: ServiceAccount
+    name: litmus-exp
+    namespace: litmus-exp
+
 ---
 apiVersion: v1
-kind: Service
+kind: ServiceAccount
 metadata:
-  name: workflow-controller-metrics
+  name: mcp-server
   namespace: litmus-exp
-spec:
-  ports:
-    - name: metrics
-      port: 9090
-      protocol: TCP
-      targetPort: 9090
-  selector:
-    app: workflow-controller
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
 metadata:
-  name: workflow-controller
+  name: mcp-server-role
+rules:
+  # Standard Kubernetes resources (read-only)
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "configmaps", "secrets", "events", "namespaces", "nodes", "replicationcontrollers", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "list", "watch"]
+  # Litmus Chaos CRDs
+  - apiGroups: ["litmuschaos.io"]
+    resources: ["chaosengines", "chaosexperiments", "chaosresults"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Litmus EventTracker CRDs
+  - apiGroups: ["eventtracker.litmuschaos.io"]
+    resources: ["eventtrackerpolicies"]
+    verbs: ["get", "list", "watch"]
+  # Argo Workflow CRDs (used by Litmus)
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "cronworkflows", "workflowtemplates", "clusterworkflowtemplates", "workflowtasksets", "workflowtaskresults"]
+    verbs: ["get", "list", "watch"]
+  # CRD discovery
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list"]
+  # OpenShift (if applicable)
+  - apiGroups: ["apps.openshift.io"]
+    resources: ["deploymentconfigs"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mcp-server-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mcp-server-role
+subjects:
+  - kind: ServiceAccount
+    name: mcp-server
+    namespace: litmus-exp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus-mcp-server
   namespace: litmus-exp
-spec:
-  selector:
-    matchLabels:
-      app: workflow-controller
-  template:
-    metadata:
-      labels:
-        app: workflow-controller
-    spec:
-      
-      #{NODE_SELECTOR}
-      containers:
-        - args:
-            - --configmap
-            - workflow-controller-configmap
-            - --executor-image
-            -  litmuschaos/argoexec:v3.3.1
-            - --namespaced
-            - --container-runtime-executor
-            -  k8sapi
-          command:
-            - workflow-controller
-          image: litmuschaos/workflow-controller:v3.3.1
-          name: workflow-controller
-          securityContext:
-            runAsUser: 2000
-            allowPrivilegeEscalation: false
-          env:
-            - name: LEADER_ELECTION_DISABLE
-              value: "true"
-          resources:
-            requests:
-              memory: "300Mi"
-              cpu: "125m"
-              ephemeral-storage: "500Mi"
-            limits:
-              memory: "500Mi"
-              cpu: "225m"
-              ephemeral-storage: "1Gi"
-      serviceAccountName: litmus-exp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-mcp-server-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  # Litmus Chaos CRDs (read-only for observing chaos experiment metrics)
+  - apiGroups: ["litmuschaos.io"]
+    resources: ["chaosengines", "chaosexperiments", "chaosresults"]
+    verbs: ["get", "list", "watch"]
+  # Argo Workflow CRDs (read-only)
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflows", "cronworkflows"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-mcp-server-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-mcp-server-role
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-mcp-server
+    namespace: litmus-exp
 
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clusterworkflowtemplates.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: ClusterWorkflowTemplate
+    listKind: ClusterWorkflowTemplateList
+    plural: clusterworkflowtemplates
+    shortNames:
+      - clusterwftmpl
+      - cwft
+    singular: clusterworkflowtemplate
+  scope: Cluster
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              x-kubernetes-map-type: atomic
+              x-kubernetes-preserve-unknown-fields: true
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: cronworkflows.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: CronWorkflow
+    listKind: CronWorkflowList
+    plural: cronworkflows
+    shortNames:
+      - cwf
+      - cronwf
+    singular: cronworkflow
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              x-kubernetes-map-type: atomic
+              x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              x-kubernetes-map-type: atomic
+              x-kubernetes-preserve-unknown-fields: true
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workflows.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: Workflow
+    listKind: WorkflowList
+    plural: workflows
+    shortNames:
+      - wf
+    singular: workflow
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - description: Status of the workflow
+          jsonPath: .status.phase
+          name: Status
+          type: string
+        - description: When the workflow was started
+          format: date-time
+          jsonPath: .status.startedAt
+          name: Age
+          type: date
+      name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              x-kubernetes-map-type: atomic
+              x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              x-kubernetes-map-type: atomic
+              x-kubernetes-preserve-unknown-fields: true
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+      subresources: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workflowtemplates.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: WorkflowTemplate
+    listKind: WorkflowTemplateList
+    plural: workflowtemplates
+    shortNames:
+      - wftmpl
+    singular: workflowtemplate
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              x-kubernetes-map-type: atomic
+              x-kubernetes-preserve-unknown-fields: true
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workflowtasksets.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: WorkflowTaskSet
+    listKind: WorkflowTaskSetList
+    plural: workflowtasksets
+    shortNames:
+      - wfts
+    singular: workflowtaskset
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              x-kubernetes-map-type: atomic
+              x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              x-kubernetes-map-type: atomic
+              x-kubernetes-preserve-unknown-fields: true
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workflowtaskresults.argoproj.io
+spec:
+  group: argoproj.io
+  names:
+    kind: WorkflowTaskResult
+    listKind: WorkflowTaskResultList
+    plural: workflowtaskresults
+    singular: workflowtaskresult
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          message:
+            type: string
+          metadata:
+            type: object
+          outputs:
+            properties:
+              artifacts:
+                items:
+                  properties:
+                    archive:
+                      properties:
+                        none:
+                          type: object
+                        tar:
+                          properties:
+                            compressionLevel:
+                              format: int32
+                              type: integer
+                          type: object
+                        zip:
+                          type: object
+                      type: object
+                    archiveLogs:
+                      type: boolean
+                    artifactory:
+                      properties:
+                        passwordSecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        url:
+                          type: string
+                        usernameSecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                      required:
+                      - url
+                      type: object
+                    from:
+                      type: string
+                    fromExpression:
+                      type: string
+                    gcs:
+                      properties:
+                        bucket:
+                          type: string
+                        key:
+                          type: string
+                        serviceAccountKeySecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                      required:
+                      - key
+                      type: object
+                    git:
+                      properties:
+                        depth:
+                          format: int64
+                          type: integer
+                        disableSubmodules:
+                          type: boolean
+                        fetch:
+                          items:
+                            type: string
+                          type: array
+                        insecureIgnoreHostKey:
+                          type: boolean
+                        passwordSecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        repo:
+                          type: string
+                        revision:
+                          type: string
+                        sshPrivateKeySecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        usernameSecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                      required:
+                      - repo
+                      type: object
+                    globalName:
+                      type: string
+                    hdfs:
+                      properties:
+                        addresses:
+                          items:
+                            type: string
+                          type: array
+                        force:
+                          type: boolean
+                        hdfsUser:
+                          type: string
+                        krbCCacheSecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        krbConfigConfigMap:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        krbKeytabSecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        krbRealm:
+                          type: string
+                        krbServicePrincipalName:
+                          type: string
+                        krbUsername:
+                          type: string
+                        path:
+                          type: string
+                      required:
+                      - path
+                      type: object
+                    http:
+                      properties:
+                        headers:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                            required:
+                            - name
+                            - value
+                            type: object
+                          type: array
+                        url:
+                          type: string
+                      required:
+                      - url
+                      type: object
+                    mode:
+                      format: int32
+                      type: integer
+                    name:
+                      type: string
+                    optional:
+                      type: boolean
+                    oss:
+                      properties:
+                        accessKeySecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        bucket:
+                          type: string
+                        createBucketIfNotPresent:
+                          type: boolean
+                        endpoint:
+                          type: string
+                        key:
+                          type: string
+                        lifecycleRule:
+                          properties:
+                            markDeletionAfterDays:
+                              format: int32
+                              type: integer
+                            markInfrequentAccessAfterDays:
+                              format: int32
+                              type: integer
+                          type: object
+                        secretKeySecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        securityToken:
+                          type: string
+                      required:
+                      - key
+                      type: object
+                    path:
+                      type: string
+                    raw:
+                      properties:
+                        data:
+                          type: string
+                      required:
+                      - data
+                      type: object
+                    recurseMode:
+                      type: boolean
+                    s3:
+                      properties:
+                        accessKeySecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        bucket:
+                          type: string
+                        createBucketIfNotPresent:
+                          properties:
+                            objectLocking:
+                              type: boolean
+                          type: object
+                        encryptionOptions:
+                          properties:
+                            enableEncryption:
+                              type: boolean
+                            kmsEncryptionContext:
+                              type: string
+                            kmsKeyId:
+                              type: string
+                            serverSideCustomerKeySecret:
+                              properties:
+                                key:
+                                  type: string
+                                name:
+                                  type: string
+                                optional:
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                          type: object
+                        endpoint:
+                          type: string
+                        insecure:
+                          type: boolean
+                        key:
+                          type: string
+                        region:
+                          type: string
+                        roleARN:
+                          type: string
+                        secretKeySecret:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        useSDKCreds:
+                          type: boolean
+                      type: object
+                    subPath:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              exitCode:
+                type: string
+              parameters:
+                items:
+                  properties:
+                    default:
+                      type: string
+                    description:
+                      type: string
+                    enum:
+                      items:
+                        type: string
+                      type: array
+                    globalName:
+                      type: string
+                    name:
+                      type: string
+                    value:
+                      type: string
+                    valueFrom:
+                      properties:
+                        configMapKeyRef:
+                          properties:
+                            key:
+                              type: string
+                            name:
+                              type: string
+                            optional:
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        default:
+                          type: string
+                        event:
+                          type: string
+                        expression:
+                          type: string
+                        jqFilter:
+                          type: string
+                        jsonPath:
+                          type: string
+                        parameter:
+                          type: string
+                        path:
+                          type: string
+                        supplied:
+                          type: object
+                      type: object
+                  required:
+                  - name
+                  type: object
+                type: array
+              result:
+                type: string
+            type: object
+          phase:
+            type: string
+          progress:
+            type: string
+        required:
+        - metadata
+        type: object
+    served: true
+    storage: true
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -201,6 +1089,385 @@ spec:
               memory: "500Mi"
               cpu: "225m"
               ephemeral-storage: "1Gi"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-mcp-config
+  namespace: litmus-exp
+data:
+  PROMETHEUS_URL: "http://prometheus.monitoring.svc.cluster.local:9090"
+  PROMETHEUS_MCP_SERVER_TRANSPORT: "http"
+  PROMETHEUS_MCP_BIND_HOST: "0.0.0.0"
+  PROMETHEUS_MCP_BIND_PORT: "9090"
+  PROMETHEUS_REQUEST_TIMEOUT: "30"
+  PROMETHEUS_URL_SSL_VERIFY: "true"
+  PROMETHEUS_DISABLE_LINKS: "false"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-mcp-secret
+  namespace: litmus-exp
+type: Opaque
+stringData:
+  PLACEHOLDER: "unused"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubernetes-mcp-server
+  namespace: litmus-exp
+  labels:
+    app: kubernetes-mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubernetes-mcp-server
+  template:
+    metadata:
+      labels:
+        app: kubernetes-mcp-server
+    spec:
+      serviceAccountName: mcp-server
+      
+      #{NODE_SELECTOR}
+      containers:
+        - name: mcp-server
+          image: quay.io/containers/kubernetes_mcp_server:latest
+          args:
+            - "--port"
+            - "8081"
+            - "--stateless"
+          ports:
+            - containerPort: 8081
+              name: http
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+              ephemeral-storage: "200Mi"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+              ephemeral-storage: "500Mi"
+          securityContext:
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubernetes-mcp-server
+  namespace: litmus-exp
+  labels:
+    app: kubernetes-mcp-server
+spec:
+  type: ClusterIP
+  selector:
+    app: kubernetes-mcp-server
+  ports:
+    - port: 8081
+      targetPort: http
+      protocol: TCP
+      name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-mcp-server
+  namespace: litmus-exp
+  labels:
+    app: prometheus-mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus-mcp-server
+  template:
+    metadata:
+      labels:
+        app: prometheus-mcp-server
+    spec:
+      serviceAccountName: prometheus-mcp-server
+      
+      #{NODE_SELECTOR}
+      containers:
+        - name: prometheus-mcp-server
+          image: agentcert/prometheus-mcp-server:latest
+          envFrom:
+            - configMapRef:
+                name: prometheus-mcp-config
+            - secretRef:
+                name: prometheus-mcp-secret
+          ports:
+            - containerPort: 9090
+              name: http
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 5
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+              ephemeral-storage: "200Mi"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+              ephemeral-storage: "500Mi"
+          securityContext:
+            runAsUser: 65532
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-mcp-server
+  namespace: litmus-exp
+  labels:
+    app: prometheus-mcp-server
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus-mcp-server
+  ports:
+    - port: 9090
+      targetPort: http
+      protocol: TCP
+      name: http
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workflow-controller-configmap
+  namespace: litmus-exp
+data:
+  containerRuntimeExecutor: k8sapi
+  executor: |
+    imagePullPolicy: IfNotPresent
+  instanceID: 8771e5f5-8076-4e65-9370-a9c4cccda3b0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workflow-controller-metrics
+  namespace: litmus-exp
+spec:
+  ports:
+    - name: metrics
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+  selector:
+    app: workflow-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workflow-controller
+  namespace: litmus-exp
+spec:
+  selector:
+    matchLabels:
+      app: workflow-controller
+  template:
+    metadata:
+      labels:
+        app: workflow-controller
+    spec:
+      
+      #{NODE_SELECTOR}
+      containers:
+        - args:
+            - --configmap
+            - workflow-controller-configmap
+            - --executor-image
+            -  litmuschaos/argoexec:v3.3.1
+            - --namespaced
+            - --container-runtime-executor
+            -  k8sapi
+          command:
+            - workflow-controller
+          image: litmuschaos/workflow-controller:v3.3.1
+          name: workflow-controller
+          securityContext:
+            runAsUser: 2000
+            allowPrivilegeEscalation: false
+          env:
+            - name: LEADER_ELECTION_DISABLE
+              value: "true"
+          resources:
+            requests:
+              memory: "300Mi"
+              cpu: "125m"
+              ephemeral-storage: "500Mi"
+            limits:
+              memory: "500Mi"
+              cpu: "225m"
+              ephemeral-storage: "1Gi"
+      serviceAccountName: litmus-exp
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: litmus-admin
+  namespace: litmus-exp
+  labels:
+    name: litmus-admin
+---
+# Source: openebs/templates/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: litmus-admin-cluster-role
+  labels:
+    name: litmus-admin-cluster-role
+rules:
+  # ***************************************************************************************
+  # Permissions needed for preparing and monitor the chaos resources by chaos-runner
+  # ***************************************************************************************
+
+  # The chaos operator watches the chaosengine resource and orchestrates the chaos experiment..
+  ## .. by creating the chaos-runner
+
+  # for creating and monitoring the chaos-runner pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create","delete","get","list","patch","update", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create","get","list","patch","update"]
+
+    # for tracking & getting logs of the pods created by chaos-runner to implement individual steps in the runner
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list", "watch"]
+
+    # for configuring and monitor the experiment job by chaos-runner pod
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "list", "get", "delete", "deletecollection"]
+
+  # ********************************************************************
+  # Permissions needed for creation and discovery of chaos experiments
+  # ********************************************************************
+
+  # The helper pods are created by experiment to perform the actual chaos injection ...
+  # ... for a period of chaos duration
+
+  # for creating and managing to execute comands inside target container
+  - apiGroups: [""]
+    resources: ["pods/exec","pods/eviction","replicationcontrollers"]
+    verbs: ["get","list","create"]
+
+    # for tracking & getting logs of the pods created by experiment pod to implement individual steps in the experiment
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list", "watch"]
+
+  # for creating and monitoring liveness services or monitoring target app services during chaos injection
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create","get","list"]
+
+    # for checking the app parent resources as deployments or sts and are eligible chaos candidates
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["list", "get", "patch", "update"]
+
+    # for checking the app parent resources as replicasets and are eligible chaos candidates
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["list", "get"]
+
+  # for checking the app parent resources as deamonsets and are eligible chaos candidates
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    verbs: ["list","get"]
+
+    # for checking (openshift) app parent resources if they are eligible chaos candidates
+  - apiGroups: ["apps.openshift.io"]
+    resources: ["deploymentconfigs"]
+    verbs: ["list", "get"]
+
+    # for checking (argo) app parent resources if they are eligible chaos candidates
+  - apiGroups: ["argoproj.io"]
+    resources: ["rollouts"]
+    verbs: ["list", "get"]
+
+  # performs CRUD operations on the network policies
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["create","delete","list","get"]
+
+  # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow
+  - apiGroups: ["litmuschaos.io"]
+    resources: ["chaosengines","chaosexperiments","chaosresults"]
+    verbs: ["create","list","get","patch","update","delete"]
+
+    # for experiment to perform node status checks and other node level operations like taint, drain in the experiment.
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["patch", "get", "list", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: litmus-admin-cluster-role-binding
+  labels:
+    name: litmus-admin-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: litmus-admin-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: litmus-admin
+    namespace: litmus-exp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: litmus-admin-ops-role-binding
+  namespace: litmus-exp
+  labels:
+    name: litmus-admin-ops-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: infra-ops-role
+subjects:
+  - kind: ServiceAccount
+    name: litmus-admin
+    namespace: litmus-exp
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -3301,1271 +4568,3 @@ spec:
   selector:
     app: chaos-exporter
   type: ClusterIP
-
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: mcp-server
-  namespace: litmus-exp
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: mcp-server-role
-rules:
-  # Standard Kubernetes resources (read-only)
-  - apiGroups: [""]
-    resources: ["pods", "pods/log", "services", "configmaps", "secrets", "events", "namespaces", "nodes", "replicationcontrollers", "persistentvolumeclaims"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["apps"]
-    resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["batch"]
-    resources: ["jobs", "cronjobs"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies", "ingresses"]
-    verbs: ["get", "list", "watch"]
-  # Litmus Chaos CRDs
-  - apiGroups: ["litmuschaos.io"]
-    resources: ["chaosengines", "chaosexperiments", "chaosresults"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # Litmus EventTracker CRDs
-  - apiGroups: ["eventtracker.litmuschaos.io"]
-    resources: ["eventtrackerpolicies"]
-    verbs: ["get", "list", "watch"]
-  # Argo Workflow CRDs (used by Litmus)
-  - apiGroups: ["argoproj.io"]
-    resources: ["workflows", "cronworkflows", "workflowtemplates", "clusterworkflowtemplates", "workflowtasksets", "workflowtaskresults"]
-    verbs: ["get", "list", "watch"]
-  # CRD discovery
-  - apiGroups: ["apiextensions.k8s.io"]
-    resources: ["customresourcedefinitions"]
-    verbs: ["get", "list"]
-  # OpenShift (if applicable)
-  - apiGroups: ["apps.openshift.io"]
-    resources: ["deploymentconfigs"]
-    verbs: ["get", "list"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: mcp-server-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: mcp-server-role
-subjects:
-  - kind: ServiceAccount
-    name: mcp-server
-    namespace: litmus-exp
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: prometheus-mcp-server
-  namespace: litmus-exp
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: prometheus-mcp-server-role
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "services", "endpoints", "namespaces", "nodes"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["apps"]
-    resources: ["deployments", "statefulsets", "daemonsets"]
-    verbs: ["get", "list", "watch"]
-  # Litmus Chaos CRDs (read-only for observing chaos experiment metrics)
-  - apiGroups: ["litmuschaos.io"]
-    resources: ["chaosengines", "chaosexperiments", "chaosresults"]
-    verbs: ["get", "list", "watch"]
-  # Argo Workflow CRDs (read-only)
-  - apiGroups: ["argoproj.io"]
-    resources: ["workflows", "cronworkflows"]
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: prometheus-mcp-server-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: prometheus-mcp-server-role
-subjects:
-  - kind: ServiceAccount
-    name: prometheus-mcp-server
-    namespace: litmus-exp
-
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: litmus-admin
-  namespace: litmus-exp
-  labels:
-    name: litmus-admin
----
-# Source: openebs/templates/clusterrole.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: litmus-admin-cluster-role
-  labels:
-    name: litmus-admin-cluster-role
-rules:
-  # ***************************************************************************************
-  # Permissions needed for preparing and monitor the chaos resources by chaos-runner
-  # ***************************************************************************************
-
-  # The chaos operator watches the chaosengine resource and orchestrates the chaos experiment..
-  ## .. by creating the chaos-runner
-
-  # for creating and monitoring the chaos-runner pods
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["create","delete","get","list","patch","update", "deletecollection"]
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["create","get","list","patch","update"]
-
-    # for tracking & getting logs of the pods created by chaos-runner to implement individual steps in the runner
-  - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get", "list", "watch"]
-
-    # for configuring and monitor the experiment job by chaos-runner pod
-  - apiGroups: ["batch"]
-    resources: ["jobs"]
-    verbs: ["create", "list", "get", "delete", "deletecollection"]
-
-  # ********************************************************************
-  # Permissions needed for creation and discovery of chaos experiments
-  # ********************************************************************
-
-  # The helper pods are created by experiment to perform the actual chaos injection ...
-  # ... for a period of chaos duration
-
-  # for creating and managing to execute comands inside target container
-  - apiGroups: [""]
-    resources: ["pods/exec","pods/eviction","replicationcontrollers"]
-    verbs: ["get","list","create"]
-
-    # for tracking & getting logs of the pods created by experiment pod to implement individual steps in the experiment
-  - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get", "list", "watch"]
-
-  # for creating and monitoring liveness services or monitoring target app services during chaos injection
-  - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["create","get","list"]
-
-    # for checking the app parent resources as deployments or sts and are eligible chaos candidates
-  - apiGroups: ["apps"]
-    resources: ["deployments", "statefulsets"]
-    verbs: ["list", "get", "patch", "update"]
-
-    # for checking the app parent resources as replicasets and are eligible chaos candidates
-  - apiGroups: ["apps"]
-    resources: ["replicasets"]
-    verbs: ["list", "get"]
-
-  # for checking the app parent resources as deamonsets and are eligible chaos candidates
-  - apiGroups: ["apps"]
-    resources: ["daemonsets"]
-    verbs: ["list","get"]
-
-    # for checking (openshift) app parent resources if they are eligible chaos candidates
-  - apiGroups: ["apps.openshift.io"]
-    resources: ["deploymentconfigs"]
-    verbs: ["list", "get"]
-
-    # for checking (argo) app parent resources if they are eligible chaos candidates
-  - apiGroups: ["argoproj.io"]
-    resources: ["rollouts"]
-    verbs: ["list", "get"]
-
-  # performs CRUD operations on the network policies
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
-    verbs: ["create","delete","list","get"]
-
-  # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow
-  - apiGroups: ["litmuschaos.io"]
-    resources: ["chaosengines","chaosexperiments","chaosresults"]
-    verbs: ["create","list","get","patch","update","delete"]
-
-    # for experiment to perform node status checks and other node level operations like taint, drain in the experiment.
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["patch", "get", "list", "update"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: litmus-admin-cluster-role-binding
-  labels:
-    name: litmus-admin-cluster-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: litmus-admin-cluster-role
-subjects:
-  - kind: ServiceAccount
-    name: litmus-admin
-    namespace: litmus-exp
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: litmus-admin-ops-role-binding
-  namespace: litmus-exp
-  labels:
-    name: litmus-admin-ops-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: infra-ops-role
-subjects:
-  - kind: ServiceAccount
-    name: litmus-admin
-    namespace: litmus-exp
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: prometheus-mcp-config
-  namespace: litmus-exp
-data:
-  PROMETHEUS_URL: "http://prometheus.monitoring.svc.cluster.local:9090"
-  PROMETHEUS_MCP_SERVER_TRANSPORT: "http"
-  PROMETHEUS_MCP_BIND_HOST: "0.0.0.0"
-  PROMETHEUS_MCP_BIND_PORT: "9090"
-  PROMETHEUS_REQUEST_TIMEOUT: "30"
-  PROMETHEUS_URL_SSL_VERIFY: "true"
-  PROMETHEUS_DISABLE_LINKS: "false"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: prometheus-mcp-secret
-  namespace: litmus-exp
-type: Opaque
-stringData:
-  PLACEHOLDER: "unused"
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kubernetes-mcp-server
-  namespace: litmus-exp
-  labels:
-    app: kubernetes-mcp-server
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: kubernetes-mcp-server
-  template:
-    metadata:
-      labels:
-        app: kubernetes-mcp-server
-    spec:
-      serviceAccountName: mcp-server
-      
-      #{NODE_SELECTOR}
-      containers:
-        - name: mcp-server
-          image: quay.io/containers/kubernetes_mcp_server:latest
-          args:
-            - "--port"
-            - "8081"
-            - "--stateless"
-          ports:
-            - containerPort: 8081
-              name: http
-              protocol: TCP
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: http
-            initialDelaySeconds: 10
-            periodSeconds: 15
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: http
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-              ephemeral-storage: "200Mi"
-            limits:
-              memory: "256Mi"
-              cpu: "500m"
-              ephemeral-storage: "500Mi"
-          securityContext:
-            runAsUser: 65532
-            allowPrivilegeEscalation: false
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kubernetes-mcp-server
-  namespace: litmus-exp
-  labels:
-    app: kubernetes-mcp-server
-spec:
-  type: ClusterIP
-  selector:
-    app: kubernetes-mcp-server
-  ports:
-    - port: 8081
-      targetPort: http
-      protocol: TCP
-      name: http
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: prometheus-mcp-server
-  namespace: litmus-exp
-  labels:
-    app: prometheus-mcp-server
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: prometheus-mcp-server
-  template:
-    metadata:
-      labels:
-        app: prometheus-mcp-server
-    spec:
-      serviceAccountName: prometheus-mcp-server
-      
-      #{NODE_SELECTOR}
-      containers:
-        - name: prometheus-mcp-server
-          image: agentcert/prometheus-mcp-server:latest
-          envFrom:
-            - configMapRef:
-                name: prometheus-mcp-config
-            - secretRef:
-                name: prometheus-mcp-secret
-          ports:
-            - containerPort: 9090
-              name: http
-              protocol: TCP
-          livenessProbe:
-            tcpSocket:
-              port: http
-            initialDelaySeconds: 10
-            periodSeconds: 15
-            failureThreshold: 5
-          readinessProbe:
-            tcpSocket:
-              port: http
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            failureThreshold: 5
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-              ephemeral-storage: "200Mi"
-            limits:
-              memory: "256Mi"
-              cpu: "500m"
-              ephemeral-storage: "500Mi"
-          securityContext:
-            runAsUser: 65532
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus-mcp-server
-  namespace: litmus-exp
-  labels:
-    app: prometheus-mcp-server
-spec:
-  type: ClusterIP
-  selector:
-    app: prometheus-mcp-server
-  ports:
-    - port: 9090
-      targetPort: http
-      protocol: TCP
-      name: http
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: infra-cluster-role
-rules:
-  # ***********************************************************************************************
-  # Permissions needed for orchestration and monitoring chaos by chaos-operator and chaos-exporter
-  # ***********************************************************************************************
-
-  # for deriving the owner references of the operator pod
-  - apiGroups: [ "apps" ]
-    resources: [ "deployments", "replicasets"]
-    verbs: [ "get", "list" ]
-
-  # for the cleanup of jobs in abort scenarios
-  - apiGroups: [ "batch" ]
-    resources: [ "jobs" ]
-    verbs: [ "get", "list", "deletecollection" ]
-
-  # for creation and management of the chaos-runner pod
-  - apiGroups: [ "" ]
-    resources: [ "pods" ]
-    verbs: ["get", "create", "update", "patch", "delete", "list", "watch", "deletecollection" ]
-
-  # for creating of events and monitoring
-  - apiGroups: [ "" ]
-    resources: [ "events", "services" ]
-    verbs: ["get", "create", "update", "patch", "list", "watch" ]
-
-  # for creation, status polling and deletion of litmus chaos resources used within a chaos workflow
-  - apiGroups: [ "litmuschaos.io" ]
-    resources: [ "chaosengines", "chaosexperiments", "chaosresults" ]
-    verbs: ["get", "create", "update", "patch", "delete", "list", "watch", "deletecollection" ]
-
-  # for validation of existance of chaosresult crd
-  - apiGroups: [ "apiextensions.k8s.io" ]
-    resources: [ "customresourcedefinitions" ]
-    verbs: [ "list", "get" ]
-
-  # for managing the finalizers to the primary resource
-  - apiGroups: [ "litmuschaos.io" ]
-    resources: [ "chaosengines/finalizers" ]
-    verbs: [ "update" ]
-
-  # for managing the leader elections in multi-replicas scenario
-  - apiGroups: [ "coordination.k8s.io" ]
-    resources: [ "leases" ]
-    verbs: [ "get","create","list","update","delete" ]
-
-  # ******************************************************************************************************
-  # Permissions needed to manage and communicate between control plane and execution plane by subscriber
-  # *******************************************************************************************************
-
-  - apiGroups: [ "batch" ]
-    resources: [ "jobs" ]
-    verbs: [ "get", "create", "patch", "update" ]
-
-  - apiGroups: [ "" ]
-    resources: [ "pods/log" ]
-    verbs: [ "get", "list", "watch" ]
-
-  - apiGroups: [ "" ]
-    resources: [ "pods", "namespaces", "nodes", "services" ]
-    verbs: [ "get", "list", "watch" ]
-
-  # for dynamic app onboarding via Helm across arbitrary namespaces
-  - apiGroups: [ "" ]
-    resources: [ "namespaces" ]
-    verbs: [ "create", "patch", "update" ]
-
-  # helm stores release metadata as secrets in the target app namespace
-  - apiGroups: [ "" ]
-    resources: [ "secrets" ]
-    verbs: [ "get", "list", "watch", "create", "update", "patch", "delete" ]
-
-  # Helm charts can reference ConfigMaps from other namespaces (for example monitoring)
-  # during render/install, so read access must be cluster-wide.
-  - apiGroups: [ "" ]
-    resources: [ "configmaps" ]
-    verbs: [ "get", "list", "watch" ]
-
-  - apiGroups: [ "litmuschaos.io" ]
-    resources: [ "chaosengines", "chaosschedules", "chaosresults", "chaosschedules" ]
-    verbs: [ "get", "list", "create", "delete", "update", "watch", "patch" ]
-
-  - apiGroups: [ "apps.openshift.io" ]
-    resources: [ "deploymentconfigs" ]
-    verbs: [ "get", "list" ]
-
-  - apiGroups: [ "apps" ]
-    resources: [ "deployments" ]
-    verbs: [ "delete" ]
-
-  - apiGroups: [ "apps" ]
-    resources: [ "deployments", "daemonsets", "replicasets", "statefulsets" ]
-    verbs: [ "get","list" ]
-
-  - apiGroups: [ "argoproj.io" ]
-    resources:
-      [
-        "workflows",
-        "workflows/finalizers",
-        "workflowtemplates",
-        "workflowtemplates/finalizers",
-        "cronworkflows",
-        "cronworkflows/finalizers",
-        "clusterworkflowtemplates",
-        "clusterworkflowtemplates/finalizers",
-        "rollouts",
-      ]
-    verbs: [ "get", "list", "create", "delete", "update", "watch", "patch" ]
-
-  # ************************************************************************
-  # Permissions needed to orchestrate the workflows by workflow controller
-  # ************************************************************************
-
-  - apiGroups: [ "" ]
-    resources: [ "pods", "pods/exec" ]
-    verbs: [ "create", "get", "list", "watch", "update", "patch", "delete" ]
-  - apiGroups: [ "" ]
-    resources: [ "persistentvolumeclaims" ]
-    verbs: [ "create", "delete" ]
-  - apiGroups: [ "argoproj.io" ]
-    resources: [ "workflows", "workflows/finalizers" ]
-    verbs: [ "get", "list", "watch", "update", "patch", "delete", "create" ]
-  - apiGroups: [ "argoproj.io" ]
-    resources: [ "workflowtemplates","workflowtemplates/finalizers","clusterworkflowtemplates","clusterworkflowtemplates/finalizers","workflowtasksets","workflowartifactgctasks" ]
-    verbs: [ "get", "list", "watch" ]
-  - apiGroups: [ "argoproj.io" ]
-    resources: [ "workflowtaskresults" ]
-    verbs: [ "list", "watch", "deletecollection" ]
-  - apiGroups: [ "" ]
-    resources: [ "serviceaccounts" ]
-    verbs: [ "get", "list" ]
-  - apiGroups: [ "argoproj.io" ]
-    resources: [ "cronworkflows", "cronworkflows/finalizers" ]
-    verbs: [ "get", "list", "watch", "update", "patch", "delete" ]
-  - apiGroups: [ "" ]
-    resources: [ "events" ]
-    verbs: [ "create", "patch" ]
-  - apiGroups: [ "policy" ]
-    resources: [ "poddisruptionbudgets" ]
-    verbs: [ "create", "get", "delete" ]
-
-  # ************************************************************************
-  # Permissions needed to for the event-tracker
-  # ************************************************************************
-
-  - apiGroups: [ "eventtracker.litmuschaos.io" ]
-    resources: [ "eventtrackerpolicies" ]
-    verbs: [ "create", "get", "list", "delete", "update", "patch", "watch" ]
-
-  - apiGroups: [ "eventtracker.litmuschaos.io" ]
-    resources: [ "eventtrackerpolicies/status" ]
-    verbs: [ "get","patch", "update" ]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: infra-cluster-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: infra-cluster-role
-subjects:
-  - kind: ServiceAccount
-    name: litmus-exp
-    namespace: litmus-exp
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: infra-ops-role
-  namespace: litmus-exp
-rules:
-  - apiGroups: [ "" ]
-    resources: [ "secrets" ]
-    verbs: [ "get", "create", "update", "patch" ]
-
-  - apiGroups: [ "" ]
-    resources: [ "configmaps"]
-    verbs: ["get", "create", "update", "patch", "list", "watch" ]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: infra-ops-role-binding
-  namespace: litmus-exp
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: infra-ops-role
-subjects:
-  - kind: ServiceAccount
-    name: litmus-exp
-    namespace: litmus-exp
-
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: argo-chaos
-  namespace: litmus-exp
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: argo-chaos-infra-cluster-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: infra-cluster-role
-subjects:
-  - kind: ServiceAccount
-    name: argo-chaos
-    namespace: litmus-exp
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: argo-chaos-ops-role-binding
-  namespace: litmus-exp
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: infra-ops-role
-subjects:
-  - kind: ServiceAccount
-    name: argo-chaos
-    namespace: litmus-exp
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: clusterworkflowtemplates.argoproj.io
-spec:
-  group: argoproj.io
-  names:
-    kind: ClusterWorkflowTemplate
-    listKind: ClusterWorkflowTemplateList
-    plural: clusterworkflowtemplates
-    shortNames:
-      - clusterwftmpl
-      - cwft
-    singular: clusterworkflowtemplate
-  scope: Cluster
-  versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: cronworkflows.argoproj.io
-spec:
-  group: argoproj.io
-  names:
-    kind: CronWorkflow
-    listKind: CronWorkflowList
-    plural: cronworkflows
-    shortNames:
-      - cwf
-      - cronwf
-    singular: cronworkflow
-  scope: Namespaced
-  versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-            status:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: workflows.argoproj.io
-spec:
-  group: argoproj.io
-  names:
-    kind: Workflow
-    listKind: WorkflowList
-    plural: workflows
-    shortNames:
-      - wf
-    singular: workflow
-  scope: Namespaced
-  versions:
-    - additionalPrinterColumns:
-        - description: Status of the workflow
-          jsonPath: .status.phase
-          name: Status
-          type: string
-        - description: When the workflow was started
-          format: date-time
-          jsonPath: .status.startedAt
-          name: Age
-          type: date
-      name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-            status:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
-      subresources: {}
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: workflowtemplates.argoproj.io
-spec:
-  group: argoproj.io
-  names:
-    kind: WorkflowTemplate
-    listKind: WorkflowTemplateList
-    plural: workflowtemplates
-    shortNames:
-      - wftmpl
-    singular: workflowtemplate
-  scope: Namespaced
-  versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: workflowtasksets.argoproj.io
-spec:
-  group: argoproj.io
-  names:
-    kind: WorkflowTaskSet
-    listKind: WorkflowTaskSetList
-    plural: workflowtasksets
-    shortNames:
-      - wfts
-    singular: workflowtaskset
-  scope: Namespaced
-  versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-            status:
-              type: object
-              x-kubernetes-map-type: atomic
-              x-kubernetes-preserve-unknown-fields: true
-          required:
-            - metadata
-            - spec
-          type: object
-      served: true
-      storage: true
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: workflowtaskresults.argoproj.io
-spec:
-  group: argoproj.io
-  names:
-    kind: WorkflowTaskResult
-    listKind: WorkflowTaskResultList
-    plural: workflowtaskresults
-    singular: workflowtaskresult
-  scope: Namespaced
-  versions:
-  - name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            type: string
-          kind:
-            type: string
-          message:
-            type: string
-          metadata:
-            type: object
-          outputs:
-            properties:
-              artifacts:
-                items:
-                  properties:
-                    archive:
-                      properties:
-                        none:
-                          type: object
-                        tar:
-                          properties:
-                            compressionLevel:
-                              format: int32
-                              type: integer
-                          type: object
-                        zip:
-                          type: object
-                      type: object
-                    archiveLogs:
-                      type: boolean
-                    artifactory:
-                      properties:
-                        passwordSecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        url:
-                          type: string
-                        usernameSecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                      required:
-                      - url
-                      type: object
-                    from:
-                      type: string
-                    fromExpression:
-                      type: string
-                    gcs:
-                      properties:
-                        bucket:
-                          type: string
-                        key:
-                          type: string
-                        serviceAccountKeySecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                      required:
-                      - key
-                      type: object
-                    git:
-                      properties:
-                        depth:
-                          format: int64
-                          type: integer
-                        disableSubmodules:
-                          type: boolean
-                        fetch:
-                          items:
-                            type: string
-                          type: array
-                        insecureIgnoreHostKey:
-                          type: boolean
-                        passwordSecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        repo:
-                          type: string
-                        revision:
-                          type: string
-                        sshPrivateKeySecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        usernameSecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                      required:
-                      - repo
-                      type: object
-                    globalName:
-                      type: string
-                    hdfs:
-                      properties:
-                        addresses:
-                          items:
-                            type: string
-                          type: array
-                        force:
-                          type: boolean
-                        hdfsUser:
-                          type: string
-                        krbCCacheSecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        krbConfigConfigMap:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        krbKeytabSecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        krbRealm:
-                          type: string
-                        krbServicePrincipalName:
-                          type: string
-                        krbUsername:
-                          type: string
-                        path:
-                          type: string
-                      required:
-                      - path
-                      type: object
-                    http:
-                      properties:
-                        headers:
-                          items:
-                            properties:
-                              name:
-                                type: string
-                              value:
-                                type: string
-                            required:
-                            - name
-                            - value
-                            type: object
-                          type: array
-                        url:
-                          type: string
-                      required:
-                      - url
-                      type: object
-                    mode:
-                      format: int32
-                      type: integer
-                    name:
-                      type: string
-                    optional:
-                      type: boolean
-                    oss:
-                      properties:
-                        accessKeySecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        bucket:
-                          type: string
-                        createBucketIfNotPresent:
-                          type: boolean
-                        endpoint:
-                          type: string
-                        key:
-                          type: string
-                        lifecycleRule:
-                          properties:
-                            markDeletionAfterDays:
-                              format: int32
-                              type: integer
-                            markInfrequentAccessAfterDays:
-                              format: int32
-                              type: integer
-                          type: object
-                        secretKeySecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        securityToken:
-                          type: string
-                      required:
-                      - key
-                      type: object
-                    path:
-                      type: string
-                    raw:
-                      properties:
-                        data:
-                          type: string
-                      required:
-                      - data
-                      type: object
-                    recurseMode:
-                      type: boolean
-                    s3:
-                      properties:
-                        accessKeySecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        bucket:
-                          type: string
-                        createBucketIfNotPresent:
-                          properties:
-                            objectLocking:
-                              type: boolean
-                          type: object
-                        encryptionOptions:
-                          properties:
-                            enableEncryption:
-                              type: boolean
-                            kmsEncryptionContext:
-                              type: string
-                            kmsKeyId:
-                              type: string
-                            serverSideCustomerKeySecret:
-                              properties:
-                                key:
-                                  type: string
-                                name:
-                                  type: string
-                                optional:
-                                  type: boolean
-                              required:
-                              - key
-                              type: object
-                          type: object
-                        endpoint:
-                          type: string
-                        insecure:
-                          type: boolean
-                        key:
-                          type: string
-                        region:
-                          type: string
-                        roleARN:
-                          type: string
-                        secretKeySecret:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        useSDKCreds:
-                          type: boolean
-                      type: object
-                    subPath:
-                      type: string
-                  required:
-                  - name
-                  type: object
-                type: array
-              exitCode:
-                type: string
-              parameters:
-                items:
-                  properties:
-                    default:
-                      type: string
-                    description:
-                      type: string
-                    enum:
-                      items:
-                        type: string
-                      type: array
-                    globalName:
-                      type: string
-                    name:
-                      type: string
-                    value:
-                      type: string
-                    valueFrom:
-                      properties:
-                        configMapKeyRef:
-                          properties:
-                            key:
-                              type: string
-                            name:
-                              type: string
-                            optional:
-                              type: boolean
-                          required:
-                          - key
-                          type: object
-                        default:
-                          type: string
-                        event:
-                          type: string
-                        expression:
-                          type: string
-                        jqFilter:
-                          type: string
-                        jsonPath:
-                          type: string
-                        parameter:
-                          type: string
-                        path:
-                          type: string
-                        supplied:
-                          type: object
-                      type: object
-                  required:
-                  - name
-                  type: object
-                type: array
-              result:
-                type: string
-            type: object
-          phase:
-            type: string
-          progress:
-            type: string
-        required:
-        - metadata
-        type: object
-    served: true
-    storage: true

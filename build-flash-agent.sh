@@ -5,6 +5,23 @@ SERVER_NAMESPACE="litmus-chaos"
 SERVER_DEPLOYMENT="litmusportal-server"
 ENV_FILE="/mnt/d/Studies/AgentCert/local-custom/config/.env"
 
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env-file)
+      ENV_FILE="${2:-}"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "[ERROR] Env file not found: ${ENV_FILE}" >&2
+  exit 1
+fi
+
 read_env_value() {
   local key="$1"
   local value
@@ -92,6 +109,34 @@ sync_live_server_env() {
   echo "[OK] Live server env synced: FLASH_AGENT_IMAGE=${IMAGE} LITELLM_MASTER_KEY=<set>"
 }
 
+sync_live_flash_agent_workloads() {
+  local namespace="sock-shop"
+  local deployment="flash-agent"
+  local cronjob="flash-agent-cronjob"
+
+  if ! command -v kubectl >/dev/null 2>&1; then
+    echo "[WARN] kubectl not found; skipping flash-agent workload image sync"
+    return 0
+  fi
+
+  if kubectl -n "${namespace}" get deployment "${deployment}" >/dev/null 2>&1; then
+    echo "[INFO] Updating ${namespace}/${deployment} image to ${IMAGE}"
+    kubectl -n "${namespace}" set image deployment/"${deployment}" agent="${IMAGE}" >/dev/null || true
+    kubectl -n "${namespace}" rollout status deployment/"${deployment}" --timeout=120s >/dev/null || true
+  else
+    echo "[WARN] ${namespace}/${deployment} not found; skipping deployment image sync"
+  fi
+
+  if kubectl -n "${namespace}" get cronjob "${cronjob}" >/dev/null 2>&1; then
+    echo "[INFO] Updating ${namespace}/${cronjob} image to ${IMAGE}"
+    kubectl -n "${namespace}" set image cronjob/"${cronjob}" agent="${IMAGE}" >/dev/null || true
+  else
+    echo "[WARN] ${namespace}/${cronjob} not found; skipping cronjob image sync"
+  fi
+
+  echo "[OK] Flash-agent workloads synced to ${IMAGE}"
+}
+
 # Prune old agentcert-flash-agent images before building new one
 echo "[INFO] Pruning old agentcert-flash-agent images..."
 docker images | grep "agentcert-flash-agent" | grep -v "latest\|dev" | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true
@@ -135,3 +180,4 @@ echo "[OK] .env updated: FLASH_AGENT_IMAGE=${LATEST_IMAGE}"
 # Update global variable for sync function
 IMAGE="${LATEST_IMAGE}"
 sync_live_server_env
+sync_live_flash_agent_workloads

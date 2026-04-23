@@ -261,11 +261,12 @@ sync_install_agent_env_from_dotenv() {
     fi
 
     print_section "Syncing install-agent env from .env to GraphQL deployment"
-    local install_agent_image install_agent_pull_policy pre_cleanup_wait_seconds agent_sidecar_image
+    local install_agent_image install_agent_pull_policy pre_cleanup_wait_seconds agent_sidecar_image blind_traces
     install_agent_image=$(get_env_value "INSTALL_AGENT_IMAGE" "$env_file")
     install_agent_pull_policy=$(get_env_value "INSTALL_AGENT_IMAGE_PULL_POLICY" "$env_file")
     pre_cleanup_wait_seconds=$(get_env_value "PRE_CLEANUP_WAIT_SECONDS" "$env_file")
     agent_sidecar_image=$(get_env_value "AGENT_SIDECAR_IMAGE" "$env_file")
+    blind_traces=$(get_env_value "BLIND_TRACES" "$env_file")
 
     if [ -z "$install_agent_image" ] && [ -z "$install_agent_pull_policy" ] && [ -z "$pre_cleanup_wait_seconds" ] && [ -z "$agent_sidecar_image" ]; then
         print_info "INSTALL_AGENT_IMAGE* not set in .env; skipping deployment env update"
@@ -292,9 +293,10 @@ sync_install_agent_env_from_dotenv() {
     [ -n "$install_agent_pull_policy" ] && set_env_args+=("INSTALL_AGENT_IMAGE_PULL_POLICY=$install_agent_pull_policy")
     [ -n "$agent_sidecar_image" ] && set_env_args+=("AGENT_SIDECAR_IMAGE=$agent_sidecar_image")
     set_env_args+=("PRE_CLEANUP_WAIT_SECONDS=$pre_cleanup_wait_seconds")
+    [ -n "$blind_traces" ] && set_env_args+=("BLIND_TRACES=$blind_traces")
 
     kubectl set env "${set_env_args[@]}" >/dev/null
-    print_success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE* AGENT_SIDECAR_IMAGE PRE_CLEANUP_WAIT_SECONDS"
+    print_success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE* AGENT_SIDECAR_IMAGE PRE_CLEANUP_WAIT_SECONDS BLIND_TRACES"
 }
 
 sync_mongo_env_from_wsl() {

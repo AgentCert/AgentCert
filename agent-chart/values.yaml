@@ -25,9 +25,9 @@ agent:
 
   containerImage:
     registry: docker.io
-    repository: agentcert/flash-agent
+    repository: agentcert/agentcert-flash-agent
     tag: latest
-    pullPolicy: Always
+    pullPolicy: IfNotPresent
 
   config:
     # --- LiteLLM Proxy ---

@@ -31,6 +31,9 @@ litellm_settings:
   # Flash Agent sends extra_body.metadata on each call for rich trace context.
   success_callback: ["langfuse"]
   failure_callback: ["langfuse"]
+  # Custom callback emits durable legacy span names.
+  # Callback source file is mounted by litellm ConfigMap in agent-charts.
+  callbacks: ["custom_callbacks.proxy_handler_instance"]
   # Retry settings — automatic retry on transient failures
   num_retries: 3
   retry_after: 30

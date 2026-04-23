@@ -3,6 +3,23 @@ set -e
 
 ENV_FILE="/mnt/d/Studies/AgentCert/local-custom/config/.env"
 
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		--env-file)
+			ENV_FILE="${2:-}"
+			shift 2
+			;;
+		*)
+			shift
+			;;
+	esac
+done
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+	echo "[ERROR] Env file not found: ${ENV_FILE}" >&2
+	exit 1
+fi
+
 # Prune old agentcert/agent-sidecar images before building new one
 echo "[INFO] Pruning old agent-sidecar images..."
 docker images | grep "agentcert/agent-sidecar" | grep -v "latest\|dev" | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true

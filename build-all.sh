@@ -156,7 +156,7 @@ echo ""
 
 # Step 4: Build install-agent image
 log_info "Starting: Build install-agent image"
-if DOCKER_BUILDKIT=1 bash /mnt/d/Studies/AgentCert/build-install-agent.sh; then
+if DOCKER_BUILDKIT=1 bash /mnt/d/Studies/AgentCert/build-install-agent.sh --env-file "${ENV_FILE}"; then
     log_success "Completed: Build install-agent image"
 else
     log_error "Failed: Build install-agent image"
@@ -167,7 +167,7 @@ echo ""
 
 # Step 5: Build agent-sidecar image
 log_info "Starting: Build agent-sidecar image"
-if bash /mnt/d/Studies/AgentCert/build-agent-sidecar.sh; then
+if bash /mnt/d/Studies/AgentCert/build-agent-sidecar.sh --env-file "${ENV_FILE}"; then
     log_success "Completed: Build agent-sidecar image"
 else
     log_error "Failed: Build agent-sidecar image"
@@ -178,7 +178,7 @@ echo ""
 
 # Step 6: Build flash-agent image (syncs LITELLM_MASTER_KEY + MCP URLs to server)
 log_info "Starting: Build flash-agent image"
-if bash /mnt/d/Studies/AgentCert/build-flash-agent.sh; then
+if bash /mnt/d/Studies/AgentCert/build-flash-agent.sh --env-file "${ENV_FILE}"; then
     log_success "Completed: Build flash-agent image"
 else
     log_error "Failed: Build flash-agent image"

@@ -259,8 +259,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if context.get("workflow_name"):
                 metadata["trace_name"] = context["workflow_name"]
 
-            # Named span label – distinguishes the kubernetes routing call
-            # from the analysis call within the same trace.
+            # Named generation label – distinguishes routing and analysis calls.
             if "generation_name" not in metadata:
                 gen_name = _detect_generation_name(data.get("messages", []))
                 if gen_name:
@@ -284,39 +283,29 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if "agent_role" in context:
                 metadata.setdefault("agent_role", context["agent_role"])
 
-            # Ground truth – injected only for llm_analysis calls.
+            # Ground truth – metadata only for llm_analysis calls.
             # The agent has zero awareness of fault names or expected output.
             # The sidecar reads GROUND_TRUTH_JSON from the ConfigMap file
             # (written by the GraphQL server at install time from the chaos hub)
-            # and injects it in two ways:
-            #   1. Into Langfuse metadata (expected_output, fault_names) so the
-            #      trace stores the reference for offline evaluation.
-            #   2. Appended to the last user message so the LLM sees the ground
-            #      truth and produces an inline ground_truth_evaluation block —
-            #      no separate post-processing step is needed.
+            # and stores it in Langfuse metadata for offline evaluation.
             gen_name = metadata.get("generation_name", "")
-            if gen_name in ("llm_analysis", "llm-analysis"):
+            if gen_name in ("llm-analysis", "llm_analysis"):
                 fault_names, expected_output = _load_ground_truth_metadata()
                 if fault_names:
                     metadata["fault_names"] = fault_names
                 if expected_output is not None:
                     metadata["expected_output"] = expected_output
-                    # Append GT context to the last user message so the LLM
-                    # includes a ground_truth_evaluation section in its output.
-                    messages = data.get("messages", [])
-                    if messages and isinstance(messages, list):
-                        last_msg = messages[-1]
-                        if isinstance(last_msg, dict) and last_msg.get("role") == "user":
-                            existing = last_msg.get("content", "")
-                            last_msg["content"] = (
-                                existing
-                                + "\n\n"
-                                + "---\n"
-                                + "GROUND TRUTH (for self-evaluation only):\n"
-                                + expected_output
-                                + "\n---"
-                            )
-                            data["messages"] = messages[:-1] + [last_msg]
+                if fault_names or expected_output is not None:
+                    # Top-level GT flag for crystal-clear identification
+                    # This makes it unmistakable in Langfuse UI and simple to filter
+                    metadata["is_ground_truth_data"] = True
+                    metadata["gt_block_type"] = "llm_analysis"
+                    
+                    # Explicit nested GT markers for backward compatibility and
+                    # filtering where provider metadata nests under requester_metadata
+                    metadata["gt_metadata_present"] = True
+                    metadata["gt_metadata_source"] = "GROUND_TRUTH_JSON"
+                    metadata["gt_metadata_version"] = "v1"
 
             return json.dumps(data).encode("utf-8")
         except (json.JSONDecodeError, ValueError):
