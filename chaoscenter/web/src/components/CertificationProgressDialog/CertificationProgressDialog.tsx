@@ -22,13 +22,15 @@ interface CertificationProgressDialogProps {
   onClose: () => void;
   experimentID: string;
   experimentName?: string;
+  agentID?: string;
 }
 
 export default function CertificationProgressDialog({
   isOpen,
   onClose,
   experimentID,
-  experimentName: _experimentName
+  experimentName: _experimentName,
+  agentID
 }: CertificationProgressDialogProps): React.ReactElement {
   const [phase, setPhase] = React.useState<'submitting' | 'polling' | 'done' | 'error'>('submitting');
   const [certTaskId, setCertTaskId] = React.useState<string>('');
@@ -62,8 +64,8 @@ export default function CertificationProgressDialog({
           method: 'POST',
           headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            agent_id: 'flash-agent',
-            agent_name: 'Flash Agent v1.0',
+            agent_id: agentID ?? experimentID,
+            agent_name: agentID ?? experimentID,
             experiment_id: experimentID,
             certification_run_id: `cert-${Date.now()}`,
             runs_per_fault: 30

@@ -17,6 +17,7 @@ import {
   useRouteWithBaseUrl
 } from '@hooks';
 import type { DataExtractionStatus } from './types';
+import { extractAgentIDFromManifest } from '@hooks';
 import RightSideBarV2 from '@components/RightSideBarV2';
 import type { UseRouteDefinitionsProps } from '@routes/RouteDefinitions';
 import {
@@ -121,6 +122,11 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   const experimentPhase = experimentRunsWithExecutionData?.[0]?.phase;
   const experimentType = experimentRunsWithExecutionData?.[0]?.experimentType;
   const experimentManifest = experimentRunsWithExecutionData?.[0]?.experimentManifest;
+
+  const agentID = React.useMemo(
+    () => extractAgentIDFromManifest(experimentManifest) ?? experimentID,
+    [experimentManifest, experimentID]
+  );
 
   React.useEffect(() => {
     if (experimentName) setExperimentNamePersistent(experimentName);
@@ -253,6 +259,7 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       experimentRunsExists={experimentRunsExists}
       multiRunConfig={multiRunConfig}
       certificateEnabled={certificateEnabled}
+      agentID={agentID}
     />
   );
 }

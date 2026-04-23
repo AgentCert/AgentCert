@@ -36,6 +36,7 @@ interface ExperimentRunHistoryViewProps {
   experimentRunsExists: boolean | undefined;
   multiRunConfig?: MultiRunConfig | null;
   certificateEnabled?: boolean;
+  agentID?: string;
 }
 
 const ExperimentRunHistoryView = ({
@@ -51,7 +52,8 @@ const ExperimentRunHistoryView = ({
   areFiltersSet,
   experimentRunsExists,
   multiRunConfig,
-  certificateEnabled
+  certificateEnabled,
+  agentID
 }: ExperimentRunHistoryViewProps): React.ReactElement => {
   const scope = getScope();
   const paths = useRouteWithBaseUrl();
@@ -124,6 +126,7 @@ const ExperimentRunHistoryView = ({
               onClose={() => setCertDialogOpen(false)}
               experimentID={experimentID}
               experimentName={experimentName}
+              agentID={agentID}
             />
             {experimentRunSearchBar}
             {dateRangePicker}
