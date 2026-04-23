@@ -19,6 +19,8 @@ import { MemoisedExperimentRunHistoryTable } from './ExperimentRunHistoryTable';
 interface MultiRunConfig {
   maxRuns: number;
   currentRun: number;
+  completedRuns: number;
+  totalRuns: number;
 }
 
 interface ExperimentRunHistoryViewProps {
@@ -135,7 +137,7 @@ const ExperimentRunHistoryView = ({
                   fontWeight: 600
                 }}
               >
-                Multi-Run: {Math.min(experimentRunsTableData?.pagination?.itemCount ?? 0, multiRunConfig.maxRuns)}/{multiRunConfig.maxRuns}
+                Multi-Run: {experimentRunsTableData?.pagination?.itemCount ?? 0}/{multiRunConfig.totalRuns}
               </Text>
             )}
           </Layout.Horizontal>
