@@ -298,10 +298,40 @@ def cmd_fetch_all(args) -> None:
     print("\nDone.")
 
 
+def is_trace_active(trace: dict) -> bool:
+    """Return True if the trace is still running (duration not yet set)."""
+    duration = trace.get("duration")
+    return duration is None or duration == 0
+
+
+def wait_for_trace_completion(trace_id: str, poll_interval: int = 60) -> dict:
+    """Poll trace until duration is set (workflow finished flushing to Langfuse).
+
+    Prints status every poll_interval seconds and returns the final trace dict.
+    """
+    attempt = 1
+    while True:
+        trace = fetch_single_trace(trace_id)
+        if not is_trace_active(trace):
+            print(f"  Trace complete (duration={trace.get('duration'):.1f}s). Proceeding.")
+            return trace
+        print(f"  [attempt {attempt}] Trace still active (duration=null). "
+              f"Sleeping {poll_interval}s before retry...")
+        attempt += 1
+        time.sleep(poll_interval)
+
+
 def cmd_fetch_single(args) -> None:
     """Fetch one trace + all its observations."""
     print(f"Fetching trace: {args.trace}")
-    trace = fetch_single_trace(args.trace)
+    if getattr(args, "wait", False):
+        print("  --wait enabled: checking if trace is still active...")
+        trace = wait_for_trace_completion(args.trace, poll_interval=getattr(args, "wait_interval", 60))
+    else:
+        trace = fetch_single_trace(args.trace)
+        if is_trace_active(trace):
+            print("  WARNING: trace duration=null — workflow may still be running.")
+            print("  Tip: re-run with --wait to block until the trace is complete.")
     obs   = fetch_trace_observations(args.trace)
 
     print(f"  Trace name   : {trace.get('name')}")
@@ -374,6 +404,10 @@ def main() -> int:
     # fetch-trace
     p_trace = sub.add_parser("fetch-trace", help="Fetch single trace + all observations")
     p_trace.add_argument("--trace", required=True, help="Trace ID")
+    p_trace.add_argument("--wait", action="store_true",
+                        help="Poll until trace is complete (duration non-null) before downloading")
+    p_trace.add_argument("--wait-interval", type=int, default=60, metavar="SECONDS",
+                        help="Seconds between polls when --wait is used (default 60)")
 
     # gt-only
     p_gt = sub.add_parser("gt-only", help="Fetch only traces containing GT observations")

@@ -562,7 +562,16 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 		logrus.Errorf("Failed to apply pre-cleanup wait patch: %v", err)
 		// Log but don't fail - wait patch is optional
 	}
-	
+
+	err = c.applyUninstallAllPatch(&workflowManifest)
+	if err != nil {
+		logrus.Errorf("Failed to apply uninstall-all patch: %v", err)
+		// Log but don't fail - uninstall patch is optional
+	}
+
+	// Enable Argo podGC so completed executor pods in litmus-exp are deleted automatically.
+	workflowManifest.Spec.PodGC = &v1alpha1.PodGC{Strategy: v1alpha1.PodGCOnWorkflowCompletion}
+
 	out, err := json.Marshal(workflowManifest)
 	if err != nil {
 		return err
@@ -1421,6 +1430,112 @@ func (c *chaosExperimentService) applyPreCleanupWaitPatch(wf *v1alpha1.Workflow)
 	return nil
 }
 
+// applyUninstallAllPatch appends a final uninstall-all step to the workflow that
+// runs helm uninstall for both the agent release and the app release after all
+// chaos and cleanup steps have completed.
+//
+// Release names are derived fully from Argo workflow parameters at runtime:
+//   - agent release  = {{workflow.parameters.agentFolder}}
+//   - app release    = {{workflow.parameters.appNamespace}}  (folder == release == namespace by convention)
+//   - namespace      = {{workflow.parameters.appNamespace}}
+//
+// The step only runs if an install-agent template is present in the workflow
+// (i.e. this is a workflow that actually deployed an agent).
+// The install-agent image (which ships with helm) is reused so no extra image pull is needed.
+func (c *chaosExperimentService) applyUninstallAllPatch(wf *v1alpha1.Workflow) error {
+	if wf == nil || len(wf.Spec.Templates) == 0 {
+		return nil
+	}
+
+	// Only inject if an install-agent step exists in the workflow.
+	hasInstallAgent := false
+	for _, t := range wf.Spec.Templates {
+		if t.Container == nil {
+			continue
+		}
+		if t.Name == "install-agent" || strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent") {
+			hasInstallAgent = true
+			break
+		}
+	}
+	if !hasInstallAgent {
+		return nil
+	}
+
+	entrypoint := wf.Spec.Entrypoint
+	if entrypoint == "" {
+		return nil
+	}
+
+	var rootTemplate *v1alpha1.Template
+	for i := range wf.Spec.Templates {
+		if wf.Spec.Templates[i].Name == entrypoint {
+			rootTemplate = &wf.Spec.Templates[i]
+			break
+		}
+	}
+	if rootTemplate == nil || len(rootTemplate.Steps) == 0 {
+		return nil
+	}
+
+	uninstallTemplateName := "uninstall-all"
+
+	// Idempotent: skip if already present.
+	for _, t := range wf.Spec.Templates {
+		if t.Name == uninstallTemplateName {
+			return nil
+		}
+	}
+
+	// Resolve install-agent image (same image used for install, guaranteed to have helm).
+	uninstallImage := strings.TrimSpace(utils.Config.InstallAgentImage)
+	if uninstallImage == "" {
+		uninstallImage = strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE"))
+	}
+	if uninstallImage == "" {
+		uninstallImage = "agentcert/agentcert-install-agent:latest"
+	}
+
+	uninstallScript := `NAMESPACE="{{workflow.parameters.appNamespace}}"
+AGENT_RELEASE="{{workflow.parameters.agentFolder}}"
+APP_RELEASE="${NAMESPACE}"
+echo "[uninstall-all] Cleaning ChaosEngine and ChaosResult resources in ${NAMESPACE}"
+kubectl delete chaosengines.litmuschaos.io --all -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+kubectl delete chaosresults.litmuschaos.io --all -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+echo "[uninstall-all] Uninstalling agent release: ${AGENT_RELEASE} (ns: ${NAMESPACE})"
+helm uninstall "${AGENT_RELEASE}" -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+echo "[uninstall-all] Uninstalling app release: ${APP_RELEASE} (ns: ${NAMESPACE})"
+helm uninstall "${APP_RELEASE}" -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+echo "[uninstall-all] Done"`
+
+	uninstallTpl := v1alpha1.Template{
+		Name: uninstallTemplateName,
+		Container: &corev1.Container{
+			Image:   uninstallImage,
+			Command: []string{"sh", "-c"},
+			Args:    []string{uninstallScript},
+		},
+	}
+	wf.Spec.Templates = append(wf.Spec.Templates, uninstallTpl)
+
+	uninstallStepGroup := v1alpha1.ParallelSteps{
+		Steps: []v1alpha1.WorkflowStep{{
+			Name:     uninstallTemplateName,
+			Template: uninstallTemplateName,
+		}},
+	}
+
+	// Append as the very last step group.
+	rootTemplate.Steps = append(rootTemplate.Steps, uninstallStepGroup)
+
+	logrus.WithFields(logrus.Fields{
+		"entrypoint": entrypoint,
+		"image":      uninstallImage,
+	}).Info("[Uninstall All Patch] Appended dynamic uninstall-all step")
+
+	return nil
+}
+
 // applyInstallAgentTemplateOverrides enforces a configurable install-agent image
 // and pull policy for all template-based workflow manifests.
 //
@@ -1583,8 +1698,7 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 	}
 
 	forcedSetArgs := []string{
-		"-set=monitoring.enabled=false",
-		"-set=mcpTools.kubernetesMcpServer.enabled=false",
+
 		"-set=mcpTools.prometheusMcpServer.enabled=false",
 	}
 

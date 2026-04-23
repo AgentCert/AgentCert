@@ -546,6 +546,107 @@ func applyPreCleanupWaitPatchToWorkflowSpec(spec *v1alpha1.WorkflowSpec) {
 	}).Info("[Pre-Cleanup Wait Patch] Injected dynamic pre-cleanup wait step in run handler")
 }
 
+// applyUninstallAllPatchToWorkflowSpec appends a final uninstall-all step that runs
+// helm uninstall for the agent and app releases after all chaos steps complete.
+// Release names are resolved dynamically via Argo workflow parameters at runtime:
+//   - agent: {{workflow.parameters.agentFolder}}
+//   - app:   {{workflow.parameters.appNamespace}}  (folder == release == namespace by convention)
+func applyUninstallAllPatchToWorkflowSpec(spec *v1alpha1.WorkflowSpec) {
+	if spec == nil || len(spec.Templates) == 0 {
+		return
+	}
+
+	// Only inject if an install-agent template is present.
+	hasInstallAgent := false
+	for _, t := range spec.Templates {
+		if t.Container == nil {
+			continue
+		}
+		if t.Name == "install-agent" || strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent") {
+			hasInstallAgent = true
+			break
+		}
+	}
+	if !hasInstallAgent {
+		return
+	}
+
+	// Enable Argo podGC so completed executor pods in litmus-exp are deleted automatically.
+	spec.PodGC = &v1alpha1.PodGC{Strategy: v1alpha1.PodGCOnWorkflowCompletion}
+
+	entrypoint := spec.Entrypoint
+	if entrypoint == "" {
+		return
+	}
+
+	var rootTemplate *v1alpha1.Template
+	for i := range spec.Templates {
+		if spec.Templates[i].Name == entrypoint {
+			rootTemplate = &spec.Templates[i]
+			break
+		}
+	}
+	if rootTemplate == nil || len(rootTemplate.Steps) == 0 {
+		return
+	}
+
+	uninstallTemplateName := "uninstall-all"
+	for _, t := range spec.Templates {
+		if t.Name == uninstallTemplateName {
+			return
+		}
+	}
+
+	uninstallImage := strings.TrimSpace(utils.Config.InstallAgentImage)
+	if uninstallImage == "" {
+		uninstallImage = strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE"))
+	}
+	if uninstallImage == "" {
+		uninstallImage = "agentcert/agentcert-install-agent:latest"
+	}
+
+	uninstallScript := `NAMESPACE="{{workflow.parameters.appNamespace}}"
+AGENT_RELEASE="{{workflow.parameters.agentFolder}}"
+APP_RELEASE="${NAMESPACE}"
+echo "[uninstall-all] Cleaning ChaosEngine and ChaosResult resources in ${NAMESPACE}"
+kubectl delete chaosengines.litmuschaos.io --all -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+kubectl delete chaosresults.litmuschaos.io --all -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+echo "[uninstall-all] Uninstalling agent release: ${AGENT_RELEASE} (ns: ${NAMESPACE})"
+helm uninstall "${AGENT_RELEASE}" -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+echo "[uninstall-all] Uninstalling app release: ${APP_RELEASE} (ns: ${NAMESPACE})"
+helm uninstall "${APP_RELEASE}" -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+echo "[uninstall-all] Done"`
+
+	uninstallTpl := v1alpha1.Template{
+		Name: uninstallTemplateName,
+		Container: &corev1.Container{
+			Image:   uninstallImage,
+			Command: []string{"sh", "-c"},
+			Args:    []string{uninstallScript},
+		},
+	}
+	spec.Templates = append(spec.Templates, uninstallTpl)
+
+	spec.Templates[func() int {
+		for i := range spec.Templates {
+			if spec.Templates[i].Name == entrypoint {
+				return i
+			}
+		}
+		return 0
+	}()].Steps = append(rootTemplate.Steps, v1alpha1.ParallelSteps{
+		Steps: []v1alpha1.WorkflowStep{{
+			Name:     uninstallTemplateName,
+			Template: uninstallTemplateName,
+		}},
+	})
+
+	logrus.WithFields(logrus.Fields{
+		"entrypoint": entrypoint,
+		"image":      uninstallImage,
+	}).Info("[Uninstall All Patch] Appended dynamic uninstall-all step in run handler")
+}
+
 func normalizeLabelSelector(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -2158,6 +2259,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		ensureInstallTimeoutParam(&workflowManifest.Spec.Arguments)
 	}
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
+	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
 
 	// Inject agentId as a workflow-level parameter for re-runs.
 	// Always ensure the parameter exists (even as empty string) so that
@@ -2568,6 +2670,7 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 		ensureInstallTimeoutParam(&cronExperimentManifest.Spec.WorkflowSpec.Arguments)
 	}
 	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
+	applyUninstallAllPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 
 	// Detect container runtime once for all ChaosEngine templates in this cron workflow
 	var (

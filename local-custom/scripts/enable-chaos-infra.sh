@@ -368,6 +368,14 @@ info "Waiting for rollouts..."
 kubectl rollout status deployment/subscriber -n "$NAMESPACE" --timeout=120s || true
 kubectl rollout status deployment/event-tracker -n "$NAMESPACE" --timeout=120s || true
 kubectl rollout status deployment/workflow-controller -n "$NAMESPACE" --timeout=120s || true
+
+# ── Clean up permanent Prometheus + Grafana if they exist (now per-experiment) ─
+for res in deployment/prometheus deployment/grafana service/prometheus service/grafana \
+           configmap/prometheus-config configmap/grafana-datasources configmap/grafana-dashboard-provider; do
+  kubectl delete "$res" -n "$NAMESPACE" --ignore-not-found 2>/dev/null && \
+    info "Removed $res from $NAMESPACE (now per-experiment)" || true
+done
+
 kubectl get pods -n "$NAMESPACE" -o wide
 
 info "Enable complete."
