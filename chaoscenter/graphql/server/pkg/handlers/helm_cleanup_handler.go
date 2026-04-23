@@ -49,7 +49,7 @@ func CleanupHelmHandler() gin.HandlerFunc {
 		log.Infof("Cleaning up Helm release '%s' in namespace '%s'", req.ReleaseName, releaseNamespace)
 
 		// Step 1: Uninstall the Helm release
-		cleanupCmd := exec.Command("helm", "uninstall", req.ReleaseName, "-n", "default")
+		cleanupCmd := exec.Command("helm", "uninstall", req.ReleaseName, "-n", releaseNamespace)
 		cleanupOutput, cleanupErr := cleanupCmd.CombinedOutput()
 		if cleanupErr != nil {
 			log.Warnf("Helm cleanup warning (may already be deleted): %v, output: %s", cleanupErr, string(cleanupOutput))
