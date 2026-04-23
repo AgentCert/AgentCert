@@ -13,3 +13,12 @@ Remove this line frm useexperimentcompletiontoast.tsx
       poll_url: `/api/v1/tasks/${stubId}`
     };
   }
+
+Remove Generate Certificate feature and all corresponding logic:
+- views/ExperimentRunHistory/ExperimentRunHistoryTable.tsx: remove hidden {false && (...)} MenuItem block, remove openCertDialog/closeCertDialog/isCertDialogOpen if unused, remove CertificateReportDialog import if unused
+- views/ExperimentRunDetails/ExperimentRunDetailsHeader.tsx: remove hidden {false && ...} Text block, remove openCertDialog/closeCertDialog/isCertDialogOpen if unused, remove CertificateReportDialog import and JSX if unused
+- components/CertificationProgressDialog/CertificationProgressDialog.tsx: remove entire component
+- strings/strings.en.yaml: remove `generateCertificate: Generate Certificate`
+- strings/types.ts: remove `'generateCertificate': unknown`
+- Search for any other files importing CertificateReportDialog or CertificationProgressDialog and remove those
+- Remove any backend API routes/handlers for POST aggregation-certification and GET cert-tasks

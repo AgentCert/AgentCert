@@ -216,6 +216,8 @@ const ExperimentRunHistoryTable = ({ content, pagination, dataExtractionStatuses
                     onClick={() => window.open(`${window.location.href}/runs/${data.experimentRunID}`, '_blank')}
                     className={css.menuItem}
                   />
+                  {/* TODO: Remove Generate Certificate and corresponding logic - hidden for now */}
+                  {false && (
                   <MenuItem
                     disabled={
                       data.experimentStatus !== ExperimentRunStatus.COMPLETED &&
@@ -226,6 +228,7 @@ const ExperimentRunHistoryTable = ({ content, pagination, dataExtractionStatuses
                     className={css.menuItem}
                     onClick={() => openCertDialog()}
                   />
+                  )}
                 </Menu>
               </Popover>
               {isCertDialogOpen && (
