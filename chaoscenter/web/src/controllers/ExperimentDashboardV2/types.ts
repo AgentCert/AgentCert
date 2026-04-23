@@ -22,6 +22,7 @@ export interface ExperimentDetails {
   experimentTags: string[] | undefined;
   cronSyntax: string | boolean;
   experimentManifest: string;
+  multiRunEnabled: boolean;
   infrastructure: {
     name: string | undefined;
     type: InfrastructureInstallationType | undefined;

@@ -7,7 +7,7 @@ import { listExperimentRunForHistory } from '@api/core';
 import { getScope, getColorBasedOnResilienceScore, cronEnabled } from '@utils';
 import ExperimentRunHistoryView from '@views/ExperimentRunHistory';
 import { useStrings } from '@strings';
-import { ExperimentRun, ExperimentType } from '@api/entities';
+import { ExperimentRun, ExperimentRunStatus, ExperimentType } from '@api/entities';
 import type { ColumnData } from '@components/ColumnChart/ColumnChart.types';
 import {
   initialExperimentRunFilterState,
@@ -162,11 +162,30 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
     const multiRunEnabled = annotations['litmuschaos.io/multiRunEnabled'];
     const maxRuns = parseInt(annotations['litmuschaos.io/maxRuns'] || '1', 10);
     const currentRun = parseInt(annotations['litmuschaos.io/currentRun'] || '0', 10);
-    if (multiRunEnabled === 'true' && maxRuns > 1) {
-      return { maxRuns, currentRun };
-    }
-    return null;
-  }, [parsedManifest]);
+    
+    if (multiRunEnabled !== 'true') return null;
+    
+    // Count completed runs (not running or queued)
+    const completedRuns = experimentRunsWithExecutionData?.filter(
+      run => run.phase !== ExperimentRunStatus.RUNNING && run.phase !== ExperimentRunStatus.QUEUED
+    ).length ?? 0;
+    
+    // Check if any runs are currently running
+    const hasRunningRuns = experimentRunsWithExecutionData?.some(
+      run => run.phase === ExperimentRunStatus.RUNNING
+    ) ?? false;
+    
+    // denominator = expected total runs
+    // When running: round up to next batch boundary based on completed runs
+    // Formula: ceil((completedRuns + 1) / maxRuns) * maxRuns gives us the target
+    // e.g., completed=0, max=2 → ceil(1/2)*2 = 2 (batch 1 target)
+    // e.g., completed=2, max=2 → ceil(3/2)*2 = 4 (batch 2 target)
+    const totalRuns = hasRunningRuns 
+      ? Math.ceil((completedRuns + 1) / maxRuns) * maxRuns
+      : (totalExperimentRuns ?? 0);
+    
+    return { maxRuns, currentRun, completedRuns, totalRuns };
+  }, [parsedManifest, experimentRunsWithExecutionData, totalExperimentRuns]);
 
   const rightSideBarV2 = (
     <RightSideBarV2
