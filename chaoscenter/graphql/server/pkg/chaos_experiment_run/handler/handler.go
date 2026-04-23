@@ -3151,6 +3151,15 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					authToken = tkn
 				}
 				
+				// Read configurable delay from annotation (default: 120 seconds = 2 minutes)
+				delaySeconds := 120
+				if delayStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunDelay`).String(); delayStr != "" {
+					if parsed, err := strconv.Atoi(delayStr); err == nil && parsed > 0 {
+						delaySeconds = parsed
+					}
+				}
+				delayDuration := time.Duration(delaySeconds) * time.Second
+				
 				go func() {
 					defer func() {
 						if r := recover(); r != nil {
@@ -3158,12 +3167,12 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 						}
 					}()
 					
-					logrus.Infof("[Multi-Run] Goroutine started, waiting 30m before triggering run %d/%d for experiment %s", nextRun, totalRuns, expID)
+					logrus.Infof("[Multi-Run] Goroutine started, waiting %v before triggering run %d/%d for experiment %s", delayDuration, nextRun, totalRuns, expID)
 					
-					// Wait 30 minutes between runs to allow system stabilisation
-					time.Sleep(30 * time.Minute)
+					// Wait configured delay between runs
+					time.Sleep(delayDuration)
 					
-					logrus.Infof("[Multi-Run] 30m delay complete, fetching experiment %s", expID)
+					logrus.Infof("[Multi-Run] %v delay complete, fetching experiment %s", delayDuration, expID)
 					
 					// Re-fetch experiment with updated manifest
 					updatedExperiment, err := handler.chaosExperimentOperator.GetExperiment(context.Background(), bson.D{{"experiment_id", expID}})
