@@ -73,7 +73,14 @@ export function useBucketingTaskTracker(): BucketingTaskTrackerResult {
 
         try {
           const response = await fetch(`/agentcert-api${entry.pollUrl}`);
-          if (!response.ok) return;
+          if (!response.ok) {
+            // 404 means the task no longer exists — mark as failed immediately
+            if (response.status === 404) {
+              updates[runID] = { ...entry, status: 'failed', stage: 'done' };
+            }
+            // Other errors (422, 500) — keep current status, will retry next poll
+            return;
+          }
           const data = await response.json();
           const apiStatus: string = data.status ?? '';
           const apiStage: BucketingTaskStage = data.stage ?? 'pending';

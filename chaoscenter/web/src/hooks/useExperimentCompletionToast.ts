@@ -83,13 +83,24 @@ export async function submitBucketingExtraction(
       return {
         status: 'accepted',
         task_id: existingTaskId,
-        poll_url: `/api/v1/tasks/${existingTaskId}`
+        poll_url: `/api/v1/tasks?experiment_id=${encodeURIComponent(experimentId)}&experiment_run_id=${encodeURIComponent(runId)}`
       };
     }
   }
 
   if (!response.ok) {
-    throw new Error(`Bucketing-extraction API returned ${response.status}`);
+    let detail = '';
+    try {
+      const body = await response.json();
+      detail = body?.detail
+        ? (typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail))
+        : '';
+    } catch {
+      // response body not JSON — ignore
+    }
+    throw new Error(
+      `Bucketing-extraction API returned ${response.status}${detail ? `: ${detail}` : ''}`
+    );
   }
 
   return response.json();

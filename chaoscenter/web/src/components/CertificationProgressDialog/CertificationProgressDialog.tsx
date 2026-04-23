@@ -17,6 +17,16 @@ interface CertTaskResponse {
   error?: { error_code?: string; message?: string; detail?: string } | null;
 }
 
+interface ApiErrorBody {
+  status?: string;
+  cert_task_id?: string;
+  poll_url?: string;
+  error_code?: string;
+  message?: string;
+  details?: Record<string, unknown>;
+  detail?: string | Array<Record<string, unknown>> | { message?: string; error_code?: string; details?: Record<string, unknown> };
+}
+
 interface CertificationProgressDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -34,6 +44,7 @@ export default function CertificationProgressDialog({
 }: CertificationProgressDialogProps): React.ReactElement {
   const [phase, setPhase] = React.useState<'submitting' | 'polling' | 'done' | 'error'>('submitting');
   const [certTaskId, setCertTaskId] = React.useState<string>('');
+  const [pollUrl, setPollUrl] = React.useState<string>('');
   const [taskData, setTaskData] = React.useState<CertTaskResponse | null>(null);
   const [errorMsg, setErrorMsg] = React.useState<string>('');
   const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
@@ -51,11 +62,32 @@ export default function CertificationProgressDialog({
       // Reset state when dialog closes
       setPhase('submitting');
       setCertTaskId('');
+      setPollUrl('');
       setTaskData(null);
       setErrorMsg('');
       cleanup();
       return;
     }
+
+    const buildPollUrl = (): string =>
+      `/api/v1/cert-tasks?experiment_id=${encodeURIComponent(experimentID)}`;
+
+    const getErrorMessage = (status: number, body: ApiErrorBody | null): string => {
+      if (!body) return `Failed to start certification: ${status}`;
+
+      if (typeof body.detail === 'string') {
+        return `Failed to start certification: ${status} ${body.detail}`;
+      }
+
+      if (Array.isArray(body.detail)) {
+        const first = body.detail[0] as { msg?: string } | undefined;
+        return `Failed to start certification: ${status}${first?.msg ? ` ${first.msg}` : ''}`;
+      }
+
+      const nested = body.detail as { message?: string } | undefined;
+      const message = body.message ?? nested?.message;
+      return `Failed to start certification: ${status}${message ? ` ${message}` : ''}`;
+    };
 
     const submitCertification = async (): Promise<void> => {
       setPhase('submitting');
@@ -72,15 +104,34 @@ export default function CertificationProgressDialog({
           })
         });
 
+        let body: ApiErrorBody | null = null;
+        try {
+          body = await resp.json();
+        } catch {
+          body = null;
+        }
+
+        if (resp.status === 409) {
+          const existingTaskId =
+            (body?.details?.cert_task_id as string | undefined) ??
+            ((body?.detail as { details?: { cert_task_id?: string } } | undefined)?.details?.cert_task_id);
+          if (existingTaskId) {
+            setCertTaskId(existingTaskId);
+            setPollUrl(buildPollUrl());
+            setPhase('polling');
+            return;
+          }
+        }
+
         if (!resp.ok) {
-          const text = await resp.text();
-          setErrorMsg(`Failed to start certification: ${resp.status} ${text}`);
+          setErrorMsg(getErrorMessage(resp.status, body));
           setPhase('error');
           return;
         }
 
-        const data = await resp.json();
+        const data = body ?? {};
         setCertTaskId(data.cert_task_id ?? '');
+        setPollUrl(typeof data.poll_url === 'string' ? data.poll_url : buildPollUrl());
         setPhase('polling');
       } catch (err) {
         setErrorMsg(`Network error: ${err instanceof Error ? err.message : String(err)}`);
@@ -92,19 +143,42 @@ export default function CertificationProgressDialog({
 
     return cleanup;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, experimentID]);
+  }, [isOpen, experimentID, agentID]);
 
   // Step 2: Poll cert-tasks once we have the cert_task_id
   React.useEffect(() => {
-    if (phase !== 'polling') return;
+    if (phase !== 'polling' || !pollUrl) return;
+
+    const getPollErrorMessage = async (resp: Response): Promise<string | null> => {
+      try {
+        const body = (await resp.json()) as ApiErrorBody;
+        if (typeof body?.detail === 'string') return body.detail;
+        if (Array.isArray(body?.detail)) {
+          const first = body.detail[0] as { msg?: string } | undefined;
+          return first?.msg ?? null;
+        }
+        if (body?.message) return body.message;
+        const nested = body?.detail as { message?: string } | undefined;
+        return nested?.message ?? null;
+      } catch {
+        return null;
+      }
+    };
 
     const poll = async (): Promise<void> => {
       try {
-        const resp = await fetch(
-          `/agentcert-api/api/v1/cert-tasks?experiment_id=${encodeURIComponent(experimentID)}`,
-          { headers: { 'Accept': 'application/json' } }
-        );
-        if (!resp.ok) return;
+        const resp = await fetch(`/agentcert-api${pollUrl}`, {
+          headers: { 'Accept': 'application/json' }
+        });
+        if (!resp.ok) {
+          if (resp.status === 404) {
+            const message = await getPollErrorMessage(resp);
+            setErrorMsg(message ?? 'Certification task not found');
+            setPhase('error');
+            cleanup();
+          }
+          return;
+        }
 
         const data = await resp.json();
         // Response could be a single object or array — find our task
@@ -132,7 +206,7 @@ export default function CertificationProgressDialog({
 
     return cleanup;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, certTaskId, experimentID]);
+  }, [phase, certTaskId, pollUrl]);
 
   const getProgressIntent = (): Intent => {
     if (phase === 'error' || taskData?.status?.toUpperCase() === 'FAILED') return Intent.DANGER;
@@ -146,8 +220,10 @@ export default function CertificationProgressDialog({
     if (phase === 'done') return 1;
     // Map stages to approximate progress
     const stage = (taskData?.stage ?? '').toLowerCase();
+    if (stage.includes('fetch')) return 0.25;
     if (stage.includes('aggregat')) return 0.5;
     if (stage.includes('generat') || stage.includes('certif')) return 0.75;
+    if (stage.includes('stor')) return 0.9;
     if (stage.includes('complet') || stage.includes('done')) return 0.95;
     return 0.3;
   };
