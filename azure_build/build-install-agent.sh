@@ -6,43 +6,33 @@ SOURCE_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --env-file)
-      ENV_FILE="${2:-}"
-      shift 2
-      ;;
-    --source-dir)
-      SOURCE_DIR="${2:-}"
-      shift 2
-      ;;
-    *)
-      shift
-      ;;
+    --env-file)   ENV_FILE="${2:-}";   shift 2 ;;
+    --source-dir) SOURCE_DIR="${2:-}"; shift 2 ;;
+    *)            shift ;;
   esac
 done
 
-if [[ -z "${ENV_FILE}" ]]; then
-  echo "[ERROR] --env-file is required" >&2
-  exit 1
-fi
-if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "[ERROR] Env file not found: ${ENV_FILE}" >&2
-  exit 1
-fi
-if [[ -z "${SOURCE_DIR}" ]]; then
-  echo "[ERROR] --source-dir is required (path to agent-charts repo)" >&2
-  exit 1
-fi
-if [[ ! -d "${SOURCE_DIR}" ]]; then
-  echo "[ERROR] --source-dir not found: ${SOURCE_DIR}" >&2
-  exit 1
-fi
+if [[ -z "${ENV_FILE}" ]];   then echo "[ERROR] --env-file is required" >&2;   exit 1; fi
+if [[ ! -f "${ENV_FILE}" ]]; then echo "[ERROR] Env file not found: ${ENV_FILE}" >&2; exit 1; fi
+if [[ -z "${SOURCE_DIR}" ]]; then echo "[ERROR] --source-dir is required (path to agent-charts repo)" >&2; exit 1; fi
+if [[ ! -d "${SOURCE_DIR}" ]];then echo "[ERROR] --source-dir not found: ${SOURCE_DIR}" >&2; exit 1; fi
+
+# Safe .env reader
+read_env_val() {
+  local key="$1" value
+  value=$(grep -E "^${key}=" "${ENV_FILE}" | tail -1 | cut -d'=' -f2- || true)
+  value=$(echo "${value}" | tr -d '\r\n')
+  value=${value#'"'}; value=${value%'"'}
+  value=${value#"'"}; value=${value%"'"}
+  echo "${value}"
+}
 
 push_to_dockerhub() {
   local dh_user dh_token
-  dh_user=$(grep -E "^DOCKERHUB_USERNAME=" "${ENV_FILE}" | tail -1 | cut -d'=' -f2- | tr -d '\r\n"'"'"')
-  dh_token=$(grep -E "^DOCKERHUB_TOKEN=" "${ENV_FILE}" | tail -1 | cut -d'=' -f2- | tr -d '\r\n"'"'"')
+  dh_user=$(read_env_val "DOCKERHUB_USERNAME")
+  dh_token=$(read_env_val "DOCKERHUB_TOKEN")
   if [[ -z "${dh_user}" || -z "${dh_token}" ]]; then
-    echo "[WARN] DOCKERHUB_USERNAME or DOCKERHUB_TOKEN not set in .env; skipping Docker Hub push"
+    echo "[WARN] DOCKERHUB_USERNAME or DOCKERHUB_TOKEN not set; skipping Docker Hub push"
     return 0
   fi
   echo "[INFO] Pushing to Docker Hub as ${dh_user}..."
@@ -53,33 +43,33 @@ push_to_dockerhub() {
   echo "[OK] Pushed to Docker Hub: ${IMAGE} and ${IMAGE_REPO}:latest"
 }
 
+IMAGE_REPO="agentcert/agentcert-install-agent"
+IMAGE_TAG="ci-$(date +%Y%m%d%H%M%S)"
+IMAGE="${IMAGE_REPO}:${IMAGE_TAG}"
+
 echo "[INFO] Pruning old agentcert-install-agent images..."
 docker images | grep "agentcert-install-agent" | grep -v "latest\|dev" | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true
 docker image prune -f 2>/dev/null || true
 echo "[OK] Old images pruned"
 
-IMAGE_REPO="agentcert/agentcert-install-agent"
-IMAGE_TAG="ci-$(date +%Y%m%d%H%M%S)"
-IMAGE="${IMAGE_REPO}:${IMAGE_TAG}"
-
-echo "[INFO] Building ${IMAGE} from ${SOURCE_DIR}"
-cd "${SOURCE_DIR}"
-
-run_docker_build() {
-  docker build -t "${IMAGE}" -f install-agent/Dockerfile .
-}
-
-if ! run_docker_build; then
-  echo "[WARN] Docker build failed. Retrying with DOCKER_BUILDKIT=0..."
-  DOCKER_BUILDKIT=0 run_docker_build
+BUILD_DIR="${SOURCE_DIR}/install-agent"
+if [[ ! -d "${BUILD_DIR}" ]]; then
+  echo "[ERROR] install-agent subdirectory not found: ${BUILD_DIR}" >&2
+  exit 1
 fi
-
-docker tag "${IMAGE}" agentcert/agentcert-install-agent:latest
-docker tag "${IMAGE}" agentcert/agentcert-install-agent:dev
+echo "[INFO] Building ${IMAGE} from ${BUILD_DIR}"
+cd "${SOURCE_DIR}"
+DOCKER_BUILDKIT=0 docker build -t "${IMAGE}" -f install-agent/Dockerfile .
+docker tag "${IMAGE}" "${IMAGE_REPO}:latest"
+docker tag "${IMAGE}" "${IMAGE_REPO}:dev"
 echo "[OK] Docker build completed"
 
 push_to_dockerhub
 
-LATEST_IMAGE="agentcert/agentcert-install-agent:latest"
-sed -i "s|^INSTALL_AGENT_IMAGE=.*|INSTALL_AGENT_IMAGE=${LATEST_IMAGE}|" "${ENV_FILE}"
+LATEST_IMAGE="${IMAGE_REPO}:latest"
+if grep -q "^INSTALL_AGENT_IMAGE=" "${ENV_FILE}" 2>/dev/null; then
+  sed -i "s|^INSTALL_AGENT_IMAGE=.*|INSTALL_AGENT_IMAGE=${LATEST_IMAGE}|" "${ENV_FILE}"
+else
+  printf "\nINSTALL_AGENT_IMAGE=%s\n" "${LATEST_IMAGE}" >> "${ENV_FILE}"
+fi
 echo "[OK] .env updated: INSTALL_AGENT_IMAGE=${LATEST_IMAGE}"
