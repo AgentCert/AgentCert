@@ -74,7 +74,7 @@ fi
 SOURCE_IMAGE="docker.io/litellm/litellm:${LITELLM_VERSION}-stable"
 
 # Deployment mode:
-# - local (default): prefer local minikube image cache
+# - local (default): deploy using SOURCE_IMAGE from Docker Hub
 # - remote: always deploy directly from public image
 DEPLOY_MODE="${LITELLM_DEPLOY_MODE:-local}"
 
@@ -128,7 +128,6 @@ require_cmd() {
 
 require_cmd docker
 require_cmd kubectl
-require_cmd minikube
 
 AZURE_API_KEY=$(read_env_value "AZURE_OPENAI_KEY")
 if [ -z "${AZURE_API_KEY}" ]; then
@@ -175,39 +174,8 @@ if [ -z "${LANGFUSE_PUBLIC_KEY}" ] || [ -z "${LANGFUSE_SECRET_KEY}" ] || [ -z "$
   echo "[WARN] Langfuse keys/host missing in .env; traces may not be exported"
 fi
 
-if [ "${DEPLOY_MODE}" = "local" ]; then
-  LOCAL_IMAGE="agentcert/agentcert-litellm-proxy:dev"
-  IMAGE="${LOCAL_IMAGE}"
-
-  if minikube image ls | grep -q "${LOCAL_IMAGE}"; then
-    echo "[INFO] Found local image in minikube: ${LOCAL_IMAGE}"
-  else
-    echo "[WARN] Local minikube image not found: ${LOCAL_IMAGE}"
-
-    # Try to prepare and load a local image quickly; if anything fails, fall back to remote.
-    if ! docker image inspect "${LOCAL_IMAGE}" >/dev/null 2>&1; then
-      echo "[INFO] Local Docker image missing, pulling source image: ${SOURCE_IMAGE}"
-      if docker pull "${SOURCE_IMAGE}"; then
-        docker tag "${SOURCE_IMAGE}" "${LOCAL_IMAGE}"
-      else
-        echo "[WARN] Could not pull ${SOURCE_IMAGE}; falling back to remote image deployment"
-        IMAGE="${SOURCE_IMAGE}"
-      fi
-    fi
-
-    if [ "${IMAGE}" = "${LOCAL_IMAGE}" ]; then
-      if minikube image load "${LOCAL_IMAGE}"; then
-        echo "[OK] Loaded local image into minikube: ${LOCAL_IMAGE}"
-      else
-        echo "[WARN] Failed to load local image into minikube; falling back to remote image deployment"
-        IMAGE="${SOURCE_IMAGE}"
-      fi
-    fi
-  fi
-else
-  IMAGE="${SOURCE_IMAGE}"
-  echo "[INFO] DEPLOY_MODE=remote: using ${IMAGE} directly (skip local image load)"
-fi
+IMAGE="${SOURCE_IMAGE}"
+echo "[INFO] Using image: ${IMAGE}"
 
 echo "[INFO] Applying namespace and configmap"
 kubectl apply -f "${LITELLM_DIR}/namespace.yaml"

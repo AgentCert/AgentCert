@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-SERVER_NAMESPACE="litmus-chaos"
-SERVER_DEPLOYMENT="litmusportal-server"
 ENV_FILE=""
 SOURCE_DIR=""
 
@@ -38,22 +36,6 @@ if [[ ! -d "${SOURCE_DIR}" ]]; then
   echo "[ERROR] --source-dir not found: ${SOURCE_DIR}" >&2
   exit 1
 fi
-
-sync_live_server_env() {
-  if ! command -v kubectl >/dev/null 2>&1; then
-    echo "[WARN] kubectl not found; skipping live server env sync"
-    return 0
-  fi
-  if ! kubectl get deployment "${SERVER_DEPLOYMENT}" -n "${SERVER_NAMESPACE}" >/dev/null 2>&1; then
-    echo "[WARN] ${SERVER_NAMESPACE}/${SERVER_DEPLOYMENT} not found; skipping live server env sync"
-    return 0
-  fi
-  echo "[INFO] Syncing live server env..."
-  kubectl set env deployment/"${SERVER_DEPLOYMENT}" -n "${SERVER_NAMESPACE}" \
-    INSTALL_AGENT_IMAGE="${IMAGE}" >/dev/null
-  kubectl rollout status deployment/"${SERVER_DEPLOYMENT}" -n "${SERVER_NAMESPACE}" --timeout=120s >/dev/null
-  echo "[OK] Live server env synced: INSTALL_AGENT_IMAGE=${IMAGE}"
-}
 
 push_to_dockerhub() {
   local dh_user dh_token

@@ -30,7 +30,7 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Build and load install-app image into minikube, then update AgentCert .env.
+Build install-app image and push to Docker Hub, then update AgentCert .env.
 
 Options:
   --source-dir PATH  Path to the install-app directory (app-charts/install-app)
@@ -196,8 +196,8 @@ show_result() {
 
 push_to_dockerhub() {
     local dh_user dh_token
-    dh_user=$(get_env_value "DOCKERHUB_USERNAME" "${AGENTCERT_ENV_FILE}")
-    dh_token=$(get_env_value "DOCKERHUB_TOKEN" "${AGENTCERT_ENV_FILE}")
+    dh_user=$(grep -E "^DOCKERHUB_USERNAME=" "${AGENTCERT_ENV_FILE}" | tail -1 | cut -d'=' -f2- | tr -d '\r\n"'"'"')
+    dh_token=$(grep -E "^DOCKERHUB_TOKEN=" "${AGENTCERT_ENV_FILE}" | tail -1 | cut -d'=' -f2- | tr -d '\r\n"'"'"')
     if [[ -z "${dh_user}" || -z "${dh_token}" ]]; then
         warn "DOCKERHUB_USERNAME or DOCKERHUB_TOKEN not set in .env; skipping Docker Hub push"
         return 0
