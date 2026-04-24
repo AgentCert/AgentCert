@@ -148,6 +148,24 @@ Use these checks during an active run:
 - Added live workload sync in flash-agent build script to set deployment/cronjob image directly.
 - Updated agent-charts defaults to use canonical flash-agent image repo.
 
+### 5.5 Argo Workflow Patches (service.go / handler.go)
+- Added `applyUninstallAllPatch`: appends a final `uninstall-all` Argo step that runs `helm uninstall` for both the agent release and the app release (sock-shop) after all chaos steps complete. Also deletes ChaosEngine and ChaosResult resources.
+- Added `applyDynamicPreCleanupWaitPatch`: injects a configurable sleep step (`PRE_CLEANUP_WAIT_SECONDS`, default 120s) before `cleanup-chaos-resources` to give the flash-agent time to complete its final analysis cycle.
+- Added `podGC: OnWorkflowCompletion`: Argo automatically garbage-collects completed executor pods so they don't accumulate in `litmus-exp`.
+
+### 5.6 Per-Experiment Monitoring (Prometheus + Grafana)
+- Removed `monitoring.enabled=false` override from `applyInstallApplicationTemplateOverrides` in `service.go`.
+- `monitoring.enabled=true` is now the default from `app-charts/charts/sock-shop/values.yaml`.
+- Result: every experiment run automatically deploys Prometheus + Grafana in the `monitoring` namespace as part of the sock-shop Helm release.
+- Prometheus scrapes sock-shop pods. Grafana reads from Prometheus. Both are torn down by `uninstall-all` when the workflow completes.
+- `prometheus-mcp-server` in `litmus-exp` (permanent bridge) points to `http://prometheus.monitoring.svc.cluster.local:9090` — it proxies flash-agent metric queries to the per-experiment Prometheus.
+- `mcpTools.kubernetesMcpServer.enabled=false` and `mcpTools.prometheusMcpServer.enabled=false` remain forced on the install-application step because those MCP tools are provided permanently by `litmus-exp`, not per-experiment.
+
+### 5.7 enable-chaos-infra.sh Changes
+- Script now applies `kubectl apply` for `prometheus-mcp-server` URL patch after manifest deploy.
+- Removed permanent Prometheus + Grafana deployment from the script (they are now per-experiment).
+- Added cleanup loop to remove any previously-deployed permanent Prometheus/Grafana from `litmus-exp` on re-run (migration safety).
+
 ---
 
 ## 6. Current Expected State
@@ -157,6 +175,27 @@ If everything is healthy now, you should observe:
 - Fault traces use aliases (`F1`, `F2`, ...) because blind mode is on.
 - GT exists in metadata for `llm_analysis` generations (usually under `requester_metadata`).
 - GT markers (`gt_metadata_present/source/version`) are present after sidecar update rollout.
+
+### 6.1 Cluster State During an Active Experiment
+```
+litmus-exp    chaos-operator              1/1  Running   permanent
+litmus-exp    chaos-exporter              1/1  Running   permanent
+litmus-exp    workflow-controller         1/1  Running   permanent
+litmus-exp    subscriber                  1/1  Running   permanent
+litmus-exp    event-tracker               1/1  Running   permanent
+litmus-exp    kubernetes-mcp-server       1/1  Running   permanent
+litmus-exp    prometheus-mcp-server       1/1  Running   permanent
+sock-shop     flash-agent-<hash>          2/2  Running   per-experiment (agent + sidecar)
+monitoring    prometheus-deployment       1/1  Running   per-experiment
+monitoring    grafana                     1/1  Running   per-experiment
+```
+
+### 6.2 Cluster State After Experiment Completes
+```
+litmus-exp    <all permanent pods>        1/1  Running   unchanged
+sock-shop     <namespace deleted>                        uninstall-all removed it
+monitoring    <namespace deleted>                        uninstall-all removed it (owned by sock-shop Helm)
+```
 
 ---
 

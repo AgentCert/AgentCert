@@ -363,7 +363,100 @@ env:
 
 ---
 
-## 7. Related Files
+## 7. Argo Workflow Lifecycle and Patches
+
+The GraphQL server (`service.go`) dynamically patches every experiment's Argo workflow manifest before submission. These patches are injected regardless of what the experiment template contains.
+
+### 7.1 Workflow Step Order
+```
+install-application   → deploys sock-shop + monitoring (Prometheus, Grafana) in sock-shop / monitoring ns
+install-agent         → deploys flash-agent (+ agent-sidecar) in sock-shop ns
+<chaos fault steps>   → LitmusChaos fault injection steps
+pre-cleanup-wait      → configurable sleep before teardown (PRE_CLEANUP_WAIT_SECONDS, default 120s)
+cleanup-chaos-resources → LitmusChaos built-in cleanup
+uninstall-all         → tears down flash-agent + sock-shop (+ monitoring) via helm uninstall
+```
+
+### 7.2 Patches Applied by service.go
+
+| Patch | What it does |
+|-------|-------------|
+| `applyUninstallAllPatch` | Appends `uninstall-all` final step — runs `helm uninstall` for agent release + app release |
+| `applyDynamicPreCleanupWaitPatch` | Inserts configurable sleep step before `cleanup-chaos-resources` |
+| `podGC: OnWorkflowCompletion` | Kubernetes auto-deletes completed Argo executor pods after workflow finishes |
+| `applyInstallApplicationTemplateOverrides` | Forces `mcpTools.kubernetesMcpServer.enabled=false` and `mcpTools.prometheusMcpServer.enabled=false` on the install-application step (these are handled by permanent infra in `litmus-exp`) |
+
+### 7.3 uninstall-all Script
+```sh
+NAMESPACE="{{workflow.parameters.appNamespace}}"   # e.g. sock-shop
+AGENT_RELEASE="{{workflow.parameters.agentFolder}}" # flash-agent Helm release name
+APP_RELEASE="${NAMESPACE}"                          # sock-shop Helm release name
+
+kubectl delete chaosengines.litmuschaos.io --all -n "${NAMESPACE}" --ignore-not-found
+kubectl delete chaosresults.litmuschaos.io --all -n "${NAMESPACE}" --ignore-not-found
+helm uninstall "${AGENT_RELEASE}" -n "${NAMESPACE}" --ignore-not-found
+helm uninstall "${APP_RELEASE}"   -n "${NAMESPACE}" --ignore-not-found
+```
+Tearing down `${APP_RELEASE}` (sock-shop) also removes the `monitoring` namespace because it is owned by the Helm release.
+
+### 7.4 Pod Pattern During an Experiment
+```
+sock-shop     flash-agent-<hash>    2/2   Running   ← agent + agent-sidecar containers
+monitoring    grafana-<hash>        1/1   Running   ← per-experiment, owned by sock-shop Helm
+monitoring    prometheus-<hash>     1/1   Running   ← per-experiment, owned by sock-shop Helm
+```
+After `uninstall-all` completes, all three namespaces (`sock-shop`, `loadtest`, `monitoring`) are removed.
+
+---
+
+## 8. Cluster Namespace Architecture
+
+### 8.1 Permanent Infrastructure (litmus-exp)
+Always running. Not tied to any experiment. Deployed once via `enable-chaos-infra.sh`.
+
+| Pod | Purpose |
+|-----|---------|
+| `chaos-operator` | Runs LitmusChaos fault injection |
+| `chaos-exporter` | Exports chaos metrics |
+| `workflow-controller` | Executes Argo workflows |
+| `subscriber` | Communicates with GraphQL control plane |
+| `event-tracker` | Watches K8s events |
+| `kubernetes-mcp-server` | MCP bridge: flash-agent → K8s API |
+| `prometheus-mcp-server` | MCP bridge: flash-agent → Prometheus TSDB |
+
+`prometheus-mcp-server` is configured with:
+```
+PROMETHEUS_URL=http://prometheus.monitoring.svc.cluster.local:9090
+```
+It proxies queries to the **per-experiment** Prometheus in `monitoring`. When no experiment is running the bridge endpoint exists but Prometheus is not available (acceptable — flash-agent only runs during experiments).
+
+### 8.2 Per-Experiment Stack (sock-shop / monitoring)
+Deployed by `install-application` Helm step. Torn down by `uninstall-all`.
+
+| Namespace | Component | Purpose |
+|-----------|-----------|---------|
+| `sock-shop` | sock-shop microservices | Target application under chaos |
+| `sock-shop` | flash-agent + agent-sidecar | AI agent under certification |
+| `sock-shop` | loadtest | Load generator |
+| `monitoring` | prometheus-deployment | Metrics TSDB scraping sock-shop pods |
+| `monitoring` | grafana | Dashboards for sock-shop metrics |
+
+### 8.3 Data Flow
+```
+sock-shop pods ──scrape──▶ prometheus (monitoring)
+                                  ▲               ▲
+                   prometheus-mcp-server       grafana
+                      (litmus-exp)           (monitoring)
+                           ▲
+                      flash-agent
+                      (sock-shop)
+```
+
+`monitoring.enabled=true` is the **default** in `app-charts/charts/sock-shop/values.yaml`. The graphql server no longer overrides it to `false`, so Prometheus+Grafana deploy automatically with every experiment.
+
+---
+
+## 9. Related Files
 
 **Helm Chart Templates:**
 - [agent-chart/Chart.yaml](agent-chart/Chart.yaml) - Chart metadata
