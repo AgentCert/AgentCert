@@ -12,6 +12,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/local-custom/config/.env"
+APP_CHART_DIR=""
+AGENTCERT_ROOT="${SCRIPT_DIR}"
+TARGET_CONTEXT=""
+ALLOW_NAMESPACE_CREATE="false"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -21,15 +25,52 @@ LLM_ARG=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --llm)
+            if [[ -z "${2:-}" ]]; then
+                echo "[ERROR] Missing value for --llm" >&2
+                exit 1
+            fi
       LLM_ARG="${2:-}"
       shift 2
       ;;
         --env-file)
+            if [[ -z "${2:-}" ]]; then
+                echo "[ERROR] Missing value for --env-file" >&2
+                exit 1
+            fi
             ENV_FILE="${2:-}"
             shift 2
             ;;
+        --app-chart-dir)
+            if [[ -z "${2:-}" ]]; then
+                echo "[ERROR] Missing value for --app-chart-dir" >&2
+                exit 1
+            fi
+            APP_CHART_DIR="${2:-}"
+            shift 2
+            ;;
+        --agentcert-root)
+            if [[ -z "${2:-}" ]]; then
+                echo "[ERROR] Missing value for --agentcert-root" >&2
+                exit 1
+            fi
+            AGENTCERT_ROOT="${2:-}"
+            shift 2
+            ;;
+        --context)
+            if [[ -z "${2:-}" ]]; then
+                echo "[ERROR] Missing value for --context" >&2
+                exit 1
+            fi
+            TARGET_CONTEXT="${2:-}"
+            shift 2
+            ;;
+        --allow-namespace-create)
+            ALLOW_NAMESPACE_CREATE="true"
+            shift
+            ;;
     *)
-      shift
+            echo "[ERROR] Unknown argument: $1" >&2
+            exit 1
       ;;
   esac
 done
@@ -74,6 +115,96 @@ function log_error() {
     echo -e "${RED}[ERROR]${NC}  $*"
 }
 
+get_env_value() {
+    local key="$1"
+    local line=""
+    line="$(grep -E "^[[:space:]]*${key}=" "${ENV_FILE}" | tail -n1 || true)"
+    line="${line#*=}"
+    line="${line%$'\r'}"
+    line="${line%\"}"
+    line="${line#\"}"
+    line="${line%\'}"
+    line="${line#\'}"
+    printf "%s" "${line}"
+}
+
+require_command() {
+    local cmd="$1"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        log_error "Required command not found: $cmd"
+        exit 1
+    fi
+}
+
+preflight_checks() {
+    local current_context=""
+    local default_app_hub_path=""
+
+    log_info "Running preflight checks"
+    require_command bash
+    require_command docker
+    require_command kubectl
+
+    if ! kubectl cluster-info >/dev/null 2>&1; then
+        log_error "kubectl cannot reach a cluster. Check kubeconfig and network."
+        exit 1
+    fi
+
+    current_context="$(kubectl config current-context 2>/dev/null || true)"
+    if [[ -z "${current_context}" ]]; then
+        log_error "Unable to determine current kubectl context."
+        exit 1
+    fi
+    log_info "Current kubectl context: ${current_context}"
+
+    if [[ -n "${TARGET_CONTEXT}" && "${TARGET_CONTEXT}" != "${current_context}" ]]; then
+        log_error "Context mismatch. Expected '${TARGET_CONTEXT}', got '${current_context}'."
+        exit 1
+    fi
+
+    if [[ -z "${APP_CHART_DIR}" ]]; then
+        default_app_hub_path="$(get_env_value DEFAULT_APP_HUB_PATH)"
+        if [[ -n "${default_app_hub_path}" ]]; then
+            APP_CHART_DIR="${default_app_hub_path%/}/install-app"
+        else
+            APP_CHART_DIR="${SCRIPT_DIR}/../app-charts/install-app"
+        fi
+    fi
+
+    if [[ ! -d "${APP_CHART_DIR}" ]]; then
+        log_error "App chart directory not found: ${APP_CHART_DIR}"
+        exit 1
+    fi
+    if [[ ! -f "${APP_CHART_DIR}/build-and-deploy-app-chart.sh" ]]; then
+        log_error "Missing script: ${APP_CHART_DIR}/build-and-deploy-app-chart.sh"
+        exit 1
+    fi
+
+    if [[ ! -d "${SCRIPT_DIR}/local-custom/scripts" ]]; then
+        log_error "Missing deploy scripts directory: ${SCRIPT_DIR}/local-custom/scripts"
+        exit 1
+    fi
+    if [[ ! -f "${SCRIPT_DIR}/build-litellm.sh" ]]; then
+        log_error "Missing script: ${SCRIPT_DIR}/build-litellm.sh"
+        exit 1
+    fi
+    if [[ ! -f "${AGENTCERT_ROOT}/build-install-agent.sh" ]]; then
+        log_error "Missing script: ${AGENTCERT_ROOT}/build-install-agent.sh"
+        exit 1
+    fi
+    if [[ ! -f "${AGENTCERT_ROOT}/build-agent-sidecar.sh" ]]; then
+        log_error "Missing script: ${AGENTCERT_ROOT}/build-agent-sidecar.sh"
+        exit 1
+    fi
+    if [[ ! -f "${AGENTCERT_ROOT}/build-flash-agent.sh" ]]; then
+        log_error "Missing script: ${AGENTCERT_ROOT}/build-flash-agent.sh"
+        exit 1
+    fi
+
+    log_info "Resolved app chart directory: ${APP_CHART_DIR}"
+    log_info "Resolved AgentCert root: ${AGENTCERT_ROOT}"
+}
+
 choose_cluster_deploy_script() {
     local namespace="litmus-chaos"
     local infra_namespace="litmus-exp"
@@ -87,12 +218,20 @@ choose_cluster_deploy_script() {
     fi
 
     if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
-        log_info "Namespace $namespace not found; creating it" >&2
-        kubectl create namespace "$namespace" >/dev/null 2>&1 || true
+        if [[ "${ALLOW_NAMESPACE_CREATE}" == "true" ]]; then
+            log_info "Namespace $namespace not found; creating it" >&2
+            kubectl create namespace "$namespace" >/dev/null 2>&1 || true
+        else
+            log_warn "Namespace $namespace not found; run with --allow-namespace-create to create it" >&2
+        fi
     fi
     if ! kubectl get namespace "$infra_namespace" >/dev/null 2>&1; then
-        log_info "Namespace $infra_namespace not found; creating it" >&2
-        kubectl create namespace "$infra_namespace" >/dev/null 2>&1 || true
+        if [[ "${ALLOW_NAMESPACE_CREATE}" == "true" ]]; then
+            log_info "Namespace $infra_namespace not found; creating it" >&2
+            kubectl create namespace "$infra_namespace" >/dev/null 2>&1 || true
+        else
+            log_warn "Namespace $infra_namespace not found; run with --allow-namespace-create to create it" >&2
+        fi
     fi
 
     if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
@@ -119,9 +258,11 @@ echo -e "${CYAN}AgentCert Build+Deploy Pipeline${NC}"
 echo -e "${CYAN}================================${NC}"
 echo ""
 
+preflight_checks
+
 # Step 1: Build and deploy app chart (Sock Shop)
 log_info "Starting: Build app chart (Sock Shop)"
-if cd /mnt/d/Studies/app-charts/install-app && bash build-and-deploy-app-chart.sh --local-mode; then
+if cd "${APP_CHART_DIR}" && bash build-and-deploy-app-chart.sh --local-mode; then
     log_success "Completed: Build app chart (Sock Shop)"
 else
     log_error "Failed: Build app chart (Sock Shop)"
@@ -156,7 +297,7 @@ echo ""
 
 # Step 4: Build install-agent image
 log_info "Starting: Build install-agent image"
-if DOCKER_BUILDKIT=1 bash /mnt/d/Studies/AgentCert/build-install-agent.sh --env-file "${ENV_FILE}"; then
+if DOCKER_BUILDKIT=1 bash "${AGENTCERT_ROOT}/build-install-agent.sh" --env-file "${ENV_FILE}"; then
     log_success "Completed: Build install-agent image"
 else
     log_error "Failed: Build install-agent image"
@@ -167,7 +308,7 @@ echo ""
 
 # Step 5: Build agent-sidecar image
 log_info "Starting: Build agent-sidecar image"
-if bash /mnt/d/Studies/AgentCert/build-agent-sidecar.sh --env-file "${ENV_FILE}"; then
+if bash "${AGENTCERT_ROOT}/build-agent-sidecar.sh" --env-file "${ENV_FILE}"; then
     log_success "Completed: Build agent-sidecar image"
 else
     log_error "Failed: Build agent-sidecar image"
@@ -178,7 +319,7 @@ echo ""
 
 # Step 6: Build flash-agent image (syncs LITELLM_MASTER_KEY + MCP URLs to server)
 log_info "Starting: Build flash-agent image"
-if bash /mnt/d/Studies/AgentCert/build-flash-agent.sh --env-file "${ENV_FILE}"; then
+if bash "${AGENTCERT_ROOT}/build-flash-agent.sh" --env-file "${ENV_FILE}"; then
     log_success "Completed: Build flash-agent image"
 else
     log_error "Failed: Build flash-agent image"
