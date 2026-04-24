@@ -5,17 +5,19 @@ set -euo pipefail
 # Runs directly on Linux (no wsl wrapper needed).
 #
 # Usage:
-#   bash build-all.sh --llm 1 --env-file /path/to/.env --paths-file /path/to/build-paths.env
+#   bash build-all.sh [--git] --llm 1 --env-file /path/to/.env --paths-file /path/to/build-paths.env
 #
 # --llm        1|azure / 2|openai / 3|all
 # --env-file   path to your .env (default: <agentcert-root>/local-custom/config/.env)
 # --paths-file path to build-paths.env (default: same dir as this script/build-paths.env)
+# --git        clone (if missing) or git pull each repo before building
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ENV_FILE=""
 PATHS_FILE="${SCRIPT_DIR}/build-paths.env"
 LLM_ARG=""
+GIT_SYNC=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,6 +33,10 @@ while [[ $# -gt 0 ]]; do
       PATHS_FILE="${2:-}"
       shift 2
       ;;
+    --git)
+      GIT_SYNC=true
+      shift
+      ;;
     *)
       shift
       ;;
@@ -45,6 +51,39 @@ if [[ ! -f "${PATHS_FILE}" ]]; then
 fi
 # shellcheck source=/dev/null
 source "${PATHS_FILE}"
+
+# ── Git sync (clone or pull each repo) ────────────────────────────────────────
+sync_repo() {
+  local dir="$1"
+  local url="$2"
+  local branch="${GIT_BRANCH:-main}"
+
+  if [[ -z "${url}" ]]; then
+    echo "[ERROR] --git flag used but no git URL configured for ${dir}" >&2
+    echo "[ERROR] Set the corresponding *_GIT_URL in ${PATHS_FILE}" >&2
+    exit 1
+  fi
+
+  if [[ -d "${dir}/.git" ]]; then
+    echo "[INFO] git pull  ${dir} (branch: ${branch})"
+    git -C "${dir}" fetch origin
+    git -C "${dir}" checkout "${branch}" 2>/dev/null || true
+    git -C "${dir}" reset --hard "origin/${branch}"
+  else
+    echo "[INFO] git clone ${url} → ${dir} (branch: ${branch})"
+    mkdir -p "$(dirname "${dir}")"
+    git clone --branch "${branch}" --depth 1 "${url}" "${dir}"
+  fi
+}
+
+if [[ "${GIT_SYNC}" == "true" ]]; then
+  echo "[INFO] Syncing repos from git..."
+  sync_repo "${AGENTCERT_ROOT}"    "${AGENTCERT_GIT_URL:-}"
+  sync_repo "${APP_CHARTS_ROOT}"   "${APP_CHARTS_GIT_URL:-}"
+  sync_repo "${AGENT_CHARTS_ROOT}" "${AGENT_CHARTS_GIT_URL:-}"
+  sync_repo "${FLASH_AGENT_ROOT}"  "${FLASH_AGENT_GIT_URL:-}"
+  echo "[OK] All repos synced"
+fi
 
 # Validate required path variables
 for var in AGENTCERT_ROOT APP_CHARTS_ROOT AGENT_CHARTS_ROOT FLASH_AGENT_ROOT; do
@@ -130,12 +169,13 @@ choose_cluster_deploy_script() {
 }
 
 # ── Build scripts (in this azure_build folder) ─────────────────────────────────
+BUILD_INSTALL_APP="${SCRIPT_DIR}/build-and-deploy-app-chart.sh"
 BUILD_INSTALL_AGENT="${SCRIPT_DIR}/build-install-agent.sh"
 BUILD_AGENT_SIDECAR="${SCRIPT_DIR}/build-agent-sidecar.sh"
 BUILD_FLASH_AGENT="${SCRIPT_DIR}/build-flash-agent.sh"
 BUILD_LITELLM="${SCRIPT_DIR}/build-litellm.sh"
 
-for s in "$BUILD_INSTALL_AGENT" "$BUILD_AGENT_SIDECAR" "$BUILD_FLASH_AGENT" "$BUILD_LITELLM"; do
+for s in "$BUILD_INSTALL_APP" "$BUILD_INSTALL_AGENT" "$BUILD_AGENT_SIDECAR" "$BUILD_FLASH_AGENT" "$BUILD_LITELLM"; do
   if [[ ! -f "$s" ]]; then
     echo "[ERROR] Build script not found: $s" >&2
     exit 1
@@ -156,7 +196,10 @@ echo ""
 
 # Step 1: Build and deploy app chart (Sock Shop)
 log_info "Starting: Build app chart (Sock Shop)"
-if cd "${APP_CHARTS_ROOT}/install-app" && bash build-and-deploy-app-chart.sh --local-mode; then
+if bash "${BUILD_INSTALL_APP}" \
+    --local-mode \
+    --env-file "${ENV_FILE}" \
+    --source-dir "${APP_CHARTS_ROOT}/install-app"; then
   log_success "Completed: Build app chart (Sock Shop)"
 else
   log_error "Failed: Build app chart (Sock Shop)"
