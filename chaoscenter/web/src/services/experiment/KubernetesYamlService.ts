@@ -516,11 +516,12 @@ export class KubernetesYamlService extends ExperimentYamlService {
 
   /**
    * Sets the multi-run configuration for an experiment.
-   * This stores maxRuns in the experiment metadata to enable sequential multi-run execution.
+   * This stores maxRuns and delay in the experiment metadata to enable sequential multi-run execution.
    * @param key - The experiment key
    * @param maxRuns - Maximum number of sequential runs (1-100)
+   * @param delaySeconds - Delay between runs in seconds (default: 120 = 2 minutes)
    */
-  async setMultiRunConfig(key: ChaosObjectStoresPrimaryKeys['experiments'], maxRuns: number): Promise<void> {
+  async setMultiRunConfig(key: ChaosObjectStoresPrimaryKeys['experiments'], maxRuns: number, delaySeconds: number = 120): Promise<void> {
     try {
       const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
       const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
@@ -540,6 +541,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       manifest.metadata.annotations['litmuschaos.io/multiRunEnabled'] = 'true';
       manifest.metadata.annotations['litmuschaos.io/maxRuns'] = String(maxRuns);
       manifest.metadata.annotations['litmuschaos.io/currentRun'] = '0';
+      manifest.metadata.annotations['litmuschaos.io/multiRunDelay'] = String(delaySeconds);
 
       await store.put({ ...experiment, manifest }, key);
       await tx.done;

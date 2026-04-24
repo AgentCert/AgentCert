@@ -638,6 +638,11 @@ multiRunText: >-
   the previous one completes. Enter the maximum number of runs.
 multiRunMaxRunsLabel: Maximum Runs
 multiRunMaxRunsPlaceholder: Enter maximum number of runs (e.g., 5)
+multiRunDelayLabel: Delay Between Runs
+multiRunDelayHours: Hours
+multiRunDelayMinutes: Minutes
+multiRunDelaySeconds: Seconds
+multiRunDelayHint: Time to wait before starting the next run (default 2 minutes)
 moduleName: Chaos Module
 monitorCluster: >-
   Allows LitmusChaos to perform and monitor chaos in all namespaces available in
