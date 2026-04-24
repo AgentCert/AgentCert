@@ -213,7 +213,42 @@ const ExperimentDashboardV2Table = ({
             ? parser.parseExpression(data.cronSyntax.toString()).next().toString()
             : undefined;
 
+          // Check if multi-run batch is in progress
+          const isMultiRunInProgress = React.useMemo(() => {
+            if (!data.multiRunEnabled || !data.experimentManifest) return false;
+            try {
+              const manifest = JSON.parse(data.experimentManifest);
+              const annotations = manifest?.metadata?.annotations || {};
+              const currentRun = parseInt(annotations['litmuschaos.io/currentRun'] || '0', 10);
+              const maxRuns = parseInt(annotations['litmuschaos.io/maxRuns'] || '1', 10);
+              // Batch is in progress if currentRun > 0 AND currentRun < maxRuns
+              return currentRun > 0 && currentRun < maxRuns;
+            } catch {
+              return false;
+            }
+          }, [data.multiRunEnabled, data.experimentManifest]);
+
           const ActionButton = (): React.ReactElement => {
+            // If multi-run batch is in progress and not currently running, show waiting indicator
+            if (isMultiRunInProgress && lastExperimentRunStatus !== ExperimentRunStatus.RUNNING && lastExperimentRunStatus !== ExperimentRunStatus.QUEUED) {
+              return (
+                <Popover
+                  className={Classes.DARK}
+                  usePortal={true}
+                  position="top"
+                  interactionKind={PopoverInteractionKind.HOVER}
+                  content={
+                    <Layout.Vertical padding={'medium'}>
+                      <Text font={{ size: 'small' }} color={Color.WHITE}>
+                        Multi-Run batch in progress. Next run will start automatically.
+                      </Text>
+                    </Layout.Vertical>
+                  }
+                >
+                  <Icon name="time" color={Color.ORANGE_500} size={25} />
+                </Popover>
+              );
+            }
             switch (lastExperimentRunStatus) {
               case ExperimentRunStatus.RUNNING:
                 return (

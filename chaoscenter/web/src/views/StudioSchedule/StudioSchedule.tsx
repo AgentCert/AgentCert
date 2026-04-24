@@ -18,6 +18,9 @@ interface SchedulePanelInterface extends ExpressionBreakdownInterface {
   expression: string;
   selectedScheduleTab?: string;
   maxRuns?: number;
+  delayHours?: number;
+  delayMinutes?: number;
+  delaySeconds?: number;
 }
 
 interface StudioScheduleViewProps {
@@ -57,7 +60,10 @@ export default function StudioScheduleView({ mode }: StudioScheduleViewProps): R
             ...getBreakdownValues(initialCronExpression),
             selectedScheduleTab: getSelectedTab(initialCronExpression),
             type: initialExperimentType ?? ExperimentType.NON_CRON,
-            maxRuns: 1
+            maxRuns: 1,
+            delayHours: 0,
+            delayMinutes: 2,
+            delaySeconds: 0
           }}
           onSubmit={values => {
             if (values.type === ExperimentType.NON_CRON && initialExperimentType === ExperimentType.CRON) {
@@ -81,8 +87,10 @@ export default function StudioScheduleView({ mode }: StudioScheduleViewProps): R
                   setUnsavedChanges();
                 });
             } else if (values.type === ExperimentType.MULTI_RUN) {
-              // Store maxRuns in experiment metadata for multi-run execution
-              (experimentHandler as KubernetesYamlService)?.setMultiRunConfig(experimentKey, values.maxRuns ?? 1).then(() => {
+              // Calculate delay in seconds from hours, minutes, seconds
+              const delaySeconds = ((values.delayHours ?? 0) * 3600) + ((values.delayMinutes ?? 2) * 60) + (values.delaySeconds ?? 0);
+              // Store maxRuns and delay in experiment metadata for multi-run execution
+              (experimentHandler as KubernetesYamlService)?.setMultiRunConfig(experimentKey, values.maxRuns ?? 1, delaySeconds).then(() => {
                 updateSearchParams({ experimentType: ExperimentType.MULTI_RUN, maxRuns: String(values.maxRuns ?? 1), unsavedChanges: 'true' });
               });
             }
@@ -149,6 +157,55 @@ export default function StudioScheduleView({ mode }: StudioScheduleViewProps): R
                                 }}
                                 style={{ width: '300px' }}
                               />
+                              <Text font={{ variation: FontVariation.FORM_LABEL }} style={{ marginTop: '16px' }}>{getString('multiRunDelayLabel')}</Text>
+                              <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500} style={{ marginTop: '-4px' }}>{getString('multiRunDelayHint')}</Text>
+                              <Layout.Horizontal spacing={'medium'} style={{ width: '300px', marginTop: '16px' }}>
+                                <Layout.Vertical spacing={'xsmall'} style={{ flex: 1 }}>
+                                  <Text font={{ variation: FontVariation.SMALL }}>{getString('multiRunDelayHours')}</Text>
+                                  <TextInput
+                                    name="delayHours"
+                                    type="number"
+                                    min={0}
+                                    max={50}
+                                    value={String(formikProps.values.delayHours ?? 0)}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                      const value = parseInt(e.target.value, 10);
+                                      formikProps.setFieldValue('delayHours', isNaN(value) ? 0 : Math.max(0, Math.min(50, value)));
+                                    }}
+                                    style={{ width: '80px' }}
+                                  />
+                                </Layout.Vertical>
+                                <Layout.Vertical spacing={'xsmall'} style={{ flex: 1 }}>
+                                  <Text font={{ variation: FontVariation.SMALL }}>{getString('multiRunDelayMinutes')}</Text>
+                                  <TextInput
+                                    name="delayMinutes"
+                                    type="number"
+                                    min={0}
+                                    max={59}
+                                    value={String(formikProps.values.delayMinutes ?? 2)}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                      const value = parseInt(e.target.value, 10);
+                                      formikProps.setFieldValue('delayMinutes', isNaN(value) ? 0 : Math.max(0, Math.min(59, value)));
+                                    }}
+                                    style={{ width: '80px' }}
+                                  />
+                                </Layout.Vertical>
+                                <Layout.Vertical spacing={'xsmall'} style={{ flex: 1 }}>
+                                  <Text font={{ variation: FontVariation.SMALL }}>{getString('multiRunDelaySeconds')}</Text>
+                                  <TextInput
+                                    name="delaySeconds"
+                                    type="number"
+                                    min={0}
+                                    max={59}
+                                    value={String(formikProps.values.delaySeconds ?? 0)}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                      const value = parseInt(e.target.value, 10);
+                                      formikProps.setFieldValue('delaySeconds', isNaN(value) ? 0 : Math.max(0, Math.min(59, value)));
+                                    }}
+                                    style={{ width: '80px' }}
+                                  />
+                                </Layout.Vertical>
+                              </Layout.Horizontal>
                             </Layout.Vertical>
                           )}
                         </Layout.Vertical>
