@@ -14,7 +14,6 @@ BUILD_CONTEXT="$(cd "$SCRIPT_DIR/.." && pwd)"
 IMAGE_REGISTRY="${IMAGE_REGISTRY:-agentcert}"
 IMAGE_NAME="${IMAGE_NAME:-agentcert-install-app}"
 IMAGE_TAG="${IMAGE_TAG:-ci-$(date +%Y%m%d%H%M%S)}"
-MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
 TAG_LATEST="${TAG_LATEST:-true}"
 NO_CACHE="${NO_CACHE:-false}"
 AGENTCERT_ENV_FILE="${AGENTCERT_ENV_FILE:-$BUILD_CONTEXT/../AgentCert/local-custom/config/.env}"
@@ -149,18 +148,6 @@ build_image() {
     success "Docker build completed"
 }
 
-load_into_minikube() {
-    info "Loading ${PRIMARY_IMAGE} into ${MINIKUBE_PROFILE}"
-    minikube -p "$MINIKUBE_PROFILE" image load "$PRIMARY_IMAGE"
-
-    if [[ "$TAG_LATEST" == "true" ]]; then
-        info "Loading ${LATEST_IMAGE} into ${MINIKUBE_PROFILE}"
-        minikube -p "$MINIKUBE_PROFILE" image load "$LATEST_IMAGE"
-    fi
-
-    success "Images loaded into minikube"
-}
-
 prune_local_images() {
     local keep_refs=("$PRIMARY_IMAGE")
     if [[ "$TAG_LATEST" == "true" ]]; then
@@ -188,34 +175,6 @@ prune_local_images() {
     success "Local Docker image prune complete"
 }
 
-prune_minikube_images() {
-    local keep_refs=("$PRIMARY_IMAGE")
-    if [[ "$TAG_LATEST" == "true" ]]; then
-        keep_refs+=("$LATEST_IMAGE")
-    fi
-
-    info "Pruning older ${IMAGE_REPO} images from ${MINIKUBE_PROFILE}"
-    while IFS= read -r ref; do
-        [[ -z "$ref" ]] && continue
-
-        local keep=false
-        for wanted in "${keep_refs[@]}"; do
-            local ref_bare="${ref#docker.io/}"
-            local wanted_bare="${wanted#docker.io/}"
-            if [[ "$ref_bare" == "$wanted_bare" ]]; then
-                keep=true
-                break
-            fi
-        done
-
-        if [[ "$keep" == "false" ]]; then
-            minikube -p "$MINIKUBE_PROFILE" image rm "$ref" >/dev/null 2>&1 || warn "Failed to remove minikube image ${ref}"
-        fi
-    done < <(minikube -p "$MINIKUBE_PROFILE" image ls 2>/dev/null | grep -E "(^|/)${IMAGE_REPO##*/}:" | sort -u || true)
-
-    success "Minikube image prune complete"
-}
-
 update_agentcert_env() {
     if [[ ! -f "$AGENTCERT_ENV_FILE" ]]; then
         warn "AgentCert .env not found at ${AGENTCERT_ENV_FILE}; skipping env update"
@@ -232,20 +191,35 @@ show_result() {
     if [[ "$TAG_LATEST" == "true" ]]; then
         printf 'Alias image: %s\n' "$LATEST_IMAGE"
     fi
-    printf 'Minikube profile: %s\n' "$MINIKUBE_PROFILE"
     printf 'Updated .env: %s\n' "$AGENTCERT_ENV_FILE"
+}
+
+push_to_dockerhub() {
+    local dh_user dh_token
+    dh_user=$(get_env_value "DOCKERHUB_USERNAME" "${AGENTCERT_ENV_FILE}")
+    dh_token=$(get_env_value "DOCKERHUB_TOKEN" "${AGENTCERT_ENV_FILE}")
+    if [[ -z "${dh_user}" || -z "${dh_token}" ]]; then
+        warn "DOCKERHUB_USERNAME or DOCKERHUB_TOKEN not set in .env; skipping Docker Hub push"
+        return 0
+    fi
+    info "Pushing to Docker Hub as ${dh_user}..."
+    echo "${dh_token}" | docker login -u "${dh_user}" --password-stdin
+    docker push "${PRIMARY_IMAGE}"
+    if [[ "${TAG_LATEST}" == "true" ]]; then
+        docker push "${LATEST_IMAGE}"
+    fi
+    docker logout >/dev/null 2>&1 || true
+    success "Pushed to Docker Hub: ${PRIMARY_IMAGE}"
 }
 
 main() {
     require_cmd docker
-    require_cmd minikube
 
     prepare_local_mode_overrides
 
     build_image
-    load_into_minikube
+    push_to_dockerhub
     prune_local_images
-    prune_minikube_images
     update_agentcert_env
     show_result
 }

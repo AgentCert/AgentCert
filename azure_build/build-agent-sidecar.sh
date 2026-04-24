@@ -37,13 +37,30 @@ if [[ ! -d "${SOURCE_DIR}" ]]; then
   exit 1
 fi
 
+push_to_dockerhub() {
+  local dh_user dh_token
+  dh_user=$(grep -E "^DOCKERHUB_USERNAME=" "${ENV_FILE}" | tail -1 | cut -d'=' -f2- | tr -d '\r\n"'"'"')
+  dh_token=$(grep -E "^DOCKERHUB_TOKEN=" "${ENV_FILE}" | tail -1 | cut -d'=' -f2- | tr -d '\r\n"'"'"')
+  if [[ -z "${dh_user}" || -z "${dh_token}" ]]; then
+    echo "[WARN] DOCKERHUB_USERNAME or DOCKERHUB_TOKEN not set in .env; skipping Docker Hub push"
+    return 0
+  fi
+  echo "[INFO] Pushing to Docker Hub as ${dh_user}..."
+  echo "${dh_token}" | docker login -u "${dh_user}" --password-stdin
+  docker push "${IMAGE}"
+  docker push "${IMAGE_REPO}:latest"
+  docker logout >/dev/null 2>&1 || true
+  echo "[OK] Pushed to Docker Hub: ${IMAGE} and ${IMAGE_REPO}:latest"
+}
+
 echo "[INFO] Pruning old agent-sidecar images..."
 docker images | grep "agentcert/agent-sidecar" | grep -v "latest\|dev" | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true
 docker image prune -f 2>/dev/null || true
 echo "[OK] Old images pruned"
 
+IMAGE_REPO="agentcert/agent-sidecar"
 IMAGE_TAG="ci-$(date +%Y%m%d%H%M%S)"
-IMAGE="agentcert/agent-sidecar:${IMAGE_TAG}"
+IMAGE="${IMAGE_REPO}:${IMAGE_TAG}"
 
 echo "[INFO] Building ${IMAGE} from ${SOURCE_DIR}"
 cd "${SOURCE_DIR}"
@@ -61,15 +78,7 @@ docker tag "${IMAGE}" agentcert/agent-sidecar:latest
 docker tag "${IMAGE}" agentcert/agent-sidecar:dev
 echo "[OK] Docker build completed"
 
-echo "[INFO] Cleaning up old images from minikube..."
-minikube image ls | grep "agent-sidecar:ci-" | grep -v "${IMAGE_TAG}" | awk '{print $1}' | xargs -r minikube image rm 2>/dev/null || true
-echo "[OK] Old minikube images cleaned"
-
-echo "[INFO] Loading into minikube..."
-minikube image load "${IMAGE}"
-minikube image load agentcert/agent-sidecar:latest
-minikube image load agentcert/agent-sidecar:dev
-echo "[OK] Images loaded into minikube"
+push_to_dockerhub
 
 LATEST_IMAGE="agentcert/agent-sidecar:latest"
 if grep -q "^AGENT_SIDECAR_IMAGE=" "${ENV_FILE}" 2>/dev/null; then

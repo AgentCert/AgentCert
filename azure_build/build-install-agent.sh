@@ -55,13 +55,30 @@ sync_live_server_env() {
   echo "[OK] Live server env synced: INSTALL_AGENT_IMAGE=${IMAGE}"
 }
 
+push_to_dockerhub() {
+  local dh_user dh_token
+  dh_user=$(grep -E "^DOCKERHUB_USERNAME=" "${ENV_FILE}" | tail -1 | cut -d'=' -f2- | tr -d '\r\n"'"'"')
+  dh_token=$(grep -E "^DOCKERHUB_TOKEN=" "${ENV_FILE}" | tail -1 | cut -d'=' -f2- | tr -d '\r\n"'"'"')
+  if [[ -z "${dh_user}" || -z "${dh_token}" ]]; then
+    echo "[WARN] DOCKERHUB_USERNAME or DOCKERHUB_TOKEN not set in .env; skipping Docker Hub push"
+    return 0
+  fi
+  echo "[INFO] Pushing to Docker Hub as ${dh_user}..."
+  echo "${dh_token}" | docker login -u "${dh_user}" --password-stdin
+  docker push "${IMAGE}"
+  docker push "${IMAGE_REPO}:latest"
+  docker logout >/dev/null 2>&1 || true
+  echo "[OK] Pushed to Docker Hub: ${IMAGE} and ${IMAGE_REPO}:latest"
+}
+
 echo "[INFO] Pruning old agentcert-install-agent images..."
 docker images | grep "agentcert-install-agent" | grep -v "latest\|dev" | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true
 docker image prune -f 2>/dev/null || true
 echo "[OK] Old images pruned"
 
+IMAGE_REPO="agentcert/agentcert-install-agent"
 IMAGE_TAG="ci-$(date +%Y%m%d%H%M%S)"
-IMAGE="agentcert/agentcert-install-agent:${IMAGE_TAG}"
+IMAGE="${IMAGE_REPO}:${IMAGE_TAG}"
 
 echo "[INFO] Building ${IMAGE} from ${SOURCE_DIR}"
 cd "${SOURCE_DIR}"
@@ -79,19 +96,8 @@ docker tag "${IMAGE}" agentcert/agentcert-install-agent:latest
 docker tag "${IMAGE}" agentcert/agentcert-install-agent:dev
 echo "[OK] Docker build completed"
 
-echo "[INFO] Cleaning up old images from minikube..."
-minikube image ls | grep "agentcert-install-agent:ci-" | grep -v "${IMAGE_TAG}" | awk '{print $1}' | xargs -r minikube image rm 2>/dev/null || true
-echo "[OK] Old minikube images cleaned"
-
-echo "[INFO] Loading into minikube..."
-minikube image load "${IMAGE}"
-minikube image load agentcert/agentcert-install-agent:latest
-minikube image load agentcert/agentcert-install-agent:dev
-echo "[OK] Images loaded into minikube"
+push_to_dockerhub
 
 LATEST_IMAGE="agentcert/agentcert-install-agent:latest"
 sed -i "s|^INSTALL_AGENT_IMAGE=.*|INSTALL_AGENT_IMAGE=${LATEST_IMAGE}|" "${ENV_FILE}"
 echo "[OK] .env updated: INSTALL_AGENT_IMAGE=${LATEST_IMAGE}"
-
-IMAGE="${LATEST_IMAGE}"
-sync_live_server_env

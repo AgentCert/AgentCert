@@ -125,13 +125,30 @@ sync_live_flash_agent_workloads() {
   echo "[OK] Flash-agent workloads synced to ${IMAGE}"
 }
 
+push_to_dockerhub() {
+  local dh_user dh_token
+  dh_user=$(read_env_value "DOCKERHUB_USERNAME")
+  dh_token=$(read_env_value "DOCKERHUB_TOKEN")
+  if [[ -z "${dh_user}" || -z "${dh_token}" ]]; then
+    echo "[WARN] DOCKERHUB_USERNAME or DOCKERHUB_TOKEN not set in .env; skipping Docker Hub push"
+    return 0
+  fi
+  echo "[INFO] Pushing to Docker Hub as ${dh_user}..."
+  echo "${dh_token}" | docker login -u "${dh_user}" --password-stdin
+  docker push "${IMAGE}"
+  docker push "${IMAGE_REPO}:latest"
+  docker logout >/dev/null 2>&1 || true
+  echo "[OK] Pushed to Docker Hub: ${IMAGE} and ${IMAGE_REPO}:latest"
+}
+
 echo "[INFO] Pruning old agentcert-flash-agent images..."
 docker images | grep "agentcert-flash-agent" | grep -v "latest\|dev" | awk '{print $3}' | xargs -r docker rmi -f 2>/dev/null || true
 docker image prune -f 2>/dev/null || true
 echo "[OK] Old images pruned"
 
+IMAGE_REPO="agentcert/agentcert-flash-agent"
 IMAGE_TAG="ci-$(date +%Y%m%d%H%M%S)"
-IMAGE="agentcert/agentcert-flash-agent:${IMAGE_TAG}"
+IMAGE="${IMAGE_REPO}:${IMAGE_TAG}"
 
 echo "[INFO] Building ${IMAGE} from ${SOURCE_DIR}"
 cd "${SOURCE_DIR}"
@@ -140,15 +157,7 @@ docker tag "${IMAGE}" agentcert/agentcert-flash-agent:latest
 docker tag "${IMAGE}" agentcert/agentcert-flash-agent:dev
 echo "[OK] Docker build completed"
 
-echo "[INFO] Cleaning up old images from minikube..."
-minikube image ls | grep "agentcert-flash-agent:ci-" | grep -v "${IMAGE_TAG}" | awk '{print $1}' | xargs -r minikube image rm 2>/dev/null || true
-echo "[OK] Old minikube images cleaned"
-
-echo "[INFO] Loading into minikube..."
-minikube image load "${IMAGE}"
-minikube image load agentcert/agentcert-flash-agent:latest
-minikube image load agentcert/agentcert-flash-agent:dev
-echo "[OK] Images loaded into minikube"
+push_to_dockerhub
 
 LATEST_IMAGE="agentcert/agentcert-flash-agent:latest"
 if grep -q "^FLASH_AGENT_IMAGE=" "${ENV_FILE}"; then
@@ -157,7 +166,3 @@ else
   sed -i "/^INSTALL_AGENT_IMAGE=/a FLASH_AGENT_IMAGE=${LATEST_IMAGE}" "${ENV_FILE}"
 fi
 echo "[OK] .env updated: FLASH_AGENT_IMAGE=${LATEST_IMAGE}"
-
-IMAGE="${LATEST_IMAGE}"
-sync_live_server_env
-sync_live_flash_agent_workloads
