@@ -416,6 +416,7 @@ type ComplexityRoot struct {
                 Engine      func(childComplexity int) int
                 Fault       func(childComplexity int) int
                 GroundTruth func(childComplexity int) int
+	}
 
 	FaultInjectionConfig struct {
 		Duration       func(childComplexity int) int
