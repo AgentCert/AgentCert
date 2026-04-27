@@ -98,7 +98,7 @@ spec:
         # ── agent-sidecar: transparent metadata-injection proxy ──────
         - name: {{ .Values.sidecar.name }}
           image: "{{ .Values.sidecar.image.registry }}/{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag }}"
-          imagePullPolicy: {{ .Values.sidecar.image.pullPolicy | default "IfNotPresent" }}
+          imagePullPolicy: {{ .Values.sidecar.image.pullPolicy | default "Always" }}
           ports:
             - containerPort: {{ .Values.sidecar.port }}
               protocol: TCP
