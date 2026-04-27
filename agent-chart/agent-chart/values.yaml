@@ -75,7 +75,7 @@ sidecar:
     registry: docker.io
     repository: agentcert/agent-sidecar
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   port: 4001
   # The real LiteLLM proxy URL — sidecar forwards enriched requests here
   upstream: ""
