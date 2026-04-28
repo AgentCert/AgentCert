@@ -198,12 +198,15 @@ export LANGFUSE_HOST="https://us.cloud.langfuse.com"
 export LANGFUSE_PUBLIC_KEY="pk-lf-ba1081a9-7849-427f-8a1c-2a2ee06900c1"
 export LANGFUSE_SECRET_KEY="sk-lf-72694bd7-4a59-430d-b870-0183114c02fe"
 
-# NOTE: CHAOS_CENTER_UI_ENDPOINT is intentionally NOT set here.
-# The Go server auto-detects the machine's outbound IP address on the
-# subscriber-pod-permanent-fix branch. This is the correct behavior for
-# Azure VMs where the subscriber pod needs to reach back to the VM's IP.
-# If auto-detect doesn't work for your setup, uncomment and set manually:
-# export CHAOS_CENTER_UI_ENDPOINT="http://<YOUR_VM_PRIVATE_IP>:8080"
+# Optional local overrides from .env (used for CHAOS_CENTER_UI_ENDPOINT, image tags, etc.)
+DOTENV_FILE="$SCRIPT_DIR/local-custom/config/.env"
+if [ -f "$DOTENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$DOTENV_FILE"
+    set +a
+    ok "Loaded environment overrides from $DOTENV_FILE"
+fi
 
 ok "Environment variables set"
 
