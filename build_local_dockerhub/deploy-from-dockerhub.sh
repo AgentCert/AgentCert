@@ -124,10 +124,21 @@ load_image() {
   echo ""
 }
 
-load_image "${INSTALL_AGENT_IMAGE}"  "agentcert-install-agent"
-load_image "${INSTALL_APP_IMAGE}"    "agentcert-install-app"
-load_image "${FLASH_AGENT_IMAGE}"    "agentcert-flash-agent"
-load_image "${AGENT_SIDECAR_IMAGE}"  "agent-sidecar"
+# ── Run all 4 AgentCert image loads in parallel ───────────────────────────
+log_info "Starting parallel load of 4 AgentCert images..."
+declare -a _main_pids=()
+( load_image "${INSTALL_AGENT_IMAGE}"  "agentcert-install-agent" ) & _main_pids+=($!)
+( load_image "${INSTALL_APP_IMAGE}"    "agentcert-install-app"   ) & _main_pids+=($!)
+( load_image "${FLASH_AGENT_IMAGE}"    "agentcert-flash-agent"   ) & _main_pids+=($!)
+( load_image "${AGENT_SIDECAR_IMAGE}"  "agent-sidecar"           ) & _main_pids+=($!)
+
+_main_fail=0
+for _pid in "${_main_pids[@]}"; do
+  wait "$_pid" || _main_fail=1
+done
+[[ $_main_fail -eq 0 ]] || { log_error "One or more AgentCert image loads failed"; exit 1; }
+log_success "All 4 AgentCert images loaded into minikube"
+echo ""
 
 # ── Step 3: Pull + load all sock-shop images into minikube ─────────────────
 # These are fixed third-party images used when an experiment deploys sock-shop.
@@ -140,37 +151,63 @@ load_static_image() {
   log_success "Loaded: ${image}"
 }
 
-log_info "Loading sock-shop images into minikube..."
+# Pool helpers: run up to _POOL_MAX jobs concurrently
+_POOL_MAX=6
+_pool_pids=()
+_pool_fail=0
+
+_pool_submit() {
+  # If pool is full, wait for the oldest job before adding a new one
+  while [[ ${#_pool_pids[@]} -ge $_POOL_MAX ]]; do
+    wait "${_pool_pids[0]}" || _pool_fail=1
+    _pool_pids=("${_pool_pids[@]:1}")
+  done
+  ( "$@" ) &
+  _pool_pids+=($!)
+}
+
+_pool_drain() {
+  for _p in "${_pool_pids[@]}"; do
+    wait "$_p" || _pool_fail=1
+  done
+  _pool_pids=()
+}
+
+log_info "Loading sock-shop + LiteLLM images into minikube (parallel, max ${_POOL_MAX} concurrent)..."
 echo ""
 # Sock Shop microservices
-load_static_image "weaveworksdemos/front-end:0.3.12"
-load_static_image "weaveworksdemos/catalogue:0.3.5"
-load_static_image "weaveworksdemos/catalogue-db:0.3.0"
-load_static_image "weaveworksdemos/carts:0.4.8"
-load_static_image "weaveworksdemos/orders:0.4.7"
-load_static_image "weaveworksdemos/payment:0.4.3"
-load_static_image "weaveworksdemos/shipping:0.4.8"
-load_static_image "weaveworksdemos/user:0.4.7"
-load_static_image "weaveworksdemos/user-db:0.4.0"
-load_static_image "weaveworksdemos/queue-master:0.3.1"
-load_static_image "mongo:latest"
-load_static_image "rabbitmq:3.6.8"
+_pool_submit load_static_image "weaveworksdemos/front-end:0.3.12"
+_pool_submit load_static_image "weaveworksdemos/catalogue:0.3.5"
+_pool_submit load_static_image "weaveworksdemos/catalogue-db:0.3.0"
+_pool_submit load_static_image "weaveworksdemos/carts:0.4.8"
+_pool_submit load_static_image "weaveworksdemos/orders:0.4.7"
+_pool_submit load_static_image "weaveworksdemos/payment:0.4.3"
+_pool_submit load_static_image "weaveworksdemos/shipping:0.4.8"
+_pool_submit load_static_image "weaveworksdemos/user:0.4.7"
+_pool_submit load_static_image "weaveworksdemos/user-db:0.4.0"
+_pool_submit load_static_image "weaveworksdemos/queue-master:0.3.1"
+_pool_submit load_static_image "mongo:latest"
+_pool_submit load_static_image "rabbitmq:3.6.8"
 # Observability
-load_static_image "litmuschaos/chaos-exporter:1.13.3"
-load_static_image "prom/prometheus:v2.25.0"
-load_static_image "grafana/grafana:latest"
+_pool_submit load_static_image "litmuschaos/chaos-exporter:1.13.3"
+_pool_submit load_static_image "prom/prometheus:v2.25.0"
+_pool_submit load_static_image "grafana/grafana:latest"
 # MCP tools
-load_static_image "quay.io/containers/kubernetes_mcp_server:latest"
-load_static_image "agentcert/prometheus-mcp-server:latest"
-log_success "All sock-shop images loaded into minikube"
+_pool_submit load_static_image "quay.io/containers/kubernetes_mcp_server:latest"
+_pool_submit load_static_image "agentcert/prometheus-mcp-server:latest"
+
+# ── Step 4: Pull + load LiteLLM proxy image (overlapped with final sock-shop batch) ──
+LITELLM_IMAGE="$(read_env_value LITELLM_PROXY_IMAGE docker.io/litellm/litellm:v1.82.0-stable)"
+log_info "Pulling LiteLLM proxy image: ${LITELLM_IMAGE} (parallel with sock-shop)..."
+_pool_submit bash -c "docker pull '${LITELLM_IMAGE}' && minikube image load '${LITELLM_IMAGE}' \
+  && echo '[INFO]  Loaded: ${LITELLM_IMAGE}' || echo '[INFO]  LiteLLM image load failed — skipping'"
+
+_pool_drain
+[[ $_pool_fail -eq 0 ]] || log_info "Some optional sock-shop/LiteLLM images failed to load (non-fatal)"
+log_success "All sock-shop + LiteLLM images loaded into minikube"
 echo ""
 
-# ── Step 4: Pull + load LiteLLM proxy image + restart pod ─────────────────
-LITELLM_IMAGE="$(read_env_value LITELLM_PROXY_IMAGE docker.io/litellm/litellm:v1.82.0-stable)"
-log_info "Pulling LiteLLM proxy image: ${LITELLM_IMAGE}..."
-docker pull "${LITELLM_IMAGE}" || log_info "LiteLLM pull failed — skipping"
-minikube image load "${LITELLM_IMAGE}" || log_info "LiteLLM minikube load failed — skipping"
-log_success "Loaded: ${LITELLM_IMAGE}"
+# Restart litellm-proxy pod so it picks up the newly loaded image
 
 if kubectl get deployment litellm-proxy -n litellm >/dev/null 2>&1; then
   log_info "Restarting litellm-proxy deployment..."

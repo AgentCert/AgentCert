@@ -44,6 +44,11 @@ _CONTEXT_KEYS = (
 # Headers to strip (hop-by-hop)
 _HOP_HEADERS = frozenset(("host", "transfer-encoding"))
 
+# Thread-safe state shared across requests
+_CONTEXT_LOCK = Lock()
+_LAST_CONTEXT: dict = {}
+_LAST_TRACE_ID: str = ""
+
 
 def _load_ground_truth_metadata() -> tuple:
     """Read GROUND_TRUTH_JSON from the ConfigMap mount and decode it.
