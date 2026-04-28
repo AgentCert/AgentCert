@@ -47,6 +47,14 @@ sync_repo() {
   fi
   if [[ -d "${dir}/.git" ]]; then
     echo "[INFO] git pull ${dir} (branch: ${branch})"
+    # If the configured URL differs from the current remote, update it so
+    # forks / mirrors are used instead of the originally-cloned upstream.
+    local current_url
+    current_url=$(git -C "${dir}" remote get-url origin 2>/dev/null || echo "")
+    if [[ -n "${url}" && "${current_url}" != "${url}" ]]; then
+      echo "[INFO] Updating remote origin: ${current_url} → ${url}"
+      git -C "${dir}" remote set-url origin "${url}"
+    fi
     git -C "${dir}" fetch origin
     git -C "${dir}" checkout "${branch}" 2>/dev/null || true
     git -C "${dir}" reset --hard "origin/${branch}"

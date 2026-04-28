@@ -50,33 +50,6 @@ _LAST_CONTEXT: dict = {}
 _LAST_TRACE_ID: str = ""
 
 
-def _load_ground_truth_metadata() -> tuple:
-    """Read GROUND_TRUTH_JSON from the ConfigMap mount and decode it.
-
-    Returns (fault_names: list, expected_output: str | None).
-    The agent (flash-agent or any other) has no knowledge of this file.
-    Reading here keeps all experiment/evaluation context in the sidecar.
-    """
-    import base64
-    gt_b64 = ""
-    file_path = os.path.join(CONFIG_MOUNT, "GROUND_TRUTH_JSON")
-    try:
-        with open(file_path) as fh:
-            gt_b64 = fh.read().strip()
-    except (FileNotFoundError, IOError):
-        gt_b64 = os.environ.get("GROUND_TRUTH_JSON", "")
-    if not gt_b64:
-        return [], None
-    try:
-        gt_data = json.loads(base64.b64decode(gt_b64).decode("utf-8"))
-        fault_names = list(gt_data.keys())
-        expected_output = json.dumps(gt_data, ensure_ascii=False)
-        return fault_names, expected_output
-    except Exception as exc:
-        print(f"[agent-sidecar] Could not decode GROUND_TRUTH_JSON: {exc}", flush=True)
-        return [], None
-
-
 def _load_context() -> dict:
     """Read experiment context from ConfigMap mount with env-var fallback.
 
@@ -304,30 +277,6 @@ class ProxyHandler(BaseHTTPRequestHandler):
             # preserve it if already set by the agent.
             if context.get("agent_platform"):
                 metadata.setdefault("agent_platform", context["agent_platform"])
-
-            # Ground truth – metadata only for llm_analysis calls.
-            # The agent has zero awareness of fault names or expected output.
-            # The sidecar reads GROUND_TRUTH_JSON from the ConfigMap file
-            # (written by the GraphQL server at install time from the chaos hub)
-            # and stores it in Langfuse metadata for offline evaluation.
-            gen_name = metadata.get("generation_name", "")
-            if gen_name in ("llm-analysis", "llm_analysis"):
-                fault_names, expected_output = _load_ground_truth_metadata()
-                if fault_names:
-                    metadata["fault_names"] = fault_names
-                if expected_output is not None:
-                    metadata["expected_output"] = expected_output
-                if fault_names or expected_output is not None:
-                    # Top-level GT flag for crystal-clear identification
-                    # This makes it unmistakable in Langfuse UI and simple to filter
-                    metadata["is_ground_truth_data"] = True
-                    metadata["gt_block_type"] = "llm_analysis"
-                    
-                    # Explicit nested GT markers for backward compatibility and
-                    # filtering where provider metadata nests under requester_metadata
-                    metadata["gt_metadata_present"] = True
-                    metadata["gt_metadata_source"] = "GROUND_TRUTH_JSON"
-                    metadata["gt_metadata_version"] = "v1"
 
             return json.dumps(data).encode("utf-8")
         except (json.JSONDecodeError, ValueError):

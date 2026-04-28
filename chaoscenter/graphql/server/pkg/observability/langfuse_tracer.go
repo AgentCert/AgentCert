@@ -336,8 +336,7 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 		ftData, _ := groundTruth[fname].(map[string]interface{})
 
 		inputData := map[string]interface{}{
-			"fault_name":   fname,
-			"ground_truth": ftData,
+			"fault_name": fname,
 		}
 		metaData := map[string]interface{}{
 			"action":          "fault_injection",
