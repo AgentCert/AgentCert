@@ -261,6 +261,111 @@ func (t *LangfuseTracer) TraceExperimentObservation(ctx context.Context, details
 	return nil
 }
 
+// ExperimentContextForTrace holds agent/experiment identity fields that are
+// emitted as an "experiment_context" SPAN before all fault spans so the
+// certifier's metadata scan finds them before hitting the first "fault: *" span.
+type ExperimentContextForTrace struct {
+	AgentID        string
+	AgentName      string
+	AgentPlatform  string
+	ExperimentID   string
+	ExperimentName string
+	Namespace      string
+}
+
+// EmitFaultSpansForTrace posts one "fault: <name>" SPAN observation per fault to
+// Langfuse so the certifier's fault bucketing pipeline has deterministic anchors
+// with full ground truth. Called once per experiment run at experiment start.
+//
+// It first emits a single "experiment_context" SPAN carrying agent/experiment
+// identity at timestamp T, then emits fault spans at T+1s. This ordering
+// guarantees the certifier's chronological metadata scan finds agent_id,
+// agent_name, experiment_id, and run_id before it stops at the first fault span.
+//
+// traceID     — the agent trace ID (notifyID / UUID with dashes)
+// faultNames  — ordered list of fault names, e.g. ["pod-delete", "disk-fill"]
+// groundTruth — decoded map of fault name → ground truth data (from chaos hub YAML)
+// expCtx      — agent/experiment identity to embed in the experiment_context span
+func (t *LangfuseTracer) EmitFaultSpansForTrace(
+	ctx context.Context,
+	traceID string,
+	faultNames []string,
+	groundTruth map[string]interface{},
+	expCtx ExperimentContextForTrace,
+) {
+	if !t.IsEnabled() || traceID == "" || len(faultNames) == 0 {
+		return
+	}
+
+	base := time.Now().UTC()
+	// experiment_context span at T — certifier scans this BEFORE fault spans
+	ctxNow := base.Format("2006-01-02T15:04:05.000Z")
+	// fault spans at T+1s — guaranteed to sort after experiment_context
+	now := base.Add(time.Second).Format("2006-01-02T15:04:05.000Z")
+
+	// --- Emit experiment_context span first ---
+	ctxPayload := &agent_registry.LangfuseObservationPayload{
+		TraceID:   traceID,
+		Name:      "experiment_context",
+		Type:      "SPAN",
+		StartTime: &ctxNow,
+		EndTime:   &ctxNow,
+		Input:     map[string]interface{}{},
+		Output:    map[string]interface{}{"status": "context_recorded"},
+		Metadata: map[string]interface{}{
+			"agent_id":        expCtx.AgentID,
+			"agent_name":      expCtx.AgentName,
+			"agent_platform":  expCtx.AgentPlatform,
+			"experiment_id":   expCtx.ExperimentID,
+			"experiment_name": expCtx.ExperimentName,
+			"run_id":          traceID,
+			"namespace":       expCtx.Namespace,
+			"fault_names":     faultNames,
+		},
+	}
+	ctxCtx, ctxCancel := context.WithTimeout(ctx, 10*time.Second)
+	if err := t.client.CreateObservation(ctxCtx, ctxPayload); err != nil {
+		fmt.Printf("[Observability] Failed to emit experiment_context span for trace %s: %v\n", traceID, err)
+	}
+	ctxCancel()
+
+	for _, fname := range faultNames {
+		// ftData is the full ground truth for this fault as loaded from ground_truth.yaml.
+		// It already contains fault_description_goal_remediation, ideal_course_of_action,
+		// and ideal_tool_usage_trajectory — use it directly without decomposing.
+		ftData, _ := groundTruth[fname].(map[string]interface{})
+
+		inputData := map[string]interface{}{
+			"fault_name":   fname,
+			"ground_truth": ftData,
+		}
+		metaData := map[string]interface{}{
+			"action":          "fault_injection",
+			"fault_name":      fname,
+			"ground_truth":    ftData,
+			"llm_used":        false,
+			"tokens_consumed": 0,
+		}
+
+		payload := &agent_registry.LangfuseObservationPayload{
+			TraceID:   traceID,
+			Name:      "fault: " + fname,
+			Type:      "SPAN",
+			StartTime: &now,
+			EndTime:   &now,
+			Input:     inputData,
+			Output:    map[string]interface{}{"status": "injected"},
+			Metadata:  metaData,
+		}
+
+		obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		if err := t.client.CreateObservation(obsCtx, payload); err != nil {
+			fmt.Printf("[Observability] Failed to emit fault span '%s' for trace %s: %v\n", fname, traceID, err)
+		}
+		cancel()
+	}
+}
+
 // ScoreExperimentExecution logs a score for the experiment run.
 func (t *LangfuseTracer) ScoreExperimentExecution(ctx context.Context, details *ExperimentScoreDetails) error {
 	if !t.IsEnabled() {

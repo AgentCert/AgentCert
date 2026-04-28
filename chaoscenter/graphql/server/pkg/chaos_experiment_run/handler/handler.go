@@ -2261,6 +2261,34 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
 	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
 
+	// Emit "fault: <name>" SPAN observations to Langfuse for certifier fault bucketing.
+	// Also emits a preceding "experiment_context" SPAN carrying agent/experiment identity
+	// so the certifier's chronological metadata scan finds it before any fault span.
+	// This is a best-effort fire-and-forget: failures are logged but do not block the run.
+	go func(tid string, templates []v1alpha1.Template, expCtx observability.ExperimentContextForTrace) {
+		faultNames := ops.ExtractChaosEngineFaults(templates)
+		if len(faultNames) > 0 {
+			groundTruth := ops.LoadFaultGroundTruthsDecoded(faultNames)
+			if groundTruth == nil {
+				groundTruth = make(map[string]interface{})
+			}
+			lft := observability.GetLangfuseTracer()
+			lft.EmitFaultSpansForTrace(context.Background(), tid, faultNames, groundTruth, expCtx)
+		}
+	}(notifyID, workflowManifest.Spec.Templates, observability.ExperimentContextForTrace{
+		AgentID:        traceAgentID,
+		AgentName:      traceAgentName,
+		AgentPlatform:  traceAgentPlatform,
+		ExperimentID:   workflow.ExperimentID,
+		ExperimentName: workflow.Name,
+		Namespace: func() string {
+			if infra.InfraNamespace != nil {
+				return *infra.InfraNamespace
+			}
+			return ""
+		}(),
+	})
+
 	// Inject agentId as a workflow-level parameter for re-runs.
 	// Always ensure the parameter exists (even as empty string) so that
 	// {{workflow.parameters.agentId}} is resolvable by Argo.

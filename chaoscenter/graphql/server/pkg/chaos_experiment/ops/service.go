@@ -1760,6 +1760,31 @@ type chaosEngineManifest struct {
 	} `json:"spec"`
 }
 
+// ExtractChaosEngineFaults is the exported wrapper for use by other packages
+// (e.g. experiment run handler) that need fault names at run time.
+func ExtractChaosEngineFaults(templates []v1alpha1.Template) []string {
+	return extractChaosEngineFaults(templates)
+}
+
+// LoadFaultGroundTruthsDecoded is the exported wrapper that returns the decoded
+// ground truth map (fault name → data) rather than a base64 blob.
+// Used by the experiment run handler to emit fault: <name> spans to Langfuse.
+func LoadFaultGroundTruthsDecoded(faultNames []string) map[string]interface{} {
+	b64 := loadFaultGroundTruths(faultNames)
+	if b64 == "" {
+		return nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil
+	}
+	return result
+}
+
 // extractChaosEngineFaults scans Argo Workflow resource templates for embedded
 // ChaosEngine manifests and returns the deduplicated list of fault names from
 // spec.experiments[].name. This is generic — it works for any chaos hub category

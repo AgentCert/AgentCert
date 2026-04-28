@@ -329,7 +329,7 @@ def format_trace(trace: dict, obs: list, otel_attrs: dict, extra_scores: list) -
         if isinstance(inp, dict):
             namespace = inp.get("namespace")
 
-    return {
+    record = {
         "trace_id": trace.get("id"),
         "trace_name": trace.get("name"),
         "timestamp_utc": ts,
@@ -364,9 +364,25 @@ def format_trace(trace: dict, obs: list, otel_attrs: dict, extra_scores: list) -
         # ── Scores (cross-linked from OTEL trace) ──
         "scores": flatten_scores(all_scores),
         # ── Observations ──
-        "observations": format_observations(obs),
-        "observation_count": len(obs),
+        "fault_names": None,        # filled in below from obs scan
+        "observations": [],         # filled in below
+        "observation_count": 0,
     }
+
+    # Build formatted observations
+    formatted_obs = format_observations(obs)
+
+    # Extract fault_names from the first obs that carries it
+    fault_names: Optional[list] = None
+    for fo in formatted_obs:
+        if fo.get("fault_names"):
+            fault_names = fo["fault_names"]
+            break
+
+    record["fault_names"] = fault_names
+    record["observations"] = formatted_obs
+    record["observation_count"] = len(formatted_obs)
+    return record
 
 
 
@@ -383,6 +399,11 @@ def parse_args():
         help="Output JSON file path",
     )
     p.add_argument("--no-observations", action="store_true", help="Skip fetching observations")
+    p.add_argument(
+        "--certifier-output",
+        default="",
+        help="If set, also write a flat observations-only JSON array to this path (certifier input format)",
+    )
     return p.parse_args()
 
 
@@ -485,13 +506,24 @@ def main():
             f" | obs={r.get('observation_count', 0)}"
         )
 
-    # ── Write ──────────────────────────────────────────────────────────────────
+    # ── Write full records ─────────────────────────────────────────────────────
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(records, f, indent=2, ensure_ascii=False)
     total_obs = sum(r.get("observation_count", 0) for r in records)
     print(f"\n[OK] {len(records)} trace(s) / {total_obs} obs -> {out}")
+
+    # ── Write flat certifier input (observations-only array) ───────────────────
+    if args.certifier_output:
+        flat_obs: list = []
+        for r in records:
+            flat_obs.extend(r.get("observations") or [])
+        cert_out = Path(args.certifier_output)
+        cert_out.parent.mkdir(parents=True, exist_ok=True)
+        with open(cert_out, "w", encoding="utf-8") as f:
+            json.dump(flat_obs, f, indent=2, ensure_ascii=False)
+        print(f"[OK] {len(flat_obs)} flat obs (certifier input) -> {cert_out}")
 
 
 if __name__ == "__main__":

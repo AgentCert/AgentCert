@@ -38,11 +38,8 @@ _CONTEXT_KEYS = (
     "AGENT_NAME",
     "AGENT_ROLE",
     "AGENT_ID",
+    "AGENT_VERSION",
 )
-
-_CONTEXT_LOCK = Lock()
-_LAST_CONTEXT: dict[str, str] = {}
-_LAST_TRACE_ID: str = ""
 
 # Headers to strip (hop-by-hop)
 _HOP_HEADERS = frozenset(("host", "transfer-encoding"))
@@ -282,6 +279,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 metadata["experiment_id"] = context["experiment_id"]
             if context.get("experiment_run_id"):
                 metadata["experiment_run_id"] = context["experiment_run_id"]
+                # Alias expected by certifier fault bucketing pipeline
+                metadata["run_id"] = context["experiment_run_id"]
             if context.get("workflow_name"):
                 metadata["workflow_name"] = context["workflow_name"]
 
@@ -292,6 +291,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 metadata["agent_id"] = context["agent_id"]
             if "agent_name" in context:
                 metadata["agent_name"] = context["agent_name"]
+            if "agent_version" in context:
+                metadata["agent_version"] = context["agent_version"]
             if "agent_role" in context:
                 metadata.setdefault("agent_role", context["agent_role"])
             # agent_platform comes from the agent body (not sidecar context),
