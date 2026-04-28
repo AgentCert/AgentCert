@@ -56,3 +56,7 @@ output/
 docs/Trace_optimization_analysis.md
 docs/Code_change_impact_analysis.md
 "}{.container.args}{"\n"}{end} | grep -E install-application
+local-custom/config/.env
+local-custom/config/.env copy
+local-custom/config/copy.env.ank
+local-custom/config/copy.env.pqt
