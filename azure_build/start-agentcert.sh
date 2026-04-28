@@ -177,8 +177,10 @@ export LITMUS_AUTH_GRPC_ENDPOINT="localhost"
 export LITMUS_AUTH_GRPC_PORT="$(env_val LITMUS_AUTH_GRPC_PORT 3030)"
 export ADMIN_USERNAME="$(env_val ADMIN_USERNAME admin)"
 export ADMIN_PASSWORD="$(env_val ADMIN_PASSWORD litmus)"
-export REST_PORT="$(env_val REST_PORT 3000)"
-export GRPC_PORT="$(env_val GRPC_PORT 3030)"
+# All ports read from .env; AUTH_REST_PORT/AUTH_GRPC_PORT exported as REST_PORT/GRPC_PORT
+# because that is what the authentication binary reads via envconfig.
+export REST_PORT="$(env_val AUTH_REST_PORT 3000)"
+export GRPC_PORT="$(env_val AUTH_GRPC_PORT 3030)"
 export GQL_REST_PORT="$(env_val GQL_REST_PORT 8080)"
 export GQL_GRPC_PORT="$(env_val GQL_GRPC_PORT 8082)"
 

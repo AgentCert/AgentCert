@@ -50,17 +50,10 @@ func init() {
 	log.Printf("go version: %s", runtime.Version())
 	log.Printf("go os/arch: %s/%s", runtime.GOOS, runtime.GOARCH)
 
-	// Load .env files if they exist (for development/local deployment)
+	// Load .env from CWD if present (local dev convenience only).
+	// In production, start-agentcert.sh sets all env vars before launching
+	// this binary — no path probing needed or wanted.
 	_ = godotenv.Load()
-	// Try common workspace paths for local-custom config
-	for _, p := range []string{
-		"./local-custom/config/.env",
-		"../local-custom/config/.env",
-		"../../local-custom/config/.env",
-		"../../../local-custom/config/.env",
-	} {
-		_ = godotenv.Overload(p)
-	}
 
 	err := envconfig.Process("", &utils.Config)
 	if err != nil {
