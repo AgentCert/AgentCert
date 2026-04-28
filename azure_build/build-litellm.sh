@@ -86,4 +86,23 @@ upsert "LITELLM_PROFILE"     "${PROFILE}"
 upsert "LITELLM_MASTER_KEY"  "${LITELLM_MASTER_KEY}"
 
 echo "[OK] .env updated: LITELLM_PROXY_IMAGE=${IMAGE} LITELLM_PROFILE=${PROFILE}"
-echo "[DONE] LiteLLM .env sync complete (no cluster changes made)"
+
+# ── Push LiteLLM image to Docker Hub ──────────────────────────────────────────
+DH_USER=$(read_env_value "DOCKERHUB_USERNAME")
+DH_TOKEN=$(read_env_value "DOCKERHUB_TOKEN")
+PROXY_IMAGE="agentcert/agentcert-litellm-proxy"
+
+if [[ -z "${DH_USER}" || -z "${DH_TOKEN}" ]]; then
+  echo "[WARN] DOCKERHUB_USERNAME or DOCKERHUB_TOKEN not set in .env; skipping push"
+else
+  echo "[INFO] Pulling upstream image: ${IMAGE}"
+  docker pull "${IMAGE}"
+  docker tag "${IMAGE}" "${PROXY_IMAGE}:latest"
+  echo "${DH_TOKEN}" | docker login -u "${DH_USER}" --password-stdin
+  docker push "${PROXY_IMAGE}:latest"
+  docker logout >/dev/null 2>&1 || true
+  echo "[OK] Pushed ${PROXY_IMAGE}:latest to Docker Hub"
+  upsert "LITELLM_PROXY_IMAGE" "${PROXY_IMAGE}:latest"
+fi
+
+echo "[DONE] LiteLLM sync complete (no cluster changes made)"

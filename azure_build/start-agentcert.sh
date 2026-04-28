@@ -250,6 +250,61 @@ export BLIND_TRACES="$(env_val BLIND_TRACES yes)"
 ok "Environment variables set"
 
 # ============================================================================
+# Step 3b: Apply LiteLLM K8s ConfigMap + Secret + rollout restart
+# ============================================================================
+LITELLM_NS="litellm"
+LITELLM_DEPLOY="litellm-proxy"
+LITELLM_DIR="${AGENT_CHARTS_ROOT:-}/litellm"
+SERVER_NS="litmus-chaos"
+SERVER_DEPLOY="litmusportal-server"
+
+if ! command -v kubectl >/dev/null 2>&1; then
+    fail "kubectl not found; skipping LiteLLM K8s sync"
+elif [[ ! -d "${LITELLM_DIR}" ]]; then
+    fail "LiteLLM manifest dir not found: ${LITELLM_DIR} — skipping K8s sync"
+else
+    status "Applying LiteLLM namespace and configmap..."
+    kubectl apply -f "${LITELLM_DIR}/namespace.yaml"
+    sed "s/model_name: LITELLM_MODEL_NAME/model_name: ${AZURE_OPENAI_DEPLOYMENT}/g" \
+        "${LITELLM_DIR}/configmap.yaml" | kubectl apply -f -
+
+    status "Applying LiteLLM secret with keys from .env..."
+    AZURE_API_KEY="$(env_val AZURE_OPENAI_KEY)"
+    [[ -z "${AZURE_API_KEY}" ]] && AZURE_API_KEY="$(env_val AZURE_OPENAI_API_KEY)"
+    AZURE_MODEL="azure/${AZURE_OPENAI_DEPLOYMENT}"
+    kubectl -n "${LITELLM_NS}" create secret generic litellm-secrets \
+        --from-literal=AZURE_API_KEY="${AZURE_API_KEY}" \
+        --from-literal=AZURE_API_BASE="${AZURE_OPENAI_ENDPOINT}" \
+        --from-literal=AZURE_MODEL="${AZURE_MODEL}" \
+        --from-literal=AZURE_API_VERSION="${AZURE_OPENAI_API_VERSION}" \
+        --from-literal=OPENAI_API_KEY="${LITELLM_MASTER_KEY}" \
+        --from-literal=LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY}" \
+        --from-literal=LANGFUSE_PUBLIC_KEY="${LANGFUSE_PUBLIC_KEY}" \
+        --from-literal=LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY}" \
+        --from-literal=LANGFUSE_HOST="${LANGFUSE_HOST}" \
+        --dry-run=client -o yaml | kubectl apply -f -
+
+    status "Applying LiteLLM deployment and restarting pod..."
+    kubectl apply -f "${LITELLM_DIR}/deployment.yaml"
+    kubectl -n "${LITELLM_NS}" set image deployment/"${LITELLM_DEPLOY}" \
+        litellm="${LITELLM_PROXY_IMAGE}" >/dev/null
+    kubectl -n "${LITELLM_NS}" rollout restart deployment/"${LITELLM_DEPLOY}"
+    kubectl -n "${LITELLM_NS}" rollout status deployment/"${LITELLM_DEPLOY}" --timeout=180s
+    ok "LiteLLM restarted with fresh config and secrets"
+
+    # Sync master key + model into litmusportal-server if it is running
+    if kubectl get deployment "${SERVER_DEPLOY}" -n "${SERVER_NS}" >/dev/null 2>&1; then
+        OPENAI_BASE_URL="$(env_val OPENAI_BASE_URL http://litellm-proxy.litellm.svc.cluster.local:4000/v1)"
+        kubectl set env deployment/"${SERVER_DEPLOY}" -n "${SERVER_NS}" \
+            LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY}" \
+            OPENAI_API_KEY="${LITELLM_MASTER_KEY}" \
+            OPENAI_BASE_URL="${OPENAI_BASE_URL}" \
+            MODEL_ALIAS="${AZURE_OPENAI_DEPLOYMENT}" >/dev/null
+        ok "litmusportal-server env synced: LITELLM_MASTER_KEY MODEL_ALIAS OPENAI_BASE_URL"
+    fi
+fi
+
+# ============================================================================
 # Step 4: Start Authentication Service
 # ============================================================================
 status "Starting Authentication Service..."
