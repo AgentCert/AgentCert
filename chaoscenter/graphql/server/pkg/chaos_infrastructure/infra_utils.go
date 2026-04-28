@@ -20,11 +20,12 @@ type SubscriberConfigurations struct {
 }
 
 func GetEndpoint(host string) (string, error) {
-	// returns endpoint from env, if provided by user
+	// Priority 1: Use CHAOS_CENTER_UI_ENDPOINT if provided (via .env or manually set)
 	if utils.Config.ChaosCenterUiEndpoint != "" {
 		return utils.Config.ChaosCenterUiEndpoint + "/api/query", nil
 	}
 
+	// Priority 2: Fall back to Kubernetes service DNS (cluster mode)
 	return host + "/api/query", nil
 }
 
