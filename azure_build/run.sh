@@ -171,7 +171,7 @@ export WORKFLOW_HELPER_IMAGE_VERSION="3.0.0"
 
 # Install-agent image (used by service.go applyInstallAgentTemplateOverrides)
 export INSTALL_AGENT_IMAGE="agentcert/agentcert-install-agent:latest"
-export INSTALL_AGENT_IMAGE_PULL_POLICY="IfNotPresent"
+export INSTALL_AGENT_IMAGE_PULL_POLICY="Always"
 
 # MCP server images (used by infra namespace manifests)
 export KUBERNETES_MCP_SERVER_IMAGE="quay.io/containers/kubernetes_mcp_server:latest"

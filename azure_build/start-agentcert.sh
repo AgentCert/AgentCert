@@ -199,9 +199,9 @@ export WORKFLOW_HELPER_IMAGE_VERSION="$(env_val WORKFLOW_HELPER_IMAGE_VERSION 3.
 
 # Custom images -- updated by azure_build scripts after each Docker Hub push
 export INSTALL_AGENT_IMAGE="$(env_val INSTALL_AGENT_IMAGE agentcert/agentcert-install-agent:latest)"
-export INSTALL_AGENT_IMAGE_PULL_POLICY="$(env_val INSTALL_AGENT_IMAGE_PULL_POLICY IfNotPresent)"
+export INSTALL_AGENT_IMAGE_PULL_POLICY="$(env_val INSTALL_AGENT_IMAGE_PULL_POLICY Always)"
 export INSTALL_APPLICATION_IMAGE="$(env_val INSTALL_APPLICATION_IMAGE agentcert/agentcert-install-app:latest)"
-export INSTALL_APPLICATION_IMAGE_PULL_POLICY="$(env_val INSTALL_APPLICATION_IMAGE_PULL_POLICY IfNotPresent)"
+export INSTALL_APPLICATION_IMAGE_PULL_POLICY="$(env_val INSTALL_APPLICATION_IMAGE_PULL_POLICY Always)"
 export FLASH_AGENT_IMAGE="$(env_val FLASH_AGENT_IMAGE agentcert/agentcert-flash-agent:latest)"
 export AGENT_SIDECAR_IMAGE="$(env_val AGENT_SIDECAR_IMAGE agentcert/agent-sidecar:latest)"
 

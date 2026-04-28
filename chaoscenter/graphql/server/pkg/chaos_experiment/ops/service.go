@@ -1694,7 +1694,7 @@ func applyInstallAgentTemplateOverridesFallback(templates []v1alpha1.Template, e
 func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 	targetPullPolicy := strings.TrimSpace(utils.Config.InstallApplicationImagePullPolicy)
 	if targetPullPolicy == "" {
-		targetPullPolicy = string(corev1.PullIfNotPresent)
+		targetPullPolicy = string(corev1.PullAlways)
 	}
 
 	forcedSetArgs := []string{
@@ -1705,7 +1705,7 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 	switch corev1.PullPolicy(targetPullPolicy) {
 	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
 	default:
-		targetPullPolicy = string(corev1.PullIfNotPresent)
+		targetPullPolicy = string(corev1.PullAlways)
 	}
 
 	changed := false
