@@ -1557,14 +1557,14 @@ func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
 		targetPullPolicy = strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE_PULL_POLICY"))
 	}
 	if targetPullPolicy == "" {
-		targetPullPolicy = string(corev1.PullIfNotPresent)
+		targetPullPolicy = string(corev1.PullAlways)
 	}
 
 	// Guard against invalid values and keep behavior deterministic.
 	switch corev1.PullPolicy(targetPullPolicy) {
 	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
 	default:
-		targetPullPolicy = string(corev1.PullIfNotPresent)
+		targetPullPolicy = string(corev1.PullAlways)
 	}
 
 	// Try metadata-driven path
@@ -2012,7 +2012,7 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		// Pin the exact sidecar image that was built and loaded into minikube.
 		"--set", fmt.Sprintf("sidecar.image.repository=%s", sidecarImageRepo),
 		"--set", fmt.Sprintf("sidecar.image.tag=%s", sidecarImageTag),
-		"--set", "sidecar.image.pullPolicy=IfNotPresent",
+		"--set", "sidecar.image.pullPolicy=Always",
 	}
 
 	// Append ground truth --set only when the workflow contains ChaosEngine
