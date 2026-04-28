@@ -198,6 +198,10 @@ export LANGFUSE_HOST="https://us.cloud.langfuse.com"
 export LANGFUSE_PUBLIC_KEY="pk-lf-ba1081a9-7849-427f-8a1c-2a2ee06900c1"
 export LANGFUSE_SECRET_KEY="sk-lf-72694bd7-4a59-430d-b870-0183114c02fe"
 
+# Default Azure VM endpoint for subscriber callbacks.
+# If local-custom/config/.env defines CHAOS_CENTER_UI_ENDPOINT, it overrides this value.
+export CHAOS_CENTER_UI_ENDPOINT="http://100.104.32.37:8080"
+
 # Optional local overrides from .env (used for CHAOS_CENTER_UI_ENDPOINT, image tags, etc.)
 DOTENV_FILE="$SCRIPT_DIR/local-custom/config/.env"
 if [ -f "$DOTENV_FILE" ]; then
