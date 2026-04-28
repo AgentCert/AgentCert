@@ -2,6 +2,7 @@ package chaos_infrastructure
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -19,12 +20,35 @@ type SubscriberConfigurations struct {
 	TLSCert        string
 }
 
+func getOutboundIP() (string, error) {
+	// Auto-detect the outbound IP address (useful for Azure VMs and cloud deployments)
+	// This attempts to find the machine's IP address by connecting to an external address
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String(), nil
+}
+
 func GetEndpoint(host string) (string, error) {
-	// returns endpoint from env, if provided by user
+	// Priority 1: returns endpoint from env, if provided by user
 	if utils.Config.ChaosCenterUiEndpoint != "" {
 		return utils.Config.ChaosCenterUiEndpoint + "/api/query", nil
 	}
 
+	// Priority 2: Try to auto-detect outbound IP (for Azure VMs, cloud deployments)
+	outboundIP, err := getOutboundIP()
+	if err == nil && outboundIP != "" {
+		// Use the detected outbound IP address
+		log.Infof("Auto-detected outbound IP for SERVER_ADDR: %s", outboundIP)
+		return "http://" + outboundIP + ":8080/api/query", nil
+	}
+
+	// Priority 3: Fall back to Kubernetes service DNS (cluster mode)
+	log.Warnf("Could not auto-detect outbound IP, falling back to Kubernetes service: %s", host)
 	return host + "/api/query", nil
 }
 
