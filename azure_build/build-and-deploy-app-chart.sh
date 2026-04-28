@@ -192,9 +192,9 @@ update_agentcert_env() {
         warn "AgentCert .env not found at ${AGENTCERT_ENV_FILE}; skipping env update"
         return 0
     fi
-    info "Updating AgentCert .env with ${PRIMARY_IMAGE}"
-    upsert_env_value "INSTALL_APPLICATION_IMAGE" "$PRIMARY_IMAGE"
-    success "AgentCert .env updated: INSTALL_APPLICATION_IMAGE=${PRIMARY_IMAGE}"
+    info "Updating AgentCert .env with ${LATEST_IMAGE}"
+    upsert_env_value "INSTALL_APPLICATION_IMAGE" "$LATEST_IMAGE"
+    success "AgentCert .env updated: INSTALL_APPLICATION_IMAGE=${LATEST_IMAGE}"
 }
 
 show_result() {

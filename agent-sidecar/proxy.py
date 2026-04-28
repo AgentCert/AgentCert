@@ -273,15 +273,31 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if context.get("experiment_run_id"):
                 metadata["user_id"] = context["experiment_run_id"]
 
+            # Experiment identifiers — explicit top-level keys so they are
+            # visible directly on the observation in Langfuse (not buried under
+            # requester_metadata nesting added by LiteLLM).
+            if context.get("notify_id"):
+                metadata["notify_id"] = context["notify_id"]
+            if context.get("experiment_id"):
+                metadata["experiment_id"] = context["experiment_id"]
+            if context.get("experiment_run_id"):
+                metadata["experiment_run_id"] = context["experiment_run_id"]
+            if context.get("workflow_name"):
+                metadata["workflow_name"] = context["workflow_name"]
+
             # Agent identity for filtering/comparison across different agents.
             # Use explicit keys (not just context spread) so naming is always
             # consistent: agent_id, agent_name, agent_role (snake_case).
             if "agent_id" in context:
                 metadata["agent_id"] = context["agent_id"]
             if "agent_name" in context:
-                metadata.setdefault("agent_name", context["agent_name"])
+                metadata["agent_name"] = context["agent_name"]
             if "agent_role" in context:
                 metadata.setdefault("agent_role", context["agent_role"])
+            # agent_platform comes from the agent body (not sidecar context),
+            # preserve it if already set by the agent.
+            if context.get("agent_platform"):
+                metadata.setdefault("agent_platform", context["agent_platform"])
 
             # Ground truth – metadata only for llm_analysis calls.
             # The agent has zero awareness of fault names or expected output.

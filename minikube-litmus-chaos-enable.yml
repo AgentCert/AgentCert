@@ -684,7 +684,7 @@ metadata:
 data:
   containerRuntimeExecutor: k8sapi
   executor: |
-    imagePullPolicy: IfNotPresent
+    imagePullPolicy: Always
   instanceID: dd859ef4-cf22-43ec-b09e-eb59b3fe5f86
 ---
 apiVersion: v1
