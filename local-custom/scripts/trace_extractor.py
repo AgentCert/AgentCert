@@ -226,6 +226,7 @@ def format_observations(raw: list) -> list:
             "expected_output": rq.get("expected_output"),
             "is_ground_truth_data": rq.get("is_ground_truth_data", False),
             "agent_name": rq.get("agent") or rq.get("agent_name"),
+            "agent_version": rq.get("agent_version"),
             "mcp_server_type": rq.get("mcp_server_type"),
             "mcp_duration_sec": rq.get("mcp_duration_sec"),
             "pods_total": rq.get("pods_total"),
@@ -347,6 +348,7 @@ def format_trace(trace: dict, obs: list, otel_attrs: dict, extra_scores: list) -
         "workflow_name": meta.get("workflow_name") or trace.get("name"),
         "agent_name": meta.get("agent_name"),
         "agent_platform": meta.get("agent_platform"),
+        "agent_version": meta.get("agent_version"),
         "agent_id": meta.get("agent_id"),
         # ── Infra / context ──
         "namespace": namespace,
