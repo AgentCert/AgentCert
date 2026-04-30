@@ -75,7 +75,7 @@ spec:
 
             # Blind-observer mode: exclude chaos tools from MCP & LLM prompt
             - name: MCP_INCLUDE_CHAOS_TOOLS
-              value: {{ .Values.agent.config.MCP_INCLUDE_CHAOS_TOOLS | default "true" | quote }}
+              value: {{ .Values.agent.config.MCP_INCLUDE_CHAOS_TOOLS | default "false" | quote }}
 
 {{- range $env := .Values.agent.deploymentEnv }}
 {{- if not (and $.Values.sidecar.enabled (eq $env.name "OPENAI_BASE_URL")) }}
