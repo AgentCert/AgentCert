@@ -303,12 +303,6 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 		return
 	}
 
-	blind := BlindTracesEnabled()
-	aliases := make([]string, 0, len(faultNames))
-	for i := range faultNames {
-		aliases = append(aliases, fmt.Sprintf("F%d", i+1))
-	}
-
 	base := time.Now().UTC()
 	// experiment_context span at T — certifier scans this BEFORE fault spans
 	ctxNow := base.Format("2006-01-02T15:04:05.000Z")
@@ -333,9 +327,7 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 			"experiment_name": expCtx.ExperimentName,
 			"run_id":          traceID,
 			"namespace":       expCtx.Namespace,
-			// Keep real names for certifier/DS ground-truth comparison.
-			"fault_names":   faultNames,
-			"fault_aliases": aliases,
+			"fault_names":     faultNames,
 		},
 	}
 	ctxCtx, ctxCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -344,39 +336,31 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	}
 	ctxCancel()
 
-	for i, fname := range faultNames {
-		spanFault := fname
-		if blind {
-			spanFault = aliases[i]
-		}
-
+	for _, fname := range faultNames {
 		// ftData is the full ground truth for this fault as loaded from ground_truth.yaml.
 		// It already contains fault_description_goal_remediation, ideal_course_of_action,
 		// and ideal_tool_usage_trajectory — use it directly without decomposing.
 		ftData, _ := groundTruth[fname].(map[string]interface{})
 
 		inputData := map[string]interface{}{
-			"fault_name":        spanFault,
-			"fault_name_actual": fname,
-			"ground_truth":      ftData,
+			"fault_name":   fname,
+			"ground_truth": ftData,
 		}
-
 		metaData := map[string]interface{}{
 			"action":          "fault_injection",
-			"fault_name":      spanFault,
-			"fault_name_actual": fname,
+			"fault_name":      fname,
 			"ground_truth":    ftData,
 			"llm_used":        false,
 			"tokens_consumed": 0,
 			"attributes": map[string]interface{}{
 				"fault.target_namespace": expCtx.Namespace,
-				"fault.target_label":     spanFault,
+				"fault.target_label":     fname,
 			},
 		}
 
 		payload := &agent_registry.LangfuseObservationPayload{
 			TraceID:   traceID,
-			Name:      "fault: " + spanFault,
+			Name:      "fault: " + fname,
 			Type:      "SPAN",
 			StartTime: &now,
 			EndTime:   &now,
@@ -387,7 +371,7 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 
 		obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := t.client.CreateObservation(obsCtx, payload); err != nil {
-			fmt.Printf("[Observability] Failed to emit fault span '%s' for trace %s: %v\n", spanFault, traceID, err)
+			fmt.Printf("[Observability] Failed to emit fault span '%s' for trace %s: %v\n", fname, traceID, err)
 		}
 		cancel()
 	}

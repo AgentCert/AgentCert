@@ -226,6 +226,18 @@ class ProxyHandler(BaseHTTPRequestHandler):
                     f"notify_id={context.get('notify_id', '')}"
                 )
 
+            # Stable trace name. Without this, LiteLLM's Langfuse callback
+            # upserts the trace with name = generation name on every LLM call,
+            # which overwrites the server-side "experiment-run" upsert and the
+            # Langfuse UI ends up showing "litellm-acompletion".
+            #
+            # We always force the constant "experiment-run" (matches OTEL root
+            # span name in graphql server StartExperimentSpan and the Go
+            # Langfuse upsert in TraceExperimentExecution). This constant is
+            # blind-observer safe: it carries no fault, workflow, or agent
+            # identity that could leak ground truth into the LLM request.
+            metadata["trace_name"] = "experiment-run"
+
             # Named generation label – distinguishes routing and analysis calls.
             if "generation_name" not in metadata:
                 gen_name = _detect_generation_name(data.get("messages", []))
