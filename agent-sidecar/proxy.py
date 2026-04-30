@@ -31,10 +31,13 @@ INJECTION_MODE = (os.environ.get("INJECTION_MODE") or "openai-metadata").strip()
 CONFIG_MOUNT = os.environ.get("CONFIG_MOUNT", "/etc/agent/metadata")
 
 _CONTEXT_KEYS = (
+    # NOTIFY_ID is the only experiment identifier the sidecar needs — it
+    # becomes trace_id so all LLM calls for this run land in one Langfuse
+    # trace. EXPERIMENT_ID, EXPERIMENT_RUN_ID, WORKFLOW_NAME are deliberately
+    # excluded: injecting them into LLM metadata would correlate the observer
+    # to the experiment in the observability store, breaking blind-observer
+    # integrity. Experiment-correlation is handled server-side (GraphQL layer).
     "NOTIFY_ID",
-    "EXPERIMENT_ID",
-    "EXPERIMENT_RUN_ID",
-    "WORKFLOW_NAME",
     "AGENT_NAME",
     "AGENT_ROLE",
     "AGENT_ID",
@@ -79,21 +82,18 @@ def _load_context() -> dict:
         cached = dict(_LAST_CONTEXT)
         merged = dict(ctx)
 
-        same_experiment = False
-        if ctx.get("notify_id") and ctx.get("notify_id") == cached.get("notify_id"):
-            same_experiment = True
-        elif ctx.get("experiment_run_id") and ctx.get("experiment_run_id") == cached.get("experiment_run_id"):
-            same_experiment = True
-        elif ctx.get("experiment_id") and ctx.get("experiment_id") == cached.get("experiment_id"):
-            same_experiment = True
-        elif ctx.get("workflow_name") and ctx.get("workflow_name") == cached.get("workflow_name"):
-            same_experiment = True
+        # Merge cached context from the previous request if notify_id matches
+        # (guards against transient ConfigMap read races on long-running pods).
+        same_experiment = (
+            bool(ctx.get("notify_id"))
+            and ctx.get("notify_id") == cached.get("notify_id")
+        )
 
         if cached and same_experiment:
             for key, value in cached.items():
                 merged.setdefault(key, value)
 
-        if merged.get("notify_id") or merged.get("experiment_run_id"):
+        if merged.get("notify_id"):
             _LAST_CONTEXT.clear()
             _LAST_CONTEXT.update(merged)
 
@@ -111,8 +111,7 @@ def _remember_trace_id(trace_id: str, context: dict) -> None:
             print(
                 "[agent-sidecar] trace_id switched "
                 f"from={_LAST_TRACE_ID} to={trace_id} "
-                f"experiment_id={context.get('experiment_id', '')} "
-                f"experiment_run_id={context.get('experiment_run_id', '')}"
+                f"notify_id={context.get('notify_id', '')}"
             )
         _LAST_TRACE_ID = trace_id
 
@@ -216,7 +215,6 @@ class ProxyHandler(BaseHTTPRequestHandler):
             # pod-startup env vars and refer to an older experiment run.
             canonical_trace_id = (
                 context.get("notify_id")          # ConfigMap-fresh, highest priority
-                or context.get("experiment_run_id")
                 or metadata.get("trace_id")        # agent-provided fallback (may be stale)
             )
             if canonical_trace_id:
@@ -225,14 +223,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
             else:
                 print(
                     "[agent-sidecar] missing trace_id for LLM request "
-                    f"experiment_id={context.get('experiment_id', '')} "
-                    f"experiment_run_id={context.get('experiment_run_id', '')}"
+                    f"notify_id={context.get('notify_id', '')}"
                 )
-
-            # Human-readable trace name — always use fresh ConfigMap value so
-            # Langfuse shows the current experiment name, not a stale one.
-            if context.get("workflow_name"):
-                metadata["trace_name"] = context["workflow_name"]
 
             # Named generation label – distinguishes routing and analysis calls.
             if "generation_name" not in metadata:
@@ -240,27 +232,12 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 if gen_name:
                     metadata["generation_name"] = gen_name
 
-            # Langfuse session / user grouping.
-            # Use direct assignment (not setdefault) so the fresh ConfigMap
-            # value always wins over anything the agent already put in metadata.
-            if context.get("experiment_id"):
-                metadata["session_id"] = context["experiment_id"]
-            if context.get("experiment_run_id"):
-                metadata["user_id"] = context["experiment_run_id"]
-
-            # Experiment identifiers — explicit top-level keys so they are
-            # visible directly on the observation in Langfuse (not buried under
-            # requester_metadata nesting added by LiteLLM).
+            # notify_id is emitted as a top-level key so it is directly visible
+            # on the Langfuse observation (not buried under requester_metadata).
+            # Experiment-correlation identifiers (experiment_id, experiment_run_id,
+            # workflow_name) are NOT injected here — they are linked server-side.
             if context.get("notify_id"):
                 metadata["notify_id"] = context["notify_id"]
-            if context.get("experiment_id"):
-                metadata["experiment_id"] = context["experiment_id"]
-            if context.get("experiment_run_id"):
-                metadata["experiment_run_id"] = context["experiment_run_id"]
-                # Alias expected by certifier fault bucketing pipeline
-                metadata["run_id"] = context["experiment_run_id"]
-            if context.get("workflow_name"):
-                metadata["workflow_name"] = context["workflow_name"]
 
             # Agent identity for filtering/comparison across different agents.
             # Use explicit keys (not just context spread) so naming is always

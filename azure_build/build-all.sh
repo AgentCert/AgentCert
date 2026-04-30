@@ -66,6 +66,16 @@ sync_repo() {
 }
 
 if [[ "${GIT_SYNC}" == "true" ]]; then
+  # ── Clean previous clones so we always get a fresh pull ─────────────────────
+  echo "[INFO] Cleaning previous clones from /tmp before git sync..."
+  for dir in "${AGENTCERT_ROOT}" "${APP_CHARTS_ROOT}" "${AGENT_CHARTS_ROOT}" "${FLASH_AGENT_ROOT}"; do
+    if [[ -d "${dir}" ]]; then
+      echo "[INFO] Removing ${dir}"
+      rm -rf "${dir}"
+    fi
+  done
+  echo "[OK] Clean done"
+
   echo "[INFO] Syncing repos from git..."
   sync_repo "${AGENTCERT_ROOT}"    "${AGENTCERT_GIT_URL:-}"
   sync_repo "${APP_CHARTS_ROOT}"   "${APP_CHARTS_GIT_URL:-}"

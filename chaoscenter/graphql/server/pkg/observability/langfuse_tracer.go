@@ -300,15 +300,50 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 		return
 	}
 
+	// Ground truth and fault spans are emitted on a SEPARATE Langfuse trace
+	// ("gt-<traceID>") so they do not appear on the agent's LLM trace in the
+	// Langfuse UI. The separate trace carries the same experiment_id /
+	// experiment_run_id metadata so the certifier's _list_traces() filter
+	// finds it alongside the agent's LiteLLM trace and merges observations.
+	gtTraceID := "gt-" + traceID
+
+	// Upsert the GT trace record so Langfuse knows it exists and the certifier
+	// can discover it via its experiment_id/experiment_run_id metadata filter.
+	gtTraceStartMs := time.Now().UnixMilli()
+	gtTraceCtx, gtTraceCancel := context.WithTimeout(ctx, 10*time.Second)
+	if err := t.client.TraceExperiment(gtTraceCtx, &agent_registry.ExperimentTrace{
+		TraceID:   gtTraceID,
+		Name:      "gt: " + expCtx.ExperimentName,
+		SessionID: traceID, // links back to agent trace for human navigation
+		AgentID:   expCtx.AgentID,
+		UserID:    expCtx.AgentID,
+		Namespace: expCtx.Namespace,
+		StartTime: gtTraceStartMs,
+		Status:    "RUNNING",
+		Metadata: map[string]interface{}{
+			"experiment_id":     expCtx.ExperimentID,
+			"experiment_run_id": traceID, // matches experiment_run_id on agent trace
+			"notify_id":         traceID,
+			"agent_id":          expCtx.AgentID,
+			"agent_name":        expCtx.AgentName,
+			"agent_version":     expCtx.AgentVersion,
+			"namespace":         expCtx.Namespace,
+			"is_ground_truth":   true,
+		},
+	}); err != nil {
+		fmt.Printf("[Observability] Failed to upsert GT trace %s: %v\n", gtTraceID, err)
+	}
+	gtTraceCancel()
+
 	base := time.Now().UTC()
 	// experiment_context span at T — certifier scans this BEFORE fault spans
 	ctxNow := base.Format("2006-01-02T15:04:05.000Z")
 	// fault spans at T+1s — guaranteed to sort after experiment_context
 	now := base.Add(time.Second).Format("2006-01-02T15:04:05.000Z")
 
-	// --- Emit experiment_context span first ---
+	// --- Emit experiment_context span first (on GT trace) ---
 	ctxPayload := &agent_registry.LangfuseObservationPayload{
-		TraceID:   traceID,
+		TraceID:   gtTraceID,
 		Name:      "experiment_context",
 		Type:      "SPAN",
 		StartTime: &ctxNow,
@@ -329,7 +364,7 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	}
 	ctxCtx, ctxCancel := context.WithTimeout(ctx, 10*time.Second)
 	if err := t.client.CreateObservation(ctxCtx, ctxPayload); err != nil {
-		fmt.Printf("[Observability] Failed to emit experiment_context span for trace %s: %v\n", traceID, err)
+		fmt.Printf("[Observability] Failed to emit experiment_context span for GT trace %s: %v\n", gtTraceID, err)
 	}
 	ctxCancel()
 
@@ -356,7 +391,7 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 		}
 
 		payload := &agent_registry.LangfuseObservationPayload{
-			TraceID:   traceID,
+			TraceID:   gtTraceID,
 			Name:      "fault: " + fname,
 			Type:      "SPAN",
 			StartTime: &now,
@@ -368,7 +403,7 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 
 		obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := t.client.CreateObservation(obsCtx, payload); err != nil {
-			fmt.Printf("[Observability] Failed to emit fault span '%s' for trace %s: %v\n", fname, traceID, err)
+			fmt.Printf("[Observability] Failed to emit fault span '%s' for GT trace %s: %v\n", fname, gtTraceID, err)
 		}
 		cancel()
 	}

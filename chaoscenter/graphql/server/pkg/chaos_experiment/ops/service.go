@@ -2019,7 +2019,11 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", "agent.config.NOTIFY_ID={{workflow.labels.notify_id}}",
 		"--set", "agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}",
 		"--set", "agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}",
-		"--set", "agent.config.WORKFLOW_NAME={{workflow.labels.experiment_name}}",
+		// WORKFLOW_NAME is intentionally NOT injected into the agent ConfigMap.
+		// In LitmusChaos the experiment name IS the fault name (e.g. "pod-cpu-hog"),
+		// so writing it would let the agent read /etc/agent/metadata/WORKFLOW_NAME
+		// and trivially discover which fault is being injected — breaking the
+		// blind-observer certification model.
 		// Enforce blind-agent mode at install time so experiment runs do not rely
 		// on chart defaults or user-supplied values to hide chaos-specific MCP data.
 		"--set", "agent.config.MCP_INCLUDE_CHAOS_TOOLS=false",
@@ -2040,14 +2044,12 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", "sidecar.image.pullPolicy=Always",
 	}
 
-	// Append ground truth --set only when the workflow contains ChaosEngine
-	// templates with ground_truth.yaml files present in the chaos hub.
-	// The value is base64-encoded JSON so it passes through Helm --set safely.
+	// Ground truth is emitted directly to Langfuse via EmitFaultSpansForTrace
+	// (called in the experiment run handler). It must NOT be written into the
+	// agent ConfigMap because that would mount it onto the agent's filesystem,
+	// allowing the agent to read the answer key before analysis.
 	if groundTruthB64 != "" {
-		experimentSetArgs = append(experimentSetArgs,
-			"--set", fmt.Sprintf("agent.config.GROUND_TRUTH_JSON=%s", groundTruthB64),
-		)
-		logrus.WithField("faults", faultNames).Info("[Ground Truth] Injecting ground truth for faults")
+		logrus.WithField("faults", faultNames).Info("[Ground Truth] Ground truth loaded for Langfuse trace emission (not injected into agent ConfigMap)")
 	}
 
 	// isStaleSetArg returns true for --set values from previous runs that should
@@ -2068,6 +2070,7 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 			strings.HasPrefix(arg, "agent.config.PROM_MCP_URL=") ||
 			strings.HasPrefix(arg, "agent.config.CHAOS_NAMESPACE=") ||
 			strings.HasPrefix(arg, "agent.config.MODEL_ALIAS=") ||
+			// GROUND_TRUTH_JSON is no longer injected into agent ConfigMap — strip any stale value from old runs
 			strings.HasPrefix(arg, "agent.config.GROUND_TRUTH_JSON=") ||
 			strings.HasPrefix(arg, "sidecar.enabled=") ||
 			strings.HasPrefix(arg, "sidecar.injectionMode=") ||

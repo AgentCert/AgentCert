@@ -48,11 +48,12 @@ agent:
     #   --set agent.config.NOTIFY_ID={{workflow.labels.notify_id}}
     #   --set agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}
     #   --set agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}
-    #   --set agent.config.WORKFLOW_NAME={{workflow.labels.subject}}
+    # WORKFLOW_NAME is intentionally NOT injected: the experiment name is
+    # the fault name in LitmusChaos (e.g. "pod-cpu-hog"), so writing it to
+    # the ConfigMap would let the agent discover the injected fault type.
     NOTIFY_ID: ""
     EXPERIMENT_ID: ""
     EXPERIMENT_RUN_ID: ""
-    WORKFLOW_NAME: ""
 
   secret:
     LITELLM_MASTER_KEY: ""
@@ -68,8 +69,7 @@ agent:
       key: EXPERIMENT_ID
     - name: EXPERIMENT_RUN_ID
       key: EXPERIMENT_RUN_ID
-    - name: WORKFLOW_NAME
-      key: WORKFLOW_NAME
+    # WORKFLOW_NAME intentionally excluded — see agent.config comment above.
 
 # ── agent-sidecar: transparent metadata-injection proxy ──────────────
 # When enabled, a lightweight sidecar container intercepts agent→LiteLLM

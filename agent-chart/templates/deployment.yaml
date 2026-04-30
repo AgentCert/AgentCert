@@ -121,21 +121,11 @@ spec:
               value: {{ .Values.agent.name | quote }}
             - name: AGENT_ROLE
               value: {{ .Values.sidecar.agentRole | default "" | quote }}
-            - name: EXPERIMENT_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: EXPERIMENT_ID
-            - name: EXPERIMENT_RUN_ID
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: EXPERIMENT_RUN_ID
-            - name: WORKFLOW_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ .Values.agent.name }}-metadata
-                  key: WORKFLOW_NAME
+            # EXPERIMENT_ID, EXPERIMENT_RUN_ID, WORKFLOW_NAME are intentionally
+            # NOT passed as sidecar env vars.  The sidecar reads NOTIFY_ID from
+            # the ConfigMap mount to set trace_id; experiment-correlation
+            # identifiers are handled server-side (GraphQL layer) and must not
+            # be injected into LLM metadata to preserve blind-observer integrity.
             {{- if .Values.agentId }}
             - name: AGENT_ID
               value: {{ .Values.agentId | quote }}
