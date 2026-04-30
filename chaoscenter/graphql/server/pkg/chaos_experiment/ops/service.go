@@ -2019,11 +2019,19 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", "agent.config.NOTIFY_ID={{workflow.labels.notify_id}}",
 		"--set", "agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}",
 		"--set", "agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}",
-		// WORKFLOW_NAME is intentionally NOT injected into the agent ConfigMap.
-		// In LitmusChaos the experiment name IS the fault name (e.g. "pod-cpu-hog"),
-		// so writing it would let the agent read /etc/agent/metadata/WORKFLOW_NAME
-		// and trivially discover which fault is being injected — breaking the
-		// blind-observer certification model.
+		// WORKFLOW_NAME is the operator-typed experiment name (workflow.Labels
+		// ["experiment_name"], set in createChaosWorkflow). It flows into the
+		// agent-metadata ConfigMap so the agent-sidecar can mount it at
+		// /etc/agent/metadata/WORKFLOW_NAME and set Langfuse trace_name on every
+		// LLM call — without this, LiteLLM's Langfuse callback overwrites the
+		// trace title to "litellm-acompletion" on the first LLM request.
+		//
+		// In AgentCert flows the operator chooses experiment names that are
+		// distinct from fault names (faults come from the chaos hub), so this
+		// does not expose ground truth to the agent. The actual fault identity
+		// stays exclusively in the server-side Langfuse fault spans emitted by
+		// EmitFaultSpansForTrace and is never written to the agent ConfigMap.
+		"--set", "agent.config.WORKFLOW_NAME={{workflow.labels.experiment_name}}",
 		// Enforce blind-agent mode at install time so experiment runs do not rely
 		// on chart defaults or user-supplied values to hide chaos-specific MCP data.
 		"--set", "agent.config.MCP_INCLUDE_CHAOS_TOOLS=false",

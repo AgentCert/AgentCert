@@ -31,13 +31,18 @@ INJECTION_MODE = (os.environ.get("INJECTION_MODE") or "openai-metadata").strip()
 CONFIG_MOUNT = os.environ.get("CONFIG_MOUNT", "/etc/agent/metadata")
 
 _CONTEXT_KEYS = (
-    # NOTIFY_ID is the only experiment identifier the sidecar needs — it
-    # becomes trace_id so all LLM calls for this run land in one Langfuse
-    # trace. EXPERIMENT_ID, EXPERIMENT_RUN_ID, WORKFLOW_NAME are deliberately
-    # excluded: injecting them into LLM metadata would correlate the observer
-    # to the experiment in the observability store, breaking blind-observer
-    # integrity. Experiment-correlation is handled server-side (GraphQL layer).
+    # NOTIFY_ID is the only experiment identifier the sidecar needs for trace
+    # correlation — it becomes trace_id so all LLM calls for this run land in
+    # one Langfuse trace.
+    #
+    # WORKFLOW_NAME is read solely to populate Langfuse trace_name so the
+    # trace title in the UI matches what the operator typed (e.g.
+    # "agent-cert-exp"). It is NOT injected into the LLM messages array —
+    # only into extra_body.metadata.trace_name which is consumed by the
+    # LiteLLM Langfuse callback as observability data and never reaches the
+    # model. EXPERIMENT_ID and EXPERIMENT_RUN_ID remain excluded.
     "NOTIFY_ID",
+    "WORKFLOW_NAME",
     "AGENT_NAME",
     "AGENT_ROLE",
     "AGENT_ID",
@@ -227,16 +232,15 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 )
 
             # Stable trace name. Without this, LiteLLM's Langfuse callback
-            # upserts the trace with name = generation name on every LLM call,
-            # which overwrites the server-side "experiment-run" upsert and the
-            # Langfuse UI ends up showing "litellm-acompletion".
+            # upserts the trace with name = generation name on every LLM call
+            # ("litellm-acompletion"), which overwrites the experiment name
+            # the Go server set during initial trace upsert.
             #
-            # We always force the constant "experiment-run" (matches OTEL root
-            # span name in graphql server StartExperimentSpan and the Go
-            # Langfuse upsert in TraceExperimentExecution). This constant is
-            # blind-observer safe: it carries no fault, workflow, or agent
-            # identity that could leak ground truth into the LLM request.
-            metadata["trace_name"] = "experiment-run"
+            # We pull the experiment name from ConfigMap (workflow_name) so
+            # the Langfuse trace title in the UI matches the experiment name
+            # the operator typed. Falls back to a constant if unavailable.
+            workflow_name = context.get("workflow_name")
+            metadata["trace_name"] = workflow_name or "experiment-run"
 
             # Named generation label – distinguishes routing and analysis calls.
             if "generation_name" not in metadata:

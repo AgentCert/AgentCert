@@ -102,9 +102,7 @@ func (t *LangfuseTracer) TraceExperimentExecution(ctx context.Context, details *
 	now := time.Now()
 	trace := &agent_registry.ExperimentTrace{
 		TraceID:           details.TraceID,
-		// Keep root trace name aligned with OTEL StartExperimentSpan("experiment-run").
-		// Experiment/fault identity stays in metadata fields.
-		Name:              "experiment-run",
+		Name:              details.ExperimentName,
 		ExperimentID:      details.ExperimentID,
 		ExperimentName:    details.ExperimentName,
 		FaultName:         details.FaultName,
@@ -191,8 +189,7 @@ func (t *LangfuseTracer) CompleteExperimentExecution(ctx context.Context, traceI
 	defer updateCancel()
 	if err := t.client.TraceExperiment(updateCtx, &agent_registry.ExperimentTrace{
 		TraceID: traceID,
-		// Preserve canonical root trace name on completion upsert as well.
-		Name:    "experiment-run",
+		Name:    endDetails.ExperimentName,
 		Output: map[string]interface{}{
 			"status":       endDetails.Status,
 			"result":       endDetails.Result,
