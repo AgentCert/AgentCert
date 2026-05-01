@@ -1743,6 +1743,9 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 			attribute.String("agent.name", traceAgentName),
 			attribute.String("agent.platform_name", traceAgentPlatform),
 		}
+		// Stamp SLA contract at span creation so the certifier always finds it,
+		// regardless of which scoring code path completes the run later.
+		startAttrs = append(startAttrs, observability.LoadSLAFromEnv().Attributes()...)
 
 		// Long-running root span — ended later by scoreExperimentRun, appears LAST
 		spanCtx, _ := observability.StartExperimentSpan(ctx, notifyID, startAttrs...)

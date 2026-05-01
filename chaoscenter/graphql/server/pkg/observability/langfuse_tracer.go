@@ -325,6 +325,9 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 			"run_id":          traceID,
 			"namespace":       expCtx.Namespace,
 			"fault_names":     faultNames,
+			// SLA contract: mirrored here so the agent-trace data path
+			// also carries the certifier targets, even when OTEL is off.
+			"attributes": LoadSLAFromEnv().AsMetadata(),
 		},
 	}
 	ctxCtx, ctxCancel := context.WithTimeout(ctx, 10*time.Second)

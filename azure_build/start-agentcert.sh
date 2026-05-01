@@ -249,6 +249,11 @@ export OTEL_EXPORTER_OTLP_HEADERS="$(env_val AGENT_OTEL_EXPORTER_OTLP_HEADERS)"
 export PRE_CLEANUP_WAIT_SECONDS="$(env_val PRE_CLEANUP_WAIT_SECONDS 0)"
 export BLIND_TRACES="$(env_val BLIND_TRACES yes)"
 
+# SLA contract (org-wide defaults; per-experiment override comes via Argo annotation in Phase 2)
+export SLA_DETECT_SEC="$(env_val SLA_DETECT_SEC 60)"
+export SLA_MITIGATE_SEC="$(env_val SLA_MITIGATE_SEC 300)"
+export SLA_TOOL_CALL_SEC="$(env_val SLA_TOOL_CALL_SEC 30)"
+
 ok "Environment variables set"
 
 # ============================================================================

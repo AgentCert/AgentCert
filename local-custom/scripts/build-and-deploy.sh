@@ -261,7 +261,7 @@ sync_install_agent_env_from_dotenv() {
     fi
 
     print_section "Syncing install-agent env from .env to GraphQL deployment"
-    local install_agent_image install_agent_pull_policy pre_cleanup_wait_seconds agent_sidecar_image blind_traces k8s_mcp_url prom_mcp_url
+    local install_agent_image install_agent_pull_policy pre_cleanup_wait_seconds agent_sidecar_image blind_traces k8s_mcp_url prom_mcp_url sla_detect_sec sla_mitigate_sec sla_tool_call_sec
     install_agent_image=$(get_env_value "INSTALL_AGENT_IMAGE" "$env_file")
     install_agent_pull_policy=$(get_env_value "INSTALL_AGENT_IMAGE_PULL_POLICY" "$env_file")
     pre_cleanup_wait_seconds=$(get_env_value "PRE_CLEANUP_WAIT_SECONDS" "$env_file")
@@ -269,6 +269,9 @@ sync_install_agent_env_from_dotenv() {
     blind_traces=$(get_env_value "BLIND_TRACES" "$env_file")
     k8s_mcp_url=$(get_env_value "K8S_MCP_URL" "$env_file")
     prom_mcp_url=$(get_env_value "PROM_MCP_URL" "$env_file")
+    sla_detect_sec=$(get_env_value "SLA_DETECT_SEC" "$env_file")
+    sla_mitigate_sec=$(get_env_value "SLA_MITIGATE_SEC" "$env_file")
+    sla_tool_call_sec=$(get_env_value "SLA_TOOL_CALL_SEC" "$env_file")
 
     if [ -z "$install_agent_image" ] && [ -z "$install_agent_pull_policy" ] && [ -z "$pre_cleanup_wait_seconds" ] && [ -z "$agent_sidecar_image" ]; then
         print_info "INSTALL_AGENT_IMAGE* not set in .env; skipping deployment env update"
@@ -298,23 +301,29 @@ sync_install_agent_env_from_dotenv() {
     [ -n "$blind_traces" ] && set_env_args+=("BLIND_TRACES=$blind_traces")
     [ -n "$k8s_mcp_url" ] && set_env_args+=("K8S_MCP_URL=$k8s_mcp_url")
     [ -n "$prom_mcp_url" ] && set_env_args+=("PROM_MCP_URL=$prom_mcp_url")
+    [ -n "$sla_detect_sec" ] && set_env_args+=("SLA_DETECT_SEC=$sla_detect_sec")
+    [ -n "$sla_mitigate_sec" ] && set_env_args+=("SLA_MITIGATE_SEC=$sla_mitigate_sec")
+    [ -n "$sla_tool_call_sec" ] && set_env_args+=("SLA_TOOL_CALL_SEC=$sla_tool_call_sec")
 
     kubectl set env "${set_env_args[@]}" >/dev/null
-    print_success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE* AGENT_SIDECAR_IMAGE PRE_CLEANUP_WAIT_SECONDS BLIND_TRACES K8S_MCP_URL PROM_MCP_URL"
+    print_success "Updated litmusportal-server env: INSTALL_AGENT_IMAGE* AGENT_SIDECAR_IMAGE PRE_CLEANUP_WAIT_SECONDS BLIND_TRACES K8S_MCP_URL PROM_MCP_URL SLA_*"
 }
 
 sync_mongo_env_from_wsl() {
     print_section "Syncing MongoDB env from local WSL"
 
-    local mongo_user mongo_pass mongo_auth_source mongo_host db_server
+    local mongo_user mongo_pass mongo_auth_source mongo_host mongo_port mongo_db db_server
     mongo_user=$(get_env_value "MONGODB_USERNAME" "$LOCAL_ENV_FILE")
     mongo_pass=$(get_env_value "MONGODB_PASSWORD" "$LOCAL_ENV_FILE")
     mongo_auth_source=$(get_env_value "MONGODB_AUTH_SOURCE" "$LOCAL_ENV_FILE")
+    mongo_port=$(get_env_value "MONGODB_PORT" "$LOCAL_ENV_FILE")
+    mongo_db=$(get_env_value "MONGODB_DB_NAME" "$LOCAL_ENV_FILE")
     mongo_host=$(get_minikube_host_ip)
 
     [ -z "$mongo_user" ] && mongo_user="root"
     [ -z "$mongo_pass" ] && mongo_pass="1234"
     [ -z "$mongo_auth_source" ] && mongo_auth_source="admin"
+    [ -z "$mongo_port" ] && mongo_port="27017"
 
     if [ -z "$mongo_host" ]; then
         mongo_host=$(get_env_value "MONGODB_HOST" "$LOCAL_ENV_FILE")
@@ -325,7 +334,7 @@ sync_mongo_env_from_wsl() {
         return 0
     fi
 
-    db_server="mongodb://${mongo_user}:${mongo_pass}@${mongo_host}:27017/${mongo_auth_source}"
+    db_server="mongodb://${mongo_user}:${mongo_pass}@${mongo_host}:${mongo_port}/${mongo_auth_source}"
 
     if kubectl -n "$NAMESPACE" get configmap litmus-portal-admin-config &>/dev/null; then
         kubectl -n "$NAMESPACE" patch configmap litmus-portal-admin-config --type merge \

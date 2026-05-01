@@ -63,6 +63,9 @@ K8S_MCP_URL="$(read_env_value K8S_MCP_URL http://kubernetes-mcp-server.litmus-ex
 PROM_MCP_URL="$(read_env_value PROM_MCP_URL http://prometheus-mcp-server.litmus-exp.svc.cluster.local:9090/mcp)"
 CHAOS_NAMESPACE="$(read_env_value CHAOS_NAMESPACE litmus-exp)"
 PRE_CLEANUP_WAIT="$(read_env_value PRE_CLEANUP_WAIT_SECONDS 0)"
+SLA_DETECT_SEC="$(read_env_value SLA_DETECT_SEC "")"
+SLA_MITIGATE_SEC="$(read_env_value SLA_MITIGATE_SEC "")"
+SLA_TOOL_CALL_SEC="$(read_env_value SLA_TOOL_CALL_SEC "")"
 
 echo ""
 echo -e "${CYAN}============================================${NC}"
@@ -109,12 +112,14 @@ load_image() {
   repo=$(echo "${image}" | cut -d':' -f1)
   docker tag "${image}" "${repo}:latest"
 
-  log_info "Cleaning old ${grep_name} ci-* images from minikube..."
+  log_info "Cleaning old ${grep_name} images from minikube..."
+  # Remove ALL old tags for this image (ci-*, latest, dev, etc.) except the one we're about to load
   minikube image ls 2>/dev/null \
-    | grep "${grep_name}:ci-" \
-    | grep -v "${tag}" \
-    | awk '{print $1}' \
+    | grep "${grep_name}:" \
+    | grep -v ":${tag}$" \
     | xargs -r minikube image rm 2>/dev/null || true
+  # Also explicitly remove the current tag so minikube doesn't serve a stale cached layer
+  minikube image rm "${repo}:${tag}" 2>/dev/null || true
   log_success "Old minikube images cleaned"
 
   log_info "Loading ${image} into minikube..."
@@ -229,19 +234,25 @@ if ! kubectl get deployment "${SERVER_DEPLOYMENT}" -n "${SERVER_NAMESPACE}" >/de
 fi
 
 log_info "Syncing litmusportal-server env vars..."
-kubectl set env deployment/"${SERVER_DEPLOYMENT}" -n "${SERVER_NAMESPACE}" \
-  INSTALL_AGENT_IMAGE="${INSTALL_AGENT_IMAGE}" \
-  INSTALL_APPLICATION_IMAGE="${INSTALL_APP_IMAGE}" \
-  FLASH_AGENT_IMAGE="${FLASH_AGENT_IMAGE}" \
-  AGENT_SIDECAR_IMAGE="${AGENT_SIDECAR_IMAGE}" \
-  LITELLM_MASTER_KEY="${LITELLM_MASTER_KEY}" \
-  OPENAI_API_KEY="${OPENAI_API_KEY}" \
-  OPENAI_BASE_URL="${OPENAI_BASE_URL}" \
-  MODEL_ALIAS="${MODEL_ALIAS}" \
-  K8S_MCP_URL="${K8S_MCP_URL}" \
-  PROM_MCP_URL="${PROM_MCP_URL}" \
-  CHAOS_NAMESPACE="${CHAOS_NAMESPACE}" \
-  PRE_CLEANUP_WAIT_SECONDS="${PRE_CLEANUP_WAIT}" >/dev/null
+set_env_args=("deployment/${SERVER_DEPLOYMENT}" "-n" "${SERVER_NAMESPACE}")
+set_env_args+=(
+  "INSTALL_AGENT_IMAGE=${INSTALL_AGENT_IMAGE}"
+  "INSTALL_APPLICATION_IMAGE=${INSTALL_APP_IMAGE}"
+  "FLASH_AGENT_IMAGE=${FLASH_AGENT_IMAGE}"
+  "AGENT_SIDECAR_IMAGE=${AGENT_SIDECAR_IMAGE}"
+  "LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}"
+  "OPENAI_API_KEY=${OPENAI_API_KEY}"
+  "OPENAI_BASE_URL=${OPENAI_BASE_URL}"
+  "MODEL_ALIAS=${MODEL_ALIAS}"
+  "K8S_MCP_URL=${K8S_MCP_URL}"
+  "PROM_MCP_URL=${PROM_MCP_URL}"
+  "CHAOS_NAMESPACE=${CHAOS_NAMESPACE}"
+  "PRE_CLEANUP_WAIT_SECONDS=${PRE_CLEANUP_WAIT}"
+)
+[ -n "${SLA_DETECT_SEC}" ]    && set_env_args+=("SLA_DETECT_SEC=${SLA_DETECT_SEC}")
+[ -n "${SLA_MITIGATE_SEC}" ]  && set_env_args+=("SLA_MITIGATE_SEC=${SLA_MITIGATE_SEC}")
+[ -n "${SLA_TOOL_CALL_SEC}" ] && set_env_args+=("SLA_TOOL_CALL_SEC=${SLA_TOOL_CALL_SEC}")
+kubectl set env "${set_env_args[@]}" >/dev/null
 
 log_info "Rolling out ${SERVER_DEPLOYMENT}..."
 kubectl rollout status deployment/"${SERVER_DEPLOYMENT}" -n "${SERVER_NAMESPACE}" --timeout=120s
