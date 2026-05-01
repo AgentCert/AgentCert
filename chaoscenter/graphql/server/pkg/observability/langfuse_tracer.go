@@ -276,6 +276,17 @@ type ExperimentContextForTrace struct {
 	Namespace      string
 }
 
+// FaultDetail captures the per-fault target metadata needed by the certifier
+// fault bucketer.  Populated from the ChaosEngine manifest in the workflow
+// templates by chaos_experiment/ops.ExtractChaosEngineFaultDetails and
+// forwarded to EmitFaultSpansForTrace.
+type FaultDetail struct {
+	Name            string
+	TargetNamespace string
+	TargetLabel     string
+	TargetKind      string
+}
+
 // EmitFaultSpansForTrace posts one "fault: <name>" SPAN observation per fault to
 // Langfuse so the certifier's fault bucketing pipeline has deterministic anchors
 // with full ground truth. Called once per experiment run at experiment start.
@@ -285,18 +296,44 @@ type ExperimentContextForTrace struct {
 // guarantees the certifier's chronological metadata scan finds agent_id,
 // agent_name, experiment_id, and run_id before it stops at the first fault span.
 //
-// traceID     — the agent trace ID (notifyID / UUID with dashes)
-// faultNames  — ordered list of fault names, e.g. ["pod-delete", "disk-fill"]
-// groundTruth — decoded map of fault name → ground truth data (from chaos hub YAML)
-// expCtx      — agent/experiment identity to embed in the experiment_context span
+// traceID      — the agent trace ID (notifyID / UUID with dashes)
+// faultDetails — ordered list of {name, target_namespace, target_label, target_kind}
+//                extracted from the ChaosEngine manifests in workflow templates.
+// groundTruth  — decoded map of fault name → ground truth data (from chaos hub YAML)
+// expCtx       — agent/experiment identity to embed in the experiment_context span
+//
+// IMPORTANT — fault names are always emitted in plain form on these spans:
+//
+//	1. The flash-agent never consumes its own emitted Langfuse spans; it only
+//	   sees data returned from MCP tool calls. Its LLM input is sanitised by a
+//	   3-pass redactor (gateway.py:_sanitize_leakage_terms) regardless of what
+//	   appears in trace metadata. So plain fault names here are not leakage.
+//	2. The Argo workflow step names (pod-cpu-hog, disk-fill, …) already expose
+//	   fault identity at the workflow level, so aliasing only the Langfuse spans
+//	   gives no real privacy.
+//	3. The certifier's fault_bucketing.py keys on the real name to attach the
+//	   correct ground_truth.yaml — aliases would break per-fault scoring.
+//
+// The fault span metadata.attributes block follows the contract consumed by
+// certifier/fault_analyzer/scripts/fault_bucketing.py:
+//
+//	fault.name                 real fault name
+//	fault.target_namespace     real ChaosEngine appinfo.appns
+//	fault.target_label         real ChaosEngine appinfo.applabel
+//	fault.target_kind          real ChaosEngine appinfo.appkind
+//	fault.status               "injected"  (set when this span is the bucket anchor)
+//	fault.injection_timestamp  span StartTime ISO-8601
+//	fault.ground_truth.sla.detect_sec    \  flat per-fault SLA so the certifier
+//	fault.ground_truth.sla.mitigate_sec   |  scorecard can score each fault against
+//	fault.ground_truth.sla.max_tool_calls /  its own bar without nested digging
 func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	ctx context.Context,
 	traceID string,
-	faultNames []string,
+	faultDetails []FaultDetail,
 	groundTruth map[string]interface{},
 	expCtx ExperimentContextForTrace,
 ) {
-	if !t.IsEnabled() || traceID == "" || len(faultNames) == 0 {
+	if !t.IsEnabled() || traceID == "" || len(faultDetails) == 0 {
 		return
 	}
 
@@ -305,6 +342,11 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	ctxNow := base.Format("2006-01-02T15:04:05.000Z")
 	// fault spans at T+1s — guaranteed to sort after experiment_context
 	now := base.Add(time.Second).Format("2006-01-02T15:04:05.000Z")
+
+	faultNames := make([]string, 0, len(faultDetails))
+	for _, fd := range faultDetails {
+		faultNames = append(faultNames, fd.Name)
+	}
 
 	// --- Emit experiment_context span first (on agent trace) ---
 	ctxPayload := &agent_registry.LangfuseObservationPayload{
@@ -336,11 +378,53 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	}
 	ctxCancel()
 
-	for _, fname := range faultNames {
+	for _, fd := range faultDetails {
+		fname := fd.Name
+
 		// ftData is the full ground truth for this fault as loaded from ground_truth.yaml.
 		// It already contains fault_description_goal_remediation, ideal_course_of_action,
-		// and ideal_tool_usage_trajectory — use it directly without decomposing.
+		// ideal_tool_usage_trajectory and (per-fault) sla — use it directly.
 		ftData, _ := groundTruth[fname].(map[string]interface{})
+
+		// Derive flat per-fault SLA keys for the certifier's attribute reader.
+		// These mirror what the experiment_context span carries globally so the
+		// scorecard can pick the per-fault target without nested traversal.
+		var slaDetect, slaMitigate, slaToolCalls interface{}
+		if ftData != nil {
+			if slaBlock, ok := ftData["sla"].(map[string]interface{}); ok {
+				if d, ok := slaBlock["time_to_detect"].(map[string]interface{}); ok {
+					slaDetect = d["threshold"]
+				}
+				if m, ok := slaBlock["time_to_mitigate"].(map[string]interface{}); ok {
+					slaMitigate = m["threshold"]
+				}
+				if tc, ok := slaBlock["max_tool_calls"].(map[string]interface{}); ok {
+					slaToolCalls = tc["threshold"]
+				}
+			}
+		}
+
+		// Always use the real fault name on the span. fault_bucketing.py keys
+		// on this exact string to attach the correct ground_truth bundle.
+		spanName := "fault: " + fname
+
+		spanAttrs := map[string]interface{}{
+			"fault.name":                fname,
+			"fault.status":              "injected",
+			"fault.injection_timestamp": now,
+			"fault.target_namespace":    fd.TargetNamespace,
+			"fault.target_label":        fd.TargetLabel,
+			"fault.target_kind":         fd.TargetKind,
+		}
+		if slaDetect != nil {
+			spanAttrs["fault.ground_truth.sla.detect_sec"] = slaDetect
+		}
+		if slaMitigate != nil {
+			spanAttrs["fault.ground_truth.sla.mitigate_sec"] = slaMitigate
+		}
+		if slaToolCalls != nil {
+			spanAttrs["fault.ground_truth.sla.max_tool_calls"] = slaToolCalls
+		}
 
 		inputData := map[string]interface{}{
 			"fault_name":   fname,
@@ -352,15 +436,12 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 			"ground_truth":    ftData,
 			"llm_used":        false,
 			"tokens_consumed": 0,
-			"attributes": map[string]interface{}{
-				"fault.target_namespace": expCtx.Namespace,
-				"fault.target_label":     fname,
-			},
+			"attributes":      spanAttrs,
 		}
 
 		payload := &agent_registry.LangfuseObservationPayload{
 			TraceID:   traceID,
-			Name:      "fault: " + fname,
+			Name:      spanName,
 			Type:      "SPAN",
 			StartTime: &now,
 			EndTime:   &now,
@@ -371,7 +452,7 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 
 		obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := t.client.CreateObservation(obsCtx, payload); err != nil {
-			fmt.Printf("[Observability] Failed to emit fault span '%s' for trace %s: %v\n", fname, traceID, err)
+			fmt.Printf("[Observability] Failed to emit fault span '%s' for trace %s: %v\n", spanName, traceID, err)
 		}
 		cancel()
 	}

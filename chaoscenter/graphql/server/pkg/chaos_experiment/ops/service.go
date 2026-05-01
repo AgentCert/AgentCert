@@ -19,6 +19,7 @@ import (
 	agentRegistry "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbChaosExperimentRun "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment_run"
@@ -1754,6 +1755,11 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 type chaosEngineManifest struct {
 	Kind string `json:"kind"`
 	Spec struct {
+		Appinfo struct {
+			Appns    string `json:"appns"`
+			Applabel string `json:"applabel"`
+			AppKind  string `json:"appkind"`
+		} `json:"appinfo"`
 		Experiments []struct {
 			Name string `json:"name"`
 		} `json:"experiments"`
@@ -1834,6 +1840,60 @@ func extractChaosEngineFaults(templates []v1alpha1.Template) []string {
 		}
 	}
 	return faults
+}
+
+// ExtractChaosEngineFaultDetails returns per-fault target metadata (namespace,
+// label, kind) for every ChaosEngine embedded in the Argo Workflow templates.
+// The certifier consumes these via the "fault: <name>" Langfuse spans to
+// bucket agent activity per fault.  Order matches workflow execution order
+// (and lines up with the F1/F2/... blind aliases in the OTEL emission path).
+func ExtractChaosEngineFaultDetails(templates []v1alpha1.Template) []observability.FaultDetail {
+	seen := make(map[string]struct{})
+	var details []observability.FaultDetail
+
+	tryExtract := func(raw string) {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return
+		}
+		raw = strings.ReplaceAll(raw, "{{", "")
+		raw = strings.ReplaceAll(raw, "}}", "")
+		var engine chaosEngineManifest
+		if err := yaml.Unmarshal([]byte(raw), &engine); err != nil {
+			return
+		}
+		if !strings.EqualFold(engine.Kind, "ChaosEngine") {
+			return
+		}
+		for _, exp := range engine.Spec.Experiments {
+			name := strings.TrimSpace(exp.Name)
+			if name == "" {
+				continue
+			}
+			if _, exists := seen[name]; exists {
+				continue
+			}
+			seen[name] = struct{}{}
+			details = append(details, observability.FaultDetail{
+				Name:            name,
+				TargetNamespace: strings.TrimSpace(engine.Spec.Appinfo.Appns),
+				TargetLabel:     strings.TrimSpace(engine.Spec.Appinfo.Applabel),
+				TargetKind:      strings.TrimSpace(engine.Spec.Appinfo.AppKind),
+			})
+		}
+	}
+
+	for _, t := range templates {
+		if t.Resource != nil && strings.TrimSpace(t.Resource.Manifest) != "" {
+			tryExtract(t.Resource.Manifest)
+		}
+		for _, artifact := range t.Inputs.Artifacts {
+			if artifact.Raw != nil && strings.TrimSpace(artifact.Raw.Data) != "" {
+				tryExtract(artifact.Raw.Data)
+			}
+		}
+	}
+	return details
 }
 
 // loadFaultGroundTruths searches the chaos hub filesystem for ground_truth.yaml
