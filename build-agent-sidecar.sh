@@ -47,8 +47,12 @@ docker tag "${IMAGE}" agentcert/agent-sidecar:dev
 echo "[OK] Docker build completed"
 
 echo "[INFO] Cleaning up old images from minikube..."
-# Remove old ci-* tags from minikube (keep only latest, dev, and the new one)
+# Remove old ci-* tags from minikube (keep only latest, dev, and the new one will be loaded next)
 minikube image ls | grep "agent-sidecar:ci-" | grep -v "${IMAGE_TAG}" | awk '{print $1}' | xargs -r minikube image rm 2>/dev/null || true
+# Also remove the existing :latest and :dev so the freshly built image is unambiguously loaded
+# (avoids any chance of a cached layer / stale digest sticking around in containerd).
+minikube image rm agentcert/agent-sidecar:latest 2>/dev/null || true
+minikube image rm agentcert/agent-sidecar:dev    2>/dev/null || true
 echo "[OK] Old minikube images cleaned"
 
 echo "[INFO] Loading into minikube..."
