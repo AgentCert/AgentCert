@@ -269,6 +269,11 @@ for workload_type in deployment cronjob; do
     kubectl -n "${FA_NAMESPACE}" set image "${workload_type}/${workload_name}" \
       agent="${FLASH_AGENT_IMAGE}" >/dev/null || true
     if [[ "${workload_type}" == "deployment" ]]; then
+      # Force a rollout even when the tag is ':latest' (set image is a no-op
+      # when the tag string is unchanged but the underlying image has been
+      # replaced in minikube). This guarantees the new image is picked up.
+      log_info "Forcing rollout restart of ${FA_NAMESPACE}/${workload_name}..."
+      kubectl -n "${FA_NAMESPACE}" rollout restart "deployment/${workload_name}" >/dev/null 2>&1 || true
       kubectl -n "${FA_NAMESPACE}" rollout status "deployment/${workload_name}" \
         --timeout=120s >/dev/null || true
     fi
@@ -280,6 +285,82 @@ done
 echo ""
 
 docker logout >/dev/null 2>&1 || true
+
+# ── Step 7: Post-deploy cluster sync + verify ─────────────────────────────
+# Mutating actions first (helm upgrade sock-shop, restart prometheus),
+# then verification at the end so the report reflects post-action state.
+if kubectl get ns monitoring >/dev/null 2>&1; then
+  echo ""
+  log_info "Post-deploy cluster sync..."
+
+  # ── Action 1: helm upgrade sock-shop ──────────────────────────────────
+  # If a helm release of sock-shop exists, upgrade it so the new chart
+  # (cadvisor + KSM scrape jobs, KSM Deployment) reaches the cluster
+  # immediately rather than waiting for the next experiment to re-run
+  # install-app.
+  if command -v helm >/dev/null 2>&1; then
+    SOCKSHOP_RELEASE=$(helm list -A 2>/dev/null | awk '$1=="sock-shop"{print $1; exit}')
+    SOCKSHOP_NS=$(helm list -A 2>/dev/null | awk '$1=="sock-shop"{print $2; exit}')
+    SOCKSHOP_CHART_DIR=""
+    for cand in /tmp/agentcert-build/app-charts/charts/sock-shop \
+                /mnt/d/Studies/app-charts/charts/sock-shop; do
+      [[ -d "$cand" ]] && SOCKSHOP_CHART_DIR="$cand" && break
+    done
+    if [[ -n "${SOCKSHOP_RELEASE}" && -n "${SOCKSHOP_CHART_DIR}" ]]; then
+      log_info "helm upgrade sock-shop in ns ${SOCKSHOP_NS} from ${SOCKSHOP_CHART_DIR}"
+      helm upgrade sock-shop "${SOCKSHOP_CHART_DIR}" -n "${SOCKSHOP_NS}" \
+        --set monitoring.enabled=true --reuse-values >/dev/null 2>&1 \
+        && log_success "sock-shop chart upgraded" \
+        || log_info "helm upgrade failed (non-fatal) — re-run experiment to pick up new chart"
+    else
+      log_info "No sock-shop helm release found locally — new chart will load on next experiment"
+    fi
+  else
+    log_info "helm CLI not found — skipping in-place chart upgrade"
+  fi
+
+  # ── Action 2: restart prometheus to reload scrape config ──────────────
+  if kubectl -n monitoring get deploy prometheus-deployment >/dev/null 2>&1; then
+    log_info "Restarting prometheus-deployment to reload scrape config..."
+    kubectl -n monitoring rollout restart deploy/prometheus-deployment >/dev/null 2>&1 || true
+    kubectl -n monitoring rollout status deploy/prometheus-deployment --timeout=120s >/dev/null 2>&1 || true
+    log_success "prometheus-deployment restarted"
+  fi
+
+  # ── Verification (post-action state) ──────────────────────────────────
+  echo ""
+  log_info "Verifying monitoring stack..."
+
+  # KSM Deployment present?
+  if kubectl -n monitoring get deploy kube-state-metrics >/dev/null 2>&1; then
+    log_success "kube-state-metrics Deployment exists"
+    kubectl -n monitoring get deploy kube-state-metrics -o wide 2>&1 | tail -1
+  else
+    log_info "kube-state-metrics Deployment NOT found in monitoring ns"
+    log_info "  -> install-app may need to be re-run so the new helm chart applies"
+  fi
+
+  # Prom configmap contains the new scrape jobs?
+  if kubectl -n monitoring get cm prometheus-configmap -o jsonpath='{.data.prometheus\.yml}' 2>/dev/null | grep -q 'kubernetes-cadvisor'; then
+    log_success "prometheus-configmap contains 'kubernetes-cadvisor' job"
+  else
+    log_info "prometheus-configmap MISSING 'kubernetes-cadvisor' job — re-run install-app"
+  fi
+  if kubectl -n monitoring get cm prometheus-configmap -o jsonpath='{.data.prometheus\.yml}' 2>/dev/null | grep -q 'kube-state-metrics'; then
+    log_success "prometheus-configmap contains 'kube-state-metrics' job"
+  else
+    log_info "prometheus-configmap MISSING 'kube-state-metrics' job — re-run install-app"
+  fi
+
+  # Targets up count
+  up_count=$(kubectl -n monitoring exec deploy/prometheus-deployment -- \
+      wget -qO- localhost:9090/api/v1/targets 2>/dev/null \
+    | grep -o '"health":"up"' | wc -l || echo 0)
+  log_info "Prometheus targets up: ${up_count}"
+else
+  log_info "monitoring ns not present (no experiment deployed yet) — skipping sync+verify"
+fi
+echo ""
 
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}Done! All images loaded into minikube and${NC}"

@@ -327,6 +327,80 @@ else
 fi
 
 echo ""
+
+# Step 7: Post-build cluster sync
+#   - Force flash-agent rolling restart so new image is picked up
+#     (set image is a no-op when the tag is unchanged but the underlying
+#      minikube image was replaced)
+#   - If sock-shop helm release exists, upgrade it so the new
+#     prometheus-configmap (cadvisor + KSM jobs) and kube-state-metrics
+#     Deployment from app-charts reach the cluster immediately rather
+#     than waiting for the next experiment to re-trigger install-app
+#   - Restart prometheus to reload scrape config
+#   - Verify monitoring stack reports the expected scrape jobs
+log_info "Starting: Post-build cluster sync"
+FA_NS="sock-shop"
+if kubectl -n "${FA_NS}" get deploy flash-agent >/dev/null 2>&1; then
+    log_info "Forcing flash-agent rollout restart..."
+    kubectl -n "${FA_NS}" rollout restart deploy/flash-agent >/dev/null 2>&1 || true
+    kubectl -n "${FA_NS}" rollout status deploy/flash-agent --timeout=120s >/dev/null 2>&1 \
+      && log_success "flash-agent rolled out" \
+      || log_warn "flash-agent rollout did not complete in time (non-fatal)"
+else
+    log_info "sock-shop/flash-agent not found — skipping rollout restart"
+fi
+
+# Helm upgrade sock-shop if a release exists, otherwise just verify monitoring
+if kubectl get ns monitoring >/dev/null 2>&1; then
+    if command -v helm >/dev/null 2>&1; then
+        SOCKSHOP_RELEASE=$(helm list -A 2>/dev/null | awk '$1=="sock-shop"{print $1; exit}')
+        SOCKSHOP_NS=$(helm list -A 2>/dev/null | awk '$1=="sock-shop"{print $2; exit}')
+        SOCKSHOP_CHART_DIR=""
+        for cand in "${APP_CHART_DIR%/install-app}/charts/sock-shop" \
+                    /tmp/agentcert-build/app-charts/charts/sock-shop \
+                    /mnt/d/Studies/app-charts/charts/sock-shop; do
+            [[ -d "$cand" ]] && SOCKSHOP_CHART_DIR="$cand" && break
+        done
+        if [[ -n "${SOCKSHOP_RELEASE}" && -n "${SOCKSHOP_CHART_DIR}" ]]; then
+            log_info "helm upgrade sock-shop in ns ${SOCKSHOP_NS} from ${SOCKSHOP_CHART_DIR}"
+            helm upgrade sock-shop "${SOCKSHOP_CHART_DIR}" -n "${SOCKSHOP_NS}" \
+                --set monitoring.enabled=true --reuse-values >/dev/null 2>&1 \
+                && log_success "sock-shop chart upgraded" \
+                || log_warn "helm upgrade failed (non-fatal) — re-run experiment to apply new chart"
+        else
+            log_info "No sock-shop helm release found — chart will load on next experiment"
+        fi
+    fi
+
+    # Restart prometheus to reload scrape config
+    if kubectl -n monitoring get deploy prometheus-deployment >/dev/null 2>&1; then
+        log_info "Restarting prometheus-deployment to reload scrape config..."
+        kubectl -n monitoring rollout restart deploy/prometheus-deployment >/dev/null 2>&1 || true
+        kubectl -n monitoring rollout status deploy/prometheus-deployment --timeout=120s >/dev/null 2>&1 || true
+    fi
+
+    # Verify expected artifacts present
+    if kubectl -n monitoring get deploy kube-state-metrics >/dev/null 2>&1; then
+        log_success "kube-state-metrics Deployment exists"
+    else
+        log_warn "kube-state-metrics Deployment NOT found — re-run experiment so install-app applies new chart"
+    fi
+    if kubectl -n monitoring get cm prometheus-configmap -o jsonpath='{.data.prometheus\.yml}' 2>/dev/null | grep -q 'kubernetes-cadvisor'; then
+        log_success "prometheus-configmap contains 'kubernetes-cadvisor' job"
+    else
+        log_warn "prometheus-configmap MISSING 'kubernetes-cadvisor' job"
+    fi
+    if kubectl -n monitoring get cm prometheus-configmap -o jsonpath='{.data.prometheus\.yml}' 2>/dev/null | grep -q 'kube-state-metrics'; then
+        log_success "prometheus-configmap contains 'kube-state-metrics' job"
+    else
+        log_warn "prometheus-configmap MISSING 'kube-state-metrics' job"
+    fi
+else
+    log_info "monitoring ns not present — skipping monitoring verify"
+fi
+log_success "Completed: Post-build cluster sync"
+
+echo ""
 echo -e "${GREEN}================================${NC}"
 echo -e "${GREEN}All builds completed successfully!${NC}"
 echo -e "${GREEN}================================${NC}"

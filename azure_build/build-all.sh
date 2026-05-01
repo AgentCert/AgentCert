@@ -40,7 +40,7 @@ source "${PATHS_FILE}"
 
 # ── Git sync (clone or pull each repo) ────────────────────────────────────────
 sync_repo() {
-  local dir="$1" url="$2" branch="${GIT_BRANCH:-main}"
+  local dir="$1" url="$2" branch="${3:-${GIT_BRANCH:-main}}"
   if [[ -z "${url}" ]]; then
     echo "[ERROR] --git used but no git URL configured for ${dir}" >&2
     exit 1
@@ -68,8 +68,8 @@ sync_repo() {
 if [[ "${GIT_SYNC}" == "true" ]]; then
   # ── Clean previous clones so we always get a fresh pull ─────────────────────
   echo "[INFO] Cleaning previous clones from /tmp before git sync..."
-  for dir in "${AGENTCERT_ROOT}" "${APP_CHARTS_ROOT}" "${AGENT_CHARTS_ROOT}" "${FLASH_AGENT_ROOT}"; do
-    if [[ -d "${dir}" ]]; then
+  for dir in "${AGENTCERT_ROOT}" "${APP_CHARTS_ROOT}" "${AGENT_CHARTS_ROOT}" "${FLASH_AGENT_ROOT}" "${CHAOS_CHARTS_ROOT:-}"; do
+    if [[ -n "${dir}" && -d "${dir}" ]]; then
       echo "[INFO] Removing ${dir}"
       rm -rf "${dir}"
     fi
@@ -81,6 +81,13 @@ if [[ "${GIT_SYNC}" == "true" ]]; then
   sync_repo "${APP_CHARTS_ROOT}"   "${APP_CHARTS_GIT_URL:-}"
   sync_repo "${AGENT_CHARTS_ROOT}" "${AGENT_CHARTS_GIT_URL:-}"
   sync_repo "${FLASH_AGENT_ROOT}"  "${FLASH_AGENT_GIT_URL:-}"
+  # chaos-charts is consumed at runtime by the GraphQL server (DEFAULT_HUB_GIT_URL),
+  # not by the Docker build pipeline.  We still sync it so the local clone stays
+  # in lockstep with the URL exported by start-agentcert.sh / run.sh, which makes
+  # local debugging (helm template, grep) match what the running cluster pulls.
+  if [[ -n "${CHAOS_CHARTS_ROOT:-}" && -n "${CHAOS_CHARTS_GIT_URL:-}" ]]; then
+    sync_repo "${CHAOS_CHARTS_ROOT}" "${CHAOS_CHARTS_GIT_URL}" "${CHAOS_CHARTS_GIT_BRANCH:-master}"
+  fi
   echo "[OK] All repos synced"
 fi
 
