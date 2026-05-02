@@ -387,6 +387,7 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 
 	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	applyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
+	applyAgentInstallNamespaceOverride(workflowManifest.Spec.Templates)
 	injectExperimentContextArgs(workflowManifest.Spec.Templates)
 
 	// Inject agentId as a workflow-level parameter so that install-agent
@@ -783,6 +784,7 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 
 	applyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	applyAgentInstallNamespaceOverride(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	injectExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 
 	if strings.TrimSpace(cronExperimentManifest.Spec.Schedule) == "" {
@@ -2004,6 +2006,85 @@ func loadFaultGroundTruths(faultNames []string) string {
 	return base64.StdEncoding.EncodeToString(jsonBytes)
 }
 
+// applyAgentInstallNamespaceOverride rewrites the install-agent template's
+// `-namespace=<x>` (and equivalent forms) to AGENT_INSTALL_NAMESPACE when set,
+// and pins the original user-supplied namespace as the agent's OBSERVATION
+// target via `--set agent.config.K8S_NAMESPACE=<original>` and
+// `--set agent.config.TARGET_APP_NAME=<original>`. This decouples the agent
+// pod's lifecycle from the chaos target ns so it survives target teardown
+// between experiments.
+//
+// When AGENT_INSTALL_NAMESPACE is empty, this is a no-op (legacy behaviour:
+// install-ns == target-ns == user-supplied value).
+//
+// Idempotent: safe to call on already-rewritten templates (re-run / cron).
+func applyAgentInstallNamespaceOverride(templates []v1alpha1.Template) {
+	agentInstallNs := strings.TrimSpace(os.Getenv("AGENT_INSTALL_NAMESPACE"))
+	if agentInstallNs == "" {
+		return
+	}
+
+	for i := range templates {
+		t := &templates[i]
+		if t.Container == nil {
+			continue
+		}
+		isInstallAgentTemplate := t.Name == "install-agent" ||
+			strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
+		if !isInstallAgentTemplate {
+			continue
+		}
+
+		// Capture the original target namespace (before rewrite) so we can
+		// pass it as the agent's K8S_NAMESPACE/TARGET_APP_NAME observation target.
+		originalNs := ""
+		newArgs := make([]string, 0, len(t.Container.Args)+4)
+		for idx := 0; idx < len(t.Container.Args); idx++ {
+			arg := t.Container.Args[idx]
+			// combined form: -namespace=<x> / --namespace=<x>
+			if strings.HasPrefix(arg, "-namespace=") {
+				originalNs = strings.TrimPrefix(arg, "-namespace=")
+				newArgs = append(newArgs, "-namespace="+agentInstallNs)
+				continue
+			}
+			if strings.HasPrefix(arg, "--namespace=") {
+				originalNs = strings.TrimPrefix(arg, "--namespace=")
+				newArgs = append(newArgs, "--namespace="+agentInstallNs)
+				continue
+			}
+			// split form: -namespace <x> / --namespace <x>
+			if (arg == "-namespace" || arg == "--namespace") && idx+1 < len(t.Container.Args) {
+				originalNs = t.Container.Args[idx+1]
+				newArgs = append(newArgs, arg, agentInstallNs)
+				idx++
+				continue
+			}
+			newArgs = append(newArgs, arg)
+		}
+		t.Container.Args = newArgs
+
+		if originalNs == "" || originalNs == agentInstallNs {
+			// No original namespace found, or already rewritten in a previous
+			// pass: nothing to pin as the observation target.
+			continue
+		}
+
+		// Stamp the original target namespace as an annotation so
+		// injectExperimentContextArgs (next phase) can pin it as the agent's
+		// observation target via --set agent.config.K8S_NAMESPACE / TARGET_APP_NAME.
+		if t.Metadata.Annotations == nil {
+			t.Metadata.Annotations = make(map[string]string)
+		}
+		t.Metadata.Annotations["agentcert.io/observation-namespace"] = originalNs
+
+		logrus.WithFields(logrus.Fields{
+			"template":         t.Name,
+			"installNamespace": agentInstallNs,
+			"targetNamespace":  originalNs,
+		}).Info("[Agent Install Namespace] Redirected agent install ns; pinned observation target")
+	}
+}
+
 // injectExperimentContextArgs appends --set flags to the install-agent template
 // so that Argo Workflow template variables (experiment_id, run_id, workflow_name)
 // are passed through to the configured agent Helm chart as ConfigMap values.
@@ -2163,6 +2244,8 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 			strings.HasPrefix(arg, "agent.config.K8S_MCP_URL=") ||
 			strings.HasPrefix(arg, "agent.config.PROM_MCP_URL=") ||
 			strings.HasPrefix(arg, "agent.config.CHAOS_NAMESPACE=") ||
+			strings.HasPrefix(arg, "agent.config.K8S_NAMESPACE=") ||
+			strings.HasPrefix(arg, "agent.config.TARGET_APP_NAME=") ||
 			strings.HasPrefix(arg, "agent.config.MODEL_ALIAS=") ||
 			// GROUND_TRUTH_JSON is no longer injected into agent ConfigMap — strip any stale value from old runs
 			strings.HasPrefix(arg, "agent.config.GROUND_TRUTH_JSON=") ||
@@ -2226,6 +2309,24 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		}
 
 		t.Container.Args = append(t.Container.Args, experimentSetArgs...)
+
+		// If applyAgentInstallNamespaceOverride redirected this install-agent
+		// step to AGENT_INSTALL_NAMESPACE, pin the original target namespace as
+		// the agent's observation target so it watches the chaos target ns
+		// rather than its own (system) install ns.
+		if t.Metadata.Annotations != nil {
+			if obsNs := strings.TrimSpace(t.Metadata.Annotations["agentcert.io/observation-namespace"]); obsNs != "" {
+				t.Container.Args = append(t.Container.Args,
+					"--set", fmt.Sprintf("agent.config.K8S_NAMESPACE=%s", obsNs),
+					"--set", fmt.Sprintf("agent.config.TARGET_APP_NAME=%s", obsNs),
+				)
+				logrus.WithFields(logrus.Fields{
+					"template":          t.Name,
+					"observationTarget": obsNs,
+				}).Info("[Experiment Context] Pinned agent observation namespace via --set")
+			}
+		}
+
 		logrus.WithFields(logrus.Fields{
 			"template": t.Name,
 			"args":     experimentSetArgs,
