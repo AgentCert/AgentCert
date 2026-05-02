@@ -10,7 +10,7 @@ set -euo pipefail
 DEFAULT_URI="mongodb://root:1234@localhost:27017/admin"
 MONGO_URI="${1:-${MONGO_URI:-$DEFAULT_URI}}"
 LITMUS_EXP_NAMESPACE="${LITMUS_EXP_NAMESPACE:-litmus-exp}"
-APP_CLEANUP_NAMESPACES="${APP_CLEANUP_NAMESPACES:-sock-shop loadtest monitoring}"
+APP_CLEANUP_NAMESPACES="${APP_CLEANUP_NAMESPACES:-sock-shop loadtest monitoring agentcert-system}"
 
 if ! command -v mongosh >/dev/null 2>&1; then
   echo "mongosh not found. Please install MongoDB Shell (mongosh)." >&2
