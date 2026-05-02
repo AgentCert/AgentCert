@@ -85,3 +85,4 @@ start-frontend.ps1
 start-graphql.ps1
 stop-agentcert.ps1
 local-custom/scripts/build-and-deploy.ps1
+chaoscenter/graphql/server/agentcert-graph
