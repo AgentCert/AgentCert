@@ -17,6 +17,24 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 )
 
+// resolveAgentInstallNamespace returns (installNamespace, targetNamespace).
+//
+// When AGENT_INSTALL_NAMESPACE env is set, the agent Helm release is always
+// installed into that stable system namespace (e.g. "agentcert-system") and
+// the user-supplied namespace becomes the OBSERVATION target the agent
+// watches.  This decouples the agent pod's lifecycle from the chaos target
+// so it survives target-namespace teardown between experiments.
+//
+// When AGENT_INSTALL_NAMESPACE is empty, behaviour is unchanged: the install
+// namespace == target namespace == user-supplied value (legacy mode).
+func resolveAgentInstallNamespace(userNamespace string) (string, string) {
+	sysNs := strings.TrimSpace(os.Getenv("AGENT_INSTALL_NAMESPACE"))
+	if sysNs == "" {
+		return userNamespace, ""
+	}
+	return sysNs, userNamespace
+}
+
 // RegisterAgent is the resolver for the registerAgent field.
 func (r *mutationResolver) RegisterAgent(ctx context.Context, input model.RegisterAgentInput) (*model.RegisterAgentResponse, error) {
 	// Convert GraphQL input to service request
@@ -57,17 +75,20 @@ func (r *mutationResolver) ValidateHelmDeployment(ctx context.Context, projectID
 	}
 	// If no chart provided, validation still proceeds (just validates merged values)
 
+	installNs, targetNs := resolveAgentInstallNamespace(namespace)
+
 	// Build Helm deployment request
 	deployReq := &agent_registry.HelmDeployRequest{
-		ReleaseName:  request.HelmReleaseName,
-		Namespace:    namespace,
-		ChartPath:    chartPath,
-		ChartData:    request.ChartData,
-		ChartVersion: &request.HelmChartVersion,
-		ValuesYAML:   request.ValuesYaml,
-		Kubeconfig:   request.Kubeconfig,
-		AgentID:      "temp-validation-id",
-		ImageTag:     &version,
+		ReleaseName:     request.HelmReleaseName,
+		Namespace:       installNs,
+		TargetNamespace: targetNs,
+		ChartPath:       chartPath,
+		ChartData:       request.ChartData,
+		ChartVersion:    &request.HelmChartVersion,
+		ValuesYAML:      request.ValuesYaml,
+		Kubeconfig:      request.Kubeconfig,
+		AgentID:         "temp-validation-id",
+		ImageTag:        &version,
 	}
 
 	// Use Azure OpenAI credentials from the request (passed from UI)
@@ -143,16 +164,18 @@ func (r *mutationResolver) DeployAgentWithHelm(ctx context.Context, projectID st
 	}
 
 	// Build Helm deployment request for validation
+	installNs, targetNs := resolveAgentInstallNamespace(request.Namespace)
 	deployReq := &agent_registry.HelmDeployRequest{
-		ReleaseName:  request.HelmReleaseName,
-		Namespace:    request.Namespace,
-		ChartPath:    chartPath,
-		ChartData:    request.ChartData,
-		ChartVersion: &request.HelmChartVersion,
-		ValuesYAML:   request.ValuesYaml,
-		Kubeconfig:   request.Kubeconfig,
-		AgentID:      "temp-validation-id", // Temporary for validation
-		ImageTag:     request.Version,
+		ReleaseName:     request.HelmReleaseName,
+		Namespace:       installNs,
+		TargetNamespace: targetNs,
+		ChartPath:       chartPath,
+		ChartData:       request.ChartData,
+		ChartVersion:    &request.HelmChartVersion,
+		ValuesYAML:      request.ValuesYaml,
+		Kubeconfig:      request.Kubeconfig,
+		AgentID:         "temp-validation-id", // Temporary for validation
+		ImageTag:        request.Version,
 	}
 
 	// Use Azure OpenAI credentials from the request (passed from UI), fallback to backend env

@@ -60,7 +60,14 @@ func SanitizeReleaseName(name string) string {
 // HelmDeployRequest captures parameters required for Helm deployment.
 type HelmDeployRequest struct {
 	ReleaseName                  string
+	// Namespace is where the agent's Helm release is INSTALLED.  In prod-grade
+	// mode this is a stable system namespace (e.g. "agentcert-system") so the
+	// agent pod survives target-namespace teardown between experiments.
 	Namespace                    string
+	// TargetNamespace, when non-empty, is the namespace the agent should
+	// OBSERVE (passed to the chart as agent.config.K8S_NAMESPACE).  When
+	// empty, the chart falls back to the install namespace for back-compat.
+	TargetNamespace              string
 	ChartPath                    string
 	ChartData                    *string // Base64-encoded .tgz chart data
 	ChartVersion                 *string
@@ -227,6 +234,20 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 	args = append(args, "--set", fmt.Sprintf("agentId=%s", req.AgentID))
 	if req.ImageTag != nil && strings.TrimSpace(*req.ImageTag) != "" {
 		args = append(args, "--set", fmt.Sprintf("image.tag=%s", *req.ImageTag))
+	}
+
+	// Tie agent.name to the (sanitized) release name so cluster-scoped
+	// resources (ClusterRole, ClusterRoleBinding) get unique names per
+	// install.  Without this, installing a second agent collides on the
+	// shared ClusterRole name and helm aborts with "already exists".
+	args = append(args, "--set", fmt.Sprintf("agent.name=%s", req.ReleaseName))
+
+	// Decouple install-namespace (where the agent pod lives) from
+	// observation-namespace (what the agent watches).  When TargetNamespace
+	// is set, the chart's K8S_NAMESPACE env points at the target so the
+	// agent observes it from a stable system namespace home.
+	if strings.TrimSpace(req.TargetNamespace) != "" {
+		args = append(args, "--set", fmt.Sprintf("agent.config.K8S_NAMESPACE=%s", req.TargetNamespace))
 	}
 
 	// Pass Azure OpenAI values using ONLY the AI_Ops pattern (secrets.* and configMap.*)

@@ -339,15 +339,24 @@ echo ""
 #   - Restart prometheus to reload scrape config
 #   - Verify monitoring stack reports the expected scrape jobs
 log_info "Starting: Post-build cluster sync"
-FA_NS="sock-shop"
-if kubectl -n "${FA_NS}" get deploy flash-agent >/dev/null 2>&1; then
-    log_info "Forcing flash-agent rollout restart..."
-    kubectl -n "${FA_NS}" rollout restart deploy/flash-agent >/dev/null 2>&1 || true
-    kubectl -n "${FA_NS}" rollout status deploy/flash-agent --timeout=120s >/dev/null 2>&1 \
-      && log_success "flash-agent rolled out" \
-      || log_warn "flash-agent rollout did not complete in time (non-fatal)"
-else
-    log_info "sock-shop/flash-agent not found — skipping rollout restart"
+# Look for any flash-agent Deployment across common install namespaces.
+# In prod-grade mode the agent lives in AGENT_INSTALL_NAMESPACE (e.g.
+# agentcert-system) and observes sock-shop; in legacy mode it lives in
+# sock-shop directly.  Restart whichever exists so the new image is picked
+# up by the running pod.
+FA_RESTARTED=0
+for FA_NS in "${AGENT_INSTALL_NAMESPACE:-agentcert-system}" sock-shop; do
+    if kubectl -n "${FA_NS}" get deploy flash-agent >/dev/null 2>&1; then
+        log_info "Forcing flash-agent rollout restart in ${FA_NS}..."
+        kubectl -n "${FA_NS}" rollout restart deploy/flash-agent >/dev/null 2>&1 || true
+        kubectl -n "${FA_NS}" rollout status deploy/flash-agent --timeout=120s >/dev/null 2>&1 \
+          && log_success "flash-agent rolled out in ${FA_NS}" \
+          || log_warn "flash-agent rollout in ${FA_NS} did not complete in time (non-fatal)"
+        FA_RESTARTED=1
+    fi
+done
+if [[ "${FA_RESTARTED}" -eq 0 ]]; then
+    log_info "flash-agent Deployment not found in any known ns — skipping rollout restart"
 fi
 
 # Helm upgrade sock-shop if a release exists, otherwise just verify monitoring
