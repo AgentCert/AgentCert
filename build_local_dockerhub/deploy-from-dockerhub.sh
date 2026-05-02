@@ -15,7 +15,7 @@ set -euo pipefail
 #   3. minikube image load each image (latest + ci tag)
 #   4. kubectl set env litmusportal-server with all image + config vars
 #   5. kubectl rollout status litmusportal-server
-#   6. kubectl set image flash-agent deployment + cronjob in sock-shop (if present)
+#   6. kubectl set image flash-agent deployment in sock-shop (if present)
 # =============================================================================
 
 ENV_FILE="/mnt/d/Studies/AgentCert/local-custom/config/.env"
@@ -259,29 +259,24 @@ kubectl rollout status deployment/"${SERVER_DEPLOYMENT}" -n "${SERVER_NAMESPACE}
 log_success "litmusportal-server updated and healthy"
 echo ""
 
-# ── Step 6: Sync flash-agent deployment + cronjob in sock-shop ────────────
+# ── Step 6: Sync flash-agent deployment in sock-shop ──────────────────
 FA_NAMESPACE="sock-shop"
-for workload_type in deployment cronjob; do
-  workload_name="flash-agent"
-  [[ "${workload_type}" == "cronjob" ]] && workload_name="flash-agent-cronjob"
-  if kubectl -n "${FA_NAMESPACE}" get "${workload_type}" "${workload_name}" >/dev/null 2>&1; then
-    log_info "Updating ${FA_NAMESPACE}/${workload_name} image -> ${FLASH_AGENT_IMAGE}"
-    kubectl -n "${FA_NAMESPACE}" set image "${workload_type}/${workload_name}" \
-      agent="${FLASH_AGENT_IMAGE}" >/dev/null || true
-    if [[ "${workload_type}" == "deployment" ]]; then
-      # Force a rollout even when the tag is ':latest' (set image is a no-op
-      # when the tag string is unchanged but the underlying image has been
-      # replaced in minikube). This guarantees the new image is picked up.
-      log_info "Forcing rollout restart of ${FA_NAMESPACE}/${workload_name}..."
-      kubectl -n "${FA_NAMESPACE}" rollout restart "deployment/${workload_name}" >/dev/null 2>&1 || true
-      kubectl -n "${FA_NAMESPACE}" rollout status "deployment/${workload_name}" \
-        --timeout=120s >/dev/null || true
-    fi
-    log_success "${workload_name} updated"
-  else
-    log_info "${FA_NAMESPACE}/${workload_name} not found — skipping"
-  fi
-done
+workload_name="flash-agent"
+if kubectl -n "${FA_NAMESPACE}" get deployment "${workload_name}" >/dev/null 2>&1; then
+  log_info "Updating ${FA_NAMESPACE}/${workload_name} image -> ${FLASH_AGENT_IMAGE}"
+  kubectl -n "${FA_NAMESPACE}" set image "deployment/${workload_name}" \
+    agent="${FLASH_AGENT_IMAGE}" >/dev/null || true
+  # Force a rollout even when the tag is ':latest' (set image is a no-op
+  # when the tag string is unchanged but the underlying image has been
+  # replaced in minikube). This guarantees the new image is picked up.
+  log_info "Forcing rollout restart of ${FA_NAMESPACE}/${workload_name}..."
+  kubectl -n "${FA_NAMESPACE}" rollout restart "deployment/${workload_name}" >/dev/null 2>&1 || true
+  kubectl -n "${FA_NAMESPACE}" rollout status "deployment/${workload_name}" \
+    --timeout=120s >/dev/null || true
+  log_success "${workload_name} updated"
+else
+  log_info "${FA_NAMESPACE}/${workload_name} not found — skipping"
+fi
 echo ""
 
 docker logout >/dev/null 2>&1 || true

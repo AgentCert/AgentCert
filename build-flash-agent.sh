@@ -112,7 +112,6 @@ sync_live_server_env() {
 sync_live_flash_agent_workloads() {
   local namespace="sock-shop"
   local deployment="flash-agent"
-  local cronjob="flash-agent-cronjob"
 
   if ! command -v kubectl >/dev/null 2>&1; then
     echo "[WARN] kubectl not found; skipping flash-agent workload image sync"
@@ -125,13 +124,6 @@ sync_live_flash_agent_workloads() {
     kubectl -n "${namespace}" rollout status deployment/"${deployment}" --timeout=120s >/dev/null || true
   else
     echo "[WARN] ${namespace}/${deployment} not found; skipping deployment image sync"
-  fi
-
-  if kubectl -n "${namespace}" get cronjob "${cronjob}" >/dev/null 2>&1; then
-    echo "[INFO] Updating ${namespace}/${cronjob} image to ${IMAGE}"
-    kubectl -n "${namespace}" set image cronjob/"${cronjob}" agent="${IMAGE}" >/dev/null || true
-  else
-    echo "[WARN] ${namespace}/${cronjob} not found; skipping cronjob image sync"
   fi
 
   echo "[OK] Flash-agent workloads synced to ${IMAGE}"

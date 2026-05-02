@@ -231,6 +231,13 @@ spec:
             - secretRef:
                 name: litmus-portal-admin-secret
           env:
+            # When set, all agent helm releases install into this stable
+            # system namespace and only OBSERVE the user-supplied target
+            # namespace.  Empty = legacy behaviour (install into target ns).
+            # The uninstall-all step deletes this namespace at experiment end
+            # (skips kube-*|default|litmus|monitoring|argo|ingress-*|cert-manager).
+            - name: AGENT_INSTALL_NAMESPACE
+              value: "agentcert-system"
             # if self-signed certificate are used pass the base64 tls certificate, to allow agents to use tls for communication
             - name: TLS_CERT_B64
               value: ""
