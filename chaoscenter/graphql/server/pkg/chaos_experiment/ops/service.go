@@ -1721,8 +1721,12 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 	}
 
 	forcedSetArgs := []string{
-
+		// MCP servers are now installed cluster-wide in the litmus-exp namespace
+		// (chaoscenter graphql/server/manifests/namespace/4b_mcp_tools_deployment.yaml)
+		// so the per-app sock-shop chart must NOT spawn duplicates that conflict on
+		// service account / node-port and end up CrashLoopBackOff.
 		"-set=mcpTools.prometheusMcpServer.enabled=false",
+		"-set=mcpTools.kubernetesMcpServer.enabled=false",
 	}
 
 	switch corev1.PullPolicy(targetPullPolicy) {
