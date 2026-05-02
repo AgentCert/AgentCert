@@ -68,3 +68,20 @@ carts_deploy.yaml
 # Local env copies
 local-custom/config/.env copy
 local-custom/config/copy.env.*
+
+# Build scripts moved to their respective repos (ignore if co-developers still have them locally)
+build-agent-sidecar.sh
+build-flash-agent.sh
+build-install-agent.sh
+build-install-app.sh
+build-litellm.sh
+build_local_dockerhub/deploy-from-dockerhub.sh
+
+# PowerShell scripts moved/removed
+run_server_log.ps1
+run_server.ps1
+start-agentcert.ps1
+start-frontend.ps1
+start-graphql.ps1
+stop-agentcert.ps1
+local-custom/scripts/build-and-deploy.ps1
