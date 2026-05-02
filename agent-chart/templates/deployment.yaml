@@ -77,6 +77,10 @@ spec:
             - name: MCP_INCLUDE_CHAOS_TOOLS
               value: {{ .Values.agent.config.MCP_INCLUDE_CHAOS_TOOLS | default "false" | quote }}
 
+            # MCP event recency window (seconds) — see values.yaml comment.
+            - name: EVENT_RECENCY_FALLBACK_SEC
+              value: {{ .Values.agent.config.EVENT_RECENCY_FALLBACK_SEC | default "90" | quote }}
+
 {{- range $env := .Values.agent.deploymentEnv }}
 {{- if not (and $.Values.sidecar.enabled (eq $env.name "OPENAI_BASE_URL")) }}
             - name: {{ $env.name }}

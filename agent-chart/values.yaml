@@ -37,10 +37,22 @@ agent:
     OPENAI_API_KEY: ""
 
     # --- Blind-observer mode ---
-    # When "false", flash-agent excludes chaos tools (chaosengines,
-    # chaosresults, argo_workflows) from MCP calls and strips chaos
-    # sections from the LLM prompt.  Default "true" preserves full mode.
+    # When "false" (DEFAULT, required for certification), flash-agent excludes
+    # chaos tools (chaosengines, chaosresults, argo_workflows) from MCP calls
+    # and strips chaos sections from the LLM prompt. This enforces the
+    # blind-observer principle: the certifier scores whether the agent
+    # detected the fault from raw K8s/Prom signals, not from reading the
+    # ChaosEngine spec or the ChaosResult verdict directly. Set "true" only
+    # for local dev/debugging where you want the full picture in traces.
     MCP_INCLUDE_CHAOS_TOOLS: "false"
+
+    # --- MCP event recency window ---
+    # Cold-start floor and slack ceiling for the per-scan event watermark.
+    # Warning-event blocks older than this many seconds are dropped from
+    # the analysis prompt so each scan reasons over fresh signal instead
+    # of recycling the same startup-probe ghosts every cycle. Should be
+    # ~3× SCAN_INTERVAL so a single missed scan still recovers gracefully.
+    EVENT_RECENCY_FALLBACK_SEC: "90"
 
     # --- Experiment context (injected by install-agent via Argo template variables) ---
     # Empty defaults: agent works with or without experiment context.
