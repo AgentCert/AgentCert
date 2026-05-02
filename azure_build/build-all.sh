@@ -77,10 +77,10 @@ if [[ "${GIT_SYNC}" == "true" ]]; then
   echo "[OK] Clean done"
 
   echo "[INFO] Syncing repos from git..."
-  sync_repo "${AGENTCERT_ROOT}"    "${AGENTCERT_GIT_URL:-}"
-  sync_repo "${APP_CHARTS_ROOT}"   "${APP_CHARTS_GIT_URL:-}"
-  sync_repo "${AGENT_CHARTS_ROOT}" "${AGENT_CHARTS_GIT_URL:-}"
-  sync_repo "${FLASH_AGENT_ROOT}"  "${FLASH_AGENT_GIT_URL:-}"
+  sync_repo "${AGENTCERT_ROOT}"    "${AGENTCERT_GIT_URL:-}"    "${AGENTCERT_GIT_BRANCH:-${GIT_BRANCH:-main}}"
+  sync_repo "${APP_CHARTS_ROOT}"   "${APP_CHARTS_GIT_URL:-}"   "${APP_CHARTS_GIT_BRANCH:-${GIT_BRANCH:-main}}"
+  sync_repo "${AGENT_CHARTS_ROOT}" "${AGENT_CHARTS_GIT_URL:-}" "${AGENT_CHARTS_GIT_BRANCH:-${GIT_BRANCH:-main}}"
+  sync_repo "${FLASH_AGENT_ROOT}"  "${FLASH_AGENT_GIT_URL:-}"  "${FLASH_AGENT_GIT_BRANCH:-${GIT_BRANCH:-main}}"
   # chaos-charts is consumed at runtime by the GraphQL server (DEFAULT_HUB_GIT_URL),
   # not by the Docker build pipeline.  We still sync it so the local clone stays
   # in lockstep with the URL exported by start-agentcert.sh / run.sh, which makes

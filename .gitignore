@@ -60,3 +60,6 @@ local-custom/config/.env
 local-custom/config/.env copy
 local-custom/config/copy.env.ank
 local-custom/config/copy.env.pqt
+local-custom/config/.env
+chaoscenter/graphql/server/.env
+azure_build/build-paths.env

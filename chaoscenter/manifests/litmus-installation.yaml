@@ -237,7 +237,7 @@ spec:
             # The uninstall-all step deletes this namespace at experiment end
             # (skips kube-*|default|litmus|monitoring|argo|ingress-*|cert-manager).
             - name: AGENT_INSTALL_NAMESPACE
-              value: "agentcert-system"
+              value: ""
             # if self-signed certificate are used pass the base64 tls certificate, to allow agents to use tls for communication
             - name: TLS_CERT_B64
               value: ""
