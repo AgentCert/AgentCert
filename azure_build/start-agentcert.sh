@@ -216,7 +216,7 @@ export INFRA_DEPLOYMENTS='["app=chaos-exporter", "name=chaos-operator", "app=eve
 # Hub paths from build-paths.env
 export DEFAULT_AGENT_HUB_GIT_URL="${AGENT_CHARTS_GIT_URL:-https://github.com/agentcert/agent-charts}"
 export DEFAULT_AGENT_HUB_BRANCH_NAME="main"
-export DEFAULT_AGENT_HUB_PATH="${FLASH_AGENT_ROOT:-/tmp/default}"
+export DEFAULT_AGENT_HUB_PATH="${AGENT_CHARTS_ROOT:-/tmp/default}"
 export DEFAULT_APP_HUB_GIT_URL="${APP_CHARTS_GIT_URL:-https://github.com/agentcert/app-charts}"
 export DEFAULT_APP_HUB_BRANCH_NAME="main"
 export DEFAULT_APP_HUB_PATH="${APP_CHARTS_ROOT:-/tmp/default}"

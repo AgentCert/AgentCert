@@ -17,9 +17,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	agentRegistry "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbChaosExperimentRun "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment_run"
@@ -431,11 +431,11 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 
 	if workflowManifest.Labels == nil {
 		workflowManifest.Labels = map[string]string{
-			"workflow_id":      *workflow.ExperimentID,
-			"infra_id":         workflow.InfraID,
+			"workflow_id": *workflow.ExperimentID,
+			"infra_id":    workflow.InfraID,
 			"workflows.argoproj.io/controller-instanceid": workflow.InfraID,
-			"revision_id":      revID,
-			"experiment_name":  workflow.ExperimentName,
+			"revision_id":     revID,
+			"experiment_name": workflow.ExperimentName,
 		}
 	} else {
 		workflowManifest.Labels["workflow_id"] = *workflow.ExperimentID
@@ -793,11 +793,11 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 
 	if cronExperimentManifest.Labels == nil {
 		cronExperimentManifest.Labels = map[string]string{
-			"workflow_id":      *workflow.ExperimentID,
-			"infra_id":         workflow.InfraID,
+			"workflow_id": *workflow.ExperimentID,
+			"infra_id":    workflow.InfraID,
 			"workflows.argoproj.io/controller-instanceid": workflow.InfraID,
-			"revision_id":      revID,
-			"experiment_name":  workflow.ExperimentName,
+			"revision_id":     revID,
+			"experiment_name": workflow.ExperimentName,
 		}
 	} else {
 		cronExperimentManifest.Labels["workflow_id"] = *workflow.ExperimentID
@@ -810,21 +810,21 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	if cronExperimentManifest.Spec.WorkflowMetadata == nil {
 		cronExperimentManifest.Spec.WorkflowMetadata = &v1.ObjectMeta{
 			Labels: map[string]string{
-				"workflow_id":      *workflow.ExperimentID,
-				"infra_id":         workflow.InfraID,
+				"workflow_id": *workflow.ExperimentID,
+				"infra_id":    workflow.InfraID,
 				"workflows.argoproj.io/controller-instanceid": workflow.InfraID,
-				"revision_id":      revID,
-				"experiment_name":  workflow.ExperimentName,
+				"revision_id":     revID,
+				"experiment_name": workflow.ExperimentName,
 			},
 		}
 	} else {
 		if cronExperimentManifest.Spec.WorkflowMetadata.Labels == nil {
 			cronExperimentManifest.Spec.WorkflowMetadata.Labels = map[string]string{
-				"workflow_id":      *workflow.ExperimentID,
-				"infra_id":         workflow.InfraID,
+				"workflow_id": *workflow.ExperimentID,
+				"infra_id":    workflow.InfraID,
 				"workflows.argoproj.io/controller-instanceid": workflow.InfraID,
-				"revision_id":      revID,
-				"experiment_name":  workflow.ExperimentName,
+				"revision_id":     revID,
+				"experiment_name": workflow.ExperimentName,
 			}
 		} else {
 			cronExperimentManifest.Spec.WorkflowMetadata.Labels["workflow_id"] = *workflow.ExperimentID
@@ -1250,7 +1250,7 @@ func (c *chaosExperimentService) applyInstallApplicationReadinessPatch(wf *v1alp
 	readinessTpl := v1alpha1.Template{
 		Name: readinessStepName,
 		Container: &corev1.Container{
-			Image: "litmuschaos/k8s:latest",
+			Image:   "litmuschaos/k8s:latest",
 			Command: []string{"sh", "-c"},
 			Args: []string{
 				`set -eu
@@ -1403,7 +1403,7 @@ func (c *chaosExperimentService) applyPreCleanupWaitPatch(wf *v1alpha1.Workflow)
 		Container: &corev1.Container{
 			Image:   "busybox:1.36",
 			Command: []string{"sh", "-c"},
-			Args: []string{fmt.Sprintf("echo '[pre-cleanup-wait] sleeping for %d seconds'; sleep %d; echo '[pre-cleanup-wait] done'", waitSec, waitSec)},
+			Args:    []string{fmt.Sprintf("echo '[pre-cleanup-wait] sleeping for %d seconds'; sleep %d; echo '[pre-cleanup-wait] done'", waitSec, waitSec)},
 		},
 	}
 	wf.Spec.Templates = append(wf.Spec.Templates, waitTpl)
@@ -2125,13 +2125,16 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 
 	k8sMCPURL := strings.TrimSpace(os.Getenv("K8S_MCP_URL"))
 	if k8sMCPURL == "" {
-		k8sMCPURL = "http://kubernetes-mcp-server.litmus-exp.svc.cluster.local:8081/mcp"
+		k8sMCPURL = "http://kubernetes-mcp-server.litmus.svc.cluster.local:8081/mcp"
 	}
 
 	promMCPURL := strings.TrimSpace(os.Getenv("PROM_MCP_URL"))
 	if promMCPURL == "" {
-		promMCPURL = "http://prometheus-mcp-server.litmus-exp.svc.cluster.local:9090/mcp"
+		promMCPURL = "http://prometheus-mcp-server.litmus.svc.cluster.local:9090/mcp"
 	}
+
+	// Build comma-separated MCP_URLS list for flash-agent
+	mcpURLs := k8sMCPURL + "," + promMCPURL
 
 	chaosNamespace := strings.TrimSpace(os.Getenv("CHAOS_NAMESPACE"))
 	if chaosNamespace == "" {
@@ -2206,8 +2209,7 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", fmt.Sprintf("agent.secret.LITELLM_MASTER_KEY=%s", masterKey),
 		"--set", fmt.Sprintf("agent.config.OPENAI_BASE_URL=%s", openAIBaseURL),
 		"--set", fmt.Sprintf("agent.config.MODEL_ALIAS=%s", modelAlias),
-		"--set", fmt.Sprintf("agent.config.K8S_MCP_URL=%s", k8sMCPURL),
-		"--set", fmt.Sprintf("agent.config.PROM_MCP_URL=%s", promMCPURL),
+		"--set", fmt.Sprintf("agent.config.MCP_URLS=%s", mcpURLs),
 		"--set", fmt.Sprintf("agent.config.CHAOS_NAMESPACE=%s", chaosNamespace),
 		"--set", "sidecar.enabled=true",
 		"--set", "sidecar.injectionMode=openai-metadata",
@@ -2241,6 +2243,7 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 			strings.HasPrefix(arg, "agent.config.OPENAI_API_KEY=") ||
 			strings.HasPrefix(arg, "agent.secret.LITELLM_MASTER_KEY=") ||
 			strings.HasPrefix(arg, "agent.config.OPENAI_BASE_URL=") ||
+			strings.HasPrefix(arg, "agent.config.MCP_URLS=") ||
 			strings.HasPrefix(arg, "agent.config.K8S_MCP_URL=") ||
 			strings.HasPrefix(arg, "agent.config.PROM_MCP_URL=") ||
 			strings.HasPrefix(arg, "agent.config.CHAOS_NAMESPACE=") ||

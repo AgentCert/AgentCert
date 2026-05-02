@@ -80,15 +80,15 @@ sync_live_server_env() {
   fi
 
   if [ -z "${k8s_mcp_url}" ]; then
-    k8s_mcp_url="http://kubernetes-mcp-server.litmus-exp.svc.cluster.local:8081/mcp"
+    k8s_mcp_url="http://kubernetes-mcp-server.litmus.svc.cluster.local:8081/mcp"
   fi
 
   if [ -z "${prom_mcp_url}" ]; then
-    prom_mcp_url="http://prometheus-mcp-server.litmus-exp.svc.cluster.local:9090/mcp"
+    prom_mcp_url="http://prometheus-mcp-server.litmus.svc.cluster.local:9090/mcp"
   fi
 
   if [ -z "${chaos_namespace}" ]; then
-    chaos_namespace="litmus-exp"
+    chaos_namespace="litmus"
   fi
 
   if [ -z "${pre_cleanup_wait_seconds}" ]; then

@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	DefaultAgentHubID               = "agenthub-default-001"
-	DefaultAgentHubName             = "Agent Charts"
-	DefaultAgentHubSyncInterval     = 6 * time.Hour
+	DefaultAgentHubID           = "agenthub-default-001"
+	DefaultAgentHubName         = "agent-charts"
+	DefaultAgentHubSyncInterval = 6 * time.Hour
 )
 
 // Service defines the AgentHub service interface.
@@ -72,22 +72,13 @@ func getDefaultBasePath() string {
 }
 
 // getAgentChartsPath returns the filesystem path where agent charts are cloned.
-// Aligns with GetClonePath in chaoshub/ops which clones default hubs to {basePath}/{HubName}.
+// Expects charts to be at {basePath}/charts.
 func getAgentChartsPath() string {
 	path := strings.TrimSpace(utils.Config.DefaultAgentHubPath)
 	if path == "" {
 		path = getDefaultBasePath()
 	}
-
-	if isCustomAgentHubMode() {
-		candidate := filepath.Join(path, "charts")
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
-		}
-		return path
-	}
-
-	return filepath.Join(path, DefaultAgentHubName, "charts")
+	return filepath.Join(path, "charts")
 }
 
 // getAgentClonePath returns the filesystem path for the agent hub clone.
@@ -96,12 +87,7 @@ func getAgentClonePath() string {
 	if path == "" {
 		path = getDefaultBasePath()
 	}
-
-	if isCustomAgentHubMode() {
-		return path
-	}
-
-	return filepath.Join(path, DefaultAgentHubName)
+	return path
 }
 
 // ListAgentHubCategories reads agent charts from the filesystem and enriches
@@ -222,9 +208,9 @@ func (s *agentHubService) SyncDefaultAgentHub() {
 
 		if err := syncHub(clonePath, repoURL, branch); err != nil {
 			log.WithFields(log.Fields{
-				"repoUrl":  repoURL,
-				"branch":   branch,
-				"hubName":  DefaultAgentHubName,
+				"repoUrl": repoURL,
+				"branch":  branch,
+				"hubName": DefaultAgentHubName,
 			}).WithError(err).Error("failed to sync default agent hub")
 		} else {
 			log.WithFields(log.Fields{

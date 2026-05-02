@@ -21,7 +21,7 @@ import (
 
 const (
 	DefaultAppHubID           = "apphub-default-001"
-	DefaultAppHubName         = "App Charts"
+	DefaultAppHubName         = "app-charts"
 	DefaultAppHubSyncInterval = 6 * time.Hour
 )
 
@@ -70,22 +70,13 @@ func getDefaultBasePath() string {
 }
 
 // getAppChartsPath returns the filesystem path where app charts are cloned.
-// Aligns with GetClonePath in chaoshub/ops which clones default hubs to {basePath}/{HubName}.
+// Expects charts to be at {basePath}/charts.
 func getAppChartsPath() string {
 	path := strings.TrimSpace(utils.Config.DefaultAppHubPath)
 	if path == "" {
 		path = getDefaultBasePath()
 	}
-
-	if isCustomAppHubMode() {
-		candidate := filepath.Join(path, "charts")
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
-		}
-		return path
-	}
-
-	return filepath.Join(path, DefaultAppHubName, "charts")
+	return filepath.Join(path, "charts")
 }
 
 // getAppClonePath returns the filesystem path for the app hub clone.
@@ -94,12 +85,7 @@ func getAppClonePath() string {
 	if path == "" {
 		path = getDefaultBasePath()
 	}
-
-	if isCustomAppHubMode() {
-		return path
-	}
-
-	return filepath.Join(path, DefaultAppHubName)
+	return path
 }
 
 // ListAppHubCategories reads app charts from the filesystem and enriches

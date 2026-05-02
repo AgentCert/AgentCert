@@ -175,7 +175,7 @@ echo ""
 log_info "Starting: Build agent-sidecar image"
 if bash "${SCRIPT_DIR}/build-agent-sidecar.sh" \
     --env-file "${ENV_FILE}" \
-    --source-dir "${AGENTCERT_ROOT}/agent-sidecar"; then
+    --source-dir "${AGENT_SIDECAR_ROOT:-${AGENTCERT_ROOT}/../agent-sidecar}"; then
   log_success "Completed: Build agent-sidecar image"
 else
   log_error "Failed: Build agent-sidecar image"; exit 1
