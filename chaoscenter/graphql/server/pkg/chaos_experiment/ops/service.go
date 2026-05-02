@@ -1497,17 +1497,39 @@ func (c *chaosExperimentService) applyUninstallAllPatch(wf *v1alpha1.Workflow) e
 		uninstallImage = "agentcert/agentcert-install-agent:latest"
 	}
 
-	uninstallScript := `NAMESPACE="{{workflow.parameters.appNamespace}}"
+	// Resolve agent install namespace (where the agent helm release actually lives).
+	// When AGENT_INSTALL_NAMESPACE is set on the graphql server, the agent is
+	// installed in that system ns and only OBSERVES the app namespace.  Uninstall
+	// must target the install ns; we still try the app ns as a fallback for
+	// back-compat with legacy releases that landed in the app ns.
+	agentInstallNs := strings.TrimSpace(os.Getenv("AGENT_INSTALL_NAMESPACE"))
+	uninstallScript := fmt.Sprintf(`NAMESPACE="{{workflow.parameters.appNamespace}}"
+AGENT_INSTALL_NS=%q
 AGENT_RELEASE="{{workflow.parameters.agentFolder}}"
 APP_RELEASE="${NAMESPACE}"
+if [ -z "${AGENT_INSTALL_NS}" ]; then AGENT_INSTALL_NS="${NAMESPACE}"; fi
 echo "[uninstall-all] Cleaning ChaosEngine and ChaosResult resources in ${NAMESPACE}"
 kubectl delete chaosengines.litmuschaos.io --all -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
 kubectl delete chaosresults.litmuschaos.io --all -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
-echo "[uninstall-all] Uninstalling agent release: ${AGENT_RELEASE} (ns: ${NAMESPACE})"
-helm uninstall "${AGENT_RELEASE}" -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+echo "[uninstall-all] Uninstalling agent release: ${AGENT_RELEASE} (ns: ${AGENT_INSTALL_NS})"
+helm uninstall "${AGENT_RELEASE}" -n "${AGENT_INSTALL_NS}" --ignore-not-found 2>&1 || true
+if [ "${AGENT_INSTALL_NS}" != "${NAMESPACE}" ]; then
+  echo "[uninstall-all] Fallback agent uninstall in app ns: ${NAMESPACE}"
+  helm uninstall "${AGENT_RELEASE}" -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
+  # Drop the agent install namespace itself so the next experiment starts clean.
+  # We only do this when it's distinct from the app ns AND not a system ns
+  # (kube-*, default, litmus, monitoring) to avoid catastrophic deletes.
+  case "${AGENT_INSTALL_NS}" in
+    kube-*|default|litmus|monitoring|argo|ingress-*|cert-manager) ;;
+    *)
+      echo "[uninstall-all] Deleting agent install namespace: ${AGENT_INSTALL_NS}"
+      kubectl delete namespace "${AGENT_INSTALL_NS}" --ignore-not-found --wait=false 2>&1 || true
+      ;;
+  esac
+fi
 echo "[uninstall-all] Uninstalling app release: ${APP_RELEASE} (ns: ${NAMESPACE})"
 helm uninstall "${APP_RELEASE}" -n "${NAMESPACE}" --ignore-not-found 2>&1 || true
-echo "[uninstall-all] Done"`
+echo "[uninstall-all] Done"`, agentInstallNs)
 
 	uninstallTpl := v1alpha1.Template{
 		Name: uninstallTemplateName,

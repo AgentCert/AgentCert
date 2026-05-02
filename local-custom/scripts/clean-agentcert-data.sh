@@ -26,7 +26,11 @@ mongosh "$MONGO_URI" --quiet --eval "
     agentRegistry: db.agentRegistry.deleteMany({}).deletedCount,
     chaosExperiments: db.chaosExperiments.deleteMany({}).deletedCount,
     chaosExperimentRuns: db.chaosExperimentRuns.deleteMany({}).deletedCount,
-    chaosProbes: db.chaosProbes.deleteMany({}).deletedCount
+    chaosProbes: db.chaosProbes.deleteMany({}).deletedCount,
+    // Cached chaos-hub charts pulled from git. Wiping forces ChaosCenter to
+    // re-clone from the configured git URL on next sync, so edits committed
+    // to chaos-charts (e.g. STATUS_CHECK_TIMEOUTS in fault.yaml) are picked up.
+    chaosHubs: db.chaosHubs.deleteMany({}).deletedCount
   };
   printjson(results);
 "
@@ -48,6 +52,11 @@ kubectl delete jobs.batch --all -n "$LITMUS_EXP_NAMESPACE" --ignore-not-found --
 kubectl delete pods --all -n "$LITMUS_EXP_NAMESPACE" --ignore-not-found --wait=false >/dev/null 2>&1 || true
 kubectl delete chaosengines.litmuschaos.io --all -n "$LITMUS_EXP_NAMESPACE" --ignore-not-found --wait=false >/dev/null 2>&1 || true
 kubectl delete chaosresults.litmuschaos.io --all -n "$LITMUS_EXP_NAMESPACE" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+# ChaosExperiment CRDs themselves carry the fault env (STATUS_CHECK_TIMEOUTS,
+# TOTAL_CHAOS_DURATION, etc.). Without deleting them, edits in chaos-charts
+# fault.yaml never reach the cluster — ChaosCenter only re-renders them on a
+# fresh experiment when the CRD is missing.
+kubectl delete chaosexperiments.litmuschaos.io --all -n "$LITMUS_EXP_NAMESPACE" --ignore-not-found --wait=false >/dev/null 2>&1 || true
 
 echo "Kubernetes workflow cleanup triggered for namespace: $LITMUS_EXP_NAMESPACE"
 
