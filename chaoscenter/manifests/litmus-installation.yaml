@@ -271,16 +271,6 @@ spec:
               value: "http://prometheus.monitoring.svc.cluster.local:9090"
             - name: DEFAULT_HUB_BRANCH_NAME
               value: "master"
-            - name: DEFAULT_HUB_GIT_URL
-              value: "https://github.com/sanjeevranjan-singh/chaos-charts"
-            - name: DEFAULT_AGENT_HUB_GIT_URL
-              value: "https://github.com/sanjeevranjan-singh/agent-charts"
-            - name: DEFAULT_AGENT_HUB_BRANCH_NAME
-              value: "main"
-            - name: DEFAULT_APP_HUB_GIT_URL
-              value: "https://github.com/sanjeevranjan-singh/app-charts"
-            - name: DEFAULT_APP_HUB_BRANCH_NAME
-              value: "main"
             - name: LITMUS_AUTH_GRPC_ENDPOINT
               value: "litmusportal-auth-server-service"
             - name: LITMUS_AUTH_GRPC_PORT
