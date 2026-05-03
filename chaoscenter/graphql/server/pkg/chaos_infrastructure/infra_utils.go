@@ -22,11 +22,11 @@ type SubscriberConfigurations struct {
 func GetEndpoint(host string) (string, error) {
 	// Priority 1: Use CHAOS_CENTER_UI_ENDPOINT if provided (via .env or manually set)
 	if utils.Config.ChaosCenterUiEndpoint != "" {
-		return utils.Config.ChaosCenterUiEndpoint + "/api/query", nil
+		return utils.Config.ChaosCenterUiEndpoint + "/query", nil
 	}
 
 	// Priority 2: Fall back to Kubernetes service DNS (cluster mode)
-	return host + "/api/query", nil
+	return host + "/query", nil
 }
 
 func GetK8sInfraYaml(host string, infra dbChaosInfra.ChaosInfra) ([]byte, error) {
