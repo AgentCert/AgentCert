@@ -14,14 +14,14 @@ import (
 // It's responsible for tracking fault executions, experiment runs, and collecting
 // observability data for all chaos activities.
 type LangfuseTracer struct {
-	client      agent_registry.LangfuseClient
-	enabled     bool
-	orgID       string // Langfuse Organization ID
-	projectID   string // Langfuse Project ID
-	mu          sync.RWMutex
-	traceChan   chan *agent_registry.ExperimentTrace
-	workerDone  chan struct{}
-	closed      bool
+	client     agent_registry.LangfuseClient
+	enabled    bool
+	orgID      string // Langfuse Organization ID
+	projectID  string // Langfuse Project ID
+	mu         sync.RWMutex
+	traceChan  chan *agent_registry.ExperimentTrace
+	workerDone chan struct{}
+	closed     bool
 	// emittedFaults tracks which fault spans have been emitted per trace to avoid duplicates.
 	// Key: traceID:faultName, Value: true if already emitted
 	emittedFaults map[string]bool
@@ -133,19 +133,19 @@ func (t *LangfuseTracer) TraceExperimentExecution(ctx context.Context, details *
 			"priority":       details.Priority,
 		},
 		Metadata: map[string]interface{}{
-			"agent_name":          details.AgentName,
-			"agent_platform":      details.AgentPlatform,
-			"agent_version":       details.AgentVersion,
-			"agent_id":            details.AgentID,
-			"service_account":     details.AgentServiceAccount,
-			"experimentType":      details.ExperimentType,
-			"phase":               details.Phase,
-			"priority":            details.Priority,
-			"experiment_id":       details.ExperimentID,
-			"experiment_run_id":   details.SessionID,
-			"notify_id":           details.TraceID,
-			"workflow_name":       details.ExperimentName,
-			"namespace":           details.Namespace,
+			"agent_name":        details.AgentName,
+			"agent_platform":    details.AgentPlatform,
+			"agent_version":     details.AgentVersion,
+			"agent_id":          details.AgentID,
+			"service_account":   details.AgentServiceAccount,
+			"experimentType":    details.ExperimentType,
+			"phase":             details.Phase,
+			"priority":          details.Priority,
+			"experiment_id":     details.ExperimentID,
+			"experiment_run_id": details.SessionID,
+			"notify_id":         details.TraceID,
+			"workflow_name":     details.ExperimentName,
+			"namespace":         details.Namespace,
 		},
 	}
 
@@ -303,21 +303,23 @@ type FaultDetail struct {
 //
 // traceID      — the agent trace ID (notifyID / UUID with dashes)
 // faultDetails — ordered list of {name, target_namespace, target_label, target_kind}
-//                extracted from the ChaosEngine manifests in workflow templates.
+//
+//	extracted from the ChaosEngine manifests in workflow templates.
+//
 // groundTruth  — decoded map of fault name → ground truth data (from chaos hub YAML)
 // expCtx       — agent/experiment identity to embed in the experiment_context span
 //
 // IMPORTANT — fault names are always emitted in plain form on these spans:
 //
-//	1. The flash-agent never consumes its own emitted Langfuse spans; it only
-//	   sees data returned from MCP tool calls. Its LLM input is sanitised by a
-//	   3-pass redactor (gateway.py:_sanitize_leakage_terms) regardless of what
-//	   appears in trace metadata. So plain fault names here are not leakage.
-//	2. The Argo workflow step names (pod-cpu-hog, disk-fill, …) already expose
-//	   fault identity at the workflow level, so aliasing only the Langfuse spans
-//	   gives no real privacy.
-//	3. The certifier's fault_bucketing.py keys on the real name to attach the
-//	   correct ground_truth.yaml — aliases would break per-fault scoring.
+//  1. The flash-agent never consumes its own emitted Langfuse spans; it only
+//     sees data returned from MCP tool calls. Its LLM input is sanitised by a
+//     3-pass redactor (gateway.py:_sanitize_leakage_terms) regardless of what
+//     appears in trace metadata. So plain fault names here are not leakage.
+//  2. The Argo workflow step names (pod-cpu-hog, disk-fill, …) already expose
+//     fault identity at the workflow level, so aliasing only the Langfuse spans
+//     gives no real privacy.
+//  3. The certifier's fault_bucketing.py keys on the real name to attach the
+//     correct ground_truth.yaml — aliases would break per-fault scoring.
 //
 // The fault span metadata.attributes block follows the contract consumed by
 // certifier/fault_analyzer/scripts/fault_bucketing.py:
@@ -599,21 +601,21 @@ func (t *LangfuseTracer) traceWorker() {
 
 // ExperimentExecutionDetails contains details about an experiment execution.
 type ExperimentExecutionDetails struct {
-	TraceID        string
-	ExperimentID   string
-	ExperimentName string
-	ExperimentType string
-	FaultName      string
-	SessionID      string
-	AgentID        string
-	AgentName      string
-	AgentPlatform  string
-	AgentVersion   string
+	TraceID             string
+	ExperimentID        string
+	ExperimentName      string
+	ExperimentType      string
+	FaultName           string
+	SessionID           string
+	AgentID             string
+	AgentName           string
+	AgentPlatform       string
+	AgentVersion        string
 	AgentServiceAccount string
-	ProjectID      string
-	Namespace      string
-	Phase          string // e.g., "injection", "post-chaos"
-	Priority       string // e.g., "high", "low"
+	ProjectID           string
+	Namespace           string
+	Phase               string // e.g., "injection", "post-chaos"
+	Priority            string // e.g., "high", "low"
 }
 
 // ExperimentCompletionDetails contains details about experiment completion.
@@ -627,14 +629,14 @@ type ExperimentCompletionDetails struct {
 
 // ExperimentObservationDetails contains details about a continuous observation/event.
 type ExperimentObservationDetails struct {
-	TraceID  string
-	Name     string
-	Type     string
+	TraceID   string
+	Name      string
+	Type      string
 	StartTime string
 	EndTime   string
-	Input    map[string]interface{}
-	Output   map[string]interface{}
-	Metadata map[string]interface{}
+	Input     map[string]interface{}
+	Output    map[string]interface{}
+	Metadata  map[string]interface{}
 }
 
 // ExperimentScoreDetails contains details about a scoring event.
