@@ -22,6 +22,10 @@ type LangfuseTracer struct {
 	traceChan   chan *agent_registry.ExperimentTrace
 	workerDone  chan struct{}
 	closed      bool
+	// emittedFaults tracks which fault spans have been emitted per trace to avoid duplicates.
+	// Key: traceID:faultName, Value: true if already emitted
+	emittedFaults map[string]bool
+	emittedMu     sync.RWMutex
 }
 
 var (
@@ -56,12 +60,13 @@ func InitializeLangfuseTracer() error {
 
 	// Initialize tracer with buffered channel for async trace submission
 	tracer := &LangfuseTracer{
-		client:    client,
-		enabled:   true,
-		orgID:     orgID,
-		projectID: projectID,
-		traceChan: make(chan *agent_registry.ExperimentTrace, 100),
-		workerDone: make(chan struct{}),
+		client:        client,
+		enabled:       true,
+		orgID:         orgID,
+		projectID:     projectID,
+		traceChan:     make(chan *agent_registry.ExperimentTrace, 100),
+		workerDone:    make(chan struct{}),
+		emittedFaults: make(map[string]bool),
 	}
 
 	// Start background worker to process traces
@@ -330,7 +335,7 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	ctx context.Context,
 	traceID string,
 	faultDetails []FaultDetail,
-	groundTruth map[string]interface{},
+	_ map[string]interface{}, // groundTruth - kept for API compatibility, no longer used here
 	expCtx ExperimentContextForTrace,
 ) {
 	if !t.IsEnabled() || traceID == "" || len(faultDetails) == 0 {
@@ -340,8 +345,6 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	base := time.Now().UTC()
 	// experiment_context span at T — certifier scans this BEFORE fault spans
 	ctxNow := base.Format("2006-01-02T15:04:05.000Z")
-	// fault spans at T+1s — guaranteed to sort after experiment_context
-	now := base.Add(time.Second).Format("2006-01-02T15:04:05.000Z")
 
 	faultNames := make([]string, 0, len(faultDetails))
 	for _, fd := range faultDetails {
@@ -378,83 +381,145 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	}
 	ctxCancel()
 
-	for _, fd := range faultDetails {
-		fname := fd.Name
+	// NOTE: Fault spans are now emitted at injection time via EmitFaultSpanAtInjection
+	// instead of here. This ensures each fault span has the actual injection timestamp
+	// rather than all faults being logged at experiment start.
+	// The fault injection tracking is done in ChaosExperimentRunEvent when ChaosEngine
+	// nodes start executing.
+}
 
-		// ftData is the full ground truth for this fault as loaded from ground_truth.yaml.
-		// It already contains fault_description_goal_remediation, ideal_course_of_action,
-		// ideal_tool_usage_trajectory and (per-fault) sla — use it directly.
-		ftData, _ := groundTruth[fname].(map[string]interface{})
+// FaultInjectionDetails holds the data needed to emit a fault span at injection time.
+type FaultInjectionDetails struct {
+	FaultName       string
+	EngineName      string
+	Namespace       string
+	TargetNamespace string
+	TargetLabel     string
+	TargetKind      string
+	StartedAt       string // ISO-8601 timestamp when the fault started
+}
 
-		// Derive flat per-fault SLA keys for the certifier's attribute reader.
-		// These mirror what the experiment_context span carries globally so the
-		// scorecard can pick the per-fault target without nested traversal.
-		var slaDetect, slaMitigate, slaToolCalls interface{}
-		if ftData != nil {
-			if slaBlock, ok := ftData["sla"].(map[string]interface{}); ok {
-				if d, ok := slaBlock["time_to_detect"].(map[string]interface{}); ok {
-					slaDetect = d["threshold"]
-				}
-				if m, ok := slaBlock["time_to_mitigate"].(map[string]interface{}); ok {
-					slaMitigate = m["threshold"]
-				}
-				if tc, ok := slaBlock["max_tool_calls"].(map[string]interface{}); ok {
-					slaToolCalls = tc["threshold"]
-				}
+// EmitFaultSpanAtInjection emits a fault span when the ChaosEngine node starts execution.
+// This is called from ChaosExperimentRunEvent when a ChaosEngine node has a StartedAt time.
+// Unlike EmitFaultSpansForTrace which emits all faults upfront, this emits each fault
+// at its actual injection time.
+func (t *LangfuseTracer) EmitFaultSpanAtInjection(
+	ctx context.Context,
+	traceID string,
+	details FaultInjectionDetails,
+	groundTruth map[string]interface{},
+) {
+	if !t.IsEnabled() || traceID == "" || details.FaultName == "" {
+		return
+	}
+
+	// Check if already emitted to avoid duplicates
+	cacheKey := traceID + ":" + details.FaultName
+	t.emittedMu.RLock()
+	if t.emittedFaults[cacheKey] {
+		t.emittedMu.RUnlock()
+		return
+	}
+	t.emittedMu.RUnlock()
+
+	// Mark as emitted
+	t.emittedMu.Lock()
+	if t.emittedFaults == nil {
+		t.emittedFaults = make(map[string]bool)
+	}
+	t.emittedFaults[cacheKey] = true
+	t.emittedMu.Unlock()
+
+	fname := details.FaultName
+	startTime := details.StartedAt
+	if startTime == "" {
+		startTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	}
+
+	// Load ground truth for this fault
+	ftData, _ := groundTruth[fname].(map[string]interface{})
+
+	// Extract SLA values from ground truth
+	var slaDetect, slaMitigate, slaToolCalls interface{}
+	if ftData != nil {
+		if slaBlock, ok := ftData["sla"].(map[string]interface{}); ok {
+			if d, ok := slaBlock["time_to_detect"].(map[string]interface{}); ok {
+				slaDetect = d["threshold"]
+			}
+			if m, ok := slaBlock["time_to_mitigate"].(map[string]interface{}); ok {
+				slaMitigate = m["threshold"]
+			}
+			if tc, ok := slaBlock["max_tool_calls"].(map[string]interface{}); ok {
+				slaToolCalls = tc["threshold"]
 			}
 		}
+	}
 
-		// Always use the real fault name on the span. fault_bucketing.py keys
-		// on this exact string to attach the correct ground_truth bundle.
-		spanName := "fault: " + fname
+	spanName := "fault: " + fname
 
-		spanAttrs := map[string]interface{}{
-			"fault.name":                fname,
-			"fault.status":              "injected",
-			"fault.injection_timestamp": now,
-			"fault.target_namespace":    fd.TargetNamespace,
-			"fault.target_label":        fd.TargetLabel,
-			"fault.target_kind":         fd.TargetKind,
-		}
-		if slaDetect != nil {
-			spanAttrs["fault.ground_truth.sla.detect_sec"] = slaDetect
-		}
-		if slaMitigate != nil {
-			spanAttrs["fault.ground_truth.sla.mitigate_sec"] = slaMitigate
-		}
-		if slaToolCalls != nil {
-			spanAttrs["fault.ground_truth.sla.max_tool_calls"] = slaToolCalls
-		}
+	spanAttrs := map[string]interface{}{
+		"fault.name":                fname,
+		"fault.status":              "injected",
+		"fault.injection_timestamp": startTime,
+		"fault.target_namespace":    details.TargetNamespace,
+		"fault.target_label":        details.TargetLabel,
+		"fault.target_kind":         details.TargetKind,
+		"fault.engine_name":         details.EngineName,
+		"fault.namespace":           details.Namespace,
+	}
+	if slaDetect != nil {
+		spanAttrs["fault.ground_truth.sla.detect_sec"] = slaDetect
+	}
+	if slaMitigate != nil {
+		spanAttrs["fault.ground_truth.sla.mitigate_sec"] = slaMitigate
+	}
+	if slaToolCalls != nil {
+		spanAttrs["fault.ground_truth.sla.max_tool_calls"] = slaToolCalls
+	}
 
-		inputData := map[string]interface{}{
-			"fault_name":   fname,
-			"ground_truth": ftData,
-		}
-		metaData := map[string]interface{}{
-			"action":          "fault_injection",
-			"fault_name":      fname,
-			"ground_truth":    ftData,
-			"llm_used":        false,
-			"tokens_consumed": 0,
-			"attributes":      spanAttrs,
-		}
+	inputData := map[string]interface{}{
+		"fault_name":   fname,
+		"ground_truth": ftData,
+	}
+	metaData := map[string]interface{}{
+		"action":          "fault_injection",
+		"fault_name":      fname,
+		"ground_truth":    ftData,
+		"llm_used":        false,
+		"tokens_consumed": 0,
+		"attributes":      spanAttrs,
+	}
 
-		payload := &agent_registry.LangfuseObservationPayload{
-			TraceID:   traceID,
-			Name:      spanName,
-			Type:      "SPAN",
-			StartTime: &now,
-			EndTime:   &now,
-			Input:     inputData,
-			Output:    map[string]interface{}{"status": "injected"},
-			Metadata:  metaData,
-		}
+	payload := &agent_registry.LangfuseObservationPayload{
+		TraceID:   traceID,
+		Name:      spanName,
+		Type:      "SPAN",
+		StartTime: &startTime,
+		EndTime:   &startTime,
+		Input:     inputData,
+		Output:    map[string]interface{}{"status": "injected"},
+		Metadata:  metaData,
+	}
 
-		obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		if err := t.client.CreateObservation(obsCtx, payload); err != nil {
-			fmt.Printf("[Observability] Failed to emit fault span '%s' for trace %s: %v\n", spanName, traceID, err)
+	obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := t.client.CreateObservation(obsCtx, payload); err != nil {
+		fmt.Printf("[Observability] Failed to emit fault span '%s' at injection for trace %s: %v\n", spanName, traceID, err)
+	} else {
+		fmt.Printf("[Observability] Emitted fault span '%s' at injection time %s for trace %s\n", spanName, startTime, traceID)
+	}
+}
+
+// ClearEmittedFaults clears the emitted faults cache for a given trace.
+// Call this when an experiment run completes to prevent memory leaks.
+func (t *LangfuseTracer) ClearEmittedFaults(traceID string) {
+	t.emittedMu.Lock()
+	defer t.emittedMu.Unlock()
+	// Clear all entries for this trace
+	for key := range t.emittedFaults {
+		if len(key) > len(traceID) && key[:len(traceID)+1] == traceID+":" {
+			delete(t.emittedFaults, key)
 		}
-		cancel()
 	}
 }
 

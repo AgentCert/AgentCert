@@ -2968,6 +2968,49 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	}
 	logrus.WithFields(logFields).Infof("[Tracing] Final canonical traceID (notifyID preferred): %s", traceID)
 
+	// Emit fault spans at injection time when ChaosEngine nodes have started.
+	// This replaces the upfront emission so fault spans reflect actual injection timestamps.
+	if traceID != "" {
+		tracer := observability.GetLangfuseTracer()
+		if tracer.IsEnabled() {
+			// Load ground truth for fault SLA values
+			faultNames := make([]string, 0)
+			for _, node := range executionData.Nodes {
+				if node.Type == "ChaosEngine" && node.ChaosExp != nil && node.StartedAt != "" {
+					faultName := node.ChaosExp.ExperimentName
+					if faultName == "" {
+						faultName = node.ChaosExp.EngineName
+					}
+					if faultName != "" {
+						faultNames = append(faultNames, faultName)
+					}
+				}
+			}
+			groundTruth := ops.LoadFaultGroundTruthsDecoded(faultNames)
+			if groundTruth == nil {
+				groundTruth = make(map[string]interface{})
+			}
+
+			for _, node := range executionData.Nodes {
+				if node.Type == "ChaosEngine" && node.ChaosExp != nil && node.StartedAt != "" {
+					faultName := node.ChaosExp.ExperimentName
+					if faultName == "" {
+						faultName = node.ChaosExp.EngineName
+					}
+					if faultName != "" {
+						tracer.EmitFaultSpanAtInjection(ctx, traceID, observability.FaultInjectionDetails{
+							FaultName:       faultName,
+							EngineName:      node.ChaosExp.EngineName,
+							Namespace:       node.ChaosExp.Namespace,
+							TargetNamespace: node.ChaosExp.Namespace,
+							StartedAt:       node.StartedAt,
+						}, groundTruth)
+					}
+				}
+			}
+		}
+	}
+
 	// G2 fix: stamp experiment.id and experiment.run_id onto the long-running experiment-run span
 	if observability.OTELTracerEnabled() {
 		if traceID != "" && event.ExperimentRunID != "" && traceID != event.ExperimentRunID {
@@ -3069,6 +3112,11 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	traceExperimentObservation(ctx, traceID, event, executionData, metricsPtr, c.agentRegistryOperator)
 	if isCompleted {
 		scoreExperimentRun(ctx, traceID, metricsPtr, executionData.Phase)
+		// Clear the emitted faults cache to prevent memory leaks
+		tracer := observability.GetLangfuseTracer()
+		if tracer.IsEnabled() {
+			tracer.ClearEmittedFaults(traceID)
+		}
 	}
 
 	//TODO check for mongo transaction
