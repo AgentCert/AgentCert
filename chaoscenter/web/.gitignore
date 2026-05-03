@@ -18,3 +18,4 @@ cypress/videos/
 certificates
 .npmrc
 tasks.md
+package-lock.json
