@@ -1722,20 +1722,16 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 		targetPullPolicy = string(corev1.PullAlways)
 	}
 
-	forcedSetArgs := []string{
-		// MCP servers are now installed cluster-wide in the litmus-exp namespace
-		// (chaoscenter graphql/server/manifests/namespace/4b_mcp_tools_deployment.yaml)
-		// so the per-app sock-shop chart must NOT spawn duplicates that conflict on
-		// service account / node-port and end up CrashLoopBackOff.
-		"-set=mcpTools.prometheusMcpServer.enabled=false",
-		"-set=mcpTools.kubernetesMcpServer.enabled=false",
-	}
-
 	switch corev1.PullPolicy(targetPullPolicy) {
 	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
 	default:
 		targetPullPolicy = string(corev1.PullAlways)
 	}
+
+	// MCP server enable flags are no longer force-disabled here. The sock-shop
+	// chart's values.yaml owns that decision so MCPs can be deployed alongside
+	// the app for namespace-scoped RBAC. The previous override pinned them to
+	// false because MCPs lived cluster-wide in the litmus ns.
 
 	changed := false
 	for i := range templates {
@@ -1752,20 +1748,6 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 		if t.Container.ImagePullPolicy != corev1.PullPolicy(targetPullPolicy) {
 			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
 			changed = true
-		}
-
-		for _, forcedArg := range forcedSetArgs {
-			alreadyPresent := false
-			for _, existingArg := range t.Container.Args {
-				if existingArg == forcedArg {
-					alreadyPresent = true
-					break
-				}
-			}
-			if !alreadyPresent {
-				t.Container.Args = append(t.Container.Args, forcedArg)
-				changed = true
-			}
 		}
 	}
 

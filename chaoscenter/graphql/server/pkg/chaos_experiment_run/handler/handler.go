@@ -30,7 +30,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 
 	"github.com/ghodss/yaml"
 	chaosTypes "github.com/litmuschaos/chaos-operator/api/litmuschaos/v1alpha1"
@@ -421,7 +420,7 @@ func normalizeInstallTemplates(templates []v1alpha1.Template) bool {
 // {{workflow.parameters.installTimeout}}.
 func ensureInstallTimeoutParam(params *v1alpha1.Arguments) {
 	const paramName = "installTimeout"
-	const defaultValue = "900"
+	const defaultValue = "15m"
 
 	for _, p := range params.Parameters {
 		if p.Name == paramName {
@@ -1730,9 +1729,9 @@ func (c *ChaosExperimentRunHandler) ListExperimentRun(projectID string, request 
 	return &output, nil
 }
 
-// traceExperimentExecution logs fault execution to observability backend.
-// When OTEL is enabled, creates an OTEL root span for the experiment run.
-// Falls back to Langfuse REST when OTEL is not configured.
+// traceExperimentExecution stamps trace-level metadata on the Langfuse trace and emits
+// the instant experiment-triggered span observation. Both go through REST so the
+// experiment trace shares the UUID-keyed traceID with LiteLLM generations.
 func traceExperimentExecution(ctx context.Context, notifyID string, experimentID string, experimentName string, experimentType string, infra dbChaosInfra.ChaosInfra, projectID string, traceAgentID string, traceAgentName string, traceAgentPlatform string) error {
 	namespace := ""
 	if infra.InfraNamespace != nil {
@@ -1743,67 +1742,35 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 		serviceAccount = *infra.ServiceAccount
 	}
 
-	// OTEL path: emit instant start span + create long-running end span
-	if observability.OTELTracerEnabled() {
-		startAttrs := []attribute.KeyValue{
-			attribute.String("experiment.id", experimentID),
-			attribute.String("experiment.name", experimentName),
-			attribute.String("experiment.type", experimentType),
-			attribute.String("experiment.fault_name", "chaos-workflow"),
-			attribute.String("experiment.session_id", notifyID),
-			attribute.String("experiment.run_key", notifyID),
-			attribute.String("infra.id", infra.InfraID),
-			attribute.String("infra.name", infra.Name),
-			attribute.String("infra.platform_name", infra.PlatformName),
-			attribute.String("project.id", projectID),
-			attribute.String("infra.namespace", namespace),
-			attribute.String("infra.service_account", serviceAccount),
-			attribute.String("experiment.phase", "injection"),
-			attribute.String("experiment.priority", "high"),
-			attribute.String("agent.id", traceAgentID),
-			attribute.String("agent.name", traceAgentName),
-			attribute.String("agent.platform_name", traceAgentPlatform),
-		}
-		// Stamp SLA contract at span creation so the certifier always finds it,
-		// regardless of which scoring code path completes the run later.
-		startAttrs = append(startAttrs, observability.LoadSLAFromEnv().Attributes()...)
+	startAttrs := []attribute.KeyValue{
+		attribute.String("experiment.id", experimentID),
+		attribute.String("experiment.name", experimentName),
+		attribute.String("experiment.type", experimentType),
+		attribute.String("experiment.fault_name", "chaos-workflow"),
+		attribute.String("experiment.session_id", notifyID),
+		attribute.String("experiment.run_key", notifyID),
+		attribute.String("infra.id", infra.InfraID),
+		attribute.String("infra.name", infra.Name),
+		attribute.String("infra.platform_name", infra.PlatformName),
+		attribute.String("project.id", projectID),
+		attribute.String("infra.namespace", namespace),
+		attribute.String("infra.service_account", serviceAccount),
+		attribute.String("experiment.phase", "injection"),
+		attribute.String("experiment.priority", "high"),
+		attribute.String("agent.id", traceAgentID),
+		attribute.String("agent.name", traceAgentName),
+		attribute.String("agent.platform_name", traceAgentPlatform),
+	}
+	// Stamp SLA contract at span creation so the certifier always finds it,
+	// regardless of which scoring code path completes the run later.
+	startAttrs = append(startAttrs, observability.LoadSLAFromEnv().Attributes()...)
 
-		// Long-running root span — ended later by scoreExperimentRun, appears LAST
-		spanCtx, _ := observability.StartExperimentSpan(ctx, notifyID, startAttrs...)
-		logrus.Infof("[OTEL] Started experiment-run span: traceID=%s experiment=%s", notifyID, experimentName)
+	tracer := observability.GetLangfuseTracer()
 
-		// Instant child span — shares the same traceID as the root span
-		observability.EmitExperimentStartSpan(spanCtx, startAttrs...)
-		logrus.Infof("[OTEL] Emitted experiment-triggered span: traceID=%s experiment=%s", notifyID, experimentName)
-
-		// Upsert Langfuse trace metadata (name, userId, sessionId, agentid) via REST
-		// alongside OTEL spans. OTEL alone cannot set trace-level metadata in Langfuse.
-		// Single upsert with UUID form (notifyID with hyphens) to match LiteLLM's trace format.
-		if lft := observability.GetLangfuseTracer(); lft.IsEnabled() {
-			details := &observability.ExperimentExecutionDetails{
-				TraceID:             notifyID,
-				ExperimentID:        experimentID,
-				ExperimentName:      experimentName,
-				ExperimentType:      experimentType,
-				FaultName:           "chaos-workflow",
-				SessionID:           notifyID,
-				AgentID:             traceAgentID,
-				AgentName:           traceAgentName,
-				AgentPlatform:       traceAgentPlatform,
-				AgentVersion:        infra.Version,
-				AgentServiceAccount: serviceAccount,
-				ProjectID:           projectID,
-				Namespace:           namespace,
-				Phase:               "injection",
-				Priority:            "high",
-			}
-			_ = lft.TraceExperimentExecution(ctx, details)
-		}
-		return nil
+	if err := tracer.EmitExperimentTriggeredSpan(ctx, notifyID, experimentName, startAttrs...); err != nil {
+		logrus.Warnf("[Tracing] EmitExperimentTriggeredSpan failed for notifyID=%s: %v", notifyID, err)
 	}
 
-	// Langfuse REST fallback
-	tracer := observability.GetLangfuseTracer()
 	return tracer.TraceExperimentExecution(ctx, &observability.ExperimentExecutionDetails{
 		TraceID:             notifyID,
 		ExperimentID:        experimentID,
@@ -1823,15 +1790,10 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 	})
 }
 
-// completeExperimentExecution logs fault execution completion to observability backend.
-// When OTEL is enabled, this is a no-op (spans are ended in ChaosExperimentRunEvent).
-// Falls back to Langfuse REST when OTEL is not configured.
+// completeExperimentExecution stamps a "submitted successfully" trace metadata update
+// at experiment trigger time. The closing experiment-run span is emitted later from
+// scoreExperimentRun once the workflow actually completes.
 func completeExperimentExecution(ctx context.Context, notifyID string, experimentID string, experimentName string, status string, result string) error {
-	if observability.OTELTracerEnabled() {
-		// OTEL spans are ended via endExperimentOTELSpan; no separate "complete" needed
-		return nil
-	}
-
 	tracer := observability.GetLangfuseTracer()
 	return tracer.CompleteExperimentExecution(ctx, notifyID, &observability.ExperimentCompletionDetails{
 		ExperimentID:   experimentID,
@@ -1917,189 +1879,68 @@ func syncWorkflowNodeSpans(ctx context.Context, traceID string, event model.Expe
 		terminal := node.FinishedAt != "" || isTerminalWorkflowNodePhase(node.Phase)
 		// Emit a child span for every workflow node (install-application,
 		// install-agent, chaos faults, cleanup steps, etc.) so the full
-		// experiment lifecycle is visible in Langfuse / OTEL.
-		if observability.OTELTracerEnabled() {
-			observability.UpsertWorkflowNodeSpan(traceID, nodeID, node.Name, terminal, stepAttrs...)
+		// experiment lifecycle is visible in Langfuse.
+		startedAt := observability.ParseArgoTime(node.StartedAt)
+		finishedAt := observability.ParseArgoTime(node.FinishedAt)
+		if tracer := observability.GetLangfuseTracer(); tracer.IsEnabled() {
+			_ = tracer.UpsertWorkflowNodeSpan(ctx, traceID, nodeID, node.Name, startedAt, finishedAt, terminal, stepAttrs...)
 		}
 
 		// When install-agent completes successfully, the agent has just registered
-		// itself in MongoDB with a fresh agent_id. Look it up and back-fill the
-		// agent.id / agent.name attributes on the root experiment-run span so the
-		// trace reflects the actual deployed agent identity.
+		// itself in MongoDB with a fresh agent_id. Capture it on the per-node span
+		// metadata so the trace records which agent was deployed.
 		if terminal &&
 			strings.ToLower(node.Phase) == "succeeded" &&
 			strings.Contains(strings.ToLower(node.Name), "install-agent") &&
 			agentOp != nil &&
 			executionData.Namespace != "" {
 			if freshAgent, lookupErr := agentOp.GetAgentByNamespace(ctx, executionData.Namespace); lookupErr == nil && freshAgent != nil {
-				updateAttrs := []attribute.KeyValue{
-					attribute.String("agent.id", freshAgent.AgentID),
-					attribute.String("agent.name", freshAgent.Name),
-				}
-				if freshAgent.Vendor != "" {
-					updateAttrs = append(updateAttrs, attribute.String("agent.platform_name", freshAgent.Vendor))
-				}
-				observability.SetExperimentSpanAttributes(traceID, updateAttrs...)
-				logrus.Infof("[OTEL] Updated agent.id on experiment span after install-agent: agentID=%s traceID=%s", freshAgent.AgentID, traceID)
+				logrus.Infof("[Tracing] install-agent succeeded: agentID=%s traceID=%s", freshAgent.AgentID, traceID)
 			}
 		}
 	}
 }
 
-// traceExperimentObservation logs continuous workflow events.
-// When OTEL is enabled, adds events to the active experiment span.
-// Falls back to Langfuse REST when OTEL is not configured.
-func traceExperimentObservation(ctx context.Context, traceID string, event model.ExperimentRunRequest, executionData types.ExecutionData, metrics *types.ExperimentRunMetrics, agentOp agent_registry.Operator) {
+// traceExperimentObservation refreshes per-node child spans on every Argo watch
+// tick. Each step is represented by a single SPAN observation keyed on
+// traceID-nodeID, which Langfuse coalesces server-side; the tracer's internal
+// state cache further suppresses upserts when nothing has changed for a node.
+// Run-level metrics are emitted separately by scoreExperimentRun on completion.
+func traceExperimentObservation(ctx context.Context, traceID string, event model.ExperimentRunRequest, executionData types.ExecutionData, agentOp agent_registry.Operator) {
 	if traceID == "" {
 		return
 	}
 
-	// OTEL path: add events and child spans to the active experiment span
-	if observability.OTELTracerEnabled() {
-		observationName := fmt.Sprintf("workflow-event: %s (%s)", executionData.Phase, executionData.EventType)
-		if executionData.Phase == "" && executionData.EventType == "" {
-			observationName = "workflow-event"
-		}
-
-		eventAttrs := []attribute.KeyValue{
-			attribute.String("experiment.id", event.ExperimentID),
-			attribute.String("experiment.run_id", event.ExperimentRunID),
-			attribute.String("experiment.name", event.ExperimentName),
-			attribute.String("event.type", executionData.EventType),
-			attribute.String("event.phase", executionData.Phase),
-			attribute.String("event.message", executionData.Message),
-			attribute.Bool("event.completed", event.Completed),
-		}
-
-		if metrics != nil {
-			eventAttrs = append(eventAttrs,
-				attribute.Float64("metrics.resiliency_score", metrics.ResiliencyScore),
-				attribute.Int("metrics.total_experiments", metrics.TotalExperiments),
-				attribute.Int("metrics.experiments_passed", metrics.ExperimentsPassed),
-				attribute.Int("metrics.experiments_failed", metrics.ExperimentsFailed),
-				attribute.Int("metrics.experiments_awaited", metrics.ExperimentsAwaited),
-				attribute.Int("metrics.experiments_stopped", metrics.ExperimentsStopped),
-				attribute.Int("metrics.experiments_na", metrics.ExperimentsNA),
-			)
-		}
-
-		// Add execution data as JSON attribute
-		eventAttrs = append(eventAttrs,
-			attribute.String("execution_data", observability.MarshalJSON(executionData)),
-		)
-
-		observability.AddExperimentEvent(traceID, observationName, eventAttrs...)
-
-		// Upsert a child span for every workflow node on every event so spans
-		// open as soon as the node starts (not just at completion).
-		syncWorkflowNodeSpans(ctx, traceID, event, executionData, agentOp)
-
-		// Also update the span's top-level attributes with latest phase
-		observability.SetExperimentSpanAttributes(traceID,
-			attribute.String("experiment.phase", executionData.Phase),
-			attribute.String("experiment.event_type", executionData.EventType),
-			attribute.String("experiment.type", executionData.ExperimentType),
-			attribute.String("experiment.run_id", event.ExperimentRunID),
-		)
-
-		logrus.Infof("[OTEL] Added event '%s' to span: traceID=%s", observationName, traceID)
-		return
-	}
-
-	// Langfuse REST fallback
-	tracer := observability.GetLangfuseTracer()
-
-	input := map[string]interface{}{
-		"experimentID":    event.ExperimentID,
-		"experimentRunID": event.ExperimentRunID,
-		"experimentName":  event.ExperimentName,
-		"revisionID":      event.RevisionID,
-		"completed":       event.Completed,
-	}
-	if event.NotifyID != nil {
-		input["notifyID"] = *event.NotifyID
-	}
-
-	output := map[string]interface{}{
-		"executionData": executionData,
-	}
-	if metrics != nil {
-		output["metrics"] = metrics
-	}
-
-	metadata := map[string]interface{}{
-		"eventType": executionData.EventType,
-		"phase":     executionData.Phase,
-		"message":   executionData.Message,
-	}
-
-	observationName := fmt.Sprintf("workflow-event: %s (%s)", executionData.Phase, executionData.EventType)
-	if executionData.Phase == "" && executionData.EventType == "" {
-		observationName = "workflow-event"
-	}
-
-	logrus.Infof("[Tracing] Creating observation: %s for trace: %s", observationName, traceID)
-
-	now := time.Now()
-
-	_ = tracer.TraceExperimentObservation(ctx, &observability.ExperimentObservationDetails{
-		TraceID:   traceID,
-		Name:      observationName,
-		Type:      "EVENT",
-		StartTime: now.Format(time.RFC3339),
-		EndTime:   now.Format(time.RFC3339),
-		Input:     input,
-		Output:    output,
-		Metadata:  metadata,
-	})
+	syncWorkflowNodeSpans(ctx, traceID, event, executionData, agentOp)
 }
 
-// scoreExperimentRun logs resiliency scores and fault metrics after experiment completion.
-// When OTEL is enabled, sets span attributes for metrics and ends the span.
-// Langfuse scores are always submitted via REST (OTEL has no native score concept).
-func scoreExperimentRun(ctx context.Context, traceID string, metrics *types.ExperimentRunMetrics, status string) {
+// scoreExperimentRun emits the closing experiment-run span and submits resiliency
+// scores when an experiment finishes. expStart should be the original trigger time
+// sourced from the experiment_run mongo document's CreatedAt field.
+func scoreExperimentRun(ctx context.Context, traceID string, experimentName string, expStart time.Time, metrics *types.ExperimentRunMetrics, status string) {
 	if traceID == "" || metrics == nil {
 		return
 	}
 
 	langfuseTraceID := traceID
-	if observability.OTELTracerEnabled() {
-		langfuseTraceID = observability.LinkedLangfuseTraceID(traceID)
-	}
 
-	// OTEL path: set final metric attributes and end the experiment span
-	if observability.OTELTracerEnabled() {
-		observability.SetExperimentSpanAttributes(traceID,
-			attribute.String("experiment.final_phase", status),
-			attribute.Float64("experiment.resiliency_score", metrics.ResiliencyScore),
-			attribute.Int("experiment.total_faults", metrics.TotalExperiments),
-			attribute.Int("experiment.faults_passed", metrics.ExperimentsPassed),
-			attribute.Int("experiment.faults_failed", metrics.ExperimentsFailed),
-			attribute.Int("experiment.faults_awaited", metrics.ExperimentsAwaited),
-			attribute.Int("experiment.faults_stopped", metrics.ExperimentsStopped),
-			attribute.Int("experiment.faults_na", metrics.ExperimentsNA),
-		)
-
-		// Set span status based on experiment outcome
-		_, span := observability.GetExperimentSpan(traceID)
-		if span != nil {
-			phaseLower := strings.ToLower(status)
-			if strings.Contains(phaseLower, "failed") || strings.Contains(phaseLower, "error") {
-				span.SetStatus(codes.Error, fmt.Sprintf("experiment %s: resiliency=%.1f%%", status, metrics.ResiliencyScore))
-			} else {
-				span.SetStatus(codes.Ok, fmt.Sprintf("experiment %s: resiliency=%.1f%%", status, metrics.ResiliencyScore))
-			}
-		}
-
-		// End the OTEL span — this triggers export to Langfuse via OTLP
-		observability.EndExperimentSpan(traceID)
-		logrus.Infof("[OTEL] Ended experiment span: traceID=%s phase=%s resiliency=%.1f%%", traceID, status, metrics.ResiliencyScore)
-	}
-
-	// Langfuse REST scores — submitted regardless of OTEL (scores need REST API)
 	tracer := observability.GetLangfuseTracer()
 	if !tracer.IsEnabled() || langfuseTraceID == "" {
 		return
+	}
+
+	finalAttrs := []attribute.KeyValue{
+		attribute.String("experiment.final_phase", status),
+		attribute.Float64("experiment.resiliency_score", metrics.ResiliencyScore),
+		attribute.Int("experiment.total_faults", metrics.TotalExperiments),
+		attribute.Int("experiment.faults_passed", metrics.ExperimentsPassed),
+		attribute.Int("experiment.faults_failed", metrics.ExperimentsFailed),
+		attribute.Int("experiment.faults_awaited", metrics.ExperimentsAwaited),
+		attribute.Int("experiment.faults_stopped", metrics.ExperimentsStopped),
+		attribute.Int("experiment.faults_na", metrics.ExperimentsNA),
+	}
+	if err := tracer.EmitExperimentRunSpan(ctx, langfuseTraceID, experimentName, expStart, time.Now(), status, finalAttrs...); err != nil {
+		logrus.Warnf("[Tracing] EmitExperimentRunSpan failed for trace %s: %v", langfuseTraceID, err)
 	}
 
 	// Score 1: Resiliency Score
@@ -2439,58 +2280,11 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 				meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
 			}
 
-			// OTEL Hook 1: Create a per-fault child span with config details.
-			// Real fault names are always emitted on these spans:
-			//   - the agent (LLM) never reads OTEL output, only MCP tool calls
-			//     (sanitised by gateway.py:_sanitize_leakage_terms before any
-			//     LLM input is built);
-			//   - the Argo workflow step name already carries the fault name
-			//     publicly, so aliasing only the OTEL span gives no privacy;
-			//   - the certifier needs the real name to attach the correct
-			//     ground_truth.yaml when scoring.
-			if observability.OTELTracerEnabled() && len(meta.Spec.Experiments) > 0 {
-				exp := meta.Spec.Experiments[0]
-				faultName := exp.Name
-
-				faultAttrs := []attribute.KeyValue{
-					attribute.String("experiment.id", workflow.ExperimentID),
-					attribute.String("fault.name", faultName),
-					attribute.String("fault.target_namespace", meta.Spec.Appinfo.Appns),
-					attribute.String("fault.target_label", meta.Spec.Appinfo.Applabel),
-					attribute.String("fault.target_kind", string(meta.Spec.Appinfo.AppKind)),
-					attribute.String("fault.engine_template", template.Name),
-				}
-
-				// Extract chaos params from experiment env vars
-				for _, envVar := range exp.Spec.Components.ENV {
-					switch envVar.Name {
-					case "TOTAL_CHAOS_DURATION":
-						faultAttrs = append(faultAttrs, attribute.String("fault.chaos_duration", envVar.Value))
-					case "CPU_CORES":
-						faultAttrs = append(faultAttrs, attribute.String("fault.cpu_cores", envVar.Value))
-					case "MEMORY_CONSUMPTION":
-						faultAttrs = append(faultAttrs, attribute.String("fault.memory_consumption", envVar.Value))
-					case "FILL_PERCENTAGE":
-						faultAttrs = append(faultAttrs, attribute.String("fault.fill_percentage", envVar.Value))
-					case "NETWORK_PACKET_LOSS_PERCENTAGE":
-						faultAttrs = append(faultAttrs, attribute.String("fault.network_loss_pct", envVar.Value))
-					case "CHAOS_INTERVAL":
-						faultAttrs = append(faultAttrs, attribute.String("fault.chaos_interval", envVar.Value))
-					}
-				}
-
-				// Add probe names
-				var probeNames []string
-				for _, p := range exp.Spec.Probe {
-					probeNames = append(probeNames, p.Name)
-				}
-				if len(probeNames) > 0 {
-					faultAttrs = append(faultAttrs, attribute.String("fault.probes", strings.Join(probeNames, ",")))
-				}
-
-				observability.StartFaultSpan(notifyID, faultName, faultAttrs...)
-				logrus.Infof("[OTEL] Created per-fault span: fault=%s target=%s/%s", faultName, meta.Spec.Appinfo.AppKind, meta.Spec.Appinfo.Applabel)
-			}
+			// Fault spans are emitted at injection time via EmitFaultSpanAtInjection.
+			// The manifest-build hook that pre-registered an OTEL fault span here was
+			// removed when the OTEL path was retired; chaos config attrs (duration,
+			// probes, target) now travel on the per-node workflow-step span and the
+			// REST fault span instead.
 
 			res, err := yaml.Marshal(&meta)
 			if err != nil {
@@ -2957,6 +2751,30 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	}
 	logrus.WithFields(logFields).Infof("[Tracing] Final canonical traceID (notifyID preferred): %s", traceID)
 
+	// Once the Argo workflow has a k8s UID (event.ExperimentRunID) — the same
+	// run_id used to query runs in the chaos DB — upsert the Langfuse trace
+	// Name to "<experimentName>:<runID>" so the trace title matches what users
+	// see in the runs UI. SetTraceName is one-shot per traceID.
+	if traceID != "" && strings.TrimSpace(event.ExperimentRunID) != "" {
+		tracer := observability.GetLangfuseTracer()
+		if tracer.IsEnabled() {
+			expName := event.ExperimentName
+			if strings.TrimSpace(expName) == "" {
+				if wfRun, dbErr := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{{"experiment_run_id", event.ExperimentRunID}}); dbErr == nil && wfRun.ExperimentName != "" {
+					expName = wfRun.ExperimentName
+				}
+			}
+			if strings.TrimSpace(expName) != "" {
+				traceName := fmt.Sprintf("%s:%s", expName, event.ExperimentRunID)
+				_ = tracer.SetTraceName(ctx, traceID, traceName)
+				// Also upsert experiment_run_id onto the root trace metadata so it
+				// matches the run_id surfaced in the chaoscenter UI. notify_id
+				// (the trace key shared with LiteLLM/sidecar) stays unchanged.
+				_ = tracer.SetTraceExperimentRunID(ctx, traceID, traceName, event.ExperimentRunID)
+			}
+		}
+	}
+
 	// Emit fault spans at injection time when ChaosEngine nodes have started.
 	// This replaces the upfront emission so fault spans reflect actual injection timestamps.
 	if traceID != "" {
@@ -3000,70 +2818,19 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 		}
 	}
 
-	// G2 fix: stamp experiment.id and experiment.run_id onto the long-running experiment-run span
-	if observability.OTELTracerEnabled() {
-		if traceID != "" && event.ExperimentRunID != "" && traceID != event.ExperimentRunID {
-			// Move any span state keyed by experiment_run_id under canonical notifyID.
-			observability.RebindExperimentSpan(event.ExperimentRunID, traceID)
-		}
-		observability.SetExperimentSpanAttributes(traceID,
-			attribute.String("experiment.id", event.ExperimentID),
-			attribute.String("experiment.run_id", event.ExperimentRunID),
-		)
-	}
+	// experiment.id and experiment.run_id are stamped on every per-node and per-fault
+	// REST observation, so no separate root-span rebind is needed once OTEL is gone.
 
 	var metricsPtr *types.ExperimentRunMetrics
 	if isCompleted {
 		metricsPtr = &workflowRunMetrics
 	}
 
-	// OTEL Hook 2: End per-fault child spans with verdicts from execution data
-	if observability.OTELTracerEnabled() && isCompleted {
-		for _, node := range executionData.Nodes {
-			if node.Type == "ChaosEngine" && node.ChaosExp != nil {
-				faultName := node.ChaosExp.ExperimentName
-				if faultName == "" {
-					faultName = node.ChaosExp.EngineName
-				}
-
-				var verdictAttrs []attribute.KeyValue
-				verdictAttrs = []attribute.KeyValue{
-					attribute.String("experiment.id", event.ExperimentID),
-					attribute.String("experiment.run_id", event.ExperimentRunID),
-					attribute.String("fault.verdict", node.ChaosExp.ExperimentVerdict),
-					attribute.String("fault.probe_success_pct", node.ChaosExp.ProbeSuccessPercentage),
-					attribute.String("fault.status", node.ChaosExp.ExperimentStatus),
-					attribute.String("fault.engine_name", node.ChaosExp.EngineName),
-					attribute.String("fault.namespace", node.ChaosExp.Namespace),
-					attribute.String("fault.started_at", node.StartedAt),
-					attribute.String("fault.finished_at", node.FinishedAt),
-					attribute.String("fault.node_phase", node.Phase),
-				}
-				if node.ChaosExp.FailStep != "" {
-					verdictAttrs = append(verdictAttrs, attribute.String("fault.fail_step", node.ChaosExp.FailStep))
-				}
-
-				// End the per-fault child span with verdict attributes
-				observability.EndFaultSpan(traceID, faultName, verdictAttrs...)
-
-				logrus.WithFields(logFields).Infof("[OTEL] Ended per-fault span: fault=%s verdict=%s probe%%=%s",
-					faultName, node.ChaosExp.ExperimentVerdict, node.ChaosExp.ProbeSuccessPercentage)
-			}
-		}
-	}
-
-	// Also submit per-fault observations via Langfuse REST for Langfuse-native consumers.
-	// In OTEL mode, attach them to the active OTEL-exported trace ID for proper stitching.
+	// Submit per-fault verdict observations via Langfuse REST.
 	if isCompleted {
 		tracer := observability.GetLangfuseTracer()
 		if tracer.IsEnabled() {
 			langfuseTraceID := traceID
-			if observability.OTELTracerEnabled() {
-				langfuseTraceID = observability.LinkedLangfuseTraceID(traceID)
-			}
-			if langfuseTraceID == "" {
-				langfuseTraceID = traceID
-			}
 			for _, node := range executionData.Nodes {
 				if node.Type == "ChaosEngine" && node.ChaosExp != nil {
 					faultName := node.ChaosExp.ExperimentName
@@ -3098,13 +2865,31 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 		}
 	}
 
-	traceExperimentObservation(ctx, traceID, event, executionData, metricsPtr, c.agentRegistryOperator)
+	traceExperimentObservation(ctx, traceID, event, executionData, c.agentRegistryOperator)
 	if isCompleted {
-		scoreExperimentRun(ctx, traceID, metricsPtr, executionData.Phase)
-		// Clear the emitted faults cache to prevent memory leaks
+		// Source experiment name + start time from the run doc for the closing
+		// experiment-run span. expStart comes from CreatedAt (epoch seconds) — per
+		// project decision, no dedicated traceStartedAt field.
+		expName := event.ExperimentName
+		expStart := time.Now()
+		if event.ExperimentRunID != "" {
+			if wfRun, dbErr := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{{"experiment_run_id", event.ExperimentRunID}}); dbErr == nil {
+				if wfRun.ExperimentName != "" {
+					expName = wfRun.ExperimentName
+				}
+				if wfRun.CreatedAt > 0 {
+					expStart = time.Unix(wfRun.CreatedAt, 0)
+				}
+			}
+		}
+		scoreExperimentRun(ctx, traceID, expName, expStart, metricsPtr, executionData.Phase)
+		// Clear per-trace caches to prevent memory leaks once the run is sealed.
 		tracer := observability.GetLangfuseTracer()
 		if tracer.IsEnabled() {
 			tracer.ClearEmittedFaults(traceID)
+			tracer.ClearWorkflowNodeStates(traceID)
+			tracer.ClearTraceNameSet(traceID)
+			tracer.ClearTraceExperimentRunIDSet(traceID)
 		}
 	}
 

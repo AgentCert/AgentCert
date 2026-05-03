@@ -116,19 +116,11 @@ func main() {
 		// Don't fail startup if Langfuse is not configured
 	}
 
-	// Initialize OTEL tracer for OTEL-compliant tracing to Langfuse
-	if err := observability.InitOTELTracer(context.Background()); err != nil {
-		log.Printf("Failed to initialize OTEL tracer: %v", err)
-		// Don't fail startup if OTEL is not configured
-	}
-
 	// Emit an explicit startup mode so trace path is unambiguous in runtime logs.
-	if observability.OTELTracerEnabled() {
-		log.Println("[Observability] Mode: OTEL enabled (trace events via OTEL exporter; Langfuse REST remains active for direct Langfuse flows)")
-	} else if observability.GetLangfuseTracer().IsEnabled() {
-		log.Println("[Observability] Mode: Langfuse-only (OTEL disabled; traces/observations/scores via Langfuse REST)")
+	if observability.GetLangfuseTracer().IsEnabled() {
+		log.Println("[Observability] Mode: Langfuse REST (traces/observations/scores via REST API)")
 	} else {
-		log.Println("[Observability] Mode: tracing disabled (no OTEL endpoint and no Langfuse credentials)")
+		log.Println("[Observability] Mode: tracing disabled (no Langfuse credentials)")
 	}
 
 	enableHTTPSConnection, err := strconv.ParseBool(utils.Config.EnableInternalTls)
@@ -219,7 +211,7 @@ func main() {
 	projectEventChannel := make(chan string)
 	go projects.ProjectEvents(projectEventChannel, mongodb.MgoClient, mongodbOperator)
 
-	// Graceful shutdown handler for OTEL and Langfuse flush
+	// Graceful shutdown handler for Langfuse flush
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -229,9 +221,6 @@ func main() {
 		defer cancel()
 		if err := observability.GetLangfuseTracer().Close(shutdownCtx); err != nil {
 			log.Errorf("Langfuse tracer shutdown error: %v", err)
-		}
-		if err := observability.ShutdownOTELTracer(shutdownCtx); err != nil {
-			log.Errorf("OTEL tracer shutdown error: %v", err)
 		}
 		os.Exit(0)
 	}()

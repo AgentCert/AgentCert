@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // LangfuseTracer manages Langfuse integration for the Litmus chaos center backend.
@@ -26,6 +29,26 @@ type LangfuseTracer struct {
 	// Key: traceID:faultName, Value: true if already emitted
 	emittedFaults map[string]bool
 	emittedMu     sync.RWMutex
+	// nodeStateCache tracks the last (startTime, endTime, terminal) signature
+	// emitted for each workflow node so repeat events that don't change state
+	// are dropped before hitting the API. Langfuse coalesces server-side via
+	// the deterministic ID, but suppressing here also kills log noise and the
+	// outbound round-trip. Key: traceID:nodeID, Value: state signature.
+	nodeStateCache map[string]string
+	nodeStateMu    sync.RWMutex
+	// traceNameSet records traceIDs whose Name has already been upserted with
+	// the canonical "<expName>:<argoRunID>" form. Argo's run UID isn't known
+	// at experiment trigger time, so the trace is created with just the
+	// experiment name and the run-id suffix is appended on the first
+	// subscriber tick. This cache makes that upsert a one-shot per run.
+	traceNameSet map[string]bool
+	traceNameMu  sync.RWMutex
+	// traceExpRunIDSet records traceIDs whose experiment_run_id metadata field
+	// has already been upserted onto the root trace. Argo's run UID isn't known
+	// at experiment trigger time, so this upsert happens on the first subscriber
+	// tick that carries a valid event.ExperimentRunID. One-shot per traceID.
+	traceExpRunIDSet map[string]bool
+	traceExpRunIDMu  sync.RWMutex
 }
 
 var (
@@ -60,13 +83,16 @@ func InitializeLangfuseTracer() error {
 
 	// Initialize tracer with buffered channel for async trace submission
 	tracer := &LangfuseTracer{
-		client:        client,
-		enabled:       true,
-		orgID:         orgID,
-		projectID:     projectID,
-		traceChan:     make(chan *agent_registry.ExperimentTrace, 100),
-		workerDone:    make(chan struct{}),
-		emittedFaults: make(map[string]bool),
+		client:         client,
+		enabled:        true,
+		orgID:          orgID,
+		projectID:      projectID,
+		traceChan:      make(chan *agent_registry.ExperimentTrace, 100),
+		workerDone:     make(chan struct{}),
+		emittedFaults:    make(map[string]bool),
+		nodeStateCache:   make(map[string]string),
+		traceNameSet:     make(map[string]bool),
+		traceExpRunIDSet: make(map[string]bool),
 	}
 
 	// Start background worker to process traces
@@ -142,10 +168,13 @@ func (t *LangfuseTracer) TraceExperimentExecution(ctx context.Context, details *
 			"phase":             details.Phase,
 			"priority":          details.Priority,
 			"experiment_id":     details.ExperimentID,
-			"experiment_run_id": details.SessionID,
-			"notify_id":         details.TraceID,
-			"workflow_name":     details.ExperimentName,
-			"namespace":         details.Namespace,
+			// experiment_run_id is intentionally omitted at trigger time —
+			// the Argo workflow UID isn't known yet. It is upserted onto the
+			// root trace metadata via SetTraceExperimentRunID once the
+			// run-event flow learns event.ExperimentRunID.
+			"notify_id":     details.TraceID,
+			"workflow_name": details.ExperimentName,
+			"namespace":     details.Namespace,
 		},
 	}
 
@@ -369,9 +398,13 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 			"agent_version":   expCtx.AgentVersion,
 			"experiment_id":   expCtx.ExperimentID,
 			"experiment_name": expCtx.ExperimentName,
-			"run_id":          traceID,
-			"namespace":       expCtx.Namespace,
-			"fault_names":     faultNames,
+			// run_id is deliberately not stamped here — the Argo run UID is
+			// unknown at trigger time. The certifier's metadata scan picks up
+			// experiment.run_id from later workflow-step spans where the value
+			// is correct. (See fault_bucketing.py — scan continues until run_id
+			// is populated.)
+			"namespace":   expCtx.Namespace,
+			"fault_names": faultNames,
 			// SLA contract: mirrored here so the agent-trace data path
 			// also carries the certifier targets, even when OTEL is off.
 			"attributes": LoadSLAFromEnv().AsMetadata(),
@@ -433,9 +466,17 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 	t.emittedMu.Unlock()
 
 	fname := details.FaultName
-	startTime := details.StartedAt
-	if startTime == "" {
-		startTime = time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+
+	// details.StartedAt arrives from the subscriber as Unix epoch seconds
+	// (StrConvTime(nodeStatus.StartedAt.Unix())). Langfuse's startTime/endTime
+	// require ISO-8601, so normalise here — passing the raw epoch string causes
+	// a 400 "Invalid ISO datetime" and the fault span (with its ground_truth
+	// payload) is dropped.
+	var startTime string
+	if ts := ParseArgoTime(details.StartedAt); ts != nil {
+		startTime = formatLangfuseTime(*ts)
+	} else {
+		startTime = formatLangfuseTime(time.Now())
 	}
 
 	// Load ground truth for this fault
@@ -523,6 +564,121 @@ func (t *LangfuseTracer) ClearEmittedFaults(traceID string) {
 			delete(t.emittedFaults, key)
 		}
 	}
+}
+
+// ClearWorkflowNodeStates drops the per-node state-signature cache for a trace.
+// Pair with ClearEmittedFaults at experiment completion to release the memory
+// held for nodes that won't see any further updates.
+func (t *LangfuseTracer) ClearWorkflowNodeStates(traceID string) {
+	t.nodeStateMu.Lock()
+	defer t.nodeStateMu.Unlock()
+	prefix := traceID + ":"
+	for key := range t.nodeStateCache {
+		if len(key) > len(prefix) && key[:len(prefix)] == prefix {
+			delete(t.nodeStateCache, key)
+		}
+	}
+}
+
+// SetTraceName upserts the trace's Name field in Langfuse with one-shot semantics
+// per traceID. The trigger-time TraceExperimentExecution call creates the trace
+// with Name=<experimentName>; this is invoked from the subscriber tick path once
+// the Argo workflow's k8s UID (event.ExperimentRunID) is known so the trace
+// renders as "<experimentName>:<argoRunID>" — the same run_id under which the
+// experiment is queried in the runs API.
+func (t *LangfuseTracer) SetTraceName(ctx context.Context, traceID, name string) error {
+	if !t.IsEnabled() || traceID == "" || name == "" {
+		return nil
+	}
+
+	t.traceNameMu.Lock()
+	if t.traceNameSet == nil {
+		t.traceNameSet = make(map[string]bool)
+	}
+	if t.traceNameSet[traceID] {
+		t.traceNameMu.Unlock()
+		return nil
+	}
+	t.traceNameSet[traceID] = true
+	t.traceNameMu.Unlock()
+
+	upsertCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := t.client.TraceExperiment(upsertCtx, &agent_registry.ExperimentTrace{
+		TraceID: traceID,
+		Name:    name,
+	}); err != nil {
+		// Roll back the cache flag so a subsequent tick can retry.
+		t.traceNameMu.Lock()
+		delete(t.traceNameSet, traceID)
+		t.traceNameMu.Unlock()
+		fmt.Printf("[Observability] Failed to upsert trace name for %s: %v\n", traceID, err)
+		return err
+	}
+	fmt.Printf("[Observability] Upserted trace name for %s -> %s\n", traceID, name)
+	return nil
+}
+
+// ClearTraceNameSet drops the one-shot trace-name flag for a trace at completion
+// so the cache doesn't grow unbounded. Pair with ClearEmittedFaults and
+// ClearWorkflowNodeStates at experiment completion.
+func (t *LangfuseTracer) ClearTraceNameSet(traceID string) {
+	t.traceNameMu.Lock()
+	defer t.traceNameMu.Unlock()
+	delete(t.traceNameSet, traceID)
+}
+
+// SetTraceExperimentRunID upserts experiment_run_id onto the root trace's metadata
+// once the Argo workflow UID becomes known. The trigger-time TraceExperimentExecution
+// call cannot populate this field — Argo's run UID is assigned at workflow-creation
+// time, after the trace is opened — so the value would otherwise be missing or wrong
+// (previously stamped with notifyID, leaving the chaoscenter UI's run_id and the
+// Langfuse trace metadata diverged). Langfuse's traces endpoint requires Name on
+// every upsert, so the canonical "<expName>:<argoRunID>" name is sent alongside the
+// metadata field; this also keeps the trace title in sync if SetTraceName has not
+// already run. One-shot per traceID.
+func (t *LangfuseTracer) SetTraceExperimentRunID(ctx context.Context, traceID, traceName, expRunID string) error {
+	if !t.IsEnabled() || traceID == "" || expRunID == "" || traceName == "" {
+		return nil
+	}
+
+	t.traceExpRunIDMu.Lock()
+	if t.traceExpRunIDSet == nil {
+		t.traceExpRunIDSet = make(map[string]bool)
+	}
+	if t.traceExpRunIDSet[traceID] {
+		t.traceExpRunIDMu.Unlock()
+		return nil
+	}
+	t.traceExpRunIDSet[traceID] = true
+	t.traceExpRunIDMu.Unlock()
+
+	upsertCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := t.client.TraceExperiment(upsertCtx, &agent_registry.ExperimentTrace{
+		TraceID: traceID,
+		Name:    traceName,
+		Metadata: map[string]interface{}{
+			"experiment_run_id": expRunID,
+		},
+	}); err != nil {
+		// Roll back the cache flag so a subsequent tick can retry.
+		t.traceExpRunIDMu.Lock()
+		delete(t.traceExpRunIDSet, traceID)
+		t.traceExpRunIDMu.Unlock()
+		fmt.Printf("[Observability] Failed to upsert experiment_run_id for trace %s: %v\n", traceID, err)
+		return err
+	}
+	fmt.Printf("[Observability] Upserted experiment_run_id for trace %s -> %s\n", traceID, expRunID)
+	return nil
+}
+
+// ClearTraceExperimentRunIDSet drops the one-shot experiment_run_id flag at completion
+// so the cache doesn't grow unbounded. Pair with ClearTraceNameSet and friends.
+func (t *LangfuseTracer) ClearTraceExperimentRunIDSet(traceID string) {
+	t.traceExpRunIDMu.Lock()
+	defer t.traceExpRunIDMu.Unlock()
+	delete(t.traceExpRunIDSet, traceID)
 }
 
 // ScoreExperimentExecution logs a score for the experiment run.
@@ -646,4 +802,246 @@ type ExperimentScoreDetails struct {
 	Value   float64
 	Comment string
 	Source  string
+}
+
+// attrsToMap flattens a variadic slice of OTEL attribute.KeyValue (used here only as a
+// typed key-value carrier — no OTEL telemetry is emitted) into a JSON-friendly map for
+// embedding in Langfuse observation metadata.
+func attrsToMap(attrs []attribute.KeyValue) map[string]interface{} {
+	if len(attrs) == 0 {
+		return nil
+	}
+	out := make(map[string]interface{}, len(attrs))
+	for _, kv := range attrs {
+		out[string(kv.Key)] = kv.Value.AsInterface()
+	}
+	return out
+}
+
+// formatLangfuseTime renders a time as an ISO-8601 millisecond-precision UTC string,
+// matching the format Langfuse expects for startTime/endTime fields.
+func formatLangfuseTime(ts time.Time) string {
+	return ts.UTC().Format("2006-01-02T15:04:05.000Z")
+}
+
+// ParseArgoTime normalises a node timestamp emitted by the AgentCert subscriber.
+// The subscriber formats node times as Unix epoch seconds via
+// StrConvTime(nodeStatus.StartedAt.Unix()) (subscriber/pkg/events/workflow.go),
+// so the value arrives as a numeric string like "1777807113". RFC3339 is also
+// accepted defensively. Returns nil if the input is empty or unparseable.
+func ParseArgoTime(s string) *time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if epoch, err := strconv.ParseInt(s, 10, 64); err == nil {
+		var t time.Time
+		if epoch > 1e12 {
+			t = time.Unix(0, epoch*int64(time.Millisecond)).UTC()
+		} else {
+			t = time.Unix(epoch, 0).UTC()
+		}
+		return &t
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		u := t.UTC()
+		return &u
+	}
+	return nil
+}
+
+// EmitExperimentTriggeredSpan emits an instant SPAN observation marking the moment an
+// experiment was triggered. Replaces the OTEL EmitExperimentStartSpan path so that the
+// experiment span lands in the same UUID-keyed Langfuse trace as LiteLLM generations.
+func (t *LangfuseTracer) EmitExperimentTriggeredSpan(
+	ctx context.Context,
+	traceID string,
+	experimentName string,
+	attrs ...attribute.KeyValue,
+) error {
+	if !t.IsEnabled() || traceID == "" {
+		return nil
+	}
+
+	now := formatLangfuseTime(time.Now())
+	spanAttrs := attrsToMap(attrs)
+
+	payload := &agent_registry.LangfuseObservationPayload{
+		TraceID:   traceID,
+		Name:      "experiment-triggered",
+		Type:      "SPAN",
+		StartTime: &now,
+		EndTime:   &now,
+		Input: map[string]interface{}{
+			"experiment_name": experimentName,
+		},
+		Output: map[string]interface{}{
+			"status": "triggered",
+		},
+		Metadata: map[string]interface{}{
+			"action":          "experiment_trigger",
+			"experiment_name": experimentName,
+			"attributes":      spanAttrs,
+		},
+	}
+
+	obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := t.client.CreateObservation(obsCtx, payload); err != nil {
+		fmt.Printf("[Observability] Failed to emit experiment-triggered span for trace %s: %v\n", traceID, err)
+		return err
+	}
+	fmt.Printf("[Observability] Emitted experiment-triggered span for trace %s (experiment=%s)\n", traceID, experimentName)
+	return nil
+}
+
+// EmitExperimentRunSpan emits the closing SPAN observation summarising the completed
+// experiment run. Replaces the OTEL EndExperimentSpan path. startTime should be sourced
+// from the experiment_run mongo document's CreatedAt field (per project decision to
+// avoid a schema change for trace bookkeeping).
+func (t *LangfuseTracer) EmitExperimentRunSpan(
+	ctx context.Context,
+	traceID string,
+	experimentName string,
+	startTime time.Time,
+	endTime time.Time,
+	status string,
+	attrs ...attribute.KeyValue,
+) error {
+	if !t.IsEnabled() || traceID == "" {
+		return nil
+	}
+
+	start := formatLangfuseTime(startTime)
+	end := formatLangfuseTime(endTime)
+	spanAttrs := attrsToMap(attrs)
+
+	payload := &agent_registry.LangfuseObservationPayload{
+		TraceID:   traceID,
+		Name:      "experiment-run",
+		Type:      "SPAN",
+		StartTime: &start,
+		EndTime:   &end,
+		Input: map[string]interface{}{
+			"experiment_name": experimentName,
+		},
+		Output: map[string]interface{}{
+			"status":          status,
+			"experiment_name": experimentName,
+		},
+		Metadata: map[string]interface{}{
+			"action":          "experiment_run_complete",
+			"experiment_name": experimentName,
+			"status":          status,
+			"attributes":      spanAttrs,
+		},
+	}
+
+	obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := t.client.CreateObservation(obsCtx, payload); err != nil {
+		fmt.Printf("[Observability] Failed to emit experiment-run span for trace %s: %v\n", traceID, err)
+		return err
+	}
+	fmt.Printf("[Observability] Emitted experiment-run span for trace %s (status=%s, duration=%s)\n",
+		traceID, status, endTime.Sub(startTime))
+	return nil
+}
+
+// UpsertWorkflowNodeSpan emits / updates a SPAN observation for an Argo workflow node.
+// Uses a deterministic observation ID (traceID-nodeID) so repeat events for the same
+// node coalesce in Langfuse rather than producing duplicates. startTime / endTime are
+// pointers because terminal events sometimes arrive without a finished timestamp.
+func (t *LangfuseTracer) UpsertWorkflowNodeSpan(
+	ctx context.Context,
+	traceID string,
+	nodeID string,
+	nodeName string,
+	startTime *time.Time,
+	endTime *time.Time,
+	terminal bool,
+	attrs ...attribute.KeyValue,
+) error {
+	if !t.IsEnabled() || traceID == "" || nodeID == "" {
+		return nil
+	}
+
+	var startStr, endStr *string
+	if startTime != nil {
+		s := formatLangfuseTime(*startTime)
+		startStr = &s
+	}
+	if endTime != nil {
+		e := formatLangfuseTime(*endTime)
+		endStr = &e
+	}
+
+	// Suppress no-op upserts. A typical node lifecycle produces three meaningful
+	// signatures (no times yet → started → finished), but Argo emits many watch
+	// events between transitions and we'd otherwise re-send identical payloads.
+	// Phase changes always coincide with startedAt/finishedAt being set, so the
+	// time-and-terminal tuple is sufficient.
+	cacheKey := traceID + ":" + nodeID
+	signature := ""
+	if startStr != nil {
+		signature = *startStr
+	}
+	signature += "|"
+	if endStr != nil {
+		signature += *endStr
+	}
+	if terminal {
+		signature += "|t"
+	} else {
+		signature += "|f"
+	}
+	t.nodeStateMu.RLock()
+	prev, seen := t.nodeStateCache[cacheKey]
+	t.nodeStateMu.RUnlock()
+	if seen && prev == signature {
+		return nil
+	}
+	t.nodeStateMu.Lock()
+	if t.nodeStateCache == nil {
+		t.nodeStateCache = make(map[string]string)
+	}
+	t.nodeStateCache[cacheKey] = signature
+	t.nodeStateMu.Unlock()
+
+	spanAttrs := attrsToMap(attrs)
+	spanName := "workflow-step: " + nodeName
+
+	payload := &agent_registry.LangfuseObservationPayload{
+		ID:        traceID + "-" + nodeID,
+		TraceID:   traceID,
+		Name:      spanName,
+		Type:      "SPAN",
+		StartTime: startStr,
+		EndTime:   endStr,
+		Input: map[string]interface{}{
+			"node_id":   nodeID,
+			"node_name": nodeName,
+		},
+		Output: map[string]interface{}{
+			"terminal": terminal,
+		},
+		Metadata: map[string]interface{}{
+			"action":     "workflow_step",
+			"node_id":    nodeID,
+			"node_name":  nodeName,
+			"terminal":   terminal,
+			"attributes": spanAttrs,
+		},
+	}
+
+	obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := t.client.CreateObservation(obsCtx, payload); err != nil {
+		fmt.Printf("[Observability] Failed to upsert workflow-step span '%s' (node=%s) for trace %s: %v\n",
+			spanName, nodeID, traceID, err)
+		return err
+	}
+	fmt.Printf("[Observability] Upserted workflow-step span '%s' (node=%s, terminal=%v) for trace %s\n",
+		spanName, nodeID, terminal, traceID)
+	return nil
 }
