@@ -154,7 +154,7 @@ func (ev *subscriberEvents) WorkflowEventHandler(oldObj, workflowObj *v1alpha1.W
 
 		if nodeType == "ChaosEngine" && cd != nil {
 			// this happens if cd.ChaosResult == nil
-			if oldObj != nil {
+			if oldObj != nil && oldObj.Status.Nodes != nil {
 				if oldNodeStatus, ok := oldObj.Status.Nodes[i]; ok && oldNodeStatus.Phase == "Pending" && nodeStatus.Phase == "Running" {
 					details.Phase = "Running"
 				} else {
