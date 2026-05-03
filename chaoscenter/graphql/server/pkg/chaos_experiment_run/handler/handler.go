@@ -22,10 +22,10 @@ import (
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 
+	ops "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/ops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
-	ops "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/ops"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -44,14 +44,14 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	corev1 "k8s.io/api/core/v1"
 	k8srbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 
 	types "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment_run"
 	store "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/data-store"
@@ -312,10 +312,10 @@ func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clients
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"clusterRole":         roleName,
-		"clusterRoleBinding":  bindingName,
-		"serviceAccount":      serviceAccount,
-		"serviceAccountNs":    infraNamespace,
+		"clusterRole":        roleName,
+		"clusterRoleBinding": bindingName,
+		"serviceAccount":     serviceAccount,
+		"serviceAccountNs":   infraNamespace,
 	}).Info("ensured dynamic app Helm RBAC binding")
 
 	return nil
@@ -995,9 +995,9 @@ func normalizeContainerRuntimeInYAML(data, runtime, socketPath string) string {
 				if entry["name"] == envName {
 					if entry["value"] != envValue {
 						logrus.WithFields(logrus.Fields{
-							"env":   envName,
-							"old":   entry["value"],
-							"new":   envValue,
+							"env": envName,
+							"old": entry["value"],
+							"new": envValue,
 						}).Info("Normalizing ChaosEngine container runtime env")
 						entry["value"] = envValue
 					}
@@ -1052,7 +1052,7 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 
 	if err := ensureDynamicAppHelmRBAC(ctx, clientset, infraNamespace, serviceAccount); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"infraNamespace":  infraNamespace,
+			"infraNamespace": infraNamespace,
 			"serviceAccount": serviceAccount,
 		}).WithError(err).Warn("RBAC preflight auto-remediation skipped; continuing with RBAC validation")
 	}
@@ -1134,7 +1134,7 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 
 		return fmt.Errorf(
 			"RBAC preflight failed for serviceaccount %s/%s; missing permissions: %s. "+
-			"Please update infra RBAC/ClusterRoleBinding to support dynamic app namespaces",
+				"Please update infra RBAC/ClusterRoleBinding to support dynamic app namespaces",
 			infraNamespace,
 			serviceAccount,
 			strings.Join(missing, ", "),
@@ -1778,10 +1778,7 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 
 		// Upsert Langfuse trace metadata (name, userId, sessionId, agentid) via REST
 		// alongside OTEL spans. OTEL alone cannot set trace-level metadata in Langfuse.
-		// Two upserts are needed:
-		//   1. UUID form (notifyID with hyphens) — covers the LLM generation trace from LiteLLM
-		//   2. Hex form (notifyID without hyphens) — covers the OTEL spans trace (Langfuse stores OTEL
-		//      traces using the raw 32-char hex trace ID, which differs from the UUID string)
+		// Single upsert with UUID form (notifyID with hyphens) to match LiteLLM's trace format.
 		if lft := observability.GetLangfuseTracer(); lft.IsEnabled() {
 			details := &observability.ExperimentExecutionDetails{
 				TraceID:             notifyID,
@@ -1800,15 +1797,7 @@ func traceExperimentExecution(ctx context.Context, notifyID string, experimentID
 				Phase:               "injection",
 				Priority:            "high",
 			}
-			// Upsert 1: UUID trace (LLM generations)
 			_ = lft.TraceExperimentExecution(ctx, details)
-			// Upsert 2: hex trace (OTEL spans) — same content, hex trace ID
-			hexTraceID := strings.ReplaceAll(notifyID, "-", "")
-			if len(hexTraceID) == 32 {
-				hexDetails := *details
-				hexDetails.TraceID = hexTraceID
-				_ = lft.TraceExperimentExecution(ctx, &hexDetails)
-			}
 		}
 		return nil
 	}
@@ -2216,7 +2205,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	if len(workflow.Revision) > 0 {
 		manifest := workflow.Revision[0].ExperimentManifest
 		multiRunEnabled := gjson.Get(manifest, "metadata.annotations.litmuschaos\\.io/multiRunEnabled").String()
-		
+
 		if multiRunEnabled == "true" {
 			// Query for any running experiment runs for this experiment
 			runningRuns, err := dbChaosExperimentRun.NewChaosExperimentRunOperator(c.mongodbOperator).GetExperimentRuns(bson.D{
@@ -2363,7 +2352,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	// Detect container runtime once for all ChaosEngine templates in this workflow
 	var (
 		clusterRuntime, clusterSocketPath string
-		clusterClientset                *kubernetes.Clientset
+		clusterClientset                  *kubernetes.Clientset
 	)
 	if cs, kerr := buildKubeClientset(); kerr == nil {
 		clusterClientset = cs
@@ -2727,7 +2716,7 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 	// Detect container runtime once for all ChaosEngine templates in this cron workflow
 	var (
 		cronRuntime, cronSocketPath string
-		cronClientset              *kubernetes.Clientset
+		cronClientset               *kubernetes.Clientset
 	)
 	if cs, kerr := buildKubeClientset(); kerr == nil {
 		cronClientset = cs
@@ -3093,10 +3082,10 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 							"namespace":  node.ChaosExp.Namespace,
 						},
 						Output: map[string]interface{}{
-							"verdict":             node.ChaosExp.ExperimentVerdict,
-							"probeSuccessPct":     node.ChaosExp.ProbeSuccessPercentage,
-							"experimentStatus":    node.ChaosExp.ExperimentStatus,
-							"failStep":            node.ChaosExp.FailStep,
+							"verdict":          node.ChaosExp.ExperimentVerdict,
+							"probeSuccessPct":  node.ChaosExp.ProbeSuccessPercentage,
+							"experimentStatus": node.ChaosExp.ExperimentStatus,
+							"failStep":         node.ChaosExp.FailStep,
 						},
 						Metadata: map[string]interface{}{
 							"nodePhase": node.Phase,
@@ -3304,37 +3293,37 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	// Multi-run triggering: if experiment completed successfully and is a multi-run experiment, trigger next run
 	if isCompleted && len(experiment.Revision) > 0 {
 		manifest := experiment.Revision[len(experiment.Revision)-1].ExperimentManifest
-		
+
 		// Debug: Log raw annotation values
 		logrus.WithFields(logFields).Infof("[Multi-Run Debug] Checking manifest for multi-run annotations...")
-		
+
 		multiRunEnabled := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunEnabled`).String()
 		maxRunsStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/maxRuns`).String()
 		currentRunStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/currentRun`).String()
-		
-		logrus.WithFields(logFields).Infof("[Multi-Run Debug] multiRunEnabled='%s', maxRuns='%s', currentRun='%s'", 
+
+		logrus.WithFields(logFields).Infof("[Multi-Run Debug] multiRunEnabled='%s', maxRuns='%s', currentRun='%s'",
 			multiRunEnabled, maxRunsStr, currentRunStr)
-		
+
 		if multiRunEnabled == "true" {
 			maxRuns := 1
 			if parsed, err := strconv.Atoi(maxRunsStr); err == nil && parsed > 1 {
 				maxRuns = parsed
 			}
-			
+
 			currentRun := 0
 			if parsed, err := strconv.Atoi(currentRunStr); err == nil {
 				currentRun = parsed
 			}
 			// This completed run means currentRun should be incremented
 			currentRun++
-			
-			logrus.WithFields(logFields).Infof("[Multi-Run] Experiment completed. multiRunEnabled=%s, currentRun=%d, maxRuns=%d", 
+
+			logrus.WithFields(logFields).Infof("[Multi-Run] Experiment completed. multiRunEnabled=%s, currentRun=%d, maxRuns=%d",
 				multiRunEnabled, currentRun, maxRuns)
-			
+
 			if currentRun < maxRuns {
 				// More runs needed - update manifest with new currentRun and trigger next
 				logrus.WithFields(logFields).Infof("[Multi-Run] Triggering run %d/%d...", currentRun+1, maxRuns)
-				
+
 				// Update the experiment manifest with incremented currentRun
 				updatedManifest, err := sjson.Set(manifest, "metadata.annotations.litmuschaos\\.io/currentRun", strconv.Itoa(currentRun))
 				if err != nil {
@@ -3342,7 +3331,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				} else {
 					// Update revision in database
 					experiment.Revision[len(experiment.Revision)-1].ExperimentManifest = updatedManifest
-					
+
 					filter := bson.D{{"experiment_id", experiment.ExperimentID}}
 					update := bson.D{
 						{"$set", bson.D{
@@ -3354,7 +3343,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 						logrus.WithFields(logFields).Errorf("[Multi-Run] Failed to update experiment revision: %v", err)
 					}
 				}
-				
+
 				// Trigger next run in a goroutine after a delay
 				// Capture values for goroutine
 				expID := experiment.ExperimentID
@@ -3368,7 +3357,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok {
 					authToken = tkn
 				}
-				
+
 				// Read configurable delay from annotation (default: 120 seconds = 2 minutes)
 				delaySeconds := 120
 				if delayStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunDelay`).String(); delayStr != "" {
@@ -3377,37 +3366,37 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					}
 				}
 				delayDuration := time.Duration(delaySeconds) * time.Second
-				
+
 				go func() {
 					defer func() {
 						if r := recover(); r != nil {
 							logrus.Errorf("[Multi-Run] PANIC in trigger goroutine: %v", r)
 						}
 					}()
-					
+
 					logrus.Infof("[Multi-Run] Goroutine started, waiting %v before triggering run %d/%d for experiment %s", delayDuration, nextRun, totalRuns, expID)
-					
+
 					// Wait configured delay between runs
 					time.Sleep(delayDuration)
-					
+
 					logrus.Infof("[Multi-Run] %v delay complete, fetching experiment %s", delayDuration, expID)
-					
+
 					// Re-fetch experiment with updated manifest
 					updatedExperiment, err := handler.chaosExperimentOperator.GetExperiment(context.Background(), bson.D{{"experiment_id", expID}})
 					if err != nil {
 						logrus.Errorf("[Multi-Run] Failed to fetch updated experiment %s: %v", expID, err)
 						return
 					}
-					
+
 					logrus.Infof("[Multi-Run] Experiment fetched, calling RunChaosWorkFlow for %s", expID)
-					
+
 					// Create a fresh context with the auth token for the new run
 					// Using context.Background() ensures the context won't be canceled
 					newCtx := context.Background()
 					if authToken != "" {
 						newCtx = context.WithValue(newCtx, authorization.AuthKey, authToken)
 					}
-					
+
 					// Trigger next run using fresh context with auth token
 					// IMPORTANT: Must pass store.Store (not nil) to actually send the workflow to subscriber
 					_, err = handler.RunChaosWorkFlow(newCtx, projID, updatedExperiment, store.Store)
@@ -3419,7 +3408,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				}()
 			} else {
 				logrus.WithFields(logFields).Infof("[Multi-Run] All %d runs completed!", maxRuns)
-				
+
 				// Reset currentRun to 0 for next batch
 				updatedManifest, err := sjson.Set(manifest, "metadata.annotations.litmuschaos\\.io/currentRun", "0")
 				if err == nil {
