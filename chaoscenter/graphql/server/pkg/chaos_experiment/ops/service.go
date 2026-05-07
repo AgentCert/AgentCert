@@ -1758,10 +1758,17 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 	}
 }
 
-// chaosEngineManifest is a minimal struct used to extract fault names from
+// chaosEngineManifest is a minimal struct used to extract fault names + per-fault
+// static config (target metadata, timing knobs, target containers) from
 // ChaosEngine resource manifests embedded in Argo Workflow templates.
 // Uses json tags because github.com/ghodss/yaml converts YAML→JSON before
 // unmarshalling, so json struct tags are the effective field mappings.
+//
+// Only the keys actually consumed by ExtractChaosEngineFaultDetails are
+// modelled; everything else on the engine spec is ignored. Adding fields here
+// is the right way to expose more engine config to the certifier — the parse
+// path is shared by ExtractChaosEngineFaults and ExtractChaosEngineFaultDetails,
+// so keep it lean.
 type chaosEngineManifest struct {
 	Kind string `json:"kind"`
 	Spec struct {
@@ -1772,6 +1779,14 @@ type chaosEngineManifest struct {
 		} `json:"appinfo"`
 		Experiments []struct {
 			Name string `json:"name"`
+			Spec struct {
+				Components struct {
+					Env []struct {
+						Name  string `json:"name"`
+						Value string `json:"value"`
+					} `json:"env"`
+				} `json:"components"`
+			} `json:"spec"`
 		} `json:"experiments"`
 	} `json:"spec"`
 }
@@ -1852,6 +1867,34 @@ func extractChaosEngineFaults(templates []v1alpha1.Template) []string {
 	return faults
 }
 
+// buildWorkloadRef returns a "<Kind>/<name>" anchor for the targeted workload
+// (e.g. "Deployment/carts") given the engine's appkind and applabel. The
+// applabel format is "<key>=<value>"; only the value is used for the anchor
+// name. Returns "" when either input is empty so the caller can omit the
+// attribute on the fault span.
+func buildWorkloadRef(appkind, applabel string) string {
+	kind := strings.TrimSpace(appkind)
+	label := strings.TrimSpace(applabel)
+	if kind == "" || label == "" {
+		return ""
+	}
+	parts := strings.SplitN(label, "=", 2)
+	name := ""
+	if len(parts) == 2 {
+		name = strings.TrimSpace(parts[1])
+	}
+	if name == "" {
+		return ""
+	}
+	// Title-case the kind so "deployment" → "Deployment". Litmus stores it
+	// lowercase after normalizeChaosEngineAppKind; the cert narrative reads
+	// better with the canonical k8s casing.
+	if low := strings.ToLower(kind); low == kind {
+		kind = strings.ToUpper(kind[:1]) + kind[1:]
+	}
+	return kind + "/" + name
+}
+
 // ExtractChaosEngineFaultDetails returns per-fault target metadata (namespace,
 // label, kind) for every ChaosEngine embedded in the Argo Workflow templates.
 // The certifier consumes these via the "fault: <name>" Langfuse spans to
@@ -1884,12 +1927,55 @@ func ExtractChaosEngineFaultDetails(templates []v1alpha1.Template) []observabili
 				continue
 			}
 			seen[name] = struct{}{}
-			details = append(details, observability.FaultDetail{
+
+			appns := strings.TrimSpace(engine.Spec.Appinfo.Appns)
+			applabel := strings.TrimSpace(engine.Spec.Appinfo.Applabel)
+			appkind := strings.TrimSpace(engine.Spec.Appinfo.AppKind)
+
+			fd := observability.FaultDetail{
 				Name:            name,
-				TargetNamespace: strings.TrimSpace(engine.Spec.Appinfo.Appns),
-				TargetLabel:     strings.TrimSpace(engine.Spec.Appinfo.Applabel),
-				TargetKind:      strings.TrimSpace(engine.Spec.Appinfo.AppKind),
-			})
+				TargetNamespace: appns,
+				TargetLabel:     applabel,
+				TargetKind:      appkind,
+				WorkloadRef:     buildWorkloadRef(appkind, applabel),
+			}
+
+			// Walk env vars on this experiment's spec.components.env once and
+			// fill the typed timing knobs + target containers. Unknown keys are
+			// ignored — they still travel via fault.action.params if/when
+			// PR2 lands; this struct only carries the certifier-consumed subset.
+			for _, kv := range exp.Spec.Components.Env {
+				key := strings.ToUpper(strings.TrimSpace(kv.Name))
+				val := strings.TrimSpace(kv.Value)
+				if val == "" {
+					continue
+				}
+				switch key {
+				case "TOTAL_CHAOS_DURATION", "CHAOS_DURATION":
+					if n, err := strconv.Atoi(val); err == nil && n > 0 {
+						fd.TotalChaosDurationSec = n
+					}
+				case "RAMP_TIME":
+					if n, err := strconv.Atoi(val); err == nil && n > 0 {
+						fd.RampTimeSec = n
+					}
+				case "CHAOS_INTERVAL":
+					if n, err := strconv.Atoi(val); err == nil && n > 0 {
+						fd.ChaosIntervalSec = n
+					}
+				case "SEQUENCE":
+					fd.Sequence = strings.ToLower(val)
+				case "TARGET_CONTAINER", "TARGET_CONTAINERS":
+					for _, c := range strings.Split(val, ",") {
+						c = strings.TrimSpace(c)
+						if c != "" {
+							fd.TargetContainers = append(fd.TargetContainers, c)
+						}
+					}
+				}
+			}
+
+			details = append(details, fd)
 		}
 	}
 
