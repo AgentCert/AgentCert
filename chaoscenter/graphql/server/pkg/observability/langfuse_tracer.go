@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,9 +26,13 @@ type LangfuseTracer struct {
 	traceChan  chan *agent_registry.ExperimentTrace
 	workerDone chan struct{}
 	closed     bool
-	// emittedFaults tracks which fault spans have been emitted per trace to avoid duplicates.
-	// Key: traceID:faultName, Value: true if already emitted
-	emittedFaults map[string]bool
+	// emittedFaults tracks the signature of the last fault span payload emitted
+	// for a given trace+fault so subsequent calls with identical content are
+	// dropped. Repeated calls with new content (e.g. ChaosResult fills in late)
+	// are upserted via the deterministic observation ID, mirroring the
+	// nodeStateCache pattern used by UpsertWorkflowNodeSpan.
+	// Key: traceID:faultName, Value: signature string
+	emittedFaults map[string]string
 	emittedMu     sync.RWMutex
 	// nodeStateCache tracks the last (startTime, endTime, terminal) signature
 	// emitted for each workflow node so repeat events that don't change state
@@ -89,7 +94,7 @@ func InitializeLangfuseTracer() error {
 		projectID:      projectID,
 		traceChan:      make(chan *agent_registry.ExperimentTrace, 100),
 		workerDone:     make(chan struct{}),
-		emittedFaults:    make(map[string]bool),
+		emittedFaults:    make(map[string]string),
 		nodeStateCache:   make(map[string]string),
 		traceNameSet:     make(map[string]bool),
 		traceExpRunIDSet: make(map[string]bool),
@@ -310,15 +315,31 @@ type ExperimentContextForTrace struct {
 	Namespace      string
 }
 
-// FaultDetail captures the per-fault target metadata needed by the certifier
-// fault bucketer.  Populated from the ChaosEngine manifest in the workflow
-// templates by chaos_experiment/ops.ExtractChaosEngineFaultDetails and
-// forwarded to EmitFaultSpansForTrace.
+// FaultDetail captures the per-fault target metadata + static config sourced
+// from the ChaosEngine manifest in the workflow templates by
+// chaos_experiment/ops.ExtractChaosEngineFaultDetails. The Target* triple has
+// been on this struct since the original fault-bucketing wiring; the timing,
+// container, and workload fields below are populated from
+// engine.Spec.Experiments[0].Spec.Components.Env and engine.Spec.Appinfo so
+// the run-event handler can stamp them onto the fault span without re-parsing
+// the engine manifest at every tick.
+//
+// All new fields are optional. When absent (older manifest, value not set),
+// they keep their zero value and are emitted as omit-empty by
+// EmitFaultSpanAtInjection.
 type FaultDetail struct {
 	Name            string
 	TargetNamespace string
 	TargetLabel     string
 	TargetKind      string
+
+	// Static engine config — populated when the manifest defines them.
+	TotalChaosDurationSec int
+	RampTimeSec           int
+	ChaosIntervalSec      int
+	Sequence              string
+	TargetContainers      []string
+	WorkloadRef           string
 }
 
 // EmitFaultSpansForTrace posts one "fault: <name>" SPAN observation per fault to
@@ -423,7 +444,12 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 	// nodes start executing.
 }
 
-// FaultInjectionDetails holds the data needed to emit a fault span at injection time.
+// FaultInjectionDetails holds the data needed to emit a fault span at injection
+// time and to upsert it later as run-state evolves. The struct is intentionally
+// flat — every key is optional so callers can populate progressively (identity
+// + start on the first tick, then verdict/probes/end_timestamp on later ticks
+// once node.ChaosExp.ChaosResult and node.FinishedAt populate). The signature
+// dedup in EmitFaultSpanAtInjection collapses no-op upserts.
 type FaultInjectionDetails struct {
 	FaultName       string
 	EngineName      string
@@ -432,12 +458,45 @@ type FaultInjectionDetails struct {
 	TargetLabel     string
 	TargetKind      string
 	StartedAt       string // ISO-8601 timestamp when the fault started
+	FinishedAt      string // ISO-8601 timestamp when the chaos node terminated; empty until completion
+
+	// Tier W — verdict / phase from node.ChaosExp (and ChaosResult when ready).
+	InjectionVerdict         string
+	InjectionPhase           string
+	InjectionProbeSuccessPct string
+	InjectionFailStep        string
+
+	// Tier W — timing knobs resolved from engine.Spec.Experiments[0].Spec.Components.Env.
+	TotalChaosDurationSec int
+	RampTimeSec           int
+	ChaosIntervalSec      int
+	Sequence              string
+
+	// Tier S — workload anchor + container scope.
+	WorkloadRef      string
+	TargetContainers []string
+
+	// Tier P — independent observer (Litmus probe outcomes).
+	ProbesResults []map[string]interface{}
+
+	// Tier C — workflow shape (parallel/sequential + sibling fault names).
+	WorkflowSequenceMode string
+	WorkflowCohortFaults []string
 }
 
-// EmitFaultSpanAtInjection emits a fault span when the ChaosEngine node starts execution.
-// This is called from ChaosExperimentRunEvent when a ChaosEngine node has a StartedAt time.
-// Unlike EmitFaultSpansForTrace which emits all faults upfront, this emits each fault
-// at its actual injection time.
+// EmitFaultSpanAtInjection emits / upserts the "fault: <name>" SPAN observation.
+//
+// Called once per ChaosExperimentRunEvent tick from the run-event handler.
+// On the first tick after the ChaosEngine node's StartedAt populates, the span
+// is created with identity + ground truth + whatever target metadata is
+// available. On later ticks (including the completion tick), node.ChaosExp.
+// ChaosResult and node.FinishedAt fill in — the function is then invoked again
+// with the new payload and the upsert-by-deterministic-ID pattern (same as
+// UpsertWorkflowNodeSpan) coalesces the writes server-side.
+//
+// A signature cache (emittedFaults) suppresses no-op upserts whose payload
+// matches the previously-emitted state, mirroring nodeStateCache for
+// workflow-step spans.
 func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 	ctx context.Context,
 	traceID string,
@@ -447,23 +506,6 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 	if !t.IsEnabled() || traceID == "" || details.FaultName == "" {
 		return
 	}
-
-	// Check if already emitted to avoid duplicates
-	cacheKey := traceID + ":" + details.FaultName
-	t.emittedMu.RLock()
-	if t.emittedFaults[cacheKey] {
-		t.emittedMu.RUnlock()
-		return
-	}
-	t.emittedMu.RUnlock()
-
-	// Mark as emitted
-	t.emittedMu.Lock()
-	if t.emittedFaults == nil {
-		t.emittedFaults = make(map[string]bool)
-	}
-	t.emittedFaults[cacheKey] = true
-	t.emittedMu.Unlock()
 
 	fname := details.FaultName
 
@@ -477,6 +519,18 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 		startTime = formatLangfuseTime(*ts)
 	} else {
 		startTime = formatLangfuseTime(time.Now())
+	}
+
+	// FinishedAt is empty until the chaos node terminates. Until then, end_time
+	// equals start_time so Langfuse renders the span as instantaneous; once the
+	// node finishes, the upsert sets a real end_time.
+	endTime := startTime
+	var finishedISO string
+	if details.FinishedAt != "" {
+		if fts := ParseArgoTime(details.FinishedAt); fts != nil {
+			finishedISO = formatLangfuseTime(*fts)
+			endTime = finishedISO
+		}
 	}
 
 	// Load ground truth for this fault
@@ -510,6 +564,56 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 		"fault.engine_name":         details.EngineName,
 		"fault.namespace":           details.Namespace,
 	}
+
+	// Tier W — observed end (set only when node terminated).
+	if finishedISO != "" {
+		spanAttrs["fault.injection_end_timestamp"] = finishedISO
+	}
+	// Tier W — timing knobs (omit zero/empty so absent ≠ "we know it's 0").
+	if details.TotalChaosDurationSec > 0 {
+		spanAttrs["fault.timing.total_chaos_duration_sec"] = details.TotalChaosDurationSec
+	}
+	if details.RampTimeSec > 0 {
+		spanAttrs["fault.timing.ramp_time_sec"] = details.RampTimeSec
+	}
+	if details.ChaosIntervalSec > 0 {
+		spanAttrs["fault.timing.chaos_interval_sec"] = details.ChaosIntervalSec
+	}
+	if details.Sequence != "" {
+		spanAttrs["fault.timing.sequence"] = details.Sequence
+	}
+	// Tier W — verdict block (populated as ChaosResult fills in across ticks).
+	if details.InjectionVerdict != "" {
+		spanAttrs["fault.injection.verdict"] = details.InjectionVerdict
+	}
+	if details.InjectionPhase != "" {
+		spanAttrs["fault.injection.phase"] = details.InjectionPhase
+	}
+	if details.InjectionProbeSuccessPct != "" {
+		spanAttrs["fault.injection.probe_success_pct"] = details.InjectionProbeSuccessPct
+	}
+	if details.InjectionFailStep != "" {
+		spanAttrs["fault.injection.fail_step"] = details.InjectionFailStep
+	}
+	// Tier S — workload anchor + container scope.
+	if details.WorkloadRef != "" {
+		spanAttrs["fault.target.workload_ref"] = details.WorkloadRef
+	}
+	if len(details.TargetContainers) > 0 {
+		spanAttrs["fault.target.containers"] = details.TargetContainers
+	}
+	// Tier P — probe results (independent observer).
+	if len(details.ProbesResults) > 0 {
+		spanAttrs["fault.probes.results"] = details.ProbesResults
+	}
+	// Tier C — workflow cohort.
+	if details.WorkflowSequenceMode != "" {
+		spanAttrs["fault.workflow.sequence_mode"] = details.WorkflowSequenceMode
+	}
+	if len(details.WorkflowCohortFaults) > 0 {
+		spanAttrs["fault.workflow.cohort_faults"] = details.WorkflowCohortFaults
+	}
+
 	if slaDetect != nil {
 		spanAttrs["fault.ground_truth.sla.detect_sec"] = slaDetect
 	}
@@ -519,6 +623,24 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 	if slaToolCalls != nil {
 		spanAttrs["fault.ground_truth.sla.max_tool_calls"] = slaToolCalls
 	}
+
+	// Build a signature over fields that change as run state evolves. Static
+	// identity bits (name/engine/start) are excluded — they don't change after
+	// the first emit and including them just bloats the cache key.
+	signature := buildFaultSpanSignature(details, finishedISO)
+	cacheKey := traceID + ":" + fname
+	t.emittedMu.RLock()
+	prev, seen := t.emittedFaults[cacheKey]
+	t.emittedMu.RUnlock()
+	if seen && prev == signature {
+		return
+	}
+	t.emittedMu.Lock()
+	if t.emittedFaults == nil {
+		t.emittedFaults = make(map[string]string)
+	}
+	t.emittedFaults[cacheKey] = signature
+	t.emittedMu.Unlock()
 
 	inputData := map[string]interface{}{
 		"fault_name":   fname,
@@ -534,11 +656,12 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 	}
 
 	payload := &agent_registry.LangfuseObservationPayload{
+		ID:        faultObservationID(traceID, fname),
 		TraceID:   traceID,
 		Name:      spanName,
 		Type:      "SPAN",
 		StartTime: &startTime,
-		EndTime:   &startTime,
+		EndTime:   &endTime,
 		Input:     inputData,
 		Output:    map[string]interface{}{"status": "injected"},
 		Metadata:  metaData,
@@ -547,10 +670,72 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 	obsCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	if err := t.client.CreateObservation(obsCtx, payload); err != nil {
-		fmt.Printf("[Observability] Failed to emit fault span '%s' at injection for trace %s: %v\n", spanName, traceID, err)
+		fmt.Printf("[Observability] Failed to upsert fault span '%s' for trace %s: %v\n", spanName, traceID, err)
 	} else {
-		fmt.Printf("[Observability] Emitted fault span '%s' at injection time %s for trace %s\n", spanName, startTime, traceID)
+		fmt.Printf("[Observability] Upserted fault span '%s' (start=%s, end=%s, verdict=%q) for trace %s\n",
+			spanName, startTime, endTime, details.InjectionVerdict, traceID)
 	}
+}
+
+// faultObservationID returns the deterministic Langfuse observation ID for a
+// fault span. Same scheme as UpsertWorkflowNodeSpan ("traceID-<discriminator>").
+func faultObservationID(traceID, faultName string) string {
+	return traceID + "-fault-" + faultName
+}
+
+// buildFaultSpanSignature is the dedup key for repeat upserts. Includes every
+// late-arriving field; excludes pure identity bits that don't change tick to tick.
+func buildFaultSpanSignature(d FaultInjectionDetails, finishedISO string) string {
+	var b strings.Builder
+	b.WriteString(d.TargetNamespace)
+	b.WriteString("|")
+	b.WriteString(d.TargetLabel)
+	b.WriteString("|")
+	b.WriteString(d.TargetKind)
+	b.WriteString("|")
+	b.WriteString(finishedISO)
+	b.WriteString("|")
+	b.WriteString(d.InjectionVerdict)
+	b.WriteString("|")
+	b.WriteString(d.InjectionPhase)
+	b.WriteString("|")
+	b.WriteString(d.InjectionProbeSuccessPct)
+	b.WriteString("|")
+	b.WriteString(d.InjectionFailStep)
+	b.WriteString("|")
+	b.WriteString(strconv.Itoa(d.TotalChaosDurationSec))
+	b.WriteString("|")
+	b.WriteString(strconv.Itoa(d.RampTimeSec))
+	b.WriteString("|")
+	b.WriteString(strconv.Itoa(d.ChaosIntervalSec))
+	b.WriteString("|")
+	b.WriteString(d.Sequence)
+	b.WriteString("|")
+	b.WriteString(d.WorkloadRef)
+	b.WriteString("|")
+	b.WriteString(strings.Join(d.TargetContainers, ","))
+	b.WriteString("|")
+	// Hash the probe verdicts, not just the count — Awaited→Passed→Failed
+	// transitions arrive with constant cardinality and we'd otherwise miss
+	// the final-state upsert. Iterate in stored order; ProbeStatuses is a
+	// stable slice on ChaosResult so order matches across ticks.
+	for _, p := range d.ProbesResults {
+		if name, ok := p["name"].(string); ok {
+			b.WriteString(name)
+		}
+		b.WriteString("=")
+		if v, ok := p["verdict"].(string); ok {
+			b.WriteString(v)
+		}
+		b.WriteString(";")
+	}
+	b.WriteString("|")
+	b.WriteString(d.WorkflowSequenceMode)
+	b.WriteString("|")
+	cohort := append([]string(nil), d.WorkflowCohortFaults...)
+	sort.Strings(cohort)
+	b.WriteString(strings.Join(cohort, ","))
+	return b.String()
 }
 
 // ClearEmittedFaults clears the emitted faults cache for a given trace.

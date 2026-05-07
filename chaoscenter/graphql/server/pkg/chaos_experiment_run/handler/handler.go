@@ -2775,8 +2775,11 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 		}
 	}
 
-	// Emit fault spans at injection time when ChaosEngine nodes have started.
-	// This replaces the upfront emission so fault spans reflect actual injection timestamps.
+	// Emit / upsert fault spans on every tick. The first tick after each
+	// ChaosEngine node's StartedAt populates creates the span; later ticks
+	// (including the completion tick) upsert verdict/probes/end_timestamp as
+	// node.ChaosExp.ChaosResult and node.FinishedAt fill in. Signature dedup
+	// inside EmitFaultSpanAtInjection collapses no-op repeats.
 	if traceID != "" {
 		tracer := observability.GetLangfuseTracer()
 		if tracer.IsEnabled() {
@@ -2798,22 +2801,77 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				groundTruth = make(map[string]interface{})
 			}
 
+			// Parse the experiment manifest once per tick to derive the static
+			// per-fault config (target_namespace from appinfo, timing knobs,
+			// target containers, workload_ref). The latest revision is the
+			// authoritative manifest for the current run.
+			faultEnrichment := loadFaultEnrichmentFromManifest(experiment.Revision)
+
+			// Compute cohort/sequence_mode once per tick from sibling chaos
+			// nodes so each fault's span carries its own cohort list.
+			cohortByFault, sequenceMode := computeFaultCohort(executionData.Nodes)
+
 			for _, node := range executionData.Nodes {
-				if node.Type == "ChaosEngine" && node.ChaosExp != nil && node.StartedAt != "" {
-					faultName := node.ChaosExp.ExperimentName
-					if faultName == "" {
-						faultName = node.ChaosExp.EngineName
-					}
-					if faultName != "" {
-						tracer.EmitFaultSpanAtInjection(ctx, traceID, observability.FaultInjectionDetails{
-							FaultName:       faultName,
-							EngineName:      node.ChaosExp.EngineName,
-							Namespace:       node.ChaosExp.Namespace,
-							TargetNamespace: node.ChaosExp.Namespace,
-							StartedAt:       node.StartedAt,
-						}, groundTruth)
+				if node.Type != "ChaosEngine" || node.ChaosExp == nil || node.StartedAt == "" {
+					continue
+				}
+				faultName := node.ChaosExp.ExperimentName
+				if faultName == "" {
+					faultName = node.ChaosExp.EngineName
+				}
+				if faultName == "" {
+					continue
+				}
+
+				details := observability.FaultInjectionDetails{
+					FaultName:                faultName,
+					EngineName:               node.ChaosExp.EngineName,
+					Namespace:                node.ChaosExp.Namespace,
+					StartedAt:                node.StartedAt,
+					FinishedAt:               node.FinishedAt,
+					InjectionVerdict:         node.ChaosExp.ExperimentVerdict,
+					InjectionPhase:           node.ChaosExp.ExperimentStatus,
+					InjectionProbeSuccessPct: node.ChaosExp.ProbeSuccessPercentage,
+					InjectionFailStep:        node.ChaosExp.FailStep,
+					WorkflowSequenceMode:     sequenceMode,
+					WorkflowCohortFaults:     cohortByFault[faultName],
+				}
+
+				// Static engine config from the manifest (when available).
+				if fd, ok := faultEnrichment[faultName]; ok {
+					details.TargetNamespace = fd.TargetNamespace
+					details.TargetLabel = fd.TargetLabel
+					details.TargetKind = fd.TargetKind
+					details.TotalChaosDurationSec = fd.TotalChaosDurationSec
+					details.RampTimeSec = fd.RampTimeSec
+					details.ChaosIntervalSec = fd.ChaosIntervalSec
+					details.Sequence = fd.Sequence
+					details.TargetContainers = fd.TargetContainers
+					details.WorkloadRef = fd.WorkloadRef
+				}
+				// Fallback: keep prior behaviour when the manifest parse failed
+				// or didn't include this fault — at least the engine namespace
+				// stays on the span so the certifier doesn't see an empty key.
+				if details.TargetNamespace == "" {
+					details.TargetNamespace = node.ChaosExp.Namespace
+				}
+
+				// Probe results (independent observer). Available only after
+				// ChaosResult populates; nil-safe.
+				if node.ChaosExp.ChaosResult != nil {
+					for _, ps := range node.ChaosExp.ChaosResult.Status.ProbeStatuses {
+						entry := map[string]interface{}{
+							"name":        ps.Name,
+							"type":        ps.Type,
+							"mode":        ps.Mode,
+							"verdict":     string(ps.Status.Verdict),
+							"description": ps.Status.Description,
+						}
+						details.ProbesResults = append(details.ProbesResults, entry)
 					}
 				}
+
+				tracer.EmitFaultSpanAtInjection(ctx, traceID, details, groundTruth)
 			}
 		}
 	}
@@ -3212,4 +3270,143 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 	}
 
 	return fmt.Sprintf("Experiment run received for for ExperimentID: %s, ExperimentRunID: %s", event.ExperimentID, event.ExperimentRunID), nil
+}
+
+// loadFaultEnrichmentFromManifest parses the latest experiment manifest revision
+// and returns per-fault static config (target metadata + timing knobs +
+// containers + workload_ref) keyed by fault name. Returns an empty map (never
+// nil) on parse failure so callers can lookup by name without nil-checking.
+//
+// Reuses ops.ExtractChaosEngineFaultDetails — the same parser used at workflow
+// trigger time — so producer-side fault metadata stays in lockstep regardless
+// of which call path emits the fault span. Handles both Workflow and
+// CronWorkflow manifests; the latter stores templates one level deeper at
+// spec.workflowSpec.templates.
+func loadFaultEnrichmentFromManifest(revisions []dbChaosExperiment.ExperimentRevision) map[string]observability.FaultDetail {
+	out := make(map[string]observability.FaultDetail)
+	if len(revisions) == 0 {
+		return out
+	}
+	manifest := revisions[len(revisions)-1].ExperimentManifest
+	if strings.TrimSpace(manifest) == "" {
+		return out
+	}
+	// Try Workflow first (the common case for one-shot experiments).
+	var wf v1alpha1.Workflow
+	if err := json.Unmarshal([]byte(manifest), &wf); err == nil && len(wf.Spec.Templates) > 0 {
+		for _, fd := range ops.ExtractChaosEngineFaultDetails(wf.Spec.Templates) {
+			out[fd.Name] = fd
+		}
+		return out
+	}
+	// Fall back to CronWorkflow — the wrapper exposes the workflow templates
+	// at spec.workflowSpec.templates rather than spec.templates.
+	var cwf v1alpha1.CronWorkflow
+	if err := json.Unmarshal([]byte(manifest), &cwf); err == nil && len(cwf.Spec.WorkflowSpec.Templates) > 0 {
+		for _, fd := range ops.ExtractChaosEngineFaultDetails(cwf.Spec.WorkflowSpec.Templates) {
+			out[fd.Name] = fd
+		}
+		return out
+	}
+	// Manifest is unparseable in both shapes; degrade gracefully — the fault
+	// span still emits with run-event-derived fields, just without the static
+	// engine config.
+	return out
+}
+
+// computeFaultCohort returns the per-fault list of sibling fault names whose
+// [StartedAt, FinishedAt] interval overlaps with each fault, plus the workflow's
+// overall sequence_mode ("single" | "sequential" | "parallel").
+//
+// Two intervals overlap iff a.start < b.end AND b.start < a.end. A node whose
+// FinishedAt is empty is treated as ongoing (FinishedAt = +inf), which captures
+// the in-flight cohort during a parallel run.
+func computeFaultCohort(nodes map[string]types.Node) (map[string][]string, string) {
+	type window struct {
+		fault    string
+		start    time.Time
+		end      time.Time
+		ongoing  bool
+		hasStart bool
+	}
+	var windows []window
+	for _, node := range nodes {
+		if node.Type != "ChaosEngine" || node.ChaosExp == nil || node.StartedAt == "" {
+			continue
+		}
+		fault := node.ChaosExp.ExperimentName
+		if fault == "" {
+			fault = node.ChaosExp.EngineName
+		}
+		if fault == "" {
+			continue
+		}
+		w := window{fault: fault}
+		if ts := observability.ParseArgoTime(node.StartedAt); ts != nil {
+			w.start = *ts
+			w.hasStart = true
+		}
+		if node.FinishedAt != "" {
+			if ts := observability.ParseArgoTime(node.FinishedAt); ts != nil {
+				w.end = *ts
+			} else {
+				w.ongoing = true
+			}
+		} else {
+			w.ongoing = true
+		}
+		if w.hasStart {
+			windows = append(windows, w)
+		}
+	}
+
+	cohorts := make(map[string][]string, len(windows))
+	if len(windows) <= 1 {
+		mode := "single"
+		if len(windows) == 0 {
+			mode = ""
+		}
+		for _, w := range windows {
+			cohorts[w.fault] = nil
+		}
+		return cohorts, mode
+	}
+
+	overlapsFound := false
+	for i, a := range windows {
+		var siblings []string
+		for j, b := range windows {
+			if i == j {
+				continue
+			}
+			aEnd := a.end
+			if a.ongoing {
+				aEnd = time.Unix(1<<62, 0)
+			}
+			bEnd := b.end
+			if b.ongoing {
+				bEnd = time.Unix(1<<62, 0)
+			}
+			if a.start.Before(bEnd) && b.start.Before(aEnd) {
+				siblings = append(siblings, b.fault)
+				overlapsFound = true
+			}
+		}
+		// Dedup (siblings are unique by fault name in practice, but a fault can
+		// appear on multiple ChaosEngine nodes if reused).
+		sort.Strings(siblings)
+		uniq := siblings[:0]
+		for k, s := range siblings {
+			if k == 0 || s != siblings[k-1] {
+				uniq = append(uniq, s)
+			}
+		}
+		cohorts[a.fault] = uniq
+	}
+
+	mode := "sequential"
+	if overlapsFound {
+		mode = "parallel"
+	}
+	return cohorts, mode
 }
