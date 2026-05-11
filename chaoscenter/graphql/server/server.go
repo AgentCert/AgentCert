@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -50,17 +50,10 @@ func init() {
 	log.Printf("go version: %s", runtime.Version())
 	log.Printf("go os/arch: %s/%s", runtime.GOOS, runtime.GOARCH)
 
-	// Load .env files if they exist (for development/local deployment)
+	// Load .env from CWD if present (local dev convenience only).
+	// In production, start-agentcert.sh sets all env vars before launching
+	// this binary â€” no path probing needed or wanted.
 	_ = godotenv.Load()
-	// Try common workspace paths for local-custom config
-	for _, p := range []string{
-		"./local-custom/config/.env",
-		"../local-custom/config/.env",
-		"../../local-custom/config/.env",
-		"../../../local-custom/config/.env",
-	} {
-		_ = godotenv.Overload(p)
-	}
 
 	err := envconfig.Process("", &utils.Config)
 	if err != nil {
@@ -123,10 +116,11 @@ func main() {
 		// Don't fail startup if Langfuse is not configured
 	}
 
-	// Initialize OTEL tracer for OTEL-compliant tracing to Langfuse
-	if err := observability.InitOTELTracer(context.Background()); err != nil {
-		log.Printf("Failed to initialize OTEL tracer: %v", err)
-		// Don't fail startup if OTEL is not configured
+	// Emit an explicit startup mode so trace path is unambiguous in runtime logs.
+	if observability.GetLangfuseTracer().IsEnabled() {
+		log.Println("[Observability] Mode: Langfuse REST (traces/observations/scores via REST API)")
+	} else {
+		log.Println("[Observability] Mode: tracing disabled (no Langfuse credentials)")
 	}
 
 	enableHTTPSConnection, err := strconv.ParseBool(utils.Config.EnableInternalTls)
@@ -217,7 +211,7 @@ func main() {
 	projectEventChannel := make(chan string)
 	go projects.ProjectEvents(projectEventChannel, mongodb.MgoClient, mongodbOperator)
 
-	// Graceful shutdown handler for OTEL and Langfuse flush
+	// Graceful shutdown handler for Langfuse flush
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -225,8 +219,8 @@ func main() {
 		log.Infof("Received signal %v, shutting down tracers...", sig)
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := observability.ShutdownOTELTracer(shutdownCtx); err != nil {
-			log.Errorf("OTEL tracer shutdown error: %v", err)
+		if err := observability.GetLangfuseTracer().Close(shutdownCtx); err != nil {
+			log.Errorf("Langfuse tracer shutdown error: %v", err)
 		}
 		os.Exit(0)
 	}()
@@ -236,12 +230,12 @@ func main() {
 			log.Fatalf("Failure to start chaoscenter authentication GRPC server due to empty TLS cert file path and TLS key path")
 		}
 
-		log.Infof("graphql server running at https://localhost:%s", utils.Config.RestPort)
+		log.Infof("graphql server running at https://0.0.0.0:%s", utils.Config.RestPort)
 		// configuring TLS config based on provided certificates & keys
 		conf := utils.GetTlsConfig(utils.Config.TlsCertPath, utils.Config.TlsKeyPath, true)
 
 		server := http.Server{
-			Addr:      ":" + utils.Config.RestPort,
+			Addr:      "0.0.0.0:" + utils.Config.RestPort,
 			Handler:   router,
 			TLSConfig: conf,
 		}
@@ -249,8 +243,8 @@ func main() {
 			log.Fatalf("Failure to start litmus-portal graphql REST server due to %v", err)
 		}
 	} else {
-		log.Infof("graphql server running at http://localhost:%s", utils.Config.RestPort)
-		log.Fatal(http.ListenAndServe(":"+utils.Config.RestPort, router))
+		log.Infof("graphql server running at http://0.0.0.0:%s", utils.Config.RestPort)
+		log.Fatal(http.ListenAndServe("0.0.0.0:"+utils.Config.RestPort, router))
 	}
 }
 

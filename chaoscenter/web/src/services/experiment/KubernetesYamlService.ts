@@ -217,8 +217,14 @@ export class KubernetesYamlService extends ExperimentYamlService {
         }
       });
 
-      if (engineCR?.metadata?.annotations) {
-        engineCR.metadata.annotations.probeRef = JSON.stringify(probes);
+      if (engineCR) {
+        engineCR.metadata = {
+          ...engineCR.metadata,
+          annotations: {
+            ...(engineCR.metadata?.annotations ?? {}),
+            probeRef: JSON.stringify(probes ?? [])
+          }
+        };
       }
 
       // Add engine to the templates
@@ -748,13 +754,16 @@ export class KubernetesYamlService extends ExperimentYamlService {
       if (template.inputs?.artifacts?.[0].raw?.data) {
         const chaosEngineCR = parse(template.inputs.artifacts[0].raw.data ?? '') as ChaosEngine;
         if (chaosEngineCR.kind === 'ChaosEngine') {
-          if (chaosEngineCR.metadata?.annotations === undefined) {
-            name = template.inputs.artifacts[0].name;
-          } else if (
-            chaosEngineCR.metadata?.annotations &&
-            chaosEngineCR.metadata?.annotations.probeRef === undefined
-          ) {
-            name = template.inputs.artifacts[0].name;
+          const probesInSpec = chaosEngineCR.spec?.experiments?.[0]?.spec?.probe;
+          const hasProbeInSpec = Array.isArray(probesInSpec) ? probesInSpec.length > 0 : probesInSpec !== undefined;
+
+          // probeRef is required only when probes are present in engine spec.
+          if (hasProbeInSpec) {
+            const probeRef = chaosEngineCR.metadata?.annotations?.probeRef;
+            const hasProbeRef = typeof probeRef === 'string' && probeRef.trim() !== '';
+            if (!hasProbeRef) {
+              name = template.inputs.artifacts[0].name;
+            }
           }
         }
       }
@@ -1091,16 +1100,17 @@ export class KubernetesYamlService extends ExperimentYamlService {
           }
         : undefined;
 
-      const metadata = chaosEngine.metadata;
-      if (metadata) {
-        metadata.namespace = '{{workflow.parameters.adminModeNamespace}}';
-        metadata['labels'] = {
-          workflow_run_id: '{{ workflow.uid }}'
-        };
-        metadata.annotations = {
-          probeRef: ''
-        };
-      }
+      const metadata = chaosEngine.metadata ?? {};
+      metadata.namespace = '{{workflow.parameters.adminModeNamespace}}';
+      metadata['labels'] = {
+        ...(metadata.labels ?? {}),
+        workflow_run_id: '{{ workflow.uid }}'
+      };
+      metadata.annotations = {
+        ...(metadata.annotations ?? {}),
+        probeRef: metadata.annotations?.probeRef ?? ''
+      };
+      chaosEngine.metadata = metadata;
 
       const engineSpec = chaosEngine.spec;
       const experimentSpec = chaosExperiment.spec;

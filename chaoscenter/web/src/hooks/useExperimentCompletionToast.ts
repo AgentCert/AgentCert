@@ -47,7 +47,11 @@ export function extractAgentIDFromManifest(manifest: string | undefined): string
   try {
     const parsed = JSON.parse(manifest);
     const params: { name: string; value?: string }[] = parsed?.spec?.arguments?.parameters ?? [];
-    return params.find(p => p.name === 'agentId')?.value;
+    const value = params.find(p => p.name === 'agentId')?.value;
+    // Treat empty string the same as missing so the `??` fallback chain in
+    // ExperimentRunDetails.tsx (`agentID ?? infra.infraID ?? experimentID`)
+    // can fall through to infraID when the manifest has no real agent.
+    return value ? value : undefined;
   } catch {
     return undefined;
   }
