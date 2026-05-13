@@ -11,7 +11,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 const CONTEXT = process.cwd();
 const isDevConfig = process.argv.some(arg => arg.includes('webpack.dev.js'));
-const includeMonacoPlugin = !isDevConfig || process.env.ENABLE_MONACO_IN_DEV === 'true';
+const includeMonacoPlugin = true;
 const includeStringTypesPlugin = !isDevConfig || process.env.ENABLE_STRING_TYPES_IN_DEV === 'true';
 
 module.exports = {
