@@ -1,0 +1,87 @@
+# Certification Generation GraphQL Schema
+# Server-side orchestrator that drives the four certifier APIs
+# (bucketing-extraction, poll, aggregation-certification, poll) on behalf
+# of the UI when an experiment run completes.  See
+# docs/mongo-collection-certiifcation.md for the full data model.
+
+"""
+Input for triggering the certification pipeline at the end of an
+experiment run.  All fields are required; the orchestrator persists
+them into MongoDB before returning.
+"""
+input CertificationGenerationRequest {
+  """Agent that produced the run (matches certificate_run_workflows.agentId)"""
+  agentID: String!
+
+  """Human-readable agent name, propagated to the aggregation API"""
+  agentName: String!
+
+  """Experiment under which the run was executed"""
+  experimentID: String!
+
+  """The specific run that just completed"""
+  experimentRunID: String!
+
+  """Total runs expected for this experiment.  Used by the
+     ALL_RUNS_COMPLETED aggregation gate.  Defaults to 1 when omitted."""
+  expectedRuns: Int
+}
+
+"""
+Response from /certification-generation.  Returned synchronously while the
+orchestration continues in the background.
+"""
+type CertificationGenerationResponse {
+  """Top-level status of the trigger call: ACCEPTED or ALREADY_RUNNING"""
+  status: String!
+
+  """Status persisted on the run-workflow document at return time"""
+  experimentRunWorkflowStatus: String!
+
+  """Optional human-readable message"""
+  message: String
+}
+
+"""
+Summary of the certification state for a single experiment.  Returned to
+the experiment-history page so the UI can decide whether to enable the
+download-certificate link.
+"""
+type CertificationExperimentSummary {
+  projectID: String!
+  agentID: String!
+  agentName: String!
+  experimentID: String!
+  status: String!
+  expectedRuns: Int!
+  totalRuns: Int!
+  completedRuns: Int!
+  failedRuns: Int!
+  ready: Boolean!
+  certificationID: String
+  generatedAt: String
+}
+
+extend type Mutation {
+  """
+  Trigger the certification pipeline for a completed experiment run.
+  Idempotent — calling repeatedly with the same identifiers will not
+  start duplicate orchestrations.
+  """
+  generateCertification(
+    projectID: ID!
+    request: CertificationGenerationRequest!
+  ): CertificationGenerationResponse!
+}
+
+extend type Query {
+  """
+  Read-only summary used by the experiment-history page.  Returns null
+  when no certification workflow has ever been started for the
+  (projectID, experimentID) pair.
+  """
+  getCertificationStatus(
+    projectID: ID!
+    experimentID: String!
+  ): CertificationExperimentSummary
+}

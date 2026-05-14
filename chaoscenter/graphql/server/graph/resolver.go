@@ -17,6 +17,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/certification"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment"
@@ -33,6 +34,7 @@ import (
 	gitops3 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/image_registry"
 	probe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/handler"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 )
 
 // This file will not be regenerated automatically.
@@ -54,6 +56,7 @@ type Resolver struct {
 	faultStudioService         fault_studio.Service
 	agentHubService            agenthub.Service
 	appHubService              apphub.Service
+	certificationService       *certification.Service
 }
 
 func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
@@ -91,13 +94,30 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	agentHubService := agenthub.NewService(agentRegistryService)
 	appHubService := apphub.NewService()
 
+	// Initialize Certification orchestrator (poller-based workflow that
+	// drives the four certifier APIs and persists state in MongoDB).
+	certificationOperator := certification.NewOperator(
+		mongodbOperator,
+		mongodb.CertificateExperimentsCollection,
+		mongodb.CertificateRunWorkflowsCollection,
+		mongodb.CertificateAggregationWorkflowsCollection,
+	)
+	certificationService := certification.NewService(
+		certificationOperator,
+		certification.NewClient(utils.Config.CertifierBaseURL),
+	)
+
 	//handler
 	chaosExperimentHandler := handler.NewChaosExperimentHandler(chaosExperimentService, chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator)
 	choasExperimentRunHandler := runHandler.NewChaosExperimentRunHandler(chaosExperimentRunService, chaosInfrastructureService, gitOpsService, chaosExperimentOperator, chaosExperimentRunOperator, probeService, mongodbOperator, agentRegistryOperator)
+	// Wire optional certification orchestrator so terminal experiment runs
+	// auto-trigger the bucketing-extraction pipeline (no UI call required).
+	choasExperimentRunHandler.SetCertificationService(certificationService)
 
 	config := generated.Config{
 		Resolvers: &Resolver{
 			chaosHubService:            chaosHubService,
+			certificationService:       certificationService,
 			chaosInfrastructureService: chaosInfrastructureService,
 			chaosExperimentService:     chaosExperimentService,
 			choasExperimentRunService:  chaosExperimentRunService,

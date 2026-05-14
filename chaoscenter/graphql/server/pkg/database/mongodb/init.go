@@ -29,6 +29,9 @@ const (
 	ChaosProbeCollection
 	AgentRegistryCollection
 	FaultStudioCollection
+	CertificateExperimentsCollection
+	CertificateRunWorkflowsCollection
+	CertificateAggregationWorkflowsCollection
 )
 
 // MongoInterface requires a MongoClient that implements the Initialize method to create the Mongo DB client
@@ -55,6 +58,9 @@ type MongoClient struct {
 	ChaosProbeCollection          *mongo.Collection
 	AgentRegistryCollection       *mongo.Collection
 	FaultStudioCollection         *mongo.Collection
+	CertificateExperimentsCollection          *mongo.Collection
+	CertificateRunWorkflowsCollection         *mongo.Collection
+	CertificateAggregationWorkflowsCollection *mongo.Collection
 }
 
 var (
@@ -74,6 +80,9 @@ var (
 		EnvironmentCollection:         "environment",
 		AgentRegistryCollection:       "agentRegistry",
 		FaultStudioCollection:         "faultStudios",
+		CertificateExperimentsCollection:          "certificate_experiments",
+		CertificateRunWorkflowsCollection:         "certificate_run_workflows",
+		CertificateAggregationWorkflowsCollection: "certificate_aggregation_workflows",
 	}
 
 	DbName            = "litmus"
@@ -390,5 +399,72 @@ func (m *MongoClient) initAllCollection() {
 	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to create indexes for faultStudios collection")
+	}
+
+	// Certification workflow collections (poller-based orchestrator).
+	// See docs/mongo-collection-certiifcation.md for the data model.
+	m.initCertificationCollections()
+}
+
+// initCertificationCollections creates the three certification-related
+// collections and their indexes.  All operations tolerate "already exists"
+// errors so the server can be restarted safely.
+func (m *MongoClient) initCertificationCollections() {
+	// certificate_experiments
+	if err := m.Database.CreateCollection(backgroundContext, Collections[CertificateExperimentsCollection], nil); err != nil &&
+		!strings.Contains(err.Error(), "already exists") {
+		logrus.WithError(err).Error("failed to create certificate_experiments collection")
+	}
+	m.CertificateExperimentsCollection = m.Database.Collection(Collections[CertificateExperimentsCollection])
+	if _, err := m.CertificateExperimentsCollection.Indexes().CreateMany(backgroundContext, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "projectId", Value: 1}, {Key: "experimentId", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "projectId", Value: 1}, {Key: "agentId", Value: 1}, {Key: "status", Value: 1}}},
+		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "updatedAt", Value: -1}}},
+		{Keys: bson.D{{Key: "latestCertificate.status", Value: 1}, {Key: "updatedAt", Value: -1}}},
+	}); err != nil {
+		logrus.WithError(err).Error("failed to create indexes for certificate_experiments collection")
+	}
+
+	// certificate_run_workflows
+	if err := m.Database.CreateCollection(backgroundContext, Collections[CertificateRunWorkflowsCollection], nil); err != nil &&
+		!strings.Contains(err.Error(), "already exists") {
+		logrus.WithError(err).Error("failed to create certificate_run_workflows collection")
+	}
+	m.CertificateRunWorkflowsCollection = m.Database.Collection(Collections[CertificateRunWorkflowsCollection])
+	if _, err := m.CertificateRunWorkflowsCollection.Indexes().CreateMany(backgroundContext, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "projectId", Value: 1}, {Key: "agentId", Value: 1},
+				{Key: "experimentId", Value: 1}, {Key: "experimentRunId", Value: 1},
+			},
+			Options: options.Index().SetUnique(true),
+		},
+		{Keys: bson.D{{Key: "bucketing.taskId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
+		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "bucketing.nextPollAt", Value: 1}}},
+		{Keys: bson.D{{Key: "agentId", Value: 1}, {Key: "experimentId", Value: 1}, {Key: "status", Value: 1}}},
+		{Keys: bson.D{{Key: "updatedAt", Value: -1}}},
+	}); err != nil {
+		logrus.WithError(err).Error("failed to create indexes for certificate_run_workflows collection")
+	}
+
+	// certificate_aggregation_workflows
+	if err := m.Database.CreateCollection(backgroundContext, Collections[CertificateAggregationWorkflowsCollection], nil); err != nil &&
+		!strings.Contains(err.Error(), "already exists") {
+		logrus.WithError(err).Error("failed to create certificate_aggregation_workflows collection")
+	}
+	m.CertificateAggregationWorkflowsCollection = m.Database.Collection(Collections[CertificateAggregationWorkflowsCollection])
+	if _, err := m.CertificateAggregationWorkflowsCollection.Indexes().CreateMany(backgroundContext, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "projectId", Value: 1}, {Key: "agentId", Value: 1},
+				{Key: "experimentId", Value: 1}, {Key: "aggregationVersion", Value: 1},
+			},
+			Options: options.Index().SetUnique(true),
+		},
+		{Keys: bson.D{{Key: "aggregation.certTaskId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
+		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "aggregation.nextPollAt", Value: 1}}},
+		{Keys: bson.D{{Key: "agentId", Value: 1}, {Key: "experimentId", Value: 1}, {Key: "createdAt", Value: -1}}},
+	}); err != nil {
+		logrus.WithError(err).Error("failed to create indexes for certificate_aggregation_workflows collection")
 	}
 }

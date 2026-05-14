@@ -342,6 +342,52 @@ type CapabilityDefinition struct {
 	Category string `json:"category"`
 }
 
+// Summary of the certification state for a single experiment.  Returned to
+// the experiment-history page so the UI can decide whether to enable the
+// download-certificate link.
+type CertificationExperimentSummary struct {
+	ProjectID       string  `json:"projectID"`
+	AgentID         string  `json:"agentID"`
+	AgentName       string  `json:"agentName"`
+	ExperimentID    string  `json:"experimentID"`
+	Status          string  `json:"status"`
+	ExpectedRuns    int     `json:"expectedRuns"`
+	TotalRuns       int     `json:"totalRuns"`
+	CompletedRuns   int     `json:"completedRuns"`
+	FailedRuns      int     `json:"failedRuns"`
+	Ready           bool    `json:"ready"`
+	CertificationID *string `json:"certificationID,omitempty"`
+	GeneratedAt     *string `json:"generatedAt,omitempty"`
+}
+
+// Input for triggering the certification pipeline at the end of an
+// experiment run.  All fields are required; the orchestrator persists
+// them into MongoDB before returning.
+type CertificationGenerationRequest struct {
+	// Agent that produced the run (matches certificate_run_workflows.agentId)
+	AgentID string `json:"agentID"`
+	// Human-readable agent name, propagated to the aggregation API
+	AgentName string `json:"agentName"`
+	// Experiment under which the run was executed
+	ExperimentID string `json:"experimentID"`
+	// The specific run that just completed
+	ExperimentRunID string `json:"experimentRunID"`
+	// Total runs expected for this experiment.  Used by the
+	//      ALL_RUNS_COMPLETED aggregation gate.  Defaults to 1 when omitted.
+	ExpectedRuns *int `json:"expectedRuns,omitempty"`
+}
+
+// Response from /certification-generation.  Returned synchronously while the
+// orchestration continues in the background.
+type CertificationGenerationResponse struct {
+	// Top-level status of the trigger call: ACCEPTED or ALREADY_RUNNING
+	Status string `json:"status"`
+	// Status persisted on the run-workflow document at return time
+	ExperimentRunWorkflowStatus string `json:"experimentRunWorkflowStatus"`
+	// Optional human-readable message
+	Message *string `json:"message,omitempty"`
+}
+
 // Defines the details for a chaos experiment
 type ChaosExperimentRequest struct {
 	// ID of the experiment

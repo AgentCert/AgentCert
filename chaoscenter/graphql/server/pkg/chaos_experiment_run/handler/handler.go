@@ -17,6 +17,7 @@ import (
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/certification"
 
 	probeUtils "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/utils"
 
@@ -70,6 +71,14 @@ type ChaosExperimentRunHandler struct {
 	probeService               probe.Service
 	mongodbOperator            mongodb.MongoOperator
 	agentRegistryOperator      agent_registry.Operator
+	certificationService       *certification.Service
+}
+
+// SetCertificationService wires the certification orchestrator used to
+// auto-trigger the bucketing-extraction pipeline when an experiment run
+// reaches a terminal phase. Optional: if nil, auto-trigger is a no-op.
+func (c *ChaosExperimentRunHandler) SetCertificationService(s *certification.Service) {
+	c.certificationService = s
 }
 
 type rbacRequirement struct {
@@ -2941,6 +2950,61 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 			}
 		}
 		scoreExperimentRun(ctx, traceID, expName, expStart, metricsPtr, executionData.Phase)
+		// Auto-trigger certification (bucketing-extraction) on terminal phase.
+		// Mirrors the manual `generateCertification` mutation so that the
+		// certifier pipeline starts without requiring a UI/API caller.
+		if c.certificationService != nil {
+			projectID := ""
+			agentID := ""
+			agentName := ""
+			if event.ExperimentRunID != "" {
+				if wfRun, dbErr := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{{"experiment_run_id", event.ExperimentRunID}}); dbErr == nil {
+					projectID = wfRun.ProjectID
+					agentID = wfRun.InfraID
+				}
+			}
+			if c.agentRegistryOperator != nil && executionData.Namespace != "" {
+				if a, e := c.agentRegistryOperator.GetAgentByNamespace(ctx, executionData.Namespace); e == nil && a != nil {
+					if agentID == "" {
+						agentID = a.AgentID
+					}
+					agentName = a.Name
+				}
+			}
+			// Fallback: look up agent by ID if namespace lookup didn't yield a name.
+			if agentName == "" && c.agentRegistryOperator != nil && agentID != "" {
+				if a, e := c.agentRegistryOperator.GetAgent(ctx, agentID); e == nil && a != nil {
+					agentName = a.Name
+				}
+			}
+			// Certifier rejects empty agent_name (422 string_too_short).
+			// Use the agentID as a last-resort label so the pipeline still runs.
+			if agentName == "" {
+				agentName = agentID
+			}
+			certIn := certification.StartInput{
+				ProjectID:       projectID,
+				AgentID:         agentID,
+				AgentName:       agentName,
+				ExperimentID:    event.ExperimentID,
+				ExperimentRunID: event.ExperimentRunID,
+				ExpectedRuns:    1,
+			}
+			lf := logFields
+			go func(in certification.StartInput) {
+				defer func() {
+					if r := recover(); r != nil {
+						logrus.WithFields(lf).Errorf("[Cert] auto-trigger panic: %v", r)
+					}
+				}()
+				out, cerr := c.certificationService.StartCertificationGeneration(context.Background(), in)
+				if cerr != nil {
+					logrus.WithFields(lf).Errorf("[Cert] auto-trigger failed for run %s: %v", in.ExperimentRunID, cerr)
+					return
+				}
+				logrus.WithFields(lf).Infof("[Cert] auto-trigger ok for run %s: status=%s wf=%s", in.ExperimentRunID, out.Status, out.ExperimentRunWorkflowStatus)
+			}(certIn)
+		}
 		// Clear per-trace caches to prevent memory leaks once the run is sealed.
 		tracer := observability.GetLangfuseTracer()
 		if tracer.IsEnabled() {

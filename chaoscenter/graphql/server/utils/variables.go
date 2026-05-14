@@ -60,6 +60,8 @@ type Configuration struct {
 	HelmBinary                  string   `split_words:"true" default:"helm"`
 	HelmTimeout                 string   `split_words:"true" default:"5m"`
 	PreCleanupWaitSeconds       string   `split_words:"true" default:"0"`
+	CertifierBaseURL            string   `split_words:"true" default:"http://localhost:8088"`
+	CertificatePDFBaseURL       string   `split_words:"true" default:"http://localhost:8089"`
 	AllowedOrigins              []string `split_words:"true" default:"^(http://|https://|)litmuschaos.io(:[0-9]+|)?,^(http://|https://|)localhost(:[0-9]+|)"`
 }
 

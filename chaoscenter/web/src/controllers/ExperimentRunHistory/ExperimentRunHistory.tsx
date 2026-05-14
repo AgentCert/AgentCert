@@ -121,6 +121,26 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   const experimentType = experimentRunsWithExecutionData?.[0]?.experimentType;
   const experimentManifest = experimentRunsWithExecutionData?.[0]?.experimentManifest;
 
+  // Certificate download enablement: every run for this experiment must be
+  // in a terminal phase (Completed / *_With_Error / *_With_Probe_Failure /
+  // Error / Stopped). Running, Queued, Timeout and NA all keep it disabled.
+  const certificateDownload = React.useMemo(() => {
+    const runs = experimentRunsWithExecutionData;
+    const agentID = runs?.[0]?.infra?.infraID ?? '';
+    if (!runs || runs.length === 0) {
+      return { enabled: false, agentID };
+    }
+    const terminalPhases = new Set<string>([
+      ExperimentRunStatus.COMPLETED,
+      ExperimentRunStatus.COMPLETED_WITH_ERROR,
+      ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE,
+      ExperimentRunStatus.ERROR,
+      ExperimentRunStatus.STOPPED
+    ]);
+    const allTerminal = runs.every(r => terminalPhases.has(r.phase));
+    return { enabled: allTerminal && !!agentID, agentID };
+  }, [experimentRunsWithExecutionData]);
+
   React.useEffect(() => {
     if (experimentName) setExperimentNamePersistent(experimentName);
   }, [experimentName]),
@@ -211,6 +231,8 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       areFiltersSet={areFiltersSet}
       experimentRunsExists={experimentRunsExists}
       multiRunConfig={multiRunConfig}
+      certificateDownloadEnabled={certificateDownload.enabled}
+      certificateAgentID={certificateDownload.agentID}
     />
   );
 }
