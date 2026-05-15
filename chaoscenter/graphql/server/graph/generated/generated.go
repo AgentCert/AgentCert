@@ -195,6 +195,27 @@ type ComplexityRoot struct {
 		Name        func(childComplexity int) int
 	}
 
+	CertificationExperimentSummary struct {
+		AgentID         func(childComplexity int) int
+		AgentName       func(childComplexity int) int
+		CertificationID func(childComplexity int) int
+		CompletedRuns   func(childComplexity int) int
+		ExpectedRuns    func(childComplexity int) int
+		ExperimentID    func(childComplexity int) int
+		FailedRuns      func(childComplexity int) int
+		GeneratedAt     func(childComplexity int) int
+		ProjectID       func(childComplexity int) int
+		Ready           func(childComplexity int) int
+		Status          func(childComplexity int) int
+		TotalRuns       func(childComplexity int) int
+	}
+
+	CertificationGenerationResponse struct {
+		ExperimentRunWorkflowStatus func(childComplexity int) int
+		Message                     func(childComplexity int) int
+		Status                      func(childComplexity int) int
+	}
+
 	ChaosExperimentResponse struct {
 		CronSyntax            func(childComplexity int) int
 		ExperimentDescription func(childComplexity int) int
@@ -412,10 +433,10 @@ type ComplexityRoot struct {
 	}
 
 	FaultDetails struct {
-                CSV         func(childComplexity int) int
-                Engine      func(childComplexity int) int
-                Fault       func(childComplexity int) int
-                GroundTruth func(childComplexity int) int
+		CSV         func(childComplexity int) int
+		Engine      func(childComplexity int) int
+		Fault       func(childComplexity int) int
+		GroundTruth func(childComplexity int) int
 	}
 
 	FaultInjectionConfig struct {
@@ -786,6 +807,7 @@ type ComplexityRoot struct {
 		DeployAgentWithHelm       func(childComplexity int, projectID string, request model.DeployAgentWithHelmRequest) int
 		DisableGitOps             func(childComplexity int, projectID string) int
 		EnableGitOps              func(childComplexity int, projectID string, configurations model.GitConfig) int
+		GenerateCertification     func(childComplexity int, projectID string, request model.CertificationGenerationRequest) int
 		GenerateSSHKey            func(childComplexity int) int
 		GetManifestWithInfraID    func(childComplexity int, projectID string, infraID string, accessKey string) int
 		GitopsNotifier            func(childComplexity int, clusterInfo model.InfraIdentity, experimentID string) int
@@ -899,6 +921,7 @@ type ComplexityRoot struct {
 		GetAgentStatus               func(childComplexity int, agentID string) int
 		GetAgentsByCapabilities      func(childComplexity int, projectID string, capabilities []string) int
 		GetAppHubStatus              func(childComplexity int, projectID string) int
+		GetCertificationStatus       func(childComplexity int, projectID string, experimentID string) int
 		GetChaosFault                func(childComplexity int, projectID string, request model.ExperimentRequest) int
 		GetChaosHub                  func(childComplexity int, projectID string, chaosHubID string) int
 		GetChaosHubStats             func(childComplexity int, projectID string) int
@@ -1062,6 +1085,7 @@ type MutationResolver interface {
 	DeleteAgent(ctx context.Context, agentID string, hardDelete *bool) (*model.DeleteAgentResponse, error)
 	ValidateAgentHealth(ctx context.Context, agentID string) (*model.AgentStatusResponse, error)
 	SyncAgentToLangfuse(ctx context.Context, agentID string) (*model.SyncResponse, error)
+	GenerateCertification(ctx context.Context, projectID string, request model.CertificationGenerationRequest) (*model.CertificationGenerationResponse, error)
 	ChaosExperimentRun(ctx context.Context, request model.ExperimentRunRequest) (string, error)
 	RunChaosExperiment(ctx context.Context, experimentID string, projectID string) (*model.RunChaosExperimentResponse, error)
 	StopExperimentRuns(ctx context.Context, projectID string, experimentID string, experimentRunID *string, notifyID *string) (bool, error)
@@ -1112,6 +1136,7 @@ type QueryResolver interface {
 	GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*model.CapabilityDefinition, error)
 	GetKubernetesNamespaces(ctx context.Context) ([]string, error)
 	GetEnvironmentVariables(ctx context.Context) ([]*model.EnvironmentVariable, error)
+	GetCertificationStatus(ctx context.Context, projectID string, experimentID string) (*model.CertificationExperimentSummary, error)
 	GetExperimentRun(ctx context.Context, projectID string, experimentRunID *string, notifyID *string) (*model.ExperimentRun, error)
 	ListExperimentRun(ctx context.Context, projectID string, request model.ListExperimentRunRequest) (*model.ListExperimentRunResponse, error)
 	GetExperimentRunStats(ctx context.Context, projectID string) (*model.GetExperimentRunStatsResponse, error)
@@ -1883,6 +1908,111 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.CapabilityDefinition.Name(childComplexity), true
+
+	case "CertificationExperimentSummary.agentID":
+		if e.complexity.CertificationExperimentSummary.AgentID == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.AgentID(childComplexity), true
+
+	case "CertificationExperimentSummary.agentName":
+		if e.complexity.CertificationExperimentSummary.AgentName == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.AgentName(childComplexity), true
+
+	case "CertificationExperimentSummary.certificationID":
+		if e.complexity.CertificationExperimentSummary.CertificationID == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.CertificationID(childComplexity), true
+
+	case "CertificationExperimentSummary.completedRuns":
+		if e.complexity.CertificationExperimentSummary.CompletedRuns == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.CompletedRuns(childComplexity), true
+
+	case "CertificationExperimentSummary.expectedRuns":
+		if e.complexity.CertificationExperimentSummary.ExpectedRuns == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.ExpectedRuns(childComplexity), true
+
+	case "CertificationExperimentSummary.experimentID":
+		if e.complexity.CertificationExperimentSummary.ExperimentID == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.ExperimentID(childComplexity), true
+
+	case "CertificationExperimentSummary.failedRuns":
+		if e.complexity.CertificationExperimentSummary.FailedRuns == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.FailedRuns(childComplexity), true
+
+	case "CertificationExperimentSummary.generatedAt":
+		if e.complexity.CertificationExperimentSummary.GeneratedAt == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.GeneratedAt(childComplexity), true
+
+	case "CertificationExperimentSummary.projectID":
+		if e.complexity.CertificationExperimentSummary.ProjectID == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.ProjectID(childComplexity), true
+
+	case "CertificationExperimentSummary.ready":
+		if e.complexity.CertificationExperimentSummary.Ready == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.Ready(childComplexity), true
+
+	case "CertificationExperimentSummary.status":
+		if e.complexity.CertificationExperimentSummary.Status == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.Status(childComplexity), true
+
+	case "CertificationExperimentSummary.totalRuns":
+		if e.complexity.CertificationExperimentSummary.TotalRuns == nil {
+			break
+		}
+
+		return e.complexity.CertificationExperimentSummary.TotalRuns(childComplexity), true
+
+	case "CertificationGenerationResponse.experimentRunWorkflowStatus":
+		if e.complexity.CertificationGenerationResponse.ExperimentRunWorkflowStatus == nil {
+			break
+		}
+
+		return e.complexity.CertificationGenerationResponse.ExperimentRunWorkflowStatus(childComplexity), true
+
+	case "CertificationGenerationResponse.message":
+		if e.complexity.CertificationGenerationResponse.Message == nil {
+			break
+		}
+
+		return e.complexity.CertificationGenerationResponse.Message(childComplexity), true
+
+	case "CertificationGenerationResponse.status":
+		if e.complexity.CertificationGenerationResponse.Status == nil {
+			break
+		}
+
+		return e.complexity.CertificationGenerationResponse.Status(childComplexity), true
 
 	case "ChaosExperimentResponse.cronSyntax":
 		if e.complexity.ChaosExperimentResponse.CronSyntax == nil {
@@ -4796,6 +4926,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.EnableGitOps(childComplexity, args["projectID"].(string), args["configurations"].(model.GitConfig)), true
 
+	case "Mutation.generateCertification":
+		if e.complexity.Mutation.GenerateCertification == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_generateCertification_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.GenerateCertification(childComplexity, args["projectID"].(string), args["request"].(model.CertificationGenerationRequest)), true
+
 	case "Mutation.generateSSHKey":
 		if e.complexity.Mutation.GenerateSSHKey == nil {
 			break
@@ -5541,6 +5683,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.GetAppHubStatus(childComplexity, args["projectID"].(string)), true
+
+	case "Query.getCertificationStatus":
+		if e.complexity.Query.GetCertificationStatus == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getCertificationStatus_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetCertificationStatus(childComplexity, args["projectID"].(string), args["experimentID"].(string)), true
 
 	case "Query.getChaosFault":
 		if e.complexity.Query.GetChaosFault == nil {
@@ -6461,6 +6615,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputAgentEndpointInput,
 		ec.unmarshalInputAgentMetadataInput,
 		ec.unmarshalInputCMDProbeRequest,
+		ec.unmarshalInputCertificationGenerationRequest,
 		ec.unmarshalInputChaosExperimentRequest,
 		ec.unmarshalInputChaosHubFilterInput,
 		ec.unmarshalInputCloningInput,
@@ -7365,6 +7520,94 @@ extend type Mutation {
   
   """Manually sync an agent's metadata to Langfuse"""
   syncAgentToLangfuse(agentID: ID!): SyncResponse!
+}
+`, BuiltIn: false},
+	{Name: "../../../definitions/shared/certification.graphqls", Input: `# Certification Generation GraphQL Schema
+# Server-side orchestrator that drives the four certifier APIs
+# (bucketing-extraction, poll, aggregation-certification, poll) on behalf
+# of the UI when an experiment run completes.  See
+# docs/mongo-collection-certiifcation.md for the full data model.
+
+"""
+Input for triggering the certification pipeline at the end of an
+experiment run.  All fields are required; the orchestrator persists
+them into MongoDB before returning.
+"""
+input CertificationGenerationRequest {
+  """Agent that produced the run (matches certificate_run_workflows.agentId)"""
+  agentID: String!
+
+  """Human-readable agent name, propagated to the aggregation API"""
+  agentName: String!
+
+  """Experiment under which the run was executed"""
+  experimentID: String!
+
+  """The specific run that just completed"""
+  experimentRunID: String!
+
+  """Total runs expected for this experiment.  Used by the
+     ALL_RUNS_COMPLETED aggregation gate.  Defaults to 1 when omitted."""
+  expectedRuns: Int
+}
+
+"""
+Response from /certification-generation.  Returned synchronously while the
+orchestration continues in the background.
+"""
+type CertificationGenerationResponse {
+  """Top-level status of the trigger call: ACCEPTED or ALREADY_RUNNING"""
+  status: String!
+
+  """Status persisted on the run-workflow document at return time"""
+  experimentRunWorkflowStatus: String!
+
+  """Optional human-readable message"""
+  message: String
+}
+
+"""
+Summary of the certification state for a single experiment.  Returned to
+the experiment-history page so the UI can decide whether to enable the
+download-certificate link.
+"""
+type CertificationExperimentSummary {
+  projectID: String!
+  agentID: String!
+  agentName: String!
+  experimentID: String!
+  status: String!
+  expectedRuns: Int!
+  totalRuns: Int!
+  completedRuns: Int!
+  failedRuns: Int!
+  ready: Boolean!
+  certificationID: String
+  generatedAt: String
+}
+
+extend type Mutation {
+  """
+  Trigger the certification pipeline for a completed experiment run.
+  Idempotent — calling repeatedly with the same identifiers will not
+  start duplicate orchestrations.
+  """
+  generateCertification(
+    projectID: ID!
+    request: CertificationGenerationRequest!
+  ): CertificationGenerationResponse!
+}
+
+extend type Query {
+  """
+  Read-only summary used by the experiment-history page.  Returns null
+  when no certification workflow has ever been started for the
+  (projectID, experimentID) pair.
+  """
+  getCertificationStatus(
+    projectID: ID!
+    experimentID: String!
+  ): CertificationExperimentSummary
 }
 `, BuiltIn: false},
 	{Name: "../../../definitions/shared/chaos_experiment.graphqls", Input: `"""
@@ -12280,6 +12523,30 @@ func (ec *executionContext) field_Mutation_enableGitOps_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_generateCertification_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 model.CertificationGenerationRequest
+	if tmp, ok := rawArgs["request"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("request"))
+		arg1, err = ec.unmarshalNCertificationGenerationRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCertificationGenerationRequest(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["request"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_getManifestWithInfraID_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -13102,6 +13369,30 @@ func (ec *executionContext) field_Query_getAppHubStatus_args(ctx context.Context
 		}
 	}
 	args["projectID"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_getCertificationStatus_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["experimentID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("experimentID"))
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["experimentID"] = arg1
 	return args, nil
 }
 
@@ -18630,6 +18921,657 @@ func (ec *executionContext) _CapabilityDefinition_category(ctx context.Context, 
 func (ec *executionContext) fieldContext_CapabilityDefinition_category(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "CapabilityDefinition",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_projectID(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_projectID(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ProjectID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_projectID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_agentID(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_agentID(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AgentID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_agentID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_agentName(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_agentName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AgentName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_agentName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_experimentID(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_experimentID(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ExperimentID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_experimentID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_status(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_status(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Status, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_expectedRuns(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_expectedRuns(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ExpectedRuns, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_expectedRuns(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_totalRuns(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_totalRuns(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalRuns, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_totalRuns(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_completedRuns(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_completedRuns(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CompletedRuns, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_completedRuns(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_failedRuns(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_failedRuns(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FailedRuns, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_failedRuns(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_ready(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_ready(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Ready, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_ready(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_certificationID(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_certificationID(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CertificationID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_certificationID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationExperimentSummary_generatedAt(ctx context.Context, field graphql.CollectedField, obj *model.CertificationExperimentSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationExperimentSummary_generatedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.GeneratedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationExperimentSummary_generatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationExperimentSummary",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationGenerationResponse_status(ctx context.Context, field graphql.CollectedField, obj *model.CertificationGenerationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationGenerationResponse_status(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Status, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationGenerationResponse_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationGenerationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationGenerationResponse_experimentRunWorkflowStatus(ctx context.Context, field graphql.CollectedField, obj *model.CertificationGenerationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationGenerationResponse_experimentRunWorkflowStatus(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ExperimentRunWorkflowStatus, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationGenerationResponse_experimentRunWorkflowStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationGenerationResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CertificationGenerationResponse_message(ctx context.Context, field graphql.CollectedField, obj *model.CertificationGenerationResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CertificationGenerationResponse_message(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Message, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CertificationGenerationResponse_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CertificationGenerationResponse",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -25827,6 +26769,7 @@ func (ec *executionContext) fieldContext_FaultDetails_groundTruth(_ context.Cont
 	}
 	return fc, nil
 }
+
 func (ec *executionContext) _FaultInjectionConfig_injectionType(ctx context.Context, field graphql.CollectedField, obj *model.FaultInjectionConfig) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_FaultInjectionConfig_injectionType(ctx, field)
 	if err != nil {
@@ -36594,6 +37537,69 @@ func (ec *executionContext) fieldContext_Mutation_syncAgentToLangfuse(ctx contex
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_generateCertification(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_generateCertification(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().GenerateCertification(rctx, fc.Args["projectID"].(string), fc.Args["request"].(model.CertificationGenerationRequest))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.CertificationGenerationResponse)
+	fc.Result = res
+	return ec.marshalNCertificationGenerationResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCertificationGenerationResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_generateCertification(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "status":
+				return ec.fieldContext_CertificationGenerationResponse_status(ctx, field)
+			case "experimentRunWorkflowStatus":
+				return ec.fieldContext_CertificationGenerationResponse_experimentRunWorkflowStatus(ctx, field)
+			case "message":
+				return ec.fieldContext_CertificationGenerationResponse_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CertificationGenerationResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_generateCertification_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_chaosExperimentRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Mutation_chaosExperimentRun(ctx, field)
 	if err != nil {
@@ -42627,6 +43633,84 @@ func (ec *executionContext) fieldContext_Query_getEnvironmentVariables(_ context
 			}
 			return nil, fmt.Errorf("no field named %q was found under type EnvironmentVariable", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_getCertificationStatus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getCertificationStatus(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GetCertificationStatus(rctx, fc.Args["projectID"].(string), fc.Args["experimentID"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.CertificationExperimentSummary)
+	fc.Result = res
+	return ec.marshalOCertificationExperimentSummary2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCertificationExperimentSummary(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getCertificationStatus(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "projectID":
+				return ec.fieldContext_CertificationExperimentSummary_projectID(ctx, field)
+			case "agentID":
+				return ec.fieldContext_CertificationExperimentSummary_agentID(ctx, field)
+			case "agentName":
+				return ec.fieldContext_CertificationExperimentSummary_agentName(ctx, field)
+			case "experimentID":
+				return ec.fieldContext_CertificationExperimentSummary_experimentID(ctx, field)
+			case "status":
+				return ec.fieldContext_CertificationExperimentSummary_status(ctx, field)
+			case "expectedRuns":
+				return ec.fieldContext_CertificationExperimentSummary_expectedRuns(ctx, field)
+			case "totalRuns":
+				return ec.fieldContext_CertificationExperimentSummary_totalRuns(ctx, field)
+			case "completedRuns":
+				return ec.fieldContext_CertificationExperimentSummary_completedRuns(ctx, field)
+			case "failedRuns":
+				return ec.fieldContext_CertificationExperimentSummary_failedRuns(ctx, field)
+			case "ready":
+				return ec.fieldContext_CertificationExperimentSummary_ready(ctx, field)
+			case "certificationID":
+				return ec.fieldContext_CertificationExperimentSummary_certificationID(ctx, field)
+			case "generatedAt":
+				return ec.fieldContext_CertificationExperimentSummary_generatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CertificationExperimentSummary", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getCertificationStatus_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -50869,6 +51953,61 @@ func (ec *executionContext) unmarshalInputCMDProbeRequest(ctx context.Context, o
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCertificationGenerationRequest(ctx context.Context, obj interface{}) (model.CertificationGenerationRequest, error) {
+	var it model.CertificationGenerationRequest
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"agentID", "agentName", "experimentID", "experimentRunID", "expectedRuns"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "agentID":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agentID"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AgentID = data
+		case "agentName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agentName"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AgentName = data
+		case "experimentID":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("experimentID"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExperimentID = data
+		case "experimentRunID":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("experimentRunID"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExperimentRunID = data
+		case "expectedRuns":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expectedRuns"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpectedRuns = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputChaosExperimentRequest(ctx context.Context, obj interface{}) (model.ChaosExperimentRequest, error) {
 	var it model.ChaosExperimentRequest
 	asMap := map[string]interface{}{}
@@ -56057,6 +57196,140 @@ func (ec *executionContext) _CapabilityDefinition(ctx context.Context, sel ast.S
 	return out
 }
 
+var certificationExperimentSummaryImplementors = []string{"CertificationExperimentSummary"}
+
+func (ec *executionContext) _CertificationExperimentSummary(ctx context.Context, sel ast.SelectionSet, obj *model.CertificationExperimentSummary) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, certificationExperimentSummaryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CertificationExperimentSummary")
+		case "projectID":
+			out.Values[i] = ec._CertificationExperimentSummary_projectID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agentID":
+			out.Values[i] = ec._CertificationExperimentSummary_agentID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agentName":
+			out.Values[i] = ec._CertificationExperimentSummary_agentName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "experimentID":
+			out.Values[i] = ec._CertificationExperimentSummary_experimentID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._CertificationExperimentSummary_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expectedRuns":
+			out.Values[i] = ec._CertificationExperimentSummary_expectedRuns(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalRuns":
+			out.Values[i] = ec._CertificationExperimentSummary_totalRuns(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "completedRuns":
+			out.Values[i] = ec._CertificationExperimentSummary_completedRuns(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "failedRuns":
+			out.Values[i] = ec._CertificationExperimentSummary_failedRuns(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ready":
+			out.Values[i] = ec._CertificationExperimentSummary_ready(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "certificationID":
+			out.Values[i] = ec._CertificationExperimentSummary_certificationID(ctx, field, obj)
+		case "generatedAt":
+			out.Values[i] = ec._CertificationExperimentSummary_generatedAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var certificationGenerationResponseImplementors = []string{"CertificationGenerationResponse"}
+
+func (ec *executionContext) _CertificationGenerationResponse(ctx context.Context, sel ast.SelectionSet, obj *model.CertificationGenerationResponse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, certificationGenerationResponseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CertificationGenerationResponse")
+		case "status":
+			out.Values[i] = ec._CertificationGenerationResponse_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "experimentRunWorkflowStatus":
+			out.Values[i] = ec._CertificationGenerationResponse_experimentRunWorkflowStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._CertificationGenerationResponse_message(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var chaosExperimentResponseImplementors = []string{"ChaosExperimentResponse"}
 
 func (ec *executionContext) _ChaosExperimentResponse(ctx context.Context, sel ast.SelectionSet, obj *model.ChaosExperimentResponse) graphql.Marshaler {
@@ -59797,6 +61070,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "generateCertification":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_generateCertification(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "chaosExperimentRun":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_chaosExperimentRun(ctx, field)
@@ -60793,6 +62073,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getCertificationStatus":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getCertificationStatus(ctx, field)
 				return res
 			}
 
@@ -63197,6 +64496,25 @@ func (ec *executionContext) marshalNCapabilityDefinition2ᚖgithubᚗcomᚋlitmu
 		return graphql.Null
 	}
 	return ec._CapabilityDefinition(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCertificationGenerationRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCertificationGenerationRequest(ctx context.Context, v interface{}) (model.CertificationGenerationRequest, error) {
+	res, err := ec.unmarshalInputCertificationGenerationRequest(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCertificationGenerationResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCertificationGenerationResponse(ctx context.Context, sel ast.SelectionSet, v model.CertificationGenerationResponse) graphql.Marshaler {
+	return ec._CertificationGenerationResponse(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCertificationGenerationResponse2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCertificationGenerationResponse(ctx context.Context, sel ast.SelectionSet, v *model.CertificationGenerationResponse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CertificationGenerationResponse(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNChaosExperimentRequest2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐChaosExperimentRequest(ctx context.Context, v interface{}) (model.ChaosExperimentRequest, error) {
@@ -65667,6 +66985,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	}
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOCertificationExperimentSummary2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐCertificationExperimentSummary(ctx context.Context, sel ast.SelectionSet, v *model.CertificationExperimentSummary) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CertificationExperimentSummary(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOChaosHubFilterInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐChaosHubFilterInput(ctx context.Context, v interface{}) (*model.ChaosHubFilterInput, error) {

@@ -71,6 +71,9 @@ export function listExperimentRunForHistory({
               weightage
             }
             executionData
+            infra {
+              infraID
+            }
           }
         }
       }

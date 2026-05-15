@@ -5,6 +5,7 @@ import { Classes } from '@blueprintjs/core';
 import { useStrings } from '@strings';
 import {
   CloneExperimentButton,
+  DownloadCertificateButton,
   DownloadExperimentButton,
   EditExperimentButton,
   EnableDisableCronButton,
@@ -28,6 +29,8 @@ interface RightSideBarViewV2Props extends Partial<RefetchExperiments>, Partial<R
   isCronEnabled?: boolean;
   setIsCronEnabled?: React.Dispatch<React.SetStateAction<boolean | undefined>>;
   isEditMode?: boolean;
+  certificateDownloadEnabled?: boolean;
+  certificateAgentID?: string;
 }
 
 function RightSideBarV2({
@@ -41,7 +44,9 @@ function RightSideBarV2({
   isCronEnabled,
   setIsCronEnabled,
   refetchExperiments,
-  refetchExperimentRuns
+  refetchExperimentRuns,
+  certificateDownloadEnabled,
+  certificateAgentID
 }: RightSideBarViewV2Props): React.ReactElement {
   const { showError } = useToaster();
   const scope = getScope();
@@ -210,6 +215,27 @@ function RightSideBarV2({
           </Text>
         </Layout.Vertical>
       </Container>
+
+      {/* <!-- download certificate button --> */}
+      {certificateDownloadEnabled !== undefined && (
+        <Container>
+          <Layout.Vertical flex={{ justifyContent: 'center' }} spacing={'small'}>
+            <DownloadCertificateButton
+              experimentID={experimentID}
+              agentID={certificateAgentID}
+              enabled={!!certificateDownloadEnabled}
+            />
+            <Text
+              style={{ textAlign: 'center' }}
+              width={70}
+              color={certificateDownloadEnabled ? Color.GREY_500 : Color.GREY_400}
+              font={{ variation: FontVariation.TINY_SEMI }}
+            >
+              {getString('downloadCertificate')}
+            </Text>
+          </Layout.Vertical>
+        </Container>
+      )}
     </Layout.Vertical>
   );
 }

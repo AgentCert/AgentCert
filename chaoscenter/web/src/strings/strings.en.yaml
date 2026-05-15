@@ -332,6 +332,9 @@ done: Done
 download: Download
 downloadChaosInfrastructureManifest: Re-Download the manifest
 downloadExperiment: Download Manifest
+downloadCertificate: Download Certificate
+downloadCertificateDisabledTooltip: Certificate will be available once every run for this experiment has finished.
+downloadCertificateEnabledTooltip: Download the certification report (PDF) for this experiment.
 downloadSuccess: Download request successfully sent
 downloadYAML: Download YML
 downloadYAMLFile: Step 1 - Download YML file

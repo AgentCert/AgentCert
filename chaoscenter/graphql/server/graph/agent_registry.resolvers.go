@@ -17,24 +17,6 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 )
 
-// resolveAgentInstallNamespace returns (installNamespace, targetNamespace).
-//
-// When AGENT_INSTALL_NAMESPACE env is set, the agent Helm release is always
-// installed into that stable system namespace (e.g. "agentcert-system") and
-// the user-supplied namespace becomes the OBSERVATION target the agent
-// watches.  This decouples the agent pod's lifecycle from the chaos target
-// so it survives target-namespace teardown between experiments.
-//
-// When AGENT_INSTALL_NAMESPACE is empty, behaviour is unchanged: the install
-// namespace == target namespace == user-supplied value (legacy mode).
-func resolveAgentInstallNamespace(userNamespace string) (string, string) {
-	sysNs := strings.TrimSpace(os.Getenv("AGENT_INSTALL_NAMESPACE"))
-	if sysNs == "" {
-		return userNamespace, ""
-	}
-	return sysNs, userNamespace
-}
-
 // RegisterAgent is the resolver for the registerAgent field.
 func (r *mutationResolver) RegisterAgent(ctx context.Context, input model.RegisterAgentInput) (*model.RegisterAgentResponse, error) {
 	// Convert GraphQL input to service request
@@ -522,4 +504,12 @@ func (r *queryResolver) GetEnvironmentVariables(ctx context.Context) ([]*model.E
 //   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
 //     it when you're done.
 //   - You have helper methods in this file. Move them out to keep these resolver files clean.
+func resolveAgentInstallNamespace(userNamespace string) (string, string) {
+	sysNs := strings.TrimSpace(os.Getenv("AGENT_INSTALL_NAMESPACE"))
+	if sysNs == "" {
+		return userNamespace, ""
+	}
+	return sysNs, userNamespace
+}
+
 var _ = uuid.New

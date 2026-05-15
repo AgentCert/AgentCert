@@ -104,6 +104,41 @@ export const MenuCell = ({
             }}
             permission={PermissionGroup.VIEWER}
           />
+          {/* <!-- download certificate button --> */}
+          {(() => {
+            const terminalPhases = new Set<string>([
+              ExperimentRunStatus.COMPLETED,
+              ExperimentRunStatus.COMPLETED_WITH_ERROR,
+              ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE,
+              ExperimentRunStatus.ERROR,
+              ExperimentRunStatus.STOPPED
+            ]);
+            const agentID = data.infrastructure?.infrastructureID;
+            const hasRuns = (data.recentExecutions?.length ?? 0) > 0;
+            const allTerminal =
+              hasRuns && data.recentExecutions.every(r => terminalPhases.has(r.experimentRunStatus));
+            const certEnabled = !!agentID && allTerminal;
+            return (
+              <RbacMenuItem
+                icon={'download'}
+                text={getString('downloadCertificate')}
+                disabled={!certEnabled}
+                title={
+                  certEnabled
+                    ? getString('downloadCertificateEnabledTooltip')
+                    : getString('downloadCertificateDisabledTooltip')
+                }
+                onClick={() => {
+                  if (!certEnabled) return;
+                  const url = `/api/certification/pdf?agent_id=${encodeURIComponent(
+                    agentID as string
+                  )}&experiment_id=${encodeURIComponent(data.experimentID)}`;
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+                permission={PermissionGroup.VIEWER}
+              />
+            );
+          })()}
           <MenuDivider />
           {/* <!-- delete experiment button --> */}
           <RbacMenuItem

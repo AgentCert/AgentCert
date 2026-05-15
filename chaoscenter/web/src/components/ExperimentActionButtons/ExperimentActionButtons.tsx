@@ -367,6 +367,50 @@ interface EnableDisableCronButtonProps extends ActionButtonProps, Partial<Refetc
   setIsCronEnabled?: React.Dispatch<React.SetStateAction<boolean | undefined>>;
 }
 
+interface DownloadCertificateButtonProps extends ActionButtonProps {
+  agentID?: string;
+  enabled: boolean;
+}
+
+export const DownloadCertificateButton = ({
+  experimentID,
+  agentID,
+  enabled,
+  tooltipProps
+}: DownloadCertificateButtonProps): React.ReactElement => {
+  const { getString } = useStrings();
+  const disabled = !enabled || !agentID;
+
+  return (
+    <div className={cx(css.actionButtons)}>
+      <RbacButton
+        tooltipProps={{
+          position: Position.TOP,
+          usePortal: true,
+          isDark: true,
+          ...tooltipProps
+        }}
+        tooltip={
+          disabled ? getString('downloadCertificateDisabledTooltip') : getString('downloadCertificateEnabledTooltip')
+        }
+        disabled={disabled}
+        iconProps={{ size: 18, color: disabled ? Color.GREY_400 : Color.PRIMARY_6 }}
+        withoutCurrentColor
+        onClick={() => {
+          if (disabled) return;
+          const url = `/api/certification/pdf?agent_id=${encodeURIComponent(
+            agentID as string
+          )}&experiment_id=${encodeURIComponent(experimentID)}`;
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }}
+        variation={ButtonVariation.ICON}
+        icon={'download'}
+        permission={PermissionGroup.VIEWER}
+      />
+    </div>
+  );
+};
+
 export const EnableDisableCronButton = ({
   experimentID,
   tooltipProps,
