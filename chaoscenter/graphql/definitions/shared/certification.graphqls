@@ -2,7 +2,7 @@
 # Server-side orchestrator that drives the four certifier APIs
 # (bucketing-extraction, poll, aggregation-certification, poll) on behalf
 # of the UI when an experiment run completes.  See
-# docs/mongo-collection-certiifcation.md for the full data model.
+# docs/certification-flow.md for the full data model.
 
 """
 Input for triggering the certification pipeline at the end of an

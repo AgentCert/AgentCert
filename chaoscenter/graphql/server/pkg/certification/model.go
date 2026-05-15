@@ -3,7 +3,7 @@
 // aggregation-certification + polling) on behalf of the UI, and persists
 // progress in MongoDB.
 //
-// See docs/mongo-collection-certiifcation.md for the data-model and flow.
+// See docs/certification-flow.md for the data-model and flow.
 package certification
 
 import "time"

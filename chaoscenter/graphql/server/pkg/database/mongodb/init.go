@@ -402,7 +402,7 @@ func (m *MongoClient) initAllCollection() {
 	}
 
 	// Certification workflow collections (poller-based orchestrator).
-	// See docs/mongo-collection-certiifcation.md for the data model.
+	// See docs/certification-flow.md for the data model.
 	m.initCertificationCollections()
 }
 
