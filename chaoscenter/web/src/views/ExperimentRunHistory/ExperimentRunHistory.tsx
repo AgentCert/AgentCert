@@ -1,7 +1,6 @@
 import React from 'react';
 import { Container, Layout, TabNavigation, Text } from '@harnessio/uicore';
 import { Color, FontVariation } from '@harnessio/design-system';
-import { Tooltip as BPTooltip } from '@blueprintjs/core';
 import { useParams } from 'react-router-dom';
 import ColumnChart from '@components/ColumnChart/ColumnChart';
 import { useStrings } from '@strings';
@@ -37,8 +36,6 @@ interface ExperimentRunHistoryViewProps {
   areFiltersSet: boolean;
   experimentRunsExists: boolean | undefined;
   multiRunConfig?: MultiRunConfig | null;
-  certificateDownloadEnabled?: boolean;
-  certificateAgentID?: string;
 }
 
 const ExperimentRunHistoryView = ({
@@ -53,9 +50,7 @@ const ExperimentRunHistoryView = ({
   loading,
   areFiltersSet,
   experimentRunsExists,
-  multiRunConfig,
-  certificateDownloadEnabled,
-  certificateAgentID
+  multiRunConfig
 }: ExperimentRunHistoryViewProps): React.ReactElement => {
   const scope = getScope();
   const paths = useRouteWithBaseUrl();
@@ -63,64 +58,6 @@ const ExperimentRunHistoryView = ({
   const { experimentID } = useParams<{ experimentID: string }>();
 
   const headerTitle = loading && !experimentName ? undefined : experimentName ?? experimentID;
-
-  const handleDownloadCertificate = React.useCallback(() => {
-    if (!certificateDownloadEnabled || !certificateAgentID) return;
-    const url = `/api/certification/pdf?agent_id=${encodeURIComponent(
-      certificateAgentID
-    )}&experiment_id=${encodeURIComponent(experimentID)}`;
-    // Open in a new tab so the current page state is preserved.
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }, [certificateDownloadEnabled, certificateAgentID, experimentID]);
-
-  const downloadCertificateLink = headerTitle ? (
-    <BPTooltip
-      content={
-        certificateDownloadEnabled
-          ? 'Download the certification report (PDF) for this experiment'
-          : 'Certificate will be available once every run for this experiment has finished.'
-      }
-      position="bottom"
-    >
-      <Layout.Horizontal
-        spacing="xsmall"
-        flex={{ alignItems: 'center', justifyContent: 'flex-start' }}
-        style={{
-          cursor: certificateDownloadEnabled ? 'pointer' : 'not-allowed',
-          opacity: certificateDownloadEnabled ? 1 : 0.6,
-          userSelect: 'none',
-          padding: '4px 10px',
-          borderRadius: 4,
-          border: `1px solid ${certificateDownloadEnabled ? 'var(--primary-7)' : 'var(--grey-300)'}`,
-          backgroundColor: certificateDownloadEnabled ? 'var(--primary-1)' : 'var(--grey-100)',
-          transition: 'background-color 0.15s ease, border-color 0.15s ease'
-        }}
-        onClick={handleDownloadCertificate}
-      >
-        <Text
-          font={{ size: 'xsmall', weight: 'semi-bold' }}
-          color={certificateDownloadEnabled ? Color.PRIMARY_7 : Color.GREY_500}
-          style={{ letterSpacing: 0.2, lineHeight: '14px' }}
-          icon="download"
-          iconProps={{
-            size: 12,
-            color: certificateDownloadEnabled ? Color.PRIMARY_7 : Color.GREY_500
-          }}
-        >
-          Download Certificate
-        </Text>
-      </Layout.Horizontal>
-    </BPTooltip>
-  ) : null;
-
-  const titleNode = headerTitle ? (
-    <Layout.Horizontal spacing="medium" flex={{ alignItems: 'center', justifyContent: 'flex-start' }}>
-      <Text font={{ variation: FontVariation.H4 }}>{headerTitle}</Text>
-      {downloadCertificateLink}
-    </Layout.Horizontal>
-  ) : (
-    headerTitle
-  );
 
   const breadcrumbs = [
     {
@@ -143,7 +80,7 @@ const ExperimentRunHistoryView = ({
 
   return (
     <DefaultLayoutTemplate
-      title={titleNode}
+      title={headerTitle}
       breadcrumbs={breadcrumbs}
       rightSideBar={rightSideBar}
       headerToolbar={

@@ -214,6 +214,8 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       phase={experimentPhase}
       isCronEnabled={isCronEnabled}
       experimentType={experimentType}
+      certificateDownloadEnabled={certificateDownload.enabled}
+      certificateAgentID={certificateDownload.agentID}
     />
   );
 
@@ -231,8 +233,6 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       areFiltersSet={areFiltersSet}
       experimentRunsExists={experimentRunsExists}
       multiRunConfig={multiRunConfig}
-      certificateDownloadEnabled={certificateDownload.enabled}
-      certificateAgentID={certificateDownload.agentID}
     />
   );
 }
