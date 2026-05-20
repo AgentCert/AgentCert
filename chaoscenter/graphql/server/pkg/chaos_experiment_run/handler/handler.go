@@ -1872,7 +1872,7 @@ func syncWorkflowNodeSpans(ctx context.Context, traceID string, event model.Expe
 				stepAttrs = append(stepAttrs, attribute.String("fault.name", node.ChaosExp.ExperimentName))
 			}
 			if node.ChaosExp.EngineName != "" {
-				stepAttrs = append(stepAttrs, attribute.String("fault.engine_name", node.ChaosExp.EngineName))
+				stepAttrs = append(stepAttrs, attribute.String("fault.engine_name", node.ChaosExp.ExperimentName))
 			}
 			if node.ChaosExp.Namespace != "" {
 				stepAttrs = append(stepAttrs, attribute.String("fault.namespace", node.ChaosExp.Namespace))
@@ -2834,7 +2834,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 
 				details := observability.FaultInjectionDetails{
 					FaultName:                faultName,
-					EngineName:               node.ChaosExp.EngineName,
+					EngineName:               node.ChaosExp.ExperimentName,
 					Namespace:                node.ChaosExp.Namespace,
 					StartedAt:                node.StartedAt,
 					FinishedAt:               node.FinishedAt,
@@ -2912,7 +2912,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 						EndTime:   node.FinishedAt,
 						Input: map[string]interface{}{
 							"faultName":  faultName,
-							"engineName": node.ChaosExp.EngineName,
+							"engineName": node.ChaosExp.ExperimentName,
 							"namespace":  node.ChaosExp.Namespace,
 						},
 						Output: map[string]interface{}{
