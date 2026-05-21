@@ -46,7 +46,7 @@ func CertificatePDFHandler() gin.HandlerFunc {
 			return
 		}
 
-		upstream := fmt.Sprintf("%s/api/certification/pdf?agent_id=%s&experiment_id=%s",
+		upstream := fmt.Sprintf("%s/api/v1/certification/pdf?agent_id=%s&experiment_id=%s",
 			base, url.QueryEscape(agentID), url.QueryEscape(experimentID))
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
