@@ -18,6 +18,9 @@ data:
   # Base URL of the Certifier service the certification orchestrator calls.
   # Override per environment (dev / pre-prod / prod) by editing this single value.
   CERTIFIER_BASE_URL: "http://certifier-service:8088"
+  # Base URL of the Certifier PDF download service used by the /api/certification/pdf proxy.
+  # Override per environment (dev / pre-prod / prod) by editing this single value.
+  CERTIFICATE_PDF_BASE_URL: "http://certifier-service:8089"
     # Configurations if you are using dex for OAuth
   DEX_ENABLED: "false"
   OIDC_ISSUER: "http://<Your Domain>:32000"

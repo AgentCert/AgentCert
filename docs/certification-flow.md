@@ -591,3 +591,53 @@ flowchart LR
   D -->|4xx/5xx| F[Set pdfStatus=FETCH_FAILED, store lastFetchError]
   F --> ER[Return normalized error JSON]
 ```
+
+---
+
+## Certifier API Endpoint Configuration Locations
+
+To connect AgentCert to the Certifier API and PDF service (local, Azure, or any remote deployment), set these two environment variables everywhere the orchestrator or PDF proxy runs:
+
+- `CERTIFIER_BASE_URL` — main Certifier API endpoint (e.g. https://your-azure-certifier-host)
+- `CERTIFICATE_PDF_BASE_URL` — PDF download endpoint (e.g. https://your-azure-certifier-host or https://your-azure-pdf-host)
+
+### Where to set them
+
+#### 1. Local/Scripted Startup (recommended for dev and most deployments)
+- Edit your `.env` file at the repo root:
+  - `CERTIFIER_BASE_URL=https://your-azure-certifier-host`
+  - `CERTIFICATE_PDF_BASE_URL=https://your-azure-pdf-host`
+- Pass this file to the startup script:
+  ```bash
+  bash scripts/azure_build/start-agentcert-v2.sh --env-file $(pwd)/.env --paths-file $(pwd)/build-paths.env
+  ```
+
+> **Note:**
+> The only supported startup script for full stack bring-up is `start-agentcert-v2.sh`. If you see references to `start-agentcert.sh` in older docs or comments, use `start-agentcert-v2.sh` instead. Both required environment variables must be set in the `.env` file you provide to this script.
+
+#### 2. Kubernetes Deployment (using provided manifests)
+- Edit all three manifest files:
+  - `AgentCert/chaoscenter/manifests/litmus-getting-started.yaml`
+  - `AgentCert/chaoscenter/manifests/litmus-installation.yaml`
+  - `AgentCert/chaoscenter/manifests/litmus-without-resources.yaml`
+- In each, update both keys in the `ConfigMap` data block:
+  ```yaml
+  CERTIFIER_BASE_URL: "https://your-azure-certifier-host"
+  CERTIFICATE_PDF_BASE_URL: "https://your-azure-pdf-host"
+  ```
+
+#### 3. Local GraphQL Server Direct Run (rare, for advanced dev only)
+- Edit `AgentCert/chaoscenter/graphql/server/.env`:
+  - `CERTIFIER_BASE_URL=https://your-azure-certifier-host`
+  - `CERTIFICATE_PDF_BASE_URL=https://your-azure-pdf-host`
+
+**Do NOT edit code defaults in `variables.go` — always override via env/config.**
+
+### Reference: Where localhost:8088/8089 appear in the repo
+
+- scripts/azure_build/start-agentcert-v2.sh: CERTIFIER_BASE_URL and CERTIFICATE_PDF_BASE_URL defaults
+- .env.example: CERTIFIER_BASE_URL and CERTIFICATE_PDF_BASE_URL example values
+- AgentCert/chaoscenter/graphql/server/utils/variables.go: Go config defaults
+- AgentCert/chaoscenter/graphql/server/.env: local dev config
+- AgentCert/chaoscenter/manifests/litmus-*.yaml: K8s ConfigMap values
+- Docs/examples: AgentCert/docs/next-step.md, AgentCert/docs/new_requirement.md
