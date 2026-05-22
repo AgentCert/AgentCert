@@ -2290,7 +2290,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 			}
 
 			// ON_DEMAND injection: reduce TOTAL_CHAOS_DURATION to prevent fault re-injection
-			if workflowManifest.Annotations["litmuschaos.io/injectionType"] == "ON_DEMAND" {
+			if meta.Annotations["litmuschaos.io/injectionType"] == "ON_DEMAND" {
 				for expIdx := range meta.Spec.Experiments {
 					for envIdx, envVar := range meta.Spec.Experiments[expIdx].Spec.Components.ENV {
 						if envVar.Name == "TOTAL_CHAOS_DURATION" {
@@ -2596,7 +2596,7 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 			}
 
 			// ON_DEMAND injection: reduce TOTAL_CHAOS_DURATION to prevent fault re-injection
-			if cronExperimentManifest.Spec.WorkflowSpec.Annotations["litmuschaos.io/injectionType"] == "ON_DEMAND" {
+			if meta.Annotations["litmuschaos.io/injectionType"] == "ON_DEMAND" {
 				for expIdx := range meta.Spec.Experiments {
 					for envIdx, envVar := range meta.Spec.Experiments[expIdx].Spec.Components.ENV {
 						if envVar.Name == "TOTAL_CHAOS_DURATION" {
