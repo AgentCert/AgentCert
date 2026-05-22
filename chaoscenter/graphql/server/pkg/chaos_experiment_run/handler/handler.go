@@ -2289,6 +2289,18 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 				meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
 			}
 
+			// ON_DEMAND injection: reduce TOTAL_CHAOS_DURATION to prevent fault re-injection
+			if meta.Annotations["litmuschaos.io/injectionType"] == "ON_DEMAND" {
+				for expIdx := range meta.Spec.Experiments {
+					for envIdx, envVar := range meta.Spec.Experiments[expIdx].Spec.Components.ENV {
+						if envVar.Name == "TOTAL_CHAOS_DURATION" {
+							meta.Spec.Experiments[expIdx].Spec.Components.ENV[envIdx].Value = "30"
+							logrus.WithField("experiment", meta.Spec.Experiments[expIdx].Name).Info("ON_DEMAND: set TOTAL_CHAOS_DURATION=30s")
+						}
+					}
+				}
+			}
+
 			// Fault spans are emitted at injection time via EmitFaultSpanAtInjection.
 			// The manifest-build hook that pre-registered an OTEL fault span here was
 			// removed when the OTEL path was retired; chaos config attrs (duration,
@@ -2582,6 +2594,19 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 			if len(meta.Spec.Experiments[0].Spec.Probe) != 0 {
 				meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
 			}
+
+			// ON_DEMAND injection: reduce TOTAL_CHAOS_DURATION to prevent fault re-injection
+			if meta.Annotations["litmuschaos.io/injectionType"] == "ON_DEMAND" {
+				for expIdx := range meta.Spec.Experiments {
+					for envIdx, envVar := range meta.Spec.Experiments[expIdx].Spec.Components.ENV {
+						if envVar.Name == "TOTAL_CHAOS_DURATION" {
+							meta.Spec.Experiments[expIdx].Spec.Components.ENV[envIdx].Value = "30"
+							logrus.WithField("experiment", meta.Spec.Experiments[expIdx].Name).Info("ON_DEMAND: set TOTAL_CHAOS_DURATION=30s")
+						}
+					}
+				}
+			}
+
 			res, err := yaml.Marshal(&meta)
 			if err != nil {
 				return errors.New("failed to marshal chaosengine")
