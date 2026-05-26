@@ -2198,11 +2198,17 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 
 	promMCPURL := strings.TrimSpace(os.Getenv("PROM_MCP_URL"))
 	if promMCPURL == "" {
-		promMCPURL = "http://prometheus-mcp-server.litmus.svc.cluster.local:9090/mcp"
+		// Match the sock-shop chart Service: port 8083 (targetPort 9090).
+		// 9090 is container-side only — unreachable via cluster DNS.
+		promMCPURL = "http://prometheus-mcp-server.sock-shop.svc.cluster.local:8083/mcp"
 	}
 
 	// Build comma-separated MCP_URLS list for flash-agent
 	mcpURLs := k8sMCPURL + "," + promMCPURL
+	logrus.WithFields(logrus.Fields{
+		"k8s_mcp_url":  k8sMCPURL,
+		"prom_mcp_url": promMCPURL,
+	}).Info("[FlashAgent] Resolved MCP URLs for agent.config.MCP_URLS")
 
 	chaosNamespace := strings.TrimSpace(os.Getenv("CHAOS_NAMESPACE"))
 	if chaosNamespace == "" {

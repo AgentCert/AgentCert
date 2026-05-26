@@ -50,10 +50,23 @@ func init() {
 	log.Printf("go version: %s", runtime.Version())
 	log.Printf("go os/arch: %s/%s", runtime.GOOS, runtime.GOARCH)
 
-	// Load .env from CWD if present (local dev convenience only).
-	// In production, start-agentcert.sh sets all env vars before launching
-	// this binary — no path probing needed or wanted.
-	_ = godotenv.Load()
+	// Load .env files in priority order. Overload (not Load) means file values
+	// replace anything already in os.Environ — this makes the monorepo root
+	// .env the single source of truth, so editing it always reflects in the
+	// running binary on next restart. AGENTCERT_ENV_FILE is set by the
+	// launcher (start-agentcert*.sh) to the monorepo root .env path.
+	//
+	// Per-service runtime knobs that must NOT be in either file (the launcher
+	// owns them and injects them via `env REST_PORT=$GQL_REST_PORT ...`):
+	//   - REST_PORT, GRPC_PORT  → launcher maps GQL_REST_PORT/GQL_GRPC_PORT
+	for _, p := range []string{".env", os.Getenv("AGENTCERT_ENV_FILE")} {
+		if p == "" {
+			continue
+		}
+		if err := godotenv.Overload(p); err == nil {
+			log.Infof("loaded env file: %s", p)
+		}
+	}
 
 	err := envconfig.Process("", &utils.Config)
 	if err != nil {
