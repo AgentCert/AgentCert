@@ -50,21 +50,25 @@ func init() {
 	log.Printf("go version: %s", runtime.Version())
 	log.Printf("go os/arch: %s/%s", runtime.GOOS, runtime.GOARCH)
 
-	// Load .env files in priority order. Overload (not Load) means file values
-	// replace anything already in os.Environ — this makes the monorepo root
-	// .env the single source of truth, so editing it always reflects in the
-	// running binary on next restart. AGENTCERT_ENV_FILE is set by the
-	// launcher (start-agentcert*.sh) to the monorepo root .env path.
+	// Env precedence (lowest → highest):
+	//   1. Local .env (CWD): gap-fill only via Load — never overrides launcher
+	//      env. This file is a STANDALONE-DEV fallback (e.g. unauthenticated
+	//      mongo on localhost) that must never silently defeat values the
+	//      launcher just exported from root .env.
+	//   2. Launcher's exported env vars (REST_PORT mapping, DB_SERVER, etc.).
+	//   3. Root .env via Overload($AGENTCERT_ENV_FILE) — authoritative; the
+	//      operator's single source of truth, so editing it always reflects
+	//      in the running binary on next restart.
 	//
 	// Per-service runtime knobs that must NOT be in either file (the launcher
 	// owns them and injects them via `env REST_PORT=$GQL_REST_PORT ...`):
 	//   - REST_PORT, GRPC_PORT  → launcher maps GQL_REST_PORT/GQL_GRPC_PORT
-	for _, p := range []string{".env", os.Getenv("AGENTCERT_ENV_FILE")} {
-		if p == "" {
-			continue
-		}
-		if err := godotenv.Overload(p); err == nil {
-			log.Infof("loaded env file: %s", p)
+	if err := godotenv.Load(".env"); err == nil {
+		log.Infof("loaded env file (gap-fill): .env")
+	}
+	if rootEnv := os.Getenv("AGENTCERT_ENV_FILE"); rootEnv != "" {
+		if err := godotenv.Overload(rootEnv); err == nil {
+			log.Infof("loaded env file (authoritative): %s", rootEnv)
 		}
 	}
 
