@@ -69,12 +69,14 @@ func (o *Operator) UpsertExperiment(ctx context.Context, doc *CertificateExperim
 			{Key: "agentName", Value: doc.AgentName},
 			{Key: "experimentId", Value: doc.ExperimentID},
 			{Key: "status", Value: ExperimentStatusRunsInProgress},
-			{Key: "expectedRuns", Value: doc.ExpectedRuns},
 			{Key: "runCounts", Value: RunCounts{}},
 			{Key: "aggregationPolicy", Value: doc.AggregationPolicy},
 			{Key: "activeAggregationVersion", Value: 0},
 			{Key: "createdAt", Value: now},
 		}},
+		// $max ensures the field is set on insert AND can ratchet up if a
+		// later run was started with a corrected planned-runs value.
+		{Key: "$max", Value: bson.D{{Key: "expectedRuns", Value: doc.ExpectedRuns}}},
 		{Key: "$set", Value: bson.D{{Key: "updatedAt", Value: now}}},
 	}
 	_, err := o.op.Update(ctx, o.experimentCol, filter, update, options.Update().SetUpsert(true))
