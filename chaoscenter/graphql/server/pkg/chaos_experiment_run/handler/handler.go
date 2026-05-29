@@ -3007,13 +3007,25 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 			if agentName == "" {
 				agentName = agentID
 			}
+			// Read the user-declared planned run count from the parent
+			// chaos-experiment document. Defaults to 1 when unset so the
+			// gate fires after a single run (preserving prior behaviour
+			// for experiments that don't opt in to multi-run certification).
+			plannedRuns := 1
+			if event.ExperimentID != "" {
+				if exp, eErr := c.chaosExperimentOperator.GetExperiment(ctx, bson.D{{"experiment_id", event.ExperimentID}}); eErr == nil {
+					if exp.PlannedRuns > 0 {
+						plannedRuns = exp.PlannedRuns
+					}
+				}
+			}
 			certIn := certification.StartInput{
 				ProjectID:       projectID,
 				AgentID:         agentID,
 				AgentName:       agentName,
 				ExperimentID:    event.ExperimentID,
 				ExperimentRunID: event.ExperimentRunID,
-				ExpectedRuns:    1,
+				ExpectedRuns:    plannedRuns,
 			}
 			lf := logFields
 			go func(in certification.StartInput) {

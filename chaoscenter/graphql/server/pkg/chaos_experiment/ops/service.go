@@ -74,6 +74,40 @@ func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator
 	}
 }
 
+// Multi-run annotations stamped by the UI's "Multi Run (Sequential runs)"
+// schedule option (see web/src/services/experiment/KubernetesYamlService.ts
+// setMultiRunConfig). For Single-run and Cron schedules these annotations
+// are absent → planned runs defaults to 1.
+const (
+	MultiRunEnabledAnnotation = "litmuschaos.io/multiRunEnabled"
+	MultiRunMaxRunsAnnotation = "litmuschaos.io/maxRuns"
+)
+
+// extractPlannedRuns reads the multi-run maxRuns annotation off a serialized
+// workflow manifest (JSON). Returns 1 when the experiment is not multi-run
+// or the value is missing/invalid.
+func extractPlannedRuns(manifest string) int {
+	if manifest == "" {
+		return 1
+	}
+	var obj unstructured.Unstructured
+	if err := json.Unmarshal([]byte(manifest), &obj); err != nil {
+		return 1
+	}
+	ann := obj.GetAnnotations()
+	if ann == nil {
+		return 1
+	}
+	if strings.TrimSpace(ann[MultiRunEnabledAnnotation]) != "true" {
+		return 1
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(ann[MultiRunMaxRunsAnnotation]))
+	if err != nil || n < 1 {
+		return 1
+	}
+	return n
+}
+
 // ProcessExperiment takes the workflow and processes it as required
 func (c *chaosExperimentService) ProcessExperiment(ctx context.Context, workflow *model.ChaosExperimentRequest, projectID string, revID string) (*model.ChaosExperimentRequest, *dbChaosExperiment.ChaosExperimentType, error) {
 	// security check for chaos_infra access
@@ -217,6 +251,7 @@ func (c *chaosExperimentService) ProcessExperimentCreation(ctx context.Context, 
 		},
 		Revision:                   revision,
 		RecentExperimentRunDetails: []dbChaosExperiment.ExperimentRunDetail{},
+		PlannedRuns:                extractPlannedRuns(input.ExperimentManifest),
 	}
 
 	err := c.chaosExperimentOperator.InsertChaosExperiment(ctx, newChaosExperiment)
@@ -267,6 +302,7 @@ func (c *chaosExperimentService) ProcessExperimentUpdate(workflow *model.ChaosEx
 			{"infra_id", workflow.InfraID},
 			{"description", workflow.ExperimentDescription},
 			{"is_custom_experiment", workflow.IsCustomExperiment},
+			{"planned_runs", extractPlannedRuns(workflow.ExperimentManifest)},
 			{"updated_at", time.Now().UnixMilli()},
 			{"updated_by", mongodb.UserDetailResponse{
 				Username: username,

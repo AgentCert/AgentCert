@@ -40,6 +40,12 @@ type ChaosExperimentRequest struct {
 	IsCustomExperiment         bool                  `bson:"is_custom_experiment"`
 	RecentExperimentRunDetails []ExperimentRunDetail `bson:"recent_experiment_run_details"` // stores the details of last 10 experiment runs
 	TotalExperimentRuns        int                   `bson:"total_experiment_runs"`
+	// PlannedRuns is the number of runs that constitute a single certification
+	// window. For Single-run and Cron schedules this is 1; for the UI's
+	// "Multi Run (Sequential runs)" schedule it equals the Maximum Runs value.
+	// Sourced from manifest annotations `litmuschaos.io/multiRunEnabled` +
+	// `litmuschaos.io/maxRuns` stamped by the web UI.
+	PlannedRuns int `bson:"planned_runs,omitempty"`
 }
 
 // Probes details containing fault name and the probe name which it was mapped to
