@@ -131,7 +131,7 @@ func Test_chaosExperimentService_ProcessExperiment(t *testing.T) {
 					{Key: "infra_id", Value: infraID},
 					{Key: "project_id", Value: projectID},
 					{Key: "is_active", Value: true},
-					{Key: "is_registered", Value: true},
+					{Key: "is_infra_confirmed", Value: true},
 				}
 				singleResult := mongo.NewSingleResultFromDocument(findResult, nil, nil)
 				mongodbMockOperator.On("Get", mock.Anything, mongodb.ChaosInfraCollection, mock.Anything).Return(singleResult, nil).Once()
@@ -156,7 +156,7 @@ func Test_chaosExperimentService_ProcessExperiment(t *testing.T) {
 					{Key: "infra_id", Value: infraID},
 					{Key: "project_id", Value: projectID},
 					{Key: "is_active", Value: true},
-					{Key: "is_registered", Value: true},
+					{Key: "is_infra_confirmed", Value: true},
 				}
 				singleResult := mongo.NewSingleResultFromDocument(findResult, nil, nil)
 				mongodbMockOperator.On("Get", mock.Anything, mongodb.ChaosInfraCollection, mock.Anything).Return(singleResult, nil).Once()
@@ -181,7 +181,7 @@ func Test_chaosExperimentService_ProcessExperiment(t *testing.T) {
 					{Key: "infra_id", Value: infraID},
 					{Key: "project_id", Value: projectID},
 					{Key: "is_active", Value: true},
-					{Key: "is_registered", Value: true},
+					{Key: "is_infra_confirmed", Value: true},
 				}
 				singleResult := mongo.NewSingleResultFromDocument(findResult, nil, nil)
 				mongodbMockOperator.On("Get", mock.Anything, mongodb.ChaosInfraCollection, mock.Anything).Return(singleResult, nil).Once()
@@ -206,7 +206,7 @@ func Test_chaosExperimentService_ProcessExperiment(t *testing.T) {
 					{Key: "infra_id", Value: infraID},
 					{Key: "project_id", Value: projectID},
 					{Key: "is_active", Value: true},
-					{Key: "is_registered", Value: true},
+					{Key: "is_infra_confirmed", Value: true},
 				}
 				singleResult := mongo.NewSingleResultFromDocument(findResult, nil, nil)
 				mongodbMockOperator.On("Get", mock.Anything, mongodb.ChaosInfraCollection, mock.Anything).Return(singleResult, nil).Once()
@@ -231,7 +231,7 @@ func Test_chaosExperimentService_ProcessExperiment(t *testing.T) {
 					{Key: "infra_id", Value: infraID},
 					{Key: "project_id", Value: projectID},
 					{Key: "is_active", Value: true},
-					{Key: "is_registered", Value: true},
+					{Key: "is_infra_confirmed", Value: true},
 				}
 				singleResult := mongo.NewSingleResultFromDocument(findResult, nil, nil)
 				mongodbMockOperator.On("Get", mock.Anything, mongodb.ChaosInfraCollection, mock.Anything).Return(singleResult, nil).Once()
@@ -257,7 +257,7 @@ func Test_chaosExperimentService_ProcessExperiment(t *testing.T) {
 					{Key: "infra_id", Value: infraID},
 					{Key: "project_id", Value: projectID},
 					{Key: "is_active", Value: true},
-					{Key: "is_registered", Value: true},
+					{Key: "is_infra_confirmed", Value: true},
 				}
 				singleResult := mongo.NewSingleResultFromDocument(findResult, nil, nil)
 				mongodbMockOperator.On("Get", mock.Anything, mongodb.ChaosInfraCollection, mock.Anything).Return(singleResult, nil).Once()
@@ -283,7 +283,7 @@ func Test_chaosExperimentService_ProcessExperiment(t *testing.T) {
 					{Key: "infra_id", Value: infraID},
 					{Key: "project_id", Value: projectID},
 					{Key: "is_active", Value: true},
-					{Key: "is_registered", Value: true},
+					{Key: "is_infra_confirmed", Value: true},
 				}
 				singleResult := mongo.NewSingleResultFromDocument(findResult, nil, nil)
 				mongodbMockOperator.On("Get", mock.Anything, mongodb.ChaosInfraCollection, mock.Anything).Return(singleResult, nil).Once()
