@@ -80,6 +80,16 @@ rules:
     resources: [ "configmaps" ]
     verbs: [ "get", "list", "watch" ]
 
+  # Helm charts (e.g. sock-shop with monitoring.enabled) ship their own RBAC
+  # objects — ClusterRole/ClusterRoleBinding (kube-state-metrics, prometheus)
+  # and namespaced Role/RoleBinding. The install runs as this service account,
+  # so it must be able to manage those cluster-wide; without this, install
+  # fails with "clusterroles.rbac.authorization.k8s.io ... is forbidden".
+  # Scoped to RBAC resources only (not full cluster-admin).
+  - apiGroups: [ "rbac.authorization.k8s.io" ]
+    resources: [ "clusterroles", "clusterrolebindings", "roles", "rolebindings" ]
+    verbs: [ "get", "list", "watch", "create", "update", "patch", "delete" ]
+
   - apiGroups: [ "litmuschaos.io" ]
     resources: [ "chaosengines", "chaosschedules", "chaosresults", "chaosschedules" ]
     verbs: [ "get", "list", "create", "delete", "update", "watch", "patch" ]
