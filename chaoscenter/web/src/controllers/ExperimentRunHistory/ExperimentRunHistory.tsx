@@ -217,9 +217,14 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       r => TERMINAL_PHASES.has(r.phase)
     );
 
-    // Cert is ready and no runs exist beyond what was certified — nothing to trigger.
-    // This prevents re-triggering all runs every time the page is opened.
-    if (isAlreadyCertified && allTerminalRuns.length <= (cs?.expectedRuns ?? 0)) return;
+    // Cert is ready and no runs exist beyond what's already in the pipeline —
+    // nothing to trigger. Use totalRuns (count of run-workflow docs already
+    // submitted to bucketing) NOT expectedRuns (the gate threshold). A cert
+    // covering 6 runs with gate=5 leaves expectedRuns=5; using it would make
+    // allTerminalRuns.length(6) > 5 true on every page load, causing
+    // spurious re-triggers and cert resets.
+    const alreadySubmitted = cs?.totalRuns ?? cs?.expectedRuns ?? 0;
+    if (isAlreadyCertified && allTerminalRuns.length <= alreadySubmitted) return;
 
     const newlyTerminal = allTerminalRuns.filter(
       r => !autoTriggeredRunsRef.current.has(r.experimentRunID)

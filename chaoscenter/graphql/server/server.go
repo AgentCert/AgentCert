@@ -221,12 +221,13 @@ func main() {
 	router.POST("/api/port-forward/start", handlers.PortForwardHandler(mongodb.MgoClient))
 	router.POST("/api/port-forward/stop", handlers.StopPortForwardHandler(mongodb.MgoClient))
 
-	// Certification PDF download (proxies to certifier service).
-	// Mount under both /certification/pdf (so the webpack dev proxy that strips
-	// the "^/api" prefix lands on the right path) and /api/certification/pdf
-	// (for direct callers / production setups that don't rewrite the prefix).
+	// Certification report download (proxies to certifier service).
+	// Each format is mounted under two paths: one for the webpack dev proxy
+	// (which strips the "^/api" prefix) and one for production direct callers.
 	router.GET("/certification/pdf", handlers.CertificatePDFHandler())
 	router.GET("/api/certification/pdf", handlers.CertificatePDFHandler())
+	router.GET("/certification/html", handlers.CertificateHTMLHandler())
+	router.GET("/api/certification/html", handlers.CertificateHTMLHandler())
 
 	//general routers
 	router.GET("/status", handlers.StatusHandler())

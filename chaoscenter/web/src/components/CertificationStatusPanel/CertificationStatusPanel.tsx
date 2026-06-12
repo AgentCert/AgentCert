@@ -157,9 +157,12 @@ export default function CertificationStatusPanel({
   const isReady = status === 'EXPERIMENT_CERTIFICATE_READY';
   const hasBucketingFailure = (certStatus?.failedRuns ?? 0) > 0;
 
-  // New runs exist beyond what the last certificate covered.
-  const certifiedCount = certStatus?.expectedRuns ?? 0;
-  const hasNewRuns = (totalExperimentRuns ?? 0) > certifiedCount;
+  // New runs exist beyond what's already in the bucketing pipeline.
+  // Use totalRuns (run-workflow doc count) not expectedRuns (gate threshold):
+  // a cert covering 6 runs with gate=5 leaves expectedRuns=5, which would
+  // make hasNewRuns permanently true and show Re-generate forever.
+  const alreadyInPipeline = certStatus?.totalRuns ?? certStatus?.expectedRuns ?? 0;
+  const hasNewRuns = (totalExperimentRuns ?? 0) > alreadyInPipeline;
 
   // Show re-trigger only when user action is actually needed:
   //   • bucketing failures exist (runs need to be retried)

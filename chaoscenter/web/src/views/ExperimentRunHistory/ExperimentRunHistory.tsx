@@ -147,7 +147,7 @@ const ExperimentRunHistoryView = ({
                   fontWeight: 600
                 }}
               >
-                Multi-Run: {experimentRunsTableData?.pagination?.itemCount ?? 0}/{multiRunConfig.totalRuns}
+                Multi-Run: {Math.min(experimentRunsTableData?.pagination?.itemCount ?? 0, multiRunConfig.totalRuns)}/{multiRunConfig.totalRuns}
               </Text>
             )}
           </Layout.Horizontal>
