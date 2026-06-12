@@ -9,7 +9,7 @@ import {
   useToggleOpen
 } from '@harnessio/uicore';
 import cx from 'classnames';
-import { Intent, Position } from '@blueprintjs/core';
+import { Intent, Menu, MenuItem, Popover, Position } from '@blueprintjs/core';
 import { useHistory } from 'react-router-dom';
 import { parse } from 'yaml';
 import { useStrings } from '@strings';
@@ -381,32 +381,46 @@ export const DownloadCertificateButton = ({
   const { getString } = useStrings();
   const disabled = !enabled || !agentID;
 
+  const openReport = (format: 'pdf' | 'html'): void => {
+    const url = `/api/certification/${format}?agent_id=${encodeURIComponent(
+      agentID as string
+    )}&experiment_id=${encodeURIComponent(experimentID)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const downloadMenu = (
+    <Menu>
+      <MenuItem icon="document-open" text="Download PDF" onClick={() => openReport('pdf')} />
+      <MenuItem icon="code-block" text="View HTML Report" onClick={() => openReport('html')} />
+    </Menu>
+  );
+
   return (
     <div className={cx(css.actionButtons)}>
-      <RbacButton
-        tooltipProps={{
-          position: Position.TOP,
-          usePortal: true,
-          isDark: true,
-          ...tooltipProps
-        }}
-        tooltip={
-          disabled ? getString('downloadCertificateDisabledTooltip') : getString('downloadCertificateEnabledTooltip')
-        }
+      <Popover
+        content={downloadMenu}
+        position={Position.BOTTOM_LEFT}
         disabled={disabled}
-        iconProps={{ size: 18, color: disabled ? Color.GREY_400 : Color.PRIMARY_6 }}
-        withoutCurrentColor
-        onClick={() => {
-          if (disabled) return;
-          const url = `/api/certification/pdf?agent_id=${encodeURIComponent(
-            agentID as string
-          )}&experiment_id=${encodeURIComponent(experimentID)}`;
-          window.open(url, '_blank', 'noopener,noreferrer');
-        }}
-        variation={ButtonVariation.ICON}
-        icon={'download'}
-        permission={PermissionGroup.VIEWER}
-      />
+        minimal
+      >
+        <RbacButton
+          tooltipProps={{
+            position: Position.TOP,
+            usePortal: true,
+            isDark: true,
+            // Only show tooltip when disabled — when enabled the popover serves as the affordance.
+            disabled: !disabled,
+            ...tooltipProps
+          }}
+          tooltip={getString('downloadCertificateDisabledTooltip')}
+          disabled={disabled}
+          iconProps={{ size: 18, color: disabled ? Color.GREY_400 : Color.PRIMARY_6 }}
+          withoutCurrentColor
+          variation={ButtonVariation.ICON}
+          icon={'download'}
+          permission={PermissionGroup.VIEWER}
+        />
+      </Popover>
     </div>
   );
 };
