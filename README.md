@@ -134,6 +134,7 @@ AgentCert/
 
 ## License
 
+<<<<<<< HEAD
 AgentCert is licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE).
 
 This project is a fork of [LitmusChaos ChaosCenter v3.0.0](https://github.com/litmuschaos/litmus)
@@ -143,3 +144,7 @@ Copyright 2026 AgentCert Authors, also under Apache 2.0.
 
 See [NOTICE](NOTICE) for full upstream attribution and third-party dependency information
 as required by Apache 2.0 Section 4(d).
+=======
+Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Upstream LitmusChaos code retains its Apache-2.0
+attribution wherever it survives unchanged.
+>>>>>>> 66bc0c8 (chore(license): replace MIT with Apache 2.0, add NOTICE)

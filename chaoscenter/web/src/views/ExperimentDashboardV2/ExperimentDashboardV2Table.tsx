@@ -267,7 +267,7 @@ const ExperimentDashboardV2Table = ({
                   />
                 );
               default:
-                return <RunExperimentButton experimentID={data.experimentID} refetchExperiments={refetchExperiments} />;
+                return <RunExperimentButton experimentID={data.experimentID} refetchExperiments={refetchExperiments} disabled={data.multiRunEnabled} />;
             }
           };
           return (
