@@ -24,21 +24,22 @@ export const sanitize = (obj: Record<string, any>, sanityConfig?: YamlSanityConf
     ...sanityConfig
   };
   for (const key in obj) {
-    if (obj[key] === null || obj[key] === undefined) {
+    const val = obj[key];
+    if (val === null || val === undefined) {
       delete obj[key];
-    } else if (removeEmptyString && obj[key] === '') {
+    } else if (removeEmptyString && val === '') {
       delete obj[key];
-    } else if (Object.prototype.toString.call(obj[key]) === '[object Object]') {
-      if (removeEmptyObject && Object.keys(obj[key]).length === 0) {
+    } else if (Array.isArray(val)) {
+      if (removeEmptyArray && val.length == 0) {
         delete obj[key];
       } else {
-        sanitize(obj[key], sanityConfig);
+        sanitize(val, sanityConfig);
       }
-    } else if (Array.isArray(obj[key])) {
-      if (removeEmptyArray && obj[key].length == 0) {
+    } else if (typeof val === 'object' && val.constructor === Object) {
+      if (removeEmptyObject && Object.keys(val).length === 0) {
         delete obj[key];
       } else {
-        sanitize(obj[key], sanityConfig);
+        sanitize(val, sanityConfig);
       }
     }
   }
