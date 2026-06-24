@@ -236,6 +236,13 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		args = append(args, "--set", fmt.Sprintf("image.tag=%s", *req.ImageTag))
 	}
 
+	// Forward IMAGE_REGISTRY from the server's environment so all agent images
+	// are pulled from the configured registry (e.g. Artifactory) without
+	// requiring per-request changes.
+	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
+		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
+	}
+
 	// Tie agent.name to the (sanitized) release name so cluster-scoped
 	// resources (ClusterRole, ClusterRoleBinding) get unique names per
 	// install.  Without this, installing a second agent collides on the

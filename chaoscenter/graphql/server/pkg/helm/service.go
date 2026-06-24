@@ -75,6 +75,12 @@ func (h *HelmService) InstallChart(ctx context.Context, chartPath string, reques
 		args = append(args, "--kubeconfig", h.kubeconfig)
 	}
 
+	// Forward IMAGE_REGISTRY from the server's environment so all chart images
+	// are pulled from the configured registry (e.g. Artifactory).
+	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
+		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
+	}
+
 	log.Infof("Executing helm command: helm %s", strings.Join(args, " "))
 
 	// Execute helm install command
@@ -129,6 +135,12 @@ func (h *HelmService) UpgradeChart(ctx context.Context, chartPath string, reques
 	// Add kubeconfig if specified
 	if h.kubeconfig != "" {
 		args = append(args, "--kubeconfig", h.kubeconfig)
+	}
+
+	// Forward IMAGE_REGISTRY from the server's environment so all chart images
+	// are pulled from the configured registry (e.g. Artifactory).
+	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
+		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
 	}
 
 	log.Infof("Executing helm command: helm %s", strings.Join(args, " "))
