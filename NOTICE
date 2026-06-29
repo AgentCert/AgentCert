@@ -1,0 +1,78 @@
+# NOTICE
+
+## AgentCert
+
+Copyright 2026 AgentCert Authors
+
+AgentCert is licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+---
+
+## LitmusChaos (upstream)
+
+AgentCert is a fork of **LitmusChaos ChaosCenter v3.0.0**
+(https://github.com/litmuschaos/litmus), which is licensed under the
+Apache License, Version 2.0.
+
+    Copyright 2016-2024 LitmusChaos Authors
+
+The source code developed for the LitmusChaos Project is licensed under
+Apache 2.0. However, the LitmusChaos project contains unmodified
+subcomponents from other open-source projects with separate copyright
+notices and license terms. Your use of the source code for those
+subcomponents is subject to the terms and conditions of those source
+projects. Please refer to the upstream FOSSA report for details:
+https://github.com/litmuschaos/litmus/blob/master/fossa.md
+
+Files derived from LitmusChaos sources are located under:
+
+    chaoscenter/
+
+These files retain their original Apache 2.0 license headers. Where
+AgentCert has modified a file, an additional copyright line has been
+added below the original header:
+
+    // Portions Copyright 2026 AgentCert Authors — modified from
+    // LitmusChaos ChaosCenter v3.0.0 (Apache-2.0)
+
+---
+
+## Net-new AgentCert components
+
+The following directories contain code written entirely by AgentCert
+Authors and were not derived from LitmusChaos:
+
+    genhash/
+    docs/
+    chaoscenter/graphql/server/pkg/agent_registry/
+    chaoscenter/graphql/server/pkg/agenthub/
+    chaoscenter/graphql/server/pkg/apps_registry/
+    chaoscenter/graphql/server/pkg/apphub/
+    chaoscenter/graphql/server/pkg/fault_studio/
+    chaoscenter/graphql/server/pkg/observability/
+
+These files are also licensed under Apache 2.0,
+Copyright 2026 AgentCert Authors.
+
+---
+
+## Third-party dependencies
+
+This project uses third-party software. Each dependency is subject to
+its own license terms. Key runtime dependencies include:
+
+| Dependency          | License        | Source                                    |
+|---------------------|----------------|-------------------------------------------|
+| Argo Workflows      | Apache 2.0     | https://github.com/argoproj/argo-workflows |
+| MongoDB Go Driver   | Apache 2.0     | https://github.com/mongodb/mongo-go-driver |
+| gqlgen              | MIT            | https://github.com/99designs/gqlgen       |
+| Langfuse Go SDK     | MIT            | https://github.com/langfuse/langfuse-go   |
+| LiteLLM             | MIT            | https://github.com/BerriAI/litellm        |
+| React               | MIT            | https://github.com/facebook/react         |
+| Dex                 | Apache 2.0     | https://github.com/dexidp/dex             |
+
+For a full dependency manifest, see the relevant go.mod and
+package.json files within each service directory.

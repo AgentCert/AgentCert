@@ -14,6 +14,8 @@ import { GenericErrorHandler } from '@errors';
 import { getScope } from '@utils';
 import { useRouteWithBaseUrl } from '@hooks';
 import { StudioTabs } from '@models';
+import type { CertificationExperimentSummary } from '@api/core';
+import CertificationStatusPanel from '@components/CertificationStatusPanel/CertificationStatusPanel';
 import { MemoisedExperimentRunHistoryTable } from './ExperimentRunHistoryTable';
 
 interface MultiRunConfig {
@@ -36,6 +38,10 @@ interface ExperimentRunHistoryViewProps {
   areFiltersSet: boolean;
   experimentRunsExists: boolean | undefined;
   multiRunConfig?: MultiRunConfig | null;
+  certStatus?: CertificationExperimentSummary | null;
+  totalExperimentRuns?: number;
+  retriggerLoading?: boolean;
+  onRetrigger?: () => void;
 }
 
 const ExperimentRunHistoryView = ({
@@ -50,7 +56,11 @@ const ExperimentRunHistoryView = ({
   loading,
   areFiltersSet,
   experimentRunsExists,
-  multiRunConfig
+  multiRunConfig,
+  certStatus,
+  totalExperimentRuns,
+  retriggerLoading = false,
+  onRetrigger
 }: ExperimentRunHistoryViewProps): React.ReactElement => {
   const scope = getScope();
   const paths = useRouteWithBaseUrl();
@@ -137,12 +147,21 @@ const ExperimentRunHistoryView = ({
                   fontWeight: 600
                 }}
               >
-                Multi-Run: {experimentRunsTableData?.pagination?.itemCount ?? 0}/{multiRunConfig.totalRuns}
+                Multi-Run: {Math.min(experimentRunsTableData?.pagination?.itemCount ?? 0, multiRunConfig.totalRuns)}/{multiRunConfig.totalRuns}
               </Text>
             )}
           </Layout.Horizontal>
           <Layout.Horizontal spacing={'medium'}>{/* {statusDropDown} */}</Layout.Horizontal>
         </Layout.Horizontal>
+        {(certStatus || retriggerLoading) && (
+          <CertificationStatusPanel
+            certStatus={certStatus}
+            totalExperimentRuns={totalExperimentRuns}
+            pendingBucketingCount={certStatus?.failedRuns ?? 0}
+            retriggerLoading={retriggerLoading}
+            onRetrigger={onRetrigger ?? (() => undefined)}
+          />
+        )}
         <Container height={'calc(100vh - 444px)'}>
           <Loader loading={loading}>
             {experimentRunsTableData && experimentRunsTableData.content.length ? (

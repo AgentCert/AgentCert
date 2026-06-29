@@ -7,3 +7,5 @@ export * from './stopWorkflow';
 export * from './deleteChaosWorkflow';
 export * from './saveChaosExperiment';
 export * from './updateCronExperimentState';
+export * from './getCertificationStatus';
+export * from './generateCertification';

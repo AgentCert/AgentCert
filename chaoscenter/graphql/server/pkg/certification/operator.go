@@ -83,6 +83,24 @@ func (o *Operator) UpsertExperiment(ctx context.Context, doc *CertificateExperim
 	return err
 }
 
+// ResetStatusIfCertified transitions the experiment from EXPERIMENT_CERTIFICATE_READY
+// back to RUNS_IN_PROGRESS when a new or replacement run arrives after the
+// previous certificate was finalized.  It is a no-op for any other status.
+func (o *Operator) ResetStatusIfCertified(ctx context.Context, projectID, experimentID string) error {
+	_, err := o.op.Update(ctx, o.experimentCol,
+		bson.D{
+			{Key: "projectId", Value: projectID},
+			{Key: "experimentId", Value: experimentID},
+			{Key: "status", Value: ExperimentStatusCertificateReady},
+		},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "status", Value: ExperimentStatusRunsInProgress},
+			{Key: "updatedAt", Value: time.Now().UTC()},
+		}}},
+	)
+	return err
+}
+
 func (o *Operator) UpdateExperimentStatus(ctx context.Context, projectID, experimentID, status string) error {
 	_, err := o.op.Update(ctx, o.experimentCol,
 		bson.D{{Key: "projectId", Value: projectID}, {Key: "experimentId", Value: experimentID}},
@@ -155,6 +173,31 @@ func (o *Operator) UpsertRunWorkflowInitial(ctx context.Context, doc *Certificat
 		{Key: "$set", Value: bson.D{{Key: "updatedAt", Value: now}}},
 	}
 	_, err := o.op.Update(ctx, o.runCol, filter, update, options.Update().SetUpsert(true))
+	return err
+}
+
+// ResetFailedRunWorkflow resets a BUCKETING_FAILED run-workflow doc back to
+// BUCKETING_TRIGGERED, clearing the stale task ID, poll URL, and error so the
+// pipeline retries bucketing from scratch.  It is a no-op when the doc does
+// not exist or is in any state other than BUCKETING_FAILED.
+func (o *Operator) ResetFailedRunWorkflow(ctx context.Context, projectID, agentID, experimentID, runID string) error {
+	now := time.Now().UTC()
+	_, err := o.op.Update(ctx, o.runCol,
+		bson.D{
+			{Key: "projectId", Value: projectID},
+			{Key: "agentId", Value: agentID},
+			{Key: "experimentId", Value: experimentID},
+			{Key: "experimentRunId", Value: runID},
+			{Key: "status", Value: RunStatusBucketingFailed},
+		},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "status", Value: RunStatusBucketingTriggered},
+			{Key: "bucketing", Value: BucketingState{}},
+			{Key: "result", Value: RunResult{}},
+			{Key: "error", Value: nil},
+			{Key: "updatedAt", Value: now},
+		}}},
+	)
 	return err
 }
 

@@ -1291,7 +1291,7 @@ func (c *chaosExperimentService) applyInstallApplicationReadinessPatch(wf *v1alp
 			Args: []string{
 				`set -eu
 NS="{{workflow.parameters.appNamespace}}"
-DEADLINE=$(($(date +%s) + ${READINESS_WAIT_SECONDS:-600}))
+DEADLINE=$(($(date +%s) + ${READINESS_WAIT_SECONDS:-900}))
 echo "[readiness-check] Waiting for all pods in namespace $NS to reach Running/Succeeded..."
 while [ "$(date +%s)" -lt "$DEADLINE" ]; do
 	if ! kubectl get ns "$NS" >/dev/null 2>&1; then
@@ -2257,6 +2257,21 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		modelAlias = strings.TrimSpace(os.Getenv("AZURE_OPENAI_DEPLOYMENT"))
 	}
 
+	// Flash-agent mitigation knobs (see flash-agent/MITIGATION_PLAN.md). Without
+	// these the per-experiment pod runs in observe mode regardless of the image,
+	// so time_to_mitigate stays 0.0.
+	agentMode := strings.TrimSpace(os.Getenv("AGENT_MODE"))
+	if agentMode == "" {
+		agentMode = "observe"
+	}
+	agentScopeNamespace := strings.TrimSpace(os.Getenv("AGENT_SCOPE_NAMESPACE"))
+	mitigationAllowDiscoveredScope := strings.TrimSpace(os.Getenv("MITIGATION_ALLOW_DISCOVERED_SCOPE"))
+	mitigationReviewIters := strings.TrimSpace(os.Getenv("MITIGATION_REVIEW_ITERS"))
+	mitigationAuditPath := strings.TrimSpace(os.Getenv("MITIGATION_AUDIT_PATH"))
+	agentMemoryPath := strings.TrimSpace(os.Getenv("AGENT_MEMORY_PATH"))
+	memoryTTLDays := strings.TrimSpace(os.Getenv("MEMORY_TTL_DAYS"))
+	reviewerModelAlias := strings.TrimSpace(os.Getenv("REVIEWER_MODEL_ALIAS"))
+
 	// Sidecar image — split registry/repo:tag so each part is set independently.
 	// AGENT_SIDECAR_IMAGE env var format: "registry/repository:tag" or "repository:tag".
 	sidecarImageFull := strings.TrimSpace(os.Getenv("AGENT_SIDECAR_IMAGE"))
@@ -2321,6 +2336,14 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", fmt.Sprintf("agent.config.MODEL_ALIAS=%s", modelAlias),
 		"--set", fmt.Sprintf("agent.config.MCP_URLS=%s", mcpURLs),
 		"--set", fmt.Sprintf("agent.config.CHAOS_NAMESPACE=%s", chaosNamespace),
+		"--set", fmt.Sprintf("agent.config.AGENT_MODE=%s", agentMode),
+		"--set", fmt.Sprintf("agent.config.AGENT_SCOPE_NAMESPACE=%s", agentScopeNamespace),
+		"--set", fmt.Sprintf("agent.config.MITIGATION_ALLOW_DISCOVERED_SCOPE=%s", mitigationAllowDiscoveredScope),
+		"--set", fmt.Sprintf("agent.config.MITIGATION_REVIEW_ITERS=%s", mitigationReviewIters),
+		"--set", fmt.Sprintf("agent.config.MITIGATION_AUDIT_PATH=%s", mitigationAuditPath),
+		"--set", fmt.Sprintf("agent.config.AGENT_MEMORY_PATH=%s", agentMemoryPath),
+		"--set", fmt.Sprintf("agent.config.MEMORY_TTL_DAYS=%s", memoryTTLDays),
+		"--set", fmt.Sprintf("agent.config.REVIEWER_MODEL_ALIAS=%s", reviewerModelAlias),
 		"--set", "sidecar.enabled=true",
 		"--set", "sidecar.injectionMode=openai-metadata",
 		// Let the sidecar forward to the real LiteLLM proxy (base URL without /v1)
@@ -2360,6 +2383,14 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 			strings.HasPrefix(arg, "agent.config.K8S_NAMESPACE=") ||
 			strings.HasPrefix(arg, "agent.config.TARGET_APP_NAME=") ||
 			strings.HasPrefix(arg, "agent.config.MODEL_ALIAS=") ||
+			strings.HasPrefix(arg, "agent.config.AGENT_MODE=") ||
+			strings.HasPrefix(arg, "agent.config.AGENT_SCOPE_NAMESPACE=") ||
+			strings.HasPrefix(arg, "agent.config.MITIGATION_ALLOW_DISCOVERED_SCOPE=") ||
+			strings.HasPrefix(arg, "agent.config.MITIGATION_REVIEW_ITERS=") ||
+			strings.HasPrefix(arg, "agent.config.MITIGATION_AUDIT_PATH=") ||
+			strings.HasPrefix(arg, "agent.config.AGENT_MEMORY_PATH=") ||
+			strings.HasPrefix(arg, "agent.config.MEMORY_TTL_DAYS=") ||
+			strings.HasPrefix(arg, "agent.config.REVIEWER_MODEL_ALIAS=") ||
 			// GROUND_TRUTH_JSON is no longer injected into agent ConfigMap — strip any stale value from old runs
 			strings.HasPrefix(arg, "agent.config.GROUND_TRUTH_JSON=") ||
 			strings.HasPrefix(arg, "sidecar.enabled=") ||

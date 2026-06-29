@@ -59,19 +59,34 @@ func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInpu
 		return nil, err
 	}
 
-	// Parent summary: created on first sight only.
+	// Parent summary: created on first sight; expectedRuns ratchets up via $max
+	// so adding runs to an already-certified experiment expands the gate target.
 	if err := s.op.UpsertExperiment(ctx, &CertificateExperiment{
-		ProjectID:    in.ProjectID,
-		AgentID:      in.AgentID,
-		AgentName:    in.AgentName,
-		ExperimentID: in.ExperimentID,
-		ExpectedRuns: in.ExpectedRuns,
+		ProjectID:         in.ProjectID,
+		AgentID:           in.AgentID,
+		AgentName:         in.AgentName,
+		ExperimentID:      in.ExperimentID,
+		ExpectedRuns:      in.ExpectedRuns,
 		AggregationPolicy: AggregationPolicy{Mode: PolicyAllRunsCompleted},
 	}); err != nil {
 		return nil, fmt.Errorf("upsert experiment: %w", err)
 	}
 
-	// Run-level workflow: created with status BUCKETING_TRIGGERED.
+	// If the experiment was already fully certified and a new (or replacement)
+	// run is arriving, reset the top-level status back to RUNS_IN_PROGRESS so
+	// the UI reflects that the pipeline is running again.
+	if err := s.op.ResetStatusIfCertified(ctx, in.ProjectID, in.ExperimentID); err != nil {
+		return nil, fmt.Errorf("reset experiment status: %w", err)
+	}
+
+	// If the run previously failed bucketing, clear its state so the pipeline
+	// retries from scratch rather than skipping due to the stale task ID.
+	if err := s.op.ResetFailedRunWorkflow(ctx, in.ProjectID, in.AgentID, in.ExperimentID, in.ExperimentRunID); err != nil {
+		return nil, fmt.Errorf("reset failed run workflow: %w", err)
+	}
+
+	// Run-level workflow: created with status BUCKETING_TRIGGERED on first
+	// sight; idempotent for runs that are already in a non-failed state.
 	if err := s.op.UpsertRunWorkflowInitial(ctx, &CertificateRunWorkflow{
 		ProjectID:       in.ProjectID,
 		AgentID:         in.AgentID,
@@ -246,9 +261,16 @@ func (s *Service) pollBucketing(ctx context.Context, in StartInput) error {
 	return fmt.Errorf("bucketing poll exceeded max attempts (%d)", MaxPollAttempts)
 }
 
-// evaluateGate implements the ALL_RUNS_COMPLETED policy.  It returns ok=true
-// only when (a) the parent doc says we have at least expectedRuns workflow
-// docs and (b) every workflow is in a terminal bucketing state.
+// evaluateGate implements the ALL_RUNS_COMPLETED policy.
+//
+// The gate fires when:
+//   - No run is still in a non-terminal bucketing state (nothing still running).
+//   - The number of SUCCESSFULLY bucketed runs >= expectedRuns.
+//
+// Runs that permanently failed bucketing do NOT count toward the target, so
+// the caller must either re-trigger those runs (via the retry button or by
+// launching a replacement run) until enough succeed.  Only COMPLETED run IDs
+// are forwarded to aggregation; failed runs are excluded from the report.
 func (s *Service) evaluateGate(ctx context.Context, in StartInput) (bool, []string, int, int, error) {
 	exp, err := s.op.GetExperiment(ctx, in.ProjectID, in.ExperimentID)
 	if err != nil {
@@ -261,21 +283,23 @@ func (s *Service) evaluateGate(ctx context.Context, in StartInput) (bool, []stri
 	if err != nil {
 		return false, nil, 0, 0, err
 	}
-	if exp.ExpectedRuns > 0 && len(runs) < exp.ExpectedRuns {
-		return false, nil, 0, 0, nil
-	}
 	var ids []string
 	successful, failed := 0, 0
 	for _, r := range runs {
 		switch r.Status {
 		case RunStatusBucketingCompleted:
 			successful++
+			ids = append(ids, r.ExperimentRunID)
 		case RunStatusBucketingFailed:
 			failed++
 		default:
+			// A run is still in progress — gate must stay closed.
 			return false, nil, 0, 0, nil
 		}
-		ids = append(ids, r.ExperimentRunID)
+	}
+	// Not enough successful runs yet — wait for retries or replacement runs.
+	if exp.ExpectedRuns > 0 && successful < exp.ExpectedRuns {
+		return false, nil, 0, 0, nil
 	}
 	return true, ids, successful, failed, nil
 }
@@ -414,6 +438,9 @@ func (s *Service) pollAggregation(ctx context.Context, in StartInput, version in
 }
 
 // GetExperimentSummary is the read path used by the experiment-history page.
+// RunCounts are computed live from the run-workflow collection so the UI always
+// sees accurate per-run bucketing progress regardless of how the parent doc's
+// counters were last written.
 func (s *Service) GetExperimentSummary(ctx context.Context, projectID, experimentID string) (*CertificateExperiment, bool, error) {
 	exp, err := s.op.GetExperiment(ctx, projectID, experimentID)
 	if err != nil {
@@ -422,6 +449,28 @@ func (s *Service) GetExperimentSummary(ctx context.Context, projectID, experimen
 	if exp == nil {
 		return nil, false, nil
 	}
+
+	runs, err := s.op.ListRunWorkflows(ctx, projectID, exp.AgentID, experimentID)
+	if err != nil {
+		return nil, false, err
+	}
+	total, completed, failed := 0, 0, 0
+	for _, r := range runs {
+		total++
+		switch r.Status {
+		case RunStatusBucketingCompleted:
+			completed++
+		case RunStatusBucketingFailed:
+			failed++
+		}
+	}
+	exp.RunCounts = RunCounts{
+		Total:     total,
+		Running:   total - completed - failed,
+		Completed: completed,
+		Failed:    failed,
+	}
+
 	return exp, exp.Status == ExperimentStatusCertificateReady, nil
 }
 

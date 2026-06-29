@@ -80,6 +80,16 @@ rules:
     resources: [ "configmaps" ]
     verbs: [ "get", "list", "watch" ]
 
+  # Helm charts (e.g. sock-shop with monitoring.enabled) ship their own RBAC
+  # objects — ClusterRole/ClusterRoleBinding (kube-state-metrics, prometheus)
+  # and namespaced Role/RoleBinding. The install runs as this service account,
+  # so it must be able to manage those cluster-wide; without this, install
+  # fails with "clusterroles.rbac.authorization.k8s.io ... is forbidden".
+  # Scoped to RBAC resources only (not full cluster-admin).
+  - apiGroups: [ "rbac.authorization.k8s.io" ]
+    resources: [ "clusterroles", "clusterrolebindings", "roles", "rolebindings" ]
+    verbs: [ "get", "list", "watch", "create", "update", "patch", "delete" ]
+
   - apiGroups: [ "litmuschaos.io" ]
     resources: [ "chaosengines", "chaosschedules", "chaosresults", "chaosschedules" ]
     verbs: [ "get", "list", "create", "delete", "update", "watch", "patch" ]
@@ -166,6 +176,28 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: #{INFRA_SERVICE_ACCOUNT}
+    namespace: #{INFRA_NAMESPACE}
+---
+# Grant the chaos install/runner service account cluster-admin so Helm can
+# install application charts that ship arbitrary cluster-scoped resources
+# (ClusterRoles, ClusterRoleBindings, APIServices, webhooks, …) without
+# per-resource RBAC whack-a-mole. This is a self-contained chaos cluster, so the
+# broad grant is an accepted trade-off; remove this binding to fall back to the
+# scoped infra-cluster-role above.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argo-chaos-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: #{INFRA_SERVICE_ACCOUNT}
+    namespace: #{INFRA_NAMESPACE}
+  - kind: ServiceAccount
+    name: argo-chaos
     namespace: #{INFRA_NAMESPACE}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -7,7 +7,9 @@ import { useStrings } from '@strings';
 import { usePermissions } from '@utils';
 import styles from './RbacMenuItem.module.scss';
 
-export interface RbacMenuItemProps extends Omit<IMenuItemProps, 'icon'> {
+export interface RbacMenuItemProps
+  extends Omit<IMenuItemProps, 'icon'>,
+    Pick<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'title'> {
   permission: string;
   icon?: IconName | MaybeElement;
 }

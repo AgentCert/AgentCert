@@ -3,7 +3,7 @@ import { Layout, Text, useToaster, Utils } from '@harnessio/uicore';
 import { useParams } from 'react-router-dom';
 import { Color } from '@harnessio/design-system';
 import { isEqual } from 'lodash-es';
-import { listExperimentRunForHistory } from '@api/core';
+import { listExperimentRunForHistory, getCertificationStatus, generateCertification } from '@api/core';
 import { getScope, getColorBasedOnResilienceScore, cronEnabled } from '@utils';
 import ExperimentRunHistoryView from '@views/ExperimentRunHistory';
 import { useStrings } from '@strings';
@@ -73,7 +73,7 @@ function generateColumnGraphData(
 export default function ExperimentRunHistoryController(): React.ReactElement {
   const scope = getScope();
   const { state, dispatch } = useExperimentRunsFilter();
-  const { showError } = useToaster();
+  const { showError, showSuccess } = useToaster();
   const searchParams = useSearchParams();
   const updateSearchParams = useUpdateSearchParams();
   const { experimentID } = useParams<{ experimentID: string }>();
@@ -121,30 +121,172 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   const experimentType = experimentRunsWithExecutionData?.[0]?.experimentType;
   const experimentManifest = experimentRunsWithExecutionData?.[0]?.experimentManifest;
 
-  // Certificate download enablement: every run for this experiment must be
-  // in a terminal phase (Completed / *_With_Error / *_With_Probe_Failure /
-  // Error / Stopped). Running, Queued, Timeout and NA all keep it disabled.
-  const certificateDownload = React.useMemo(() => {
-    const runs = experimentRunsWithExecutionData;
-    const agentID = runs?.[0]?.infra?.infraID ?? '';
-    if (!runs || runs.length === 0) {
-      return { enabled: false, agentID };
+  const agentID = experimentRunsWithExecutionData?.[0]?.infra?.infraID ?? '';
+  const agentName = experimentRunsWithExecutionData?.[0]?.infra?.name ?? agentID;
+
+  const hasAnyRuns = (experimentRunsWithExecutionData?.length ?? 0) > 0;
+
+  const { data: certStatusData } = getCertificationStatus({
+    projectID: scope.projectID,
+    experimentID,
+    options: {
+      // Poll as soon as there are any runs so the panel shows live progress.
+      // Always keep polling — cert status can revert to RUNS_IN_PROGRESS when
+      // the experiment is extended with more runs after a certificate was issued.
+      skip: !hasAnyRuns || !experimentID,
+      pollInterval: 10000
     }
-    const terminalPhases = new Set<string>([
-      ExperimentRunStatus.COMPLETED,
-      ExperimentRunStatus.COMPLETED_WITH_ERROR,
-      ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE,
-      ExperimentRunStatus.ERROR,
-      ExperimentRunStatus.STOPPED
-    ]);
-    const allTerminal = runs.every(r => terminalPhases.has(r.phase));
-    return { enabled: allTerminal && !!agentID, agentID };
-  }, [experimentRunsWithExecutionData]);
+  });
+
+  const certReady = certStatusData?.getCertificationStatus?.ready === true;
+  const certificateDownload = { enabled: certReady && !!agentID, agentID };
+
+  // Manual re-trigger — shows success toast so user knows the action fired.
+  const [generateCertificationMutation, { loading: retriggerLoading }] = generateCertification({
+    onCompleted: () => showSuccess('Certification pipeline re-triggered'),
+    onError: err => showError(err.message)
+  });
+
+  // Silent auto-trigger — no success toast; errors still surface.
+  const [autoTriggerMutation] = generateCertification({
+    onError: err => showError(err.message)
+  });
+
+  // Memoize so parsedManifest identity is stable between renders.
+  const parsedManifest = React.useMemo(
+    () => (experimentManifest ? JSON.parse(experimentManifest) : null),
+    [experimentManifest]
+  );
+
+  const isCronEnabled =
+    experimentRunsWithExecutionData && experimentType === ExperimentType.CRON && cronEnabled(parsedManifest);
+
+  // Multi-run config extracted from manifest annotations.
+  const multiRunConfig = React.useMemo(() => {
+    if (!parsedManifest?.metadata?.annotations) return null;
+    const annotations = parsedManifest.metadata.annotations;
+    if (annotations['litmuschaos.io/multiRunEnabled'] !== 'true') return null;
+
+    const maxRuns = Number.parseInt(annotations['litmuschaos.io/maxRuns'] || '1', 10);
+    const currentRun = Number.parseInt(annotations['litmuschaos.io/currentRun'] || '0', 10);
+    const completedRuns = experimentRunsWithExecutionData?.filter(
+      run => run.phase !== ExperimentRunStatus.RUNNING && run.phase !== ExperimentRunStatus.QUEUED
+    ).length ?? 0;
+
+    return { maxRuns, currentRun, completedRuns, totalRuns: maxRuns };
+  }, [parsedManifest, experimentRunsWithExecutionData]);
+
+  // Shared terminal-phase set used by both auto-trigger and manual re-trigger.
+  // Includes the deprecated COMPLETED_WITH_ERROR so old runs stored in the DB
+  // are still bucketed. TIMEOUT is terminal — a timed-out run produces data.
+  const TERMINAL_PHASES = React.useMemo(() => new Set<string>([
+    ExperimentRunStatus.COMPLETED,
+    ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE,
+    ExperimentRunStatus.COMPLETED_WITH_ERROR,
+    ExperimentRunStatus.ERROR,
+    ExperimentRunStatus.STOPPED,
+    ExperimentRunStatus.TIMEOUT
+  ]), []);
+
+  // Tracks which run IDs have already been sent to the cert pipeline this
+  // session so the effect below doesn't re-fire on every 10 s poll tick.
+  const autoTriggeredRunsRef = React.useRef(new Set<string>());
+
+  // Auto-trigger bucketing for every newly terminal run.
+  //
+  // Safety contract: we wait for certStatusData to be defined before acting.
+  // autoTriggeredRunsRef starts empty on every page load — without this guard,
+  // loading a page where a cert is already done would re-fire generateCertification
+  // for every run, calling ResetStatusIfCertified and trashing the existing cert.
+  //
+  // Logic:
+  //   • cert ready + no new runs beyond expectedRuns → page loaded for an already-
+  //     certified experiment, nothing to do.
+  //   • otherwise → fire for terminal runs not yet in the session ref.
+  //
+  // The backend is idempotent: UpsertRunWorkflowInitial uses $setOnInsert,
+  // triggerBucketing skips when Bucketing.TaskID is already set.
+  React.useEffect(() => {
+    if (!hasAnyRuns || !experimentID || !scope.projectID) return;
+    // Block until cert status is loaded — undefined means the query hasn't returned yet.
+    if (certStatusData === undefined) return;
+
+    const cs = certStatusData?.getCertificationStatus;
+    const isAlreadyCertified = cs?.status === 'EXPERIMENT_CERTIFICATE_READY';
+    const allTerminalRuns = (experimentRunsWithExecutionData ?? []).filter(
+      r => TERMINAL_PHASES.has(r.phase)
+    );
+
+    // Cert is ready and no runs exist beyond what's already in the pipeline —
+    // nothing to trigger. Use totalRuns (count of run-workflow docs already
+    // submitted to bucketing) NOT expectedRuns (the gate threshold). A cert
+    // covering 6 runs with gate=5 leaves expectedRuns=5; using it would make
+    // allTerminalRuns.length(6) > 5 true on every page load, causing
+    // spurious re-triggers and cert resets.
+    const alreadySubmitted = cs?.totalRuns ?? cs?.expectedRuns ?? 0;
+    if (isAlreadyCertified && allTerminalRuns.length <= alreadySubmitted) return;
+
+    const newlyTerminal = allTerminalRuns.filter(
+      r => !autoTriggeredRunsRef.current.has(r.experimentRunID)
+    );
+    if (newlyTerminal.length === 0) return;
+
+    const resolvedAgentID = cs?.agentID ?? agentID;
+    // cs.agentName is stored via $setOnInsert on first call; fall back to
+    // infra.name so the cert doc gets the display name, not the infraID.
+    const resolvedAgentName = cs?.agentName ?? agentName;
+    const expectedRuns = multiRunConfig?.maxRuns ?? totalExperimentRuns ?? newlyTerminal.length;
+
+    newlyTerminal.forEach(run => {
+      autoTriggeredRunsRef.current.add(run.experimentRunID);
+      autoTriggerMutation({
+        variables: {
+          projectID: scope.projectID,
+          request: {
+            agentID: resolvedAgentID,
+            agentName: resolvedAgentName,
+            experimentID,
+            experimentRunID: run.experimentRunID,
+            expectedRuns
+          }
+        }
+      });
+    });
+  }, [experimentRunsWithExecutionData, hasAnyRuns, experimentID, scope.projectID, agentID, agentName,
+      certStatusData, multiRunConfig, totalExperimentRuns, TERMINAL_PHASES, autoTriggerMutation]);
+
+  // Manual re-trigger: fires for all terminal runs with the updated expectedRuns,
+  // and registers them in the ref so the auto-trigger effect doesn't double-fire.
+  const handleRetrigger = React.useCallback(() => {
+    const runs = experimentRunsWithExecutionData ?? [];
+    const cs = certStatusData?.getCertificationStatus;
+    const resolvedAgentID = cs?.agentID ?? agentID;
+    const resolvedAgentName = cs?.agentName ?? agentName;
+    const expectedRuns = multiRunConfig?.maxRuns ?? totalExperimentRuns ?? runs.length;
+    const terminalRuns = runs.filter(r => TERMINAL_PHASES.has(r.phase));
+
+    terminalRuns.forEach(run => {
+      // Mark in ref so the auto-trigger effect doesn't re-fire for the same runs.
+      autoTriggeredRunsRef.current.add(run.experimentRunID);
+      generateCertificationMutation({
+        variables: {
+          projectID: scope.projectID,
+          request: {
+            agentID: resolvedAgentID,
+            agentName: resolvedAgentName,
+            experimentID,
+            experimentRunID: run.experimentRunID,
+            expectedRuns
+          }
+        }
+      });
+    });
+  }, [experimentRunsWithExecutionData, multiRunConfig, totalExperimentRuns, certStatusData,
+      agentID, agentName, experimentID, scope.projectID, TERMINAL_PHASES, generateCertificationMutation]);
 
   React.useEffect(() => {
     if (experimentName) setExperimentNamePersistent(experimentName);
-  }, [experimentName]),
-    [experimentName];
+  }, [experimentName]);
 
   const experimentRunsTableData: ExperimentRunHistoryTableProps | undefined = experimentRunsWithExecutionData && {
     content: generateExperimentRunTableContent(experimentRunsWithExecutionData),
@@ -169,43 +311,6 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   };
 
   const areFiltersSet = !(isEqual(state, initialExperimentRunFilterState) && page === 0);
-
-  const parsedManifest = experimentManifest && JSON.parse(experimentManifest);
-
-  const isCronEnabled =
-    experimentRunsWithExecutionData && experimentType === ExperimentType.CRON && cronEnabled(parsedManifest);
-
-  // Extract multi-run configuration from manifest annotations
-  const multiRunConfig = React.useMemo(() => {
-    if (!parsedManifest?.metadata?.annotations) return null;
-    const annotations = parsedManifest.metadata.annotations;
-    const multiRunEnabled = annotations['litmuschaos.io/multiRunEnabled'];
-    const maxRuns = parseInt(annotations['litmuschaos.io/maxRuns'] || '1', 10);
-    const currentRun = parseInt(annotations['litmuschaos.io/currentRun'] || '0', 10);
-    
-    if (multiRunEnabled !== 'true') return null;
-    
-    // Count completed runs (not running or queued)
-    const completedRuns = experimentRunsWithExecutionData?.filter(
-      run => run.phase !== ExperimentRunStatus.RUNNING && run.phase !== ExperimentRunStatus.QUEUED
-    ).length ?? 0;
-    
-    // Check if any runs are currently running
-    const hasRunningRuns = experimentRunsWithExecutionData?.some(
-      run => run.phase === ExperimentRunStatus.RUNNING
-    ) ?? false;
-    
-    // denominator = expected total runs
-    // When running: round up to next batch boundary based on completed runs
-    // Formula: ceil((completedRuns + 1) / maxRuns) * maxRuns gives us the target
-    // e.g., completed=0, max=2 → ceil(1/2)*2 = 2 (batch 1 target)
-    // e.g., completed=2, max=2 → ceil(3/2)*2 = 4 (batch 2 target)
-    const totalRuns = hasRunningRuns 
-      ? Math.ceil((completedRuns + 1) / maxRuns) * maxRuns
-      : (totalExperimentRuns ?? 0);
-    
-    return { maxRuns, currentRun, completedRuns, totalRuns };
-  }, [parsedManifest, experimentRunsWithExecutionData, totalExperimentRuns]);
 
   const rightSideBarV2 = (
     <RightSideBarV2
@@ -233,6 +338,10 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       areFiltersSet={areFiltersSet}
       experimentRunsExists={experimentRunsExists}
       multiRunConfig={multiRunConfig}
+      certStatus={certStatusData?.getCertificationStatus}
+      totalExperimentRuns={totalExperimentRuns}
+      retriggerLoading={retriggerLoading}
+      onRetrigger={handleRetrigger}
     />
   );
 }

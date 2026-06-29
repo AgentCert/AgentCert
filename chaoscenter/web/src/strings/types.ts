@@ -258,6 +258,9 @@ export interface StringsMap {
   'docker': unknown
   'done': unknown
   'download': unknown
+  'downloadCertificate': unknown
+  'downloadCertificateDisabledTooltip': unknown
+  'downloadCertificateEnabledTooltip': unknown
   'downloadChaosInfrastructureManifest': unknown
   'downloadExperiment': unknown
   'downloadSuccess': unknown
