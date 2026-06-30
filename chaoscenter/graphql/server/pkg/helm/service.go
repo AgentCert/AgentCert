@@ -75,8 +75,7 @@ func (h *HelmService) InstallChart(ctx context.Context, chartPath string, reques
 		args = append(args, "--kubeconfig", h.kubeconfig)
 	}
 
-	// Forward IMAGE_REGISTRY from the server's environment so all chart images
-	// are pulled from the configured registry (e.g. Artifactory).
+	// Inject global image registry from environment
 	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
 		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
 	}
@@ -137,8 +136,7 @@ func (h *HelmService) UpgradeChart(ctx context.Context, chartPath string, reques
 		args = append(args, "--kubeconfig", h.kubeconfig)
 	}
 
-	// Forward IMAGE_REGISTRY from the server's environment so all chart images
-	// are pulled from the configured registry (e.g. Artifactory).
+	// Inject global image registry from environment
 	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
 		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
 	}
@@ -377,7 +375,7 @@ func (h *HelmService) StartPortForward(namespace, serviceName string, servicePor
 
 	// Start the port-forward process in the background
 	cmd := exec.Command("kubectl", args...)
-	
+
 	// Capture output for debugging
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

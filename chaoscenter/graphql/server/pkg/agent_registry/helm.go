@@ -59,27 +59,27 @@ func SanitizeReleaseName(name string) string {
 
 // HelmDeployRequest captures parameters required for Helm deployment.
 type HelmDeployRequest struct {
-	ReleaseName                  string
+	ReleaseName string
 	// Namespace is where the agent's Helm release is INSTALLED.  In prod-grade
 	// mode this is a stable system namespace (e.g. "agentcert-system") so the
 	// agent pod survives target-namespace teardown between experiments.
-	Namespace                    string
+	Namespace string
 	// TargetNamespace, when non-empty, is the namespace the agent should
 	// OBSERVE (passed to the chart as agent.config.K8S_NAMESPACE).  When
 	// empty, the chart falls back to the install namespace for back-compat.
-	TargetNamespace              string
-	ChartPath                    string
-	ChartData                    *string // Base64-encoded .tgz chart data
-	ChartVersion                 *string
-	ValuesYAML                   *string
-	Kubeconfig                   *string
-	AgentID                      string
-	ImageTag                     *string
+	TargetNamespace string
+	ChartPath       string
+	ChartData       *string // Base64-encoded .tgz chart data
+	ChartVersion    *string
+	ValuesYAML      *string
+	Kubeconfig      *string
+	AgentID         string
+	ImageTag        *string
 	// Azure OpenAI Environment Variables
-	AzureOpenAIKey               *string
-	AzureOpenAIEndpoint          *string
-	AzureOpenAIDeployment        *string
-	AzureOpenAIAPIVersion        *string
+	AzureOpenAIKey                 *string
+	AzureOpenAIEndpoint            *string
+	AzureOpenAIDeployment          *string
+	AzureOpenAIAPIVersion          *string
 	AzureOpenAIEmbeddingDeployment *string
 }
 
@@ -118,7 +118,7 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		if err != nil {
 			return "", fmt.Errorf("failed to create temp chart file: %w", err)
 		}
-		
+
 		if _, err := tmpFile.Write(decoded); err != nil {
 			tmpFile.Close()
 			os.Remove(tmpFile.Name())
@@ -151,7 +151,7 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 	// Create ConfigMap and Secret for environment variables in the target namespace
 	// First, clean up any orphaned resources from previous failed deployments
 	cleanupOrphanedResources(ctx, req.Namespace, req.ReleaseName)
-	
+
 	// COMMENTED OUT: Don't create ConfigMap/Secret manually - let Helm manage them
 	// This was creating resources without Helm ownership labels, causing conflicts
 	// The Helm chart will create its own ConfigMap/Secret with proper labels
@@ -176,8 +176,8 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		"--create-namespace",
 		"--wait",
 		"--timeout", timeout,
-		"--atomic",           // Rollback on failure, prevents orphaned resources
-		"--cleanup-on-fail",  // Clean up resources if install fails
+		"--atomic",          // Rollback on failure, prevents orphaned resources
+		"--cleanup-on-fail", // Clean up resources if install fails
 	}
 
 	if req.ChartVersion != nil && strings.TrimSpace(*req.ChartVersion) != "" {
@@ -273,6 +273,11 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 	}
 	if req.AzureOpenAIEmbeddingDeployment != nil && strings.TrimSpace(*req.AzureOpenAIEmbeddingDeployment) != "" {
 		args = append(args, "--set", fmt.Sprintf("configMap.AZURE_OPENAI_EMBEDDING_DEPLOYMENT=%s", *req.AzureOpenAIEmbeddingDeployment))
+	}
+
+	// Inject global image registry from environment
+	if imageRegistry := os.Getenv("IMAGE_REGISTRY"); imageRegistry != "" {
+		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
 	}
 
 	log.Printf("[Helm Deploy] Executing: %s %s", helmBin, strings.Join(args, " "))
