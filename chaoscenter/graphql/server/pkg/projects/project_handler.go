@@ -2,6 +2,8 @@ package projects
 
 import (
 	"context"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,10 +24,16 @@ func ProjectInitializer(ctx context.Context, project project.Project, role strin
 	var bl_true = true
 	currentTime := time.Now().UnixMilli()
 
+	// Use IMAGE_REGISTRY env var if set, fall back to docker.io
+	registryName := "docker.io"
+	if reg := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); reg != "" {
+		registryName = reg
+	}
+
 	imageRegistry := image_registry.ImageRegistry{
 		ImageRegistryID:   uuid.New().String(),
 		ProjectID:         project.ID,
-		ImageRegistryName: "docker.io",
+		ImageRegistryName: registryName,
 		ImageRepoName:     "litmuschaos",
 		ImageRegistryType: "public",
 		SecretName:        nil,
