@@ -26,8 +26,16 @@ func ProjectInitializer(ctx context.Context, project project.Project, role strin
 
 	// Use IMAGE_REGISTRY env var if set, fall back to docker.io
 	registryName := "docker.io"
+	registryType := "public"
+	var secretName *string
+	var secretNamespace *string
 	if reg := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); reg != "" {
 		registryName = reg
+		registryType = "private"
+		sn := "jfrog-registry"
+		sns := "litmus"
+		secretName = &sn
+		secretNamespace = &sns
 	}
 
 	imageRegistry := image_registry.ImageRegistry{
@@ -35,9 +43,9 @@ func ProjectInitializer(ctx context.Context, project project.Project, role strin
 		ProjectID:         project.ID,
 		ImageRegistryName: registryName,
 		ImageRepoName:     "litmuschaos",
-		ImageRegistryType: "public",
-		SecretName:        nil,
-		SecretNamespace:   nil,
+		ImageRegistryType: registryType,
+		SecretName:        secretName,
+		SecretNamespace:   secretNamespace,
 		EnableRegistry:    &bl_true,
 		IsDefault:         true,
 		Audit: mongodb.Audit{
