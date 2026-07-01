@@ -18,16 +18,16 @@ type Configuration struct {
 	LitmusChaosRunnerImage      string   `required:"true" split_words:"true"`
 	LitmusChaosExporterImage    string   `required:"true" split_words:"true"`
 	ContainerRuntimeExecutor    string   `required:"true" split_words:"true"`
-	KubernetesMcpServerImage    string   `split_words:"true" default:"quay.io/containers/kubernetes_mcp_server:latest"`
-	PrometheusMcpServerImage    string   `split_words:"true" default:"agentcert/prometheus-mcp-server:latest"`
+	KubernetesMcpServerImage    string   `split_words:"true" default:"infyartifactory.jfrog.io/docker-local/kubernetes_mcp_server:latest"`
+	PrometheusMcpServerImage    string   `split_words:"true" default:"infyartifactory.jfrog.io/docker-local/agentcert/prometheus-mcp-server:latest"`
 	PrometheusMcpUrl            string   `split_words:"true" default:"http://prometheus.monitoring.svc.cluster.local:9090"`
 	WorkflowHelperImageVersion  string   `required:"true" split_words:"true"`
-	InstallApplicationImage     string   `split_words:"true" default:"agentcert/agentcert-install-app:latest"`
+	InstallApplicationImage     string   `split_words:"true" default:"infyartifactory.jfrog.io/docker-local/agentcert/agentcert-install-app:latest"`
 	InstallApplicationImagePullPolicy string `split_words:"true" default:"IfNotPresent"`
-	InstallAgentImage           string   `split_words:"true" default:"agentcert/agentcert-install-agent:latest"`
+	InstallAgentImage           string   `split_words:"true" default:"infyartifactory.jfrog.io/docker-local/agentcert/agentcert-install-agent:latest"`
 	InstallAgentImagePullPolicy string   `split_words:"true" default:"IfNotPresent"`
-	FlashAgentImage             string   `split_words:"true" default:"agentcert/agentcert-flash-agent:latest"`
-	AgentSidecarImage           string   `split_words:"true" default:"agentcert/agent-sidecar:latest"`
+	FlashAgentImage             string   `split_words:"true" default:"infyartifactory.jfrog.io/docker-local/agentcert/agentcert-flash-agent:latest"`
+	AgentSidecarImage           string   `split_words:"true" default:"infyartifactory.jfrog.io/docker-local/agentcert/agent-sidecar:latest"`
 	ChaosCenterUiEndpoint       string   `split_words:"true" default:"https://localhost:8080"`
 	TlsCertB64                  string   `split_words:"true"`
 	LitmusAuthGrpcEndpoint      string   `split_words:"true" default:"localhost"`

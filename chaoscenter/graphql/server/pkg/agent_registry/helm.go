@@ -146,6 +146,9 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 			applyCmd.Stdin = strings.NewReader(string(nsOutput))
 			applyCmd.Run()
 		}
+		// Immediately seed jfrog-registry into the namespace so Helm-managed pods
+		// can pull images without waiting up to 60s for the jfrog-secret-sync Deployment.
+		syncJFrogSecret(ctx, req.Namespace)
 	}
 
 	// Create ConfigMap and Secret for environment variables in the target namespace
@@ -591,6 +594,38 @@ func cleanupOrphanedResources(ctx context.Context, namespace, releaseName string
 		log.Printf("[Cleanup] Failed to delete orphaned configmap: %v (output: %s)", err, string(output))
 	} else if len(output) > 0 {
 		log.Printf("[Cleanup] Deleted orphaned configmap: %s", string(output))
+	}
+}
+
+// syncJFrogSecret copies the jfrog-registry imagePullSecret from kube-system
+// into the target namespace and patches its default SA additively.
+// Called immediately after namespace creation so pods never wait for the
+// jfrog-secret-sync Deployment's next watch event.
+func syncJFrogSecret(ctx context.Context, namespace string) {
+	if strings.TrimSpace(namespace) == "" {
+		return
+	}
+	script := fmt.Sprintf(`
+		CONFIG=$(kubectl get secret jfrog-registry -n kube-system \
+			-o jsonpath='{.data.\.dockerconfigjson}' 2>/dev/null) || exit 0
+		[ -z "$CONFIG" ] && exit 0
+		TMP=$(mktemp)
+		echo "$CONFIG" | base64 -d > "$TMP" 2>/dev/null || { rm -f "$TMP"; exit 0; }
+		kubectl create secret generic jfrog-registry \
+			--namespace '%s' \
+			--type=kubernetes.io/dockerconfigjson \
+			"--from-file=.dockerconfigjson=$TMP" \
+			--dry-run=client -o yaml 2>/dev/null | kubectl apply -f - 2>/dev/null || true
+		rm -f "$TMP"
+		kubectl patch serviceaccount default -n '%s' --type=json \
+			-p '[{"op":"add","path":"/imagePullSecrets/-","value":{"name":"jfrog-registry"}}]' \
+			2>/dev/null || \
+		kubectl patch serviceaccount default -n '%s' --type=merge \
+			-p '{"imagePullSecrets":[{"name":"jfrog-registry"}]}' 2>/dev/null || true
+	`, namespace, namespace, namespace)
+	cmd := exec.CommandContext(ctx, "bash", "-c", script)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("[Helm Deploy] Warning: jfrog secret sync to %s: %v (%s)", namespace, err, string(output))
 	}
 }
 
