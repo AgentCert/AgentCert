@@ -31,6 +31,8 @@ spec:
         name: chaos-operator
     spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
+      imagePullSecrets:
+        - name: jfrog-registry
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -88,6 +90,8 @@ spec:
         app: chaos-exporter
         release: prometheus-stack
     spec:
+      imagePullSecrets:
+        - name: jfrog-registry
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
