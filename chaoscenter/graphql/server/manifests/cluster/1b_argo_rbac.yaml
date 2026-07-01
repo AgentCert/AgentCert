@@ -4,6 +4,8 @@ kind: ServiceAccount
 metadata:
   name: argo-chaos
   namespace: #{INFRA_NAMESPACE}
+imagePullSecrets:
+  - name: jfrog-registry
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

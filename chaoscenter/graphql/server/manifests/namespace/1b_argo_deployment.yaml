@@ -73,3 +73,5 @@ spec:
               cpu: "225m"
               ephemeral-storage: "1Gi"
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
+      imagePullSecrets:
+        - name: jfrog-registry
