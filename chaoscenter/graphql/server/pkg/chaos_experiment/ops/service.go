@@ -18,8 +18,8 @@ import (
 
 	agentRegistry "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbChaosExperimentRun "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment_run"
@@ -1785,6 +1785,23 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
 			changed = true
 		}
+
+		// Inject --set=global.imageRegistry=<IMAGE_REGISTRY> so sock-shop
+		// images are pulled from JFrog instead of Docker Hub.
+		if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
+			registryArg := fmt.Sprintf("--set=global.imageRegistry=%s", imageRegistry)
+			alreadySet := false
+			for _, arg := range t.Container.Args {
+				if strings.Contains(arg, "global.imageRegistry=") {
+					alreadySet = true
+					break
+				}
+			}
+			if !alreadySet {
+				t.Container.Args = append(t.Container.Args, registryArg)
+				changed = true
+			}
+		}
 	}
 
 	if changed {
@@ -2348,7 +2365,8 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", "sidecar.injectionMode=openai-metadata",
 		// Let the sidecar forward to the real LiteLLM proxy (base URL without /v1)
 		"--set", fmt.Sprintf("sidecar.upstream=%s", sidecarUpstream),
-		// Pin the exact sidecar image that was built and loaded into minikube.
+		// Pin the exact sidecar image — registry is already in the repo path so override to empty.
+		"--set", "sidecar.image.registry=",
 		"--set", fmt.Sprintf("sidecar.image.repository=%s", sidecarImageRepo),
 		"--set", fmt.Sprintf("sidecar.image.tag=%s", sidecarImageTag),
 		"--set", "sidecar.image.pullPolicy=Always",
