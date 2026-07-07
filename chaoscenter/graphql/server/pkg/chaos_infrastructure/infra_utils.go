@@ -92,7 +92,7 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 
 	var (
 		namespaceConfig   = "---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: " + InfraNamespace + "\n"
-		serviceAccountStr = "---\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: " + ServiceAccountName + "\n  namespace: " + InfraNamespace + "\nimagePullSecrets:\n  - name: jfrog-registry\n"
+		serviceAccountStr = "---\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: " + ServiceAccountName + "\n  namespace: " + InfraNamespace + "\nimagePullSecrets:\n  - name: " + utils.Config.ImagePullSecretName + "\n"
 	)
 
 	// Checking if the agent namespace does not exist and its scope of installation is not namespaced
@@ -188,6 +188,7 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 		newContent = strings.Replace(newContent, "#{KUBERNETES_MCP_SERVER_IMAGE}", utils.Config.KubernetesMcpServerImage, -1)
 		newContent = strings.Replace(newContent, "#{PROMETHEUS_MCP_SERVER_IMAGE}", utils.Config.PrometheusMcpServerImage, -1)
 		newContent = strings.Replace(newContent, "#{PROMETHEUS_MCP_URL}", utils.Config.PrometheusMcpUrl, -1)
+		newContent = strings.Replace(newContent, "#{IMAGE_PULL_SECRET_NAME}", utils.Config.ImagePullSecretName, -1)
 
 		newContent = strings.Replace(newContent, "#{START_TIME}", "\""+infra.StartTime+"\"", -1)
 		if infra.IsInfraConfirmed {

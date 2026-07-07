@@ -44,7 +44,7 @@ spec:
       #{NODE_SELECTOR}
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
       imagePullSecrets:
-        - name: jfrog-registry
+        - name: #{IMAGE_PULL_SECRET_NAME}
       containers:
         - name: subscriber
           image: #{SUBSCRIBER_IMAGE}
@@ -93,7 +93,7 @@ spec:
       #{NODE_SELECTOR}
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
       imagePullSecrets:
-        - name: jfrog-registry
+        - name: #{IMAGE_PULL_SECRET_NAME}
       containers:
         - image: #{EVENT_TRACKER_IMAGE}
           imagePullPolicy: Always

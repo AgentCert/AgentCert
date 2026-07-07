@@ -32,7 +32,7 @@ spec:
     spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
       imagePullSecrets:
-        - name: jfrog-registry
+        - name: #{IMAGE_PULL_SECRET_NAME}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -91,7 +91,7 @@ spec:
         release: prometheus-stack
     spec:
       imagePullSecrets:
-        - name: jfrog-registry
+        - name: #{IMAGE_PULL_SECRET_NAME}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:

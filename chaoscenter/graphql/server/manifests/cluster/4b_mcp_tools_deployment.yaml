@@ -41,7 +41,7 @@ spec:
     spec:
       serviceAccountName: mcp-server
       imagePullSecrets:
-        - name: jfrog-registry
+        - name: #{IMAGE_PULL_SECRET_NAME}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -116,7 +116,7 @@ spec:
     spec:
       serviceAccountName: prometheus-mcp-server
       imagePullSecrets:
-        - name: jfrog-registry
+        - name: #{IMAGE_PULL_SECRET_NAME}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:

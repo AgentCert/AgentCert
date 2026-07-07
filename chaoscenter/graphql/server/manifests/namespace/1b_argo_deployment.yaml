@@ -74,4 +74,4 @@ spec:
               ephemeral-storage: "1Gi"
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
       imagePullSecrets:
-        - name: jfrog-registry
+        - name: #{IMAGE_PULL_SECRET_NAME}
