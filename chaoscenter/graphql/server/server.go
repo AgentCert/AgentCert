@@ -30,6 +30,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/generated"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/catalog"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
 	handler2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
@@ -154,7 +155,8 @@ func main() {
 		go startGRPCServer(utils.Config.GrpcPort, mongodbOperator) // start GRPC serve
 	}
 
-	srv := handler.New(generated.NewExecutableSchema(graph.NewConfig(mongodbOperator)))
+	gqlConfig, catalogSvc := graph.NewConfig(mongodbOperator)
+	srv := handler.New(generated.NewExecutableSchema(gqlConfig))
 
 	// Pass through actual error messages instead of generic "internal system error"
 	srv.SetErrorPresenter(func(ctx context.Context, e error) *gqlerror.Error {
@@ -220,6 +222,13 @@ func main() {
 	// Port-forward routers
 	router.POST("/api/port-forward/start", handlers.PortForwardHandler(mongodb.MgoClient))
 	router.POST("/api/port-forward/stop", handlers.StopPortForwardHandler(mongodb.MgoClient))
+
+	// Catalog contribution routers
+	catalogGroup := router.Group("/api/catalog")
+	{
+		catalogGroup.POST("/validate-name", catalog.ValidateName(catalogSvc))
+		catalogGroup.POST("/discover-services", catalog.DiscoverServices())
+	}
 
 	// Certification report download (proxies to certifier service).
 	// Each format is mounted under two paths: one for the webpack dev proxy

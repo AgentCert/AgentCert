@@ -1,167 +1,215 @@
-.container {
-  padding: var(--spacing-xlarge);
-  max-width: 800px;
-}
-
-.heading {
-  margin-bottom: var(--spacing-xlarge);
-}
-
-.radioGroup {
+.stepIndicator {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-medium);
-  margin-bottom: var(--spacing-xlarge);
+  gap: 8px;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--grey-100, #f3f4f6);
 }
 
-.radioRow {
+.stepDot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--grey-200, #e5e7eb);
+  color: var(--grey-500, #6b7280);
   display: flex;
   align-items: center;
-  gap: var(--spacing-medium);
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stepDotActive {
+  background: var(--primary-7, #0278d5);
+  color: white;
+}
+
+.stepContainer {
+  max-width: 760px;
+  margin: 24px auto;
+  padding: 0 24px;
+}
+
+.stepTitle {
+  margin-bottom: 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--grey-700, #374151);
+}
+
+.input {
+  padding: 8px 12px;
+  border: 1px solid var(--grey-300, #d1d5db);
+  border-radius: 4px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-5, #4894db);
+    box-shadow: 0 0 0 2px rgba(4, 120, 213, 0.1);
+  }
+}
+
+.inputError {
+  border-color: var(--red-600, #dc2626);
+}
+
+.methodCard {
+  padding: 16px;
+  border: 2px solid var(--grey-200, #e5e7eb);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+
+  &:hover {
+    border-color: var(--primary-4, #7ab7e5);
+  }
+}
+
+.methodCardSelected {
+  border-color: var(--primary-7, #0278d5);
+  background: var(--blue-50, #eff6ff);
+}
+
+.serviceTable {
+  border: 1px solid var(--grey-200, #e5e7eb);
+  border-radius: 4px;
+  overflow: auto;
+}
+
+.serviceRow {
+  display: grid;
+  grid-template-columns: 2fr 2fr 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--grey-100, #f3f4f6);
+  align-items: center;
+  font-size: 13px;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.serviceHeader {
+  background: var(--grey-50, #fafafa);
+  font-weight: 600;
+}
+
+.autoExcludedRow {
+  opacity: 0.6;
+}
+
+.criticalitySelect {
+  padding: 2px 6px;
+  border: 1px solid var(--grey-200, #e5e7eb);
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 .radioCard {
   display: flex;
-  align-items: center;
-  padding: var(--spacing-medium) var(--spacing-large);
-  border: 1px solid var(--grey-200);
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border: 2px solid var(--grey-200, #e5e7eb);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  background: var(--white);
-  flex: 1;
+  transition: border-color 0.15s;
 
   &:hover {
-    border-color: var(--primary-7);
-    background: var(--primary-1);
+    border-color: var(--primary-4, #7ab7e5);
   }
+}
 
-  &.selected {
-    border-color: var(--primary-7);
-    background: var(--primary-1);
-  }
+.radioCardSelected {
+  border-color: var(--primary-7, #0278d5);
+  background: var(--blue-50, #eff6ff);
 }
 
 .radioInput {
-  margin-right: var(--spacing-medium);
-  accent-color: var(--primary-7);
-  width: 18px;
-  height: 18px;
-}
-
-.radioContent {
-  display: flex;
-  flex-direction: column;
-}
-
-.radioTitle {
-  font-weight: 600;
-  color: var(--grey-900);
-}
-
-.radioDescription {
-  font-size: 12px;
-  color: var(--grey-500);
-  margin-top: 4px;
-}
-
-.buttonContainer {
-  margin-top: var(--spacing-xlarge);
-  display: flex;
-  gap: var(--spacing-medium);
-}
-
-.inputSection {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  min-width: 500px;
-}
-
-.urlTextbox {
-  flex: 1;
-  min-width: 400px;
-  
-  input {
-    width: 100%;
-  }
-
-  &:disabled {
-    background-color: var(--grey-100);
-    cursor: not-allowed;
-  }
-}
-
-.uploadSection {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  min-width: 200px;
-}
-
-.uploadButton {
-  white-space: nowrap;
+  margin-top: 3px;
   flex-shrink: 0;
 }
 
-.uploadedFileName {
-  white-space: nowrap;
-}
-
-.newAppButtonContainer {
-  margin-top: var(--spacing-large);
-}
-
-.tableContainer {
-  margin-top: 120px;
-  margin-left: 700px;
-}
-
-.tableHeading {
-  margin-bottom: 48px;
-  font-weight: 600;
-}
-
-.appsTable {
+.yamlEditor {
   width: 100%;
-  border: 1px solid var(--grey-200);
-  border-radius: 8px;
-  overflow: hidden;
+  padding: 8px 12px;
+  border: 1px solid var(--grey-300, #d1d5db);
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  box-sizing: border-box;
+}
 
-  :global {
-    .TableV2--header {
-      background-color: var(--grey-100);
-      border-bottom: 2px solid var(--grey-300);
-    }
+.yamlPreview {
+  background: var(--grey-50, #fafafa);
+  border: 1px solid var(--grey-200, #e5e7eb);
+  border-radius: 4px;
+  padding: 16px;
+  font-size: 12px;
+  overflow: auto;
+  max-height: 400px;
+  white-space: pre;
+}
 
-    .TableV2--header [role="columnheader"] {
-      font-weight: 600;
-      color: var(--grey-900);
-      text-transform: uppercase;
-      font-size: 12px;
-      letter-spacing: 0.5px;
-      padding: var(--spacing-medium) var(--spacing-large);
-    }
+.summaryGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--grey-50, #fafafa);
+  border-radius: 4px;
+  border: 1px solid var(--grey-200, #e5e7eb);
+}
 
-    .TableV2--row {
-      border-bottom: 1px solid var(--grey-200);
+.summaryRow {
+  display: flex;
+  gap: 12px;
+  font-size: 14px;
 
-      &:hover {
-        background-color: var(--grey-50);
-      }
-    }
-
-    .TableV2--cell {
-      padding: var(--spacing-medium) var(--spacing-large);
-    }
+  span {
+    color: var(--grey-500, #6b7280);
+    min-width: 80px;
   }
 }
 
-.actionLink {
-  cursor: pointer;
-  font-weight: 500;
+.fileList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
-  &:hover {
-    text-decoration: underline;
-  }
+.fileItem {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: var(--grey-700, #374151);
+}
+
+.nextSteps {
+  padding-left: 20px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--grey-700, #374151);
+  line-height: 1.8;
+}
+
+.halfWidth {
+  flex: 1;
+  min-width: 0;
+}
+
+.autoExcludeNote {
+  font-style: italic;
 }

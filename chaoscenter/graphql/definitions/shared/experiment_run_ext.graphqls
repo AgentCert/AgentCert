@@ -1,0 +1,136 @@
+"""
+Lifecycle status of an ACE experiment run.
+"""
+enum AceRunStatus {
+  """Submitted to Argo; waiting for cluster capacity."""
+  QUEUED
+  """Argo Workflow is actively executing."""
+  RUNNING
+  """All steps completed; certifier received Langfuse trace."""
+  COMPLETED
+  """A step failed (app probe, fault injection, or verify step)."""
+  FAILED
+  """User called abortRun or 90-minute timeout was reached."""
+  ABORTED
+}
+
+"""
+A single status transition event in the run lifecycle.
+"""
+type RunStatusEvent {
+  status: AceRunStatus!
+  timestamp: String!
+  reason: String
+}
+
+"""
+One execution instance of an AceExperimentDefinition.
+A run record is immutable after reaching COMPLETED, FAILED, or ABORTED.
+"""
+type AceExperimentRun {
+  runID: String!
+  projectID: String!
+
+  """Name and version of the experiment definition this run was created from."""
+  definitionName: String!
+  definitionVersion: String!
+
+  """Agent that executed this run."""
+  agentName: String!
+  agentVersion: String!
+
+  """
+  LLM model used in this run — always populated (resolved at submit time).
+  e.g. "gpt-4o", "claude-3-5-sonnet-20241022"
+  """
+  modelUsed: String!
+
+  """
+  LLM provider for the model used. e.g. "openai", "anthropic"
+  """
+  modelProvider: String!
+
+  """Name of the Argo Workflow created for this run."""
+  argoWorkflowName: String!
+
+  """Langfuse trace ID — populated when agent begins executing."""
+  langfuseTraceId: String
+
+  """Certifier report ID — populated when certification completes."""
+  certifierReportId: String
+
+  status: AceRunStatus!
+  statusHistory: [RunStatusEvent!]!
+
+  startedAt: String
+  completedAt: String
+  createdAt: String!
+  createdBy: String!
+}
+
+"""
+Input for a secret key/value pair used by the agent.
+"""
+input AceSecretInput {
+  key: String!
+  value: String!
+}
+
+"""
+Input for overriding a parameter value at run time.
+"""
+input AceParamInput {
+  stepName: String!
+  key: String!
+  value: String!
+}
+
+extend type Mutation {
+  """
+  Submit a new run of an experiment definition.
+  Validates the definition, hydrates an Argo Workflow, submits it, and returns the run record.
+  """
+  submitRun(
+    projectID: ID!
+    experimentName: String!
+    agentName: String!
+    """
+    Override the model for this run. Only valid when the agent's
+    llmConfig.allowUserChoice is true. Ignored otherwise.
+    """
+    modelOverride: String
+    """
+    Agent secret key/value pairs. These are stored in a K8s Secret
+    named ace-agent-secret-<runID> in the litmus namespace.
+    """
+    secretOverrides: [AceSecretInput!]
+    """
+    Per-step parameter overrides applied at hydration time.
+    """
+    paramOverrides: [AceParamInput!]
+  ): AceExperimentRun! @authorized
+
+  """
+  Abort a running experiment. Stops the Argo Workflow and marks the run as ABORTED.
+  Has no effect if the run is already in a terminal state.
+  """
+  abortRun(projectID: ID!, runID: String!): AceExperimentRun! @authorized
+}
+
+extend type Query {
+  """
+  Retrieve a single run record by run ID.
+  """
+  getRun(projectID: ID!, runID: String!): AceExperimentRun @authorized
+
+  """
+  List runs, optionally filtered by experiment name, agent name, or status.
+  Returns up to 100 records ordered by creation time descending.
+  """
+  listRuns(
+    projectID: ID!
+    experimentName: String
+    agentName: String
+    status: AceRunStatus
+  ): [AceExperimentRun!]! @authorized
+}

@@ -21,6 +21,7 @@ import {
 } from '@api/core';
 import { useAppStore } from '@context';
 import css from './AgentOnboarding.module.scss';
+import { AgentRegistrationWizard } from './wizard';
 
 // Available capabilities for agent selection
 const AVAILABLE_CAPABILITIES: SelectOption[] = [
@@ -55,6 +56,7 @@ interface HelmFormState {
   namespace: string;
   helmReleaseName: string;
   helmChartVersion: string;
+  version: string;
   capabilities: string[];
   valuesYaml: string;
 }
@@ -95,6 +97,7 @@ export default function AgentOnboardingView(): React.ReactElement {
   const searchParams = new URLSearchParams(location.search);
   const showOptions = searchParams.get('step') === 'select';
   const [selectedMethod, setSelectedMethod] = useState<OnboardingMethod | null>(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [apiUrl, setApiUrl] = useState<string>('');
   const [faasUrl, setFaasUrl] = useState<string>('');
@@ -205,6 +208,7 @@ export default function AgentOnboardingView(): React.ReactElement {
     namespace: 'default',
     helmReleaseName: '',
     helmChartVersion: '1.0.0',
+    version: '',
     capabilities: [],
     valuesYaml: ''
   });
@@ -432,6 +436,7 @@ export default function AgentOnboardingView(): React.ReactElement {
             namespace: 'default',
             helmReleaseName: '',
             helmChartVersion: '1.0.0',
+            version: '',
             capabilities: [],
             valuesYaml: ''
           });
@@ -737,13 +742,26 @@ export default function AgentOnboardingView(): React.ReactElement {
               {getString('agentOnboarding')}
             </Text>
             <Container className={css.newAgentButtonContainer}>
-              <Button
-                variation={ButtonVariation.PRIMARY}
-                text={getString('newAgent')}
-                icon="plus"
-                onClick={handleNewAgent}
-              />
+              <Layout.Horizontal spacing="medium">
+                <Button
+                  variation={ButtonVariation.PRIMARY}
+                  text={getString('newAgent')}
+                  icon="plus"
+                  onClick={handleNewAgent}
+                />
+                <Button
+                  variation={ButtonVariation.SECONDARY}
+                  text="Register Agent"
+                  icon="plus"
+                  onClick={() => setIsWizardOpen(true)}
+                />
+              </Layout.Horizontal>
             </Container>
+            <AgentRegistrationWizard
+              isOpen={isWizardOpen}
+              onClose={() => setIsWizardOpen(false)}
+              onRegistered={() => refetchAgents()}
+            />
 
             {agentsLoading ? (
               <Container className={css.tableContainer}>

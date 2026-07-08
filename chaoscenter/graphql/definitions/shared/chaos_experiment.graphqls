@@ -41,6 +41,23 @@ enum ScheduleType {
 }
 
 """
+A single secret key/value pair supplied by the caller for an agent's secret input.
+"""
+input AgentSecretInput {
+  key:   String!
+  value: String!
+}
+
+"""
+Agent-level configuration node that carries the agent name and any
+secret-type inputs that should be stored in a K8s Secret for this experiment.
+"""
+input AgentConfigNode {
+  agentName:    String!
+  secretInputs: [AgentSecretInput!]
+}
+
+"""
 Defines the details for a chaos experiment
 """
 input SaveChaosExperimentRequest {
@@ -72,6 +89,11 @@ input SaveChaosExperimentRequest {
   Tags of the infrastructure
   """
   tags: [String!]
+  """
+  Optional agent configuration carrying secret-type inputs to be stored
+  in a K8s Secret named ace-agent-secret-<experimentID>.
+  """
+  agentConfig: AgentConfigNode
 }
 
 """

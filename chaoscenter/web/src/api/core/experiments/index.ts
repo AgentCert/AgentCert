@@ -1,4 +1,5 @@
 export * from './createChaosWorkflow';
+export * from './aceExperiments';
 export * from './listWorkflow';
 export * from './listWorkflowRun';
 export * from './runChaosExperiment';

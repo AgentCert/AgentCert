@@ -8,3 +8,5 @@ export * from './checkResourceID';
 export * from './agents';
 export * from './agenthub';
 export * from './apphub';
+export * from './catalog';
+export * from './modelLibrary';

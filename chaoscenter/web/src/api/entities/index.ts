@@ -9,3 +9,4 @@ export * from './environment';
 export * from './imageRegistry';
 export * from './agentHub';
 export * from './appHub';
+export * from './catalog';

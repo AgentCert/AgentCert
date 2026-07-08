@@ -1,26 +1,33 @@
 declare namespace AppsOnboardingModuleScssNamespace {
   export interface IAppsOnboardingModuleScss {
-    actionLink: string;
-    appsTable: string;
-    buttonContainer: string;
-    container: string;
-    heading: string;
-    inputSection: string;
-    newAppButtonContainer: string;
+    autoExcludeNote: string;
+    autoExcludedRow: string;
+    criticalitySelect: string;
+    field: string;
+    fieldLabel: string;
+    fileItem: string;
+    fileList: string;
+    halfWidth: string;
+    input: string;
+    inputError: string;
+    methodCard: string;
+    methodCardSelected: string;
+    nextSteps: string;
     radioCard: string;
-    radioContent: string;
-    radioDescription: string;
-    radioGroup: string;
+    radioCardSelected: string;
     radioInput: string;
-    radioRow: string;
-    radioTitle: string;
-    selected: string;
-    tableContainer: string;
-    tableHeading: string;
-    uploadButton: string;
-    uploadSection: string;
-    uploadedFileName: string;
-    urlTextbox: string;
+    serviceHeader: string;
+    serviceRow: string;
+    serviceTable: string;
+    stepContainer: string;
+    stepDot: string;
+    stepDotActive: string;
+    stepIndicator: string;
+    stepTitle: string;
+    summaryGrid: string;
+    summaryRow: string;
+    yamlEditor: string;
+    yamlPreview: string;
   }
 }
 

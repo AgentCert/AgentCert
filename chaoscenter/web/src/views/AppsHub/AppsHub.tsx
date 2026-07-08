@@ -1,68 +1,41 @@
-import type { ApolloQueryResult } from '@apollo/client';
+import React, { useState, useMemo } from 'react';
 import { Color, FontVariation } from '@harnessio/design-system';
-import { Card, Container, Layout, Text } from '@harnessio/uicore';
+import { Button, ButtonVariation, Card, Container, Layout, Text, TextInput } from '@harnessio/uicore';
 import { Icon } from '@harnessio/icons';
-import React from 'react';
 import { useHistory } from 'react-router-dom';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
-import type { AppHubCategory, AppHubEntry } from '@api/entities';
-import type { ListAppHubCategoriesRequest, ListAppHubCategoriesResponse } from '@api/core';
+import type { ApplicationSpec } from '@api/entities';
 import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
-import { useStrings } from '@strings';
 import Loader from '@components/Loader';
 import css from './AppsHub.module.scss';
 
-interface AppsHubViewProps {
-  categories?: AppHubCategory[];
-  loading: boolean;
-  refetch: (
-    variables?: Partial<ListAppHubCategoriesRequest> | undefined
-  ) => Promise<ApolloQueryResult<ListAppHubCategoriesResponse>>;
-}
+const DOMAINS = [
+  { id: 'all', displayName: 'All Domains' },
+  { id: 'cloud-native', displayName: 'Cloud Native' },
+  { id: 'service-mesh', displayName: 'Service Mesh' },
+  { id: 'telecom', displayName: 'Telecom' },
+  { id: 'health-it', displayName: 'Health IT' },
+  { id: 'itops', displayName: 'IT Operations' },
+  { id: 'finops', displayName: 'FinOps / Financial' },
+];
 
-/* DeploymentStatusBadge hidden as part of UI-changes branch
-function DeploymentStatusBadge({ isDeployed, runningServices }: { isDeployed: boolean; runningServices?: string }): React.ReactElement {
-  const { getString } = useStrings();
+function TierBadge({ tier }: { tier: string }): React.ReactElement {
+  const isOfficial = tier === 'official';
   return (
-    <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
-      <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="4" cy="4" r="4" fill={isDeployed ? '#0AB000' : '#999999'} />
-      </svg>
-      <Text font={{ variation: FontVariation.SMALL }} color={isDeployed ? Color.GREEN_700 : Color.GREY_500}>
-        {isDeployed ? `${runningServices ?? '0/0'} ${getString('runningServices')}` : getString('appNotDeployed')}
-      </Text>
-    </Layout.Horizontal>
+    <span className={isOfficial ? css.tierBadgeOfficial : css.tierBadgeCommunity}>
+      {isOfficial ? 'Official' : 'Community'}
+    </span>
   );
 }
-*/
 
-/* MicroserviceRow moved to AppDetail page
-function MicroserviceRow({ service }: { service: Microservice }): React.ReactElement {
-  return (
-    <Layout.Horizontal
-      spacing="small"
-      flex={{ justifyContent: 'space-between', alignItems: 'center' }}
-      className={css.microserviceRow}
-    >
-      <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
-        <svg width="6" height="6" viewBox="0 0 6 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="3" cy="3" r="3" fill={service.isRunning ? '#0AB000' : '#CF2318'} />
-        </svg>
-        <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_700}>
-          {service.name}
-        </Text>
-      </Layout.Horizontal>
-      <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>
-        {service.readyReplicas}/{service.desiredReplicas}
-      </Text>
-    </Layout.Horizontal>
-  );
+function DomainBadge({ domain }: { domain: string }): React.ReactElement {
+  return <span className={css.domainBadge}>{domain}</span>;
 }
-*/
 
-function AppCard({ app }: { app: AppHubEntry }): React.ReactElement {
+function AppCard({ app }: { app: ApplicationSpec }): React.ReactElement {
   const history = useHistory();
   const paths = useRouteWithBaseUrl();
+  const compatibleFaults = app.faultCompatibility.filter(f => f.compatible).length;
 
   return (
     <Card
@@ -72,83 +45,144 @@ function AppCard({ app }: { app: AppHubEntry }): React.ReactElement {
       onClick={() => history.push(paths.toAppDetail({ appName: app.name }))}
     >
       <Layout.Vertical spacing="medium" padding="medium">
-        <Layout.Horizontal flex={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <Layout.Horizontal flex={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <Layout.Horizontal spacing="small" flex={{ alignItems: 'center' }}>
             <Icon name="nav-settings" size={24} color={Color.PRIMARY_7} />
             <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800}>
               {app.displayName}
             </Text>
           </Layout.Horizontal>
+          <TierBadge tier={app.tier} />
         </Layout.Horizontal>
-        <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_600} lineClamp={2}>
-          {app.description}
-        </Text>
+
         <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
-          <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.GREY_500}>
-            v{app.version}
-          </Text>
-          {app.namespace && (
-            <>
-              <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_400}>|</Text>
-              <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>
-                {app.namespace}
-              </Text>
-            </>
-          )}
+          <DomainBadge domain={app.domain} />
+          <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.GREY_400}>v{app.version}</Text>
         </Layout.Horizontal>
-        {app.microservices && app.microservices.length > 0 && (
-          <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.PRIMARY_7}>
+
+        <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_600} lineClamp={2}>
+          {app.description.short}
+        </Text>
+
+        <Layout.Horizontal spacing="medium">
+          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>
             {app.microservices.length} microservices
           </Text>
-        )}
+          <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>
+            {compatibleFaults} faults
+          </Text>
+        </Layout.Horizontal>
       </Layout.Vertical>
     </Card>
   );
 }
 
-export default function AppsHubView({
-  categories,
-  loading,
-  refetch: _refetch
-}: AppsHubViewProps): React.ReactElement {
-  const { getString } = useStrings();
+interface AppsHubViewProps {
+  apps: ApplicationSpec[];
+  loading: boolean;
+}
 
-  useDocumentTitle(getString('appsHub'));
+export default function AppsHubView({ apps, loading }: AppsHubViewProps): React.ReactElement {
+  const history = useHistory();
+  const paths = useRouteWithBaseUrl();
+  const [selectedDomain, setSelectedDomain] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
+  useDocumentTitle('App Catalog');
+
+  const filteredApps = useMemo(() => {
+    return apps.filter(app => {
+      const domainMatch = selectedDomain === 'all' || app.domain === selectedDomain;
+      const searchMatch =
+        searchTerm === '' ||
+        app.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.description.short.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
+      return domainMatch && searchMatch;
+    });
+  }, [apps, selectedDomain, searchTerm]);
+
+  const officialApps = filteredApps.filter(a => a.tier === 'official');
+  const communityApps = filteredApps.filter(a => a.tier === 'community');
 
   return (
-    <DefaultLayoutTemplate title={getString('appsHub')} breadcrumbs={[]} subTitle={getString('appsHubDescription')}>
+    <DefaultLayoutTemplate
+      title="App Catalog"
+      breadcrumbs={[]}
+      subTitle="Choose an application environment for your experiment"
+    >
       <Container padding="xlarge">
         <Loader loading={loading}>
-          {categories && categories.length > 0 ? (
-            <Layout.Vertical spacing="xlarge">
-              {categories.map(category => (
-                <Layout.Vertical key={category.displayName} spacing="medium">
-                  <Text font={{ variation: FontVariation.H4 }} color={Color.GREY_800}>
-                    {category.displayName}
+          <Layout.Horizontal spacing="large" className={css.catalogLayout}>
+            <Layout.Vertical spacing="small" className={css.sidebar}>
+              <Text font={{ variation: FontVariation.H6 }} color={Color.GREY_700}>Filter by Domain</Text>
+              {DOMAINS.map(d => (
+                <div
+                  key={d.id}
+                  className={`${css.domainFilter} ${selectedDomain === d.id ? css.domainFilterActive : ''}`}
+                  onClick={() => setSelectedDomain(d.id)}
+                >
+                  <Text
+                    font={{ variation: FontVariation.BODY }}
+                    color={selectedDomain === d.id ? Color.PRIMARY_7 : Color.GREY_700}
+                  >
+                    {d.displayName}
                   </Text>
-                  <Layout.Horizontal spacing="medium" className={css.appGrid}>
-                    {category.applications.map(app => (
-                      <AppCard key={app.name} app={app} />
-                    ))}
-                  </Layout.Horizontal>
-                </Layout.Vertical>
+                </div>
               ))}
             </Layout.Vertical>
-          ) : (
-            <Layout.Vertical
-              flex={{ justifyContent: 'center', alignItems: 'center' }}
-              height={400}
-              spacing="medium"
-            >
-              <Icon name="nav-settings" size={48} color={Color.GREY_400} />
-              <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_500}>
-                No applications available in the hub
-              </Text>
-              <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_400}>
-                Application charts will appear here once the Apps Hub is synced
-              </Text>
+
+            <Layout.Vertical spacing="large" className={css.mainContent}>
+              <TextInput
+                leftIcon="search"
+                placeholder="Search apps..."
+                value={searchTerm}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                className={css.searchBar}
+              />
+
+              {officialApps.length > 0 && (
+                <Layout.Vertical spacing="medium">
+                  <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800}>Official</Text>
+                  <div className={css.appGrid}>
+                    {officialApps.map(app => <AppCard key={app.name} app={app} />)}
+                  </div>
+                </Layout.Vertical>
+              )}
+
+              {communityApps.length > 0 && (
+                <Layout.Vertical spacing="medium">
+                  <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_700}>Community</Text>
+                  <div className={css.appGrid}>
+                    {communityApps.map(app => <AppCard key={app.name} app={app} />)}
+                  </div>
+                </Layout.Vertical>
+              )}
+
+              {filteredApps.length === 0 && !loading && (
+                <Layout.Vertical flex={{ justifyContent: 'center', alignItems: 'center' }} height={300} spacing="medium">
+                  <Icon name="nav-settings" size={48} color={Color.GREY_400} />
+                  <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_500}>No apps found for this filter</Text>
+                </Layout.Vertical>
+              )}
+
+              <Layout.Horizontal
+                className={css.contributeBanner}
+                flex={{ justifyContent: 'space-between', alignItems: 'center' }}
+                padding="medium"
+              >
+                <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
+                  Don't see your domain? Contribute an app to the catalog.
+                </Text>
+                <Button
+                  variation={ButtonVariation.SECONDARY}
+                  text="Contribute an App"
+                  icon="plus"
+                  onClick={() => history.push(paths.toAppsOnboarding())}
+                />
+              </Layout.Horizontal>
             </Layout.Vertical>
-          )}
+          </Layout.Horizontal>
         </Loader>
       </Container>
     </DefaultLayoutTemplate>

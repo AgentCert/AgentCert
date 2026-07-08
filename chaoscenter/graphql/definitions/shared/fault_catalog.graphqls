@@ -1,0 +1,163 @@
+"""
+Scope of a fault in the three-tier ACE taxonomy.
+"""
+enum FaultScope {
+  GENERAL
+  DOMAIN
+  APP_SPECIFIC
+}
+
+"""
+How a fault is implemented and executed at workflow runtime.
+"""
+enum FaultImplementationType {
+  LITMUS
+  HTTP_FAULT
+  SCRIPT
+  EXTERNAL
+}
+
+"""
+Category of the ground truth impact — drives certifier scoring dimensions.
+"""
+enum GroundTruthCategory {
+  AVAILABILITY
+  PERFORMANCE
+  SECURITY
+  DATA_INTEGRITY
+  CONFIGURATION
+}
+
+"""
+Whether a fault entry is official (maintained by ACE team) or community.
+"""
+enum CatalogTier {
+  OFFICIAL
+  COMMUNITY
+}
+
+"""
+Type of a fault parameter value.
+"""
+enum FaultParameterType {
+  INTEGER
+  STRING
+  BOOLEAN
+  ENUM
+  PERCENT
+}
+
+"""
+Human-readable description of a fault.
+"""
+type FaultDescription {
+  short: String!
+  long: String!
+  suitableFor: [String!]!
+  notSuitableFor: [String!]!
+}
+
+"""
+How the fault is executed at runtime (implementation details).
+"""
+type FaultImplementation {
+  type: FaultImplementationType!
+  chaosKind: String
+  experimentRef: String
+  namespace: String
+  image: String
+  endpoint: String
+}
+
+"""
+A single configurable parameter of a fault.
+"""
+type FaultParameter {
+  key: String!
+  displayName: String!
+  type: FaultParameterType!
+  unit: String
+  default: String!
+  min: Int
+  max: Int
+  required: Boolean!
+  description: String!
+  litmusEnv: String
+  allowedValues: [String!]
+}
+
+"""
+Compatibility constraints for a fault.
+"""
+type FaultCompatibility {
+  targetDomains: [String!]!
+  incompatibleApps: [String!]!
+  requiredCapabilities: [String!]!
+}
+
+"""
+Expected observable symptoms when this fault is active.
+"""
+type FaultObservability {
+  expectedSymptoms: [String!]!
+  expectedAlerts: [String!]!
+  detectionWindowSecs: Int!
+}
+
+"""
+Machine-readable ground truth used by the certifier for scoring.
+"""
+type FaultGroundTruth {
+  category: GroundTruthCategory!
+  impact: String!
+  detectWithinSecs: Int!
+  mitigateWithinSecs: Int!
+  detectionHints: [String!]!
+  remediationHints: [String!]!
+}
+
+"""
+A single fault from the ACE fault catalog.
+"""
+type FaultSpec {
+  name: String!
+  displayName: String!
+  version: String!
+  tier: CatalogTier!
+  scope: FaultScope!
+  domain: String
+  targetApp: String
+  tags: [String!]!
+  filePath: String!
+  description: FaultDescription!
+  implementation: FaultImplementation!
+  parameters: [FaultParameter!]!
+  compatibility: FaultCompatibility!
+  observability: FaultObservability!
+  groundTruth: FaultGroundTruth!
+}
+
+extend type Query {
+  """
+  List all faults, optionally filtered by scope, domain, or targetApp.
+  Pass no arguments to list all faults across all scopes.
+  """
+  listFaults(
+    scope: FaultScope
+    domain: String
+    targetApp: String
+  ): [FaultSpec!]! @authorized
+
+  """
+  Retrieve a single fault by its catalog name slug (e.g. "pod-delete").
+  Returns null if the fault does not exist.
+  """
+  getFault(name: String!): FaultSpec @authorized
+
+  """
+  Returns all faults applicable to the named app:
+  general + domain-matching + app-specific, minus incompatible ones.
+  This is the primary query used by the Chaos Studio fault library panel.
+  """
+  faultsForApp(appName: String!): [FaultSpec!]! @authorized
+}

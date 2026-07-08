@@ -44,6 +44,163 @@ type ResourceDetails interface {
 	GetTags() []string
 }
 
+// An ACE experiment definition — a reusable blueprint for running an
+// AI agent under controlled fault injection. NOT the same as the existing
+// Argo-manifest-based Experiment type.
+type AceExperimentDefinition struct {
+	Name              string                     `json:"name"`
+	DisplayName       *string                    `json:"displayName,omitempty"`
+	Version           string                     `json:"version"`
+	Hypothesis        *string                    `json:"hypothesis,omitempty"`
+	Tags              []string                   `json:"tags,omitempty"`
+	Status            ExperimentDefinitionStatus `json:"status"`
+	CreatedAt         string                     `json:"createdAt"`
+	UpdatedAt         string                     `json:"updatedAt"`
+	CreatedBy         string                     `json:"createdBy"`
+	TargetApp         *AceTargetApp              `json:"targetApp"`
+	AgentConstraints  *AgentConstraints          `json:"agentConstraints,omitempty"`
+	ModelSelection    *AceModelSelection         `json:"modelSelection"`
+	Steps             []*AceExperimentStep       `json:"steps"`
+	SuccessCriteria   *AceSuccessCriteria        `json:"successCriteria,omitempty"`
+	EvaluationMetrics []string                   `json:"evaluationMetrics,omitempty"`
+}
+
+// Input for creating or updating an experiment definition.
+type AceExperimentInput struct {
+	Name              string                    `json:"name"`
+	DisplayName       *string                   `json:"displayName,omitempty"`
+	Hypothesis        *string                   `json:"hypothesis,omitempty"`
+	Tags              []string                  `json:"tags,omitempty"`
+	TargetApp         *AceTargetAppInput        `json:"targetApp"`
+	AgentConstraints  *AgentConstraintsInput    `json:"agentConstraints,omitempty"`
+	ModelSelection    *AceModelSelectionInput   `json:"modelSelection"`
+	Steps             []*AceExperimentStepInput `json:"steps"`
+	SuccessCriteria   *AceSuccessCriteriaInput  `json:"successCriteria,omitempty"`
+	EvaluationMetrics []string                  `json:"evaluationMetrics,omitempty"`
+}
+
+// Filter for listing experiment definitions.
+type AceExperimentListFilter struct {
+	TargetApp *string                     `json:"targetApp,omitempty"`
+	Tags      []string                    `json:"tags,omitempty"`
+	Status    *ExperimentDefinitionStatus `json:"status,omitempty"`
+}
+
+// One execution instance of an AceExperimentDefinition.
+// A run record is immutable after reaching COMPLETED, FAILED, or ABORTED.
+type AceExperimentRun struct {
+	RunID     string `json:"runID"`
+	ProjectID string `json:"projectID"`
+	// Name and version of the experiment definition this run was created from.
+	DefinitionName    string `json:"definitionName"`
+	DefinitionVersion string `json:"definitionVersion"`
+	// Agent that executed this run.
+	AgentName    string `json:"agentName"`
+	AgentVersion string `json:"agentVersion"`
+	// LLM model used in this run — always populated (resolved at submit time).
+	// e.g. "gpt-4o", "claude-3-5-sonnet-20241022"
+	ModelUsed string `json:"modelUsed"`
+	// LLM provider for the model used. e.g. "openai", "anthropic"
+	ModelProvider string `json:"modelProvider"`
+	// Name of the Argo Workflow created for this run.
+	ArgoWorkflowName string `json:"argoWorkflowName"`
+	// Langfuse trace ID — populated when agent begins executing.
+	LangfuseTraceID *string `json:"langfuseTraceId,omitempty"`
+	// Certifier report ID — populated when certification completes.
+	CertifierReportID *string           `json:"certifierReportId,omitempty"`
+	Status            AceRunStatus      `json:"status"`
+	StatusHistory     []*RunStatusEvent `json:"statusHistory"`
+	StartedAt         *string           `json:"startedAt,omitempty"`
+	CompletedAt       *string           `json:"completedAt,omitempty"`
+	CreatedAt         string            `json:"createdAt"`
+	CreatedBy         string            `json:"createdBy"`
+}
+
+// A single step in the experiment sequence.
+type AceExperimentStep struct {
+	Name        string   `json:"name"`
+	Type        StepType `json:"type"`
+	Description *string  `json:"description,omitempty"`
+	// Duration string for observe/wait steps (e.g. '30s', '2m').
+	Duration *string `json:"duration,omitempty"`
+	// Reference to a fault in the catalog (for fault steps).
+	FaultRef            *string              `json:"faultRef,omitempty"`
+	Target              *StepTarget          `json:"target,omitempty"`
+	Params              []*KeyValuePair      `json:"params,omitempty"`
+	DependsOn           *string              `json:"dependsOn,omitempty"`
+	GroundTruthOverride *GroundTruthOverride `json:"groundTruthOverride,omitempty"`
+	// HTTP probe configuration (for verify steps).
+	Probe *StepProbe `json:"probe,omitempty"`
+	// Faults to inject simultaneously (for parallel-fault steps).
+	Faults []*ParallelFaultEntry `json:"faults,omitempty"`
+}
+
+// Input for a single experiment step.
+type AceExperimentStepInput struct {
+	Name                string                     `json:"name"`
+	Type                StepType                   `json:"type"`
+	Description         *string                    `json:"description,omitempty"`
+	Duration            *string                    `json:"duration,omitempty"`
+	FaultRef            *string                    `json:"faultRef,omitempty"`
+	Target              *StepTargetInput           `json:"target,omitempty"`
+	Params              []*KeyValuePairInput       `json:"params,omitempty"`
+	DependsOn           *string                    `json:"dependsOn,omitempty"`
+	GroundTruthOverride *GroundTruthOverrideInput  `json:"groundTruthOverride,omitempty"`
+	Probe               *StepProbeInput            `json:"probe,omitempty"`
+	Faults              []*ParallelFaultEntryInput `json:"faults,omitempty"`
+}
+
+// Model selection configuration for this experiment.
+type AceModelSelection struct {
+	Mode       ModelSelectionMode `json:"mode"`
+	FixedModel *string            `json:"fixedModel,omitempty"`
+}
+
+// Input for model selection.
+type AceModelSelectionInput struct {
+	Mode       ModelSelectionMode `json:"mode"`
+	FixedModel *string            `json:"fixedModel,omitempty"`
+}
+
+// Input for overriding a parameter value at run time.
+type AceParamInput struct {
+	StepName string `json:"stepName"`
+	Key      string `json:"key"`
+	Value    string `json:"value"`
+}
+
+// Input for a secret key/value pair used by the agent.
+type AceSecretInput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// Success criteria block for an experiment definition.
+type AceSuccessCriteria struct {
+	PerStep []*PerStepCriteria `json:"perStep,omitempty"`
+	Overall *OverallCriteria   `json:"overall,omitempty"`
+}
+
+// Input for the success criteria block.
+type AceSuccessCriteriaInput struct {
+	PerStep []*PerStepCriteriaInput `json:"perStep,omitempty"`
+	Overall *OverallCriteriaInput   `json:"overall,omitempty"`
+}
+
+// The app targeted by this experiment.
+type AceTargetApp struct {
+	Name          string          `json:"name"`
+	Version       string          `json:"version"`
+	InstallParams []*KeyValuePair `json:"installParams,omitempty"`
+}
+
+// Input for the target app spec.
+type AceTargetAppInput struct {
+	Name          string               `json:"name"`
+	Version       string               `json:"version"`
+	InstallParams []*KeyValuePairInput `json:"installParams,omitempty"`
+}
+
 type ActionPayload struct {
 	RequestID    string  `json:"requestID"`
 	RequestType  string  `json:"requestType"`
@@ -87,7 +244,70 @@ type Agent struct {
 	// Additional metadata with labels and annotations
 	Metadata *AgentMetadata `json:"metadata,omitempty"`
 	// Audit information for tracking creation and updates
-	AuditInfo *AuditInfo `json:"auditInfo"`
+	AuditInfo         *AuditInfo          `json:"auditInfo"`
+	DisplayName       *string             `json:"displayName,omitempty"`
+	Tier              *string             `json:"tier,omitempty"`
+	AgentDescription  *AgentDescription   `json:"agentDescription,omitempty"`
+	Install           *AgentInstallSpec   `json:"install,omitempty"`
+	LlmConfig         *LLMConfig          `json:"llmConfig,omitempty"`
+	Inputs            []*AgentInput       `json:"inputs,omitempty"`
+	ContextInjection  []*ContextInjection `json:"contextInjection,omitempty"`
+	RequiredTools     []*RequiredTool     `json:"requiredTools,omitempty"`
+	EvaluationMetrics []string            `json:"evaluationMetrics,omitempty"`
+	Compatibility     *AgentCompatibility `json:"compatibility,omitempty"`
+	AgentOwner        *AgentOwner         `json:"agentOwner,omitempty"`
+	Repository        *string             `json:"repository,omitempty"`
+	License           *string             `json:"license,omitempty"`
+	SchemaVersion     *string             `json:"schemaVersion,omitempty"`
+}
+
+type AgentCompatibility struct {
+	SupportedApps     []string `json:"supportedApps"`
+	UnsupportedApps   []string `json:"unsupportedApps"`
+	MinimumFaultCount int      `json:"minimumFaultCount"`
+	MaximumFaultCount int      `json:"maximumFaultCount"`
+}
+
+type AgentCompatibilityInput struct {
+	SupportedApps     []string `json:"supportedApps,omitempty"`
+	UnsupportedApps   []string `json:"unsupportedApps,omitempty"`
+	MinimumFaultCount *int     `json:"minimumFaultCount,omitempty"`
+	MaximumFaultCount *int     `json:"maximumFaultCount,omitempty"`
+}
+
+// Agent-level configuration node that carries the agent name and any
+// secret-type inputs that should be stored in a K8s Secret for this experiment.
+type AgentConfigNode struct {
+	AgentName    string              `json:"agentName"`
+	SecretInputs []*AgentSecretInput `json:"secretInputs,omitempty"`
+}
+
+// Agent compatibility constraints for this experiment.
+type AgentConstraints struct {
+	RequiredCapabilities []string `json:"requiredCapabilities,omitempty"`
+	SupportedAgents      []string `json:"supportedAgents,omitempty"`
+	BlockedAgents        []string `json:"blockedAgents,omitempty"`
+}
+
+// Input for agent constraints.
+type AgentConstraintsInput struct {
+	RequiredCapabilities []string `json:"requiredCapabilities,omitempty"`
+	SupportedAgents      []string `json:"supportedAgents,omitempty"`
+	BlockedAgents        []string `json:"blockedAgents,omitempty"`
+}
+
+type AgentDescription struct {
+	Short        string  `json:"short"`
+	Long         string  `json:"long"`
+	Approach     *string `json:"approach,omitempty"`
+	LlmDependent bool    `json:"llmDependent"`
+}
+
+type AgentDescriptionInput struct {
+	Short        string  `json:"short"`
+	Long         string  `json:"long"`
+	Approach     *string `json:"approach,omitempty"`
+	LlmDependent *bool   `json:"llmDependent,omitempty"`
 }
 
 // AgentEndpoint defines how to communicate with the agent service,
@@ -180,6 +400,61 @@ type AgentHubStatus struct {
 	LastSyncedAt string `json:"lastSyncedAt"`
 }
 
+type AgentInput struct {
+	Key         string   `json:"key"`
+	DisplayName string   `json:"displayName"`
+	Description *string  `json:"description,omitempty"`
+	Type        string   `json:"type"`
+	Required    bool     `json:"required"`
+	Default     *string  `json:"default,omitempty"`
+	Placeholder *string  `json:"placeholder,omitempty"`
+	HelmPath    string   `json:"helmPath"`
+	Values      []string `json:"values,omitempty"`
+	Min         *int     `json:"min,omitempty"`
+	Max         *int     `json:"max,omitempty"`
+	Unit        *string  `json:"unit,omitempty"`
+	Advanced    bool     `json:"advanced"`
+	Group       *string  `json:"group,omitempty"`
+}
+
+type AgentInputDefinition struct {
+	Key         string   `json:"key"`
+	DisplayName string   `json:"displayName"`
+	Description *string  `json:"description,omitempty"`
+	Type        string   `json:"type"`
+	Required    *bool    `json:"required,omitempty"`
+	Default     *string  `json:"default,omitempty"`
+	Placeholder *string  `json:"placeholder,omitempty"`
+	HelmPath    string   `json:"helmPath"`
+	Values      []string `json:"values,omitempty"`
+	Min         *int     `json:"min,omitempty"`
+	Max         *int     `json:"max,omitempty"`
+	Unit        *string  `json:"unit,omitempty"`
+	Advanced    *bool    `json:"advanced,omitempty"`
+	Group       *string  `json:"group,omitempty"`
+}
+
+type AgentInstallInput struct {
+	Method    string  `json:"method"`
+	Image     *string `json:"image,omitempty"`
+	Folder    *string `json:"folder,omitempty"`
+	Namespace *string `json:"namespace,omitempty"`
+	Timeout   *string `json:"timeout,omitempty"`
+	CPU       *string `json:"cpu,omitempty"`
+	Memory    *string `json:"memory,omitempty"`
+}
+
+type AgentInstallSpec struct {
+	Method    string  `json:"method"`
+	Image     *string `json:"image,omitempty"`
+	Folder    *string `json:"folder,omitempty"`
+	Namespace string  `json:"namespace"`
+	Timeout   string  `json:"timeout"`
+	CPU       *string `json:"cpu,omitempty"`
+	Memory    *string `json:"memory,omitempty"`
+	Replicas  int     `json:"replicas"`
+}
+
 // AgentListResponse returned from list queries with pagination info.
 type AgentListResponse struct {
 	// List of agents matching the filter
@@ -208,6 +483,24 @@ type AgentMetadataInput struct {
 	Labels []*KeyValuePairInput `json:"labels,omitempty"`
 	// List of annotation key-value pairs
 	Annotations []*KeyValuePairInput `json:"annotations,omitempty"`
+}
+
+type AgentOwner struct {
+	Name  string  `json:"name"`
+	Email string  `json:"email"`
+	Org   *string `json:"org,omitempty"`
+}
+
+type AgentOwnerInput struct {
+	Name  string  `json:"name"`
+	Email string  `json:"email"`
+	Org   *string `json:"org,omitempty"`
+}
+
+// A single secret key/value pair supplied by the caller for an agent's secret input.
+type AgentSecretInput struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 // AgentStatusResponse provides health and sync status for an agent.
@@ -290,6 +583,25 @@ type AppHubStatus struct {
 	LastSyncedAt string `json:"lastSyncedAt"`
 }
 
+// Full application spec as read from catalog/apps/<tier>/<name>/app.yaml.
+type ApplicationSpec struct {
+	Name               string                     `json:"name"`
+	DisplayName        string                     `json:"displayName"`
+	Version            string                     `json:"version"`
+	Tier               string                     `json:"tier"`
+	Domain             string                     `json:"domain"`
+	CapabilityDomains  []string                   `json:"capabilityDomains"`
+	Tags               []string                   `json:"tags"`
+	Description        *CatalogAppDescription     `json:"description"`
+	Install            *CatalogInstallSpec        `json:"install"`
+	HealthProbe        *CatalogHealthProbeSpec    `json:"healthProbe"`
+	LoadTest           *CatalogLoadTestSpec       `json:"loadTest"`
+	Microservices      []*CatalogMicroserviceSpec `json:"microservices"`
+	FaultCompatibility []*FaultCompatibilityEntry `json:"faultCompatibility"`
+	Inputs             []*CatalogAppInput         `json:"inputs"`
+	SchemaVersion      string                     `json:"schemaVersion"`
+}
+
 // AuditInfo tracks creation and modification information for the agent.
 type AuditInfo struct {
 	// Timestamp when the agent was created
@@ -340,6 +652,75 @@ type CapabilityDefinition struct {
 	Description string `json:"description"`
 	// Category for grouping capabilities
 	Category string `json:"category"`
+}
+
+type CatalogAppDescription struct {
+	Short          string   `json:"short"`
+	Long           string   `json:"long"`
+	SuitableFor    []string `json:"suitableFor"`
+	NotSuitableFor []string `json:"notSuitableFor"`
+}
+
+type CatalogAppInput struct {
+	Key         string   `json:"key"`
+	DisplayName string   `json:"displayName"`
+	Description *string  `json:"description,omitempty"`
+	Type        string   `json:"type"`
+	Required    bool     `json:"required"`
+	Default     *string  `json:"default,omitempty"`
+	HelmPath    string   `json:"helmPath"`
+	Values      []string `json:"values,omitempty"`
+	Min         *int     `json:"min,omitempty"`
+	Max         *int     `json:"max,omitempty"`
+	Unit        *string  `json:"unit,omitempty"`
+	Advanced    bool     `json:"advanced"`
+}
+
+type CatalogChartRef struct {
+	Repo    string `json:"repo"`
+	Chart   string `json:"chart"`
+	Version string `json:"version"`
+}
+
+type CatalogHealthProbeSpec struct {
+	URLTemplate         string `json:"urlTemplate"`
+	ExpectedStatus      string `json:"expectedStatus"`
+	InitialDelaySeconds int    `json:"initialDelaySeconds"`
+	PeriodSeconds       int    `json:"periodSeconds"`
+	FailureThreshold    int    `json:"failureThreshold"`
+}
+
+type CatalogInstallSpec struct {
+	Method    string                `json:"method"`
+	Folder    *string               `json:"folder,omitempty"`
+	ChartRef  *CatalogChartRef      `json:"chartRef,omitempty"`
+	Namespace *CatalogNamespaceSpec `json:"namespace"`
+	Timeout   string                `json:"timeout"`
+	Wait      bool                  `json:"wait"`
+}
+
+type CatalogLoadTestSpec struct {
+	Enabled bool     `json:"enabled"`
+	Method  *string  `json:"method,omitempty"`
+	Image   *string  `json:"image,omitempty"`
+	Args    []string `json:"args,omitempty"`
+}
+
+type CatalogMicroserviceSpec struct {
+	Name           string   `json:"name"`
+	DisplayName    string   `json:"displayName"`
+	Description    *string  `json:"description,omitempty"`
+	K8sLabel       string   `json:"k8sLabel"`
+	K8sKind        string   `json:"k8sKind"`
+	K8sNamespace   string   `json:"k8sNamespace"`
+	Criticality    string   `json:"criticality"`
+	RelevantFaults []string `json:"relevantFaults"`
+	DependsOn      []string `json:"dependsOn"`
+}
+
+type CatalogNamespaceSpec struct {
+	Default      string `json:"default"`
+	Configurable bool   `json:"configurable"`
 }
 
 // Summary of the certification state for a single experiment.  Returned to
@@ -657,6 +1038,20 @@ type ContainerImageInput struct {
 	Repository string `json:"repository"`
 	// Image tag
 	Tag string `json:"tag"`
+}
+
+type ContextInjection struct {
+	HelmPath    string  `json:"helmPath"`
+	Source      string  `json:"source"`
+	Required    bool    `json:"required"`
+	Description *string `json:"description,omitempty"`
+}
+
+type ContextInjectionInput struct {
+	HelmPath    string  `json:"helmPath"`
+	Source      string  `json:"source"`
+	Required    *bool   `json:"required,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 // A single Helm --set mapping that the server injects into the install template
@@ -1134,6 +1529,28 @@ type Experiments struct {
 	Desc string `json:"desc"`
 }
 
+// Compatibility constraints for a fault.
+type FaultCompatibility struct {
+	TargetDomains        []string `json:"targetDomains"`
+	IncompatibleApps     []string `json:"incompatibleApps"`
+	RequiredCapabilities []string `json:"requiredCapabilities"`
+}
+
+type FaultCompatibilityEntry struct {
+	FaultName          string   `json:"faultName"`
+	Compatible         bool     `json:"compatible"`
+	Notes              *string  `json:"notes,omitempty"`
+	RecommendedTargets []string `json:"recommendedTargets"`
+}
+
+// Human-readable description of a fault.
+type FaultDescription struct {
+	Short          string   `json:"short"`
+	Long           string   `json:"long"`
+	SuitableFor    []string `json:"suitableFor"`
+	NotSuitableFor []string `json:"notSuitableFor"`
+}
+
 // Fault Detail consists of all the fault related details
 type FaultDetails struct {
 	// fault consists of fault.yaml
@@ -1144,6 +1561,26 @@ type FaultDetails struct {
 	CSV string `json:"csv"`
 	// groundTruth consists ground_truth.yaml
 	GroundTruth string `json:"groundTruth"`
+}
+
+// Machine-readable ground truth used by the certifier for scoring.
+type FaultGroundTruth struct {
+	Category           GroundTruthCategory `json:"category"`
+	Impact             string              `json:"impact"`
+	DetectWithinSecs   int                 `json:"detectWithinSecs"`
+	MitigateWithinSecs int                 `json:"mitigateWithinSecs"`
+	DetectionHints     []string            `json:"detectionHints"`
+	RemediationHints   []string            `json:"remediationHints"`
+}
+
+// How the fault is executed at runtime (implementation details).
+type FaultImplementation struct {
+	Type          FaultImplementationType `json:"type"`
+	ChaosKind     *string                 `json:"chaosKind,omitempty"`
+	ExperimentRef *string                 `json:"experimentRef,omitempty"`
+	Namespace     *string                 `json:"namespace,omitempty"`
+	Image         *string                 `json:"image,omitempty"`
+	Endpoint      *string                 `json:"endpoint,omitempty"`
 }
 
 // FaultInjectionConfig contains configuration for how and when a fault should be injected.
@@ -1179,6 +1616,28 @@ type FaultList struct {
 	DisplayName string   `json:"displayName"`
 	Description string   `json:"description"`
 	Plan        []string `json:"plan,omitempty"`
+}
+
+// Expected observable symptoms when this fault is active.
+type FaultObservability struct {
+	ExpectedSymptoms    []string `json:"expectedSymptoms"`
+	ExpectedAlerts      []string `json:"expectedAlerts"`
+	DetectionWindowSecs int      `json:"detectionWindowSecs"`
+}
+
+// A single configurable parameter of a fault.
+type FaultParameter struct {
+	Key           string             `json:"key"`
+	DisplayName   string             `json:"displayName"`
+	Type          FaultParameterType `json:"type"`
+	Unit          *string            `json:"unit,omitempty"`
+	Default       string             `json:"default"`
+	Min           *int               `json:"min,omitempty"`
+	Max           *int               `json:"max,omitempty"`
+	Required      bool               `json:"required"`
+	Description   string             `json:"description"`
+	LitmusEnv     *string            `json:"litmusEnv,omitempty"`
+	AllowedValues []string           `json:"allowedValues,omitempty"`
 }
 
 // FaultSelection represents a single fault selected from a ChaosHub for inclusion in a Fault Studio.
@@ -1219,6 +1678,25 @@ type FaultSelectionInput struct {
 	CustomParameters *string `json:"customParameters,omitempty"`
 	// Priority/weight for fault selection
 	Weight *int `json:"weight,omitempty"`
+}
+
+// A single fault from the ACE fault catalog.
+type FaultSpec struct {
+	Name           string               `json:"name"`
+	DisplayName    string               `json:"displayName"`
+	Version        string               `json:"version"`
+	Tier           CatalogTier          `json:"tier"`
+	Scope          FaultScope           `json:"scope"`
+	Domain         *string              `json:"domain,omitempty"`
+	TargetApp      *string              `json:"targetApp,omitempty"`
+	Tags           []string             `json:"tags"`
+	FilePath       string               `json:"filePath"`
+	Description    *FaultDescription    `json:"description"`
+	Implementation *FaultImplementation `json:"implementation"`
+	Parameters     []*FaultParameter    `json:"parameters"`
+	Compatibility  *FaultCompatibility  `json:"compatibility"`
+	Observability  *FaultObservability  `json:"observability"`
+	GroundTruth    *FaultGroundTruth    `json:"groundTruth"`
 }
 
 // FaultStudio represents a configured collection of faults from a ChaosHub
@@ -1458,6 +1936,18 @@ type GitConfigResponse struct {
 	Password *string `json:"password,omitempty"`
 	// Private SSH key authenticating into git repository
 	SSHPrivateKey *string `json:"sshPrivateKey,omitempty"`
+}
+
+// Per-step override of the fault's default detection/mitigation SLAs.
+type GroundTruthOverride struct {
+	DetectWithinSecs   *int `json:"detectWithinSecs,omitempty"`
+	MitigateWithinSecs *int `json:"mitigateWithinSecs,omitempty"`
+}
+
+// Input for a ground truth override.
+type GroundTruthOverrideInput struct {
+	DetectWithinSecs   *int `json:"detectWithinSecs,omitempty"`
+	MitigateWithinSecs *int `json:"mitigateWithinSecs,omitempty"`
 }
 
 // Defines the input for HTTP probe properties
@@ -2051,6 +2541,26 @@ type KubernetesHTTPProbeRequest struct {
 	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
+type LLMConfig struct {
+	ConfigRef       *string  `json:"configRef,omitempty"`
+	Provider        *string  `json:"provider,omitempty"`
+	Model           *string  `json:"model,omitempty"`
+	AllowUserChoice bool     `json:"allowUserChoice"`
+	AllowedModels   []string `json:"allowedModels"`
+	DefaultModel    *string  `json:"defaultModel,omitempty"`
+	LlmDependent    bool     `json:"llmDependent"`
+}
+
+type LLMConfigInput struct {
+	ConfigRef       *string  `json:"configRef,omitempty"`
+	Provider        *string  `json:"provider,omitempty"`
+	Model           *string  `json:"model,omitempty"`
+	AllowUserChoice *bool    `json:"allowUserChoice,omitempty"`
+	AllowedModels   []string `json:"allowedModels,omitempty"`
+	DefaultModel    *string  `json:"defaultModel,omitempty"`
+	LlmDependent    *bool    `json:"llmDependent,omitempty"`
+}
+
 // LangfuseConfig contains configuration for syncing agent metadata
 // to Langfuse for observability and tracing.
 type LangfuseConfig struct {
@@ -2195,6 +2705,11 @@ type ListInfraResponse struct {
 	Infras []*Infra `json:"infras"`
 }
 
+type MCPImportResult struct {
+	Tools  []string `json:"tools"`
+	Errors []string `json:"errors"`
+}
+
 // Defines the details of the maintainer
 type Maintainer struct {
 	// Name of the maintainer
@@ -2239,6 +2754,36 @@ type Microservice struct {
 	DesiredReplicas *int `json:"desiredReplicas,omitempty"`
 }
 
+type ModelConfig struct {
+	Alias       string   `json:"alias"`
+	Provider    string   `json:"provider"`
+	Model       string   `json:"model"`
+	BaseURL     *string  `json:"baseURL,omitempty"`
+	SecretRef   string   `json:"secretRef"`
+	AgentsUsing []string `json:"agentsUsing"`
+	Status      string   `json:"status"`
+	LastTested  *string  `json:"lastTested,omitempty"`
+}
+
+type ModelConfigInput struct {
+	Alias    string  `json:"alias"`
+	Provider string  `json:"provider"`
+	Model    string  `json:"model"`
+	BaseURL  *string `json:"baseURL,omitempty"`
+	APIKey   string  `json:"apiKey"`
+}
+
+type ModelConfigResult struct {
+	Config  *ModelConfig `json:"config"`
+	Message string       `json:"message"`
+}
+
+type ModelConfigTestResult struct {
+	Success      bool    `json:"success"`
+	LatencyMs    *int    `json:"latencyMs,omitempty"`
+	ErrorMessage *string `json:"errorMessage,omitempty"`
+}
+
 type Mutation struct {
 }
 
@@ -2254,6 +2799,20 @@ type ObjectData struct {
 	Labels []string `json:"labels,omitempty"`
 	// Name of the resource
 	Name string `json:"name"`
+}
+
+// Experiment-level success thresholds applied across all steps.
+type OverallCriteria struct {
+	ToolCallEfficiencyMin float64 `json:"toolCallEfficiencyMin"`
+	FalsePositiveRateMax  float64 `json:"falsePositiveRateMax"`
+	RootCauseAccuracyMin  float64 `json:"rootCauseAccuracyMin"`
+}
+
+// Input for overall success criteria.
+type OverallCriteriaInput struct {
+	ToolCallEfficiencyMin float64 `json:"toolCallEfficiencyMin"`
+	FalsePositiveRateMax  float64 `json:"falsePositiveRateMax"`
+	RootCauseAccuracyMin  float64 `json:"rootCauseAccuracyMin"`
 }
 
 // Details of POST request
@@ -2385,6 +2944,34 @@ type PaginationInput struct {
 	Page int `json:"page"`
 	// Number of items per page
 	Limit int `json:"limit"`
+}
+
+// One fault entry within a parallel-fault step.
+type ParallelFaultEntry struct {
+	FaultRef string          `json:"faultRef"`
+	Target   *StepTarget     `json:"target"`
+	Params   []*KeyValuePair `json:"params,omitempty"`
+}
+
+// Input for a parallel fault entry.
+type ParallelFaultEntryInput struct {
+	FaultRef string               `json:"faultRef"`
+	Target   *StepTargetInput     `json:"target"`
+	Params   []*KeyValuePairInput `json:"params,omitempty"`
+}
+
+// Success criteria for a single fault step.
+type PerStepCriteria struct {
+	StepName           string `json:"stepName"`
+	DetectWithinSecs   int    `json:"detectWithinSecs"`
+	MitigateWithinSecs int    `json:"mitigateWithinSecs"`
+}
+
+// Input for per-step success criteria.
+type PerStepCriteriaInput struct {
+	StepName           string `json:"stepName"`
+	DetectWithinSecs   int    `json:"detectWithinSecs"`
+	MitigateWithinSecs int    `json:"mitigateWithinSecs"`
 }
 
 // Response received for querying pod logs
@@ -2611,7 +3198,20 @@ type RegisterAgentInput struct {
 	// Optional metadata
 	Metadata *AgentMetadataInput `json:"metadata,omitempty"`
 	// Helm release name for Helm-deployed agents
-	HelmReleaseName *string `json:"helmReleaseName,omitempty"`
+	HelmReleaseName   *string                  `json:"helmReleaseName,omitempty"`
+	DisplayName       *string                  `json:"displayName,omitempty"`
+	AgentDescription  *AgentDescriptionInput   `json:"agentDescription,omitempty"`
+	Install           *AgentInstallInput       `json:"install,omitempty"`
+	LlmConfig         *LLMConfigInput          `json:"llmConfig,omitempty"`
+	Inputs            []*AgentInputDefinition  `json:"inputs,omitempty"`
+	ContextInjection  []*ContextInjectionInput `json:"contextInjection,omitempty"`
+	RequiredTools     []*RequiredToolInput     `json:"requiredTools,omitempty"`
+	EvaluationMetrics []string                 `json:"evaluationMetrics,omitempty"`
+	Compatibility     *AgentCompatibilityInput `json:"compatibility,omitempty"`
+	AgentOwner        *AgentOwnerInput         `json:"agentOwner,omitempty"`
+	Tier              *string                  `json:"tier,omitempty"`
+	Repository        *string                  `json:"repository,omitempty"`
+	License           *string                  `json:"license,omitempty"`
 }
 
 // RegisterAgentResponse returned after successful agent registration.
@@ -2666,6 +3266,22 @@ type RegisterInfraResponse struct {
 	Manifest string `json:"manifest"`
 }
 
+type RequiredTool struct {
+	Name         string  `json:"name"`
+	Purpose      *string `json:"purpose,omitempty"`
+	Critical     bool    `json:"critical"`
+	MinCallCount int     `json:"minCallCount"`
+	MaxCallCount *int    `json:"maxCallCount,omitempty"`
+}
+
+type RequiredToolInput struct {
+	Name         string  `json:"name"`
+	Purpose      *string `json:"purpose,omitempty"`
+	Critical     *bool   `json:"critical,omitempty"`
+	MinCallCount *int    `json:"minCallCount,omitempty"`
+	MaxCallCount *int    `json:"maxCallCount,omitempty"`
+}
+
 type ResilienceScoreCategory struct {
 	// Lower bound of the range(inclusive)
 	ID int `json:"id"`
@@ -2675,6 +3291,13 @@ type ResilienceScoreCategory struct {
 
 type RunChaosExperimentResponse struct {
 	NotifyID string `json:"notifyID"`
+}
+
+// A single status transition event in the run lifecycle.
+type RunStatusEvent struct {
+	Status    AceRunStatus `json:"status"`
+	Timestamp string       `json:"timestamp"`
+	Reason    *string      `json:"reason,omitempty"`
 }
 
 // Defines the SSHKey details
@@ -2701,6 +3324,9 @@ type SaveChaosExperimentRequest struct {
 	InfraID string `json:"infraID"`
 	// Tags of the infrastructure
 	Tags []string `json:"tags,omitempty"`
+	// Optional agent configuration carrying secret-type inputs to be stored
+	// in a K8s Secret named ace-agent-secret-<experimentID>.
+	AgentConfig *AgentConfigNode `json:"agentConfig,omitempty"`
 }
 
 // Response received for fetching GQL server version
@@ -2733,6 +3359,34 @@ type Status struct {
 	Verdict ProbeVerdict `json:"verdict"`
 	// Description defines the description of probe status
 	Description *string `json:"description,omitempty"`
+}
+
+// HTTP health probe for a verify step.
+type StepProbe struct {
+	URL            string `json:"url"`
+	ExpectedStatus int    `json:"expectedStatus"`
+	TimeoutSecs    *int   `json:"timeoutSecs,omitempty"`
+	Retries        *int   `json:"retries,omitempty"`
+}
+
+// Input for a health probe.
+type StepProbeInput struct {
+	URL            string `json:"url"`
+	ExpectedStatus int    `json:"expectedStatus"`
+	TimeoutSecs    *int   `json:"timeoutSecs,omitempty"`
+	Retries        *int   `json:"retries,omitempty"`
+}
+
+// Identifies the target microservice within the app.
+type StepTarget struct {
+	Microservice    string  `json:"microservice"`
+	ExplicitPodName *string `json:"explicitPodName,omitempty"`
+}
+
+// Input for creating a step target.
+type StepTargetInput struct {
+	Microservice    string  `json:"microservice"`
+	ExplicitPodName *string `json:"explicitPodName,omitempty"`
 }
 
 // Defines the request for stopping a experiment
@@ -2885,6 +3539,59 @@ type Workload struct {
 	Namespace string `json:"namespace"`
 }
 
+// Lifecycle status of an ACE experiment run.
+type AceRunStatus string
+
+const (
+	// Submitted to Argo; waiting for cluster capacity.
+	AceRunStatusQueued AceRunStatus = "QUEUED"
+	// Argo Workflow is actively executing.
+	AceRunStatusRunning AceRunStatus = "RUNNING"
+	// All steps completed; certifier received Langfuse trace.
+	AceRunStatusCompleted AceRunStatus = "COMPLETED"
+	// A step failed (app probe, fault injection, or verify step).
+	AceRunStatusFailed AceRunStatus = "FAILED"
+	// User called abortRun or 90-minute timeout was reached.
+	AceRunStatusAborted AceRunStatus = "ABORTED"
+)
+
+var AllAceRunStatus = []AceRunStatus{
+	AceRunStatusQueued,
+	AceRunStatusRunning,
+	AceRunStatusCompleted,
+	AceRunStatusFailed,
+	AceRunStatusAborted,
+}
+
+func (e AceRunStatus) IsValid() bool {
+	switch e {
+	case AceRunStatusQueued, AceRunStatusRunning, AceRunStatusCompleted, AceRunStatusFailed, AceRunStatusAborted:
+		return true
+	}
+	return false
+}
+
+func (e AceRunStatus) String() string {
+	return string(e)
+}
+
+func (e *AceRunStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AceRunStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AceRunStatus", str)
+	}
+	return nil
+}
+
+func (e AceRunStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
 // AgentStatus represents the current state of the agent in its lifecycle.
 type AgentStatus string
 
@@ -2980,6 +3687,48 @@ func (e *AuthType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e AuthType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// Whether a fault entry is official (maintained by ACE team) or community.
+type CatalogTier string
+
+const (
+	CatalogTierOfficial  CatalogTier = "OFFICIAL"
+	CatalogTierCommunity CatalogTier = "COMMUNITY"
+)
+
+var AllCatalogTier = []CatalogTier{
+	CatalogTierOfficial,
+	CatalogTierCommunity,
+}
+
+func (e CatalogTier) IsValid() bool {
+	switch e {
+	case CatalogTierOfficial, CatalogTierCommunity:
+		return true
+	}
+	return false
+}
+
+func (e CatalogTier) String() string {
+	return string(e)
+}
+
+func (e *CatalogTier) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CatalogTier(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CatalogTier", str)
+	}
+	return nil
+}
+
+func (e CatalogTier) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
@@ -3153,6 +3902,50 @@ func (e EnvironmentType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
+// Status of an experiment definition.
+type ExperimentDefinitionStatus string
+
+const (
+	// Being built in Chaos Studio — not yet committed.
+	ExperimentDefinitionStatusDraft ExperimentDefinitionStatus = "DRAFT"
+	// Saved and valid — ready to create runs.
+	ExperimentDefinitionStatusReady ExperimentDefinitionStatus = "READY"
+)
+
+var AllExperimentDefinitionStatus = []ExperimentDefinitionStatus{
+	ExperimentDefinitionStatusDraft,
+	ExperimentDefinitionStatusReady,
+}
+
+func (e ExperimentDefinitionStatus) IsValid() bool {
+	switch e {
+	case ExperimentDefinitionStatusDraft, ExperimentDefinitionStatusReady:
+		return true
+	}
+	return false
+}
+
+func (e ExperimentDefinitionStatus) String() string {
+	return string(e)
+}
+
+func (e *ExperimentDefinitionStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ExperimentDefinitionStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ExperimentDefinitionStatus", str)
+	}
+	return nil
+}
+
+func (e ExperimentDefinitionStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
 type ExperimentRunStatus string
 
 const (
@@ -3300,6 +4093,144 @@ func (e ExperimentType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
+// How a fault is implemented and executed at workflow runtime.
+type FaultImplementationType string
+
+const (
+	FaultImplementationTypeLitmus    FaultImplementationType = "LITMUS"
+	FaultImplementationTypeHTTPFault FaultImplementationType = "HTTP_FAULT"
+	FaultImplementationTypeScript    FaultImplementationType = "SCRIPT"
+	FaultImplementationTypeExternal  FaultImplementationType = "EXTERNAL"
+)
+
+var AllFaultImplementationType = []FaultImplementationType{
+	FaultImplementationTypeLitmus,
+	FaultImplementationTypeHTTPFault,
+	FaultImplementationTypeScript,
+	FaultImplementationTypeExternal,
+}
+
+func (e FaultImplementationType) IsValid() bool {
+	switch e {
+	case FaultImplementationTypeLitmus, FaultImplementationTypeHTTPFault, FaultImplementationTypeScript, FaultImplementationTypeExternal:
+		return true
+	}
+	return false
+}
+
+func (e FaultImplementationType) String() string {
+	return string(e)
+}
+
+func (e *FaultImplementationType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FaultImplementationType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FaultImplementationType", str)
+	}
+	return nil
+}
+
+func (e FaultImplementationType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// Type of a fault parameter value.
+type FaultParameterType string
+
+const (
+	FaultParameterTypeInteger FaultParameterType = "INTEGER"
+	FaultParameterTypeString  FaultParameterType = "STRING"
+	FaultParameterTypeBoolean FaultParameterType = "BOOLEAN"
+	FaultParameterTypeEnum    FaultParameterType = "ENUM"
+	FaultParameterTypePercent FaultParameterType = "PERCENT"
+)
+
+var AllFaultParameterType = []FaultParameterType{
+	FaultParameterTypeInteger,
+	FaultParameterTypeString,
+	FaultParameterTypeBoolean,
+	FaultParameterTypeEnum,
+	FaultParameterTypePercent,
+}
+
+func (e FaultParameterType) IsValid() bool {
+	switch e {
+	case FaultParameterTypeInteger, FaultParameterTypeString, FaultParameterTypeBoolean, FaultParameterTypeEnum, FaultParameterTypePercent:
+		return true
+	}
+	return false
+}
+
+func (e FaultParameterType) String() string {
+	return string(e)
+}
+
+func (e *FaultParameterType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FaultParameterType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FaultParameterType", str)
+	}
+	return nil
+}
+
+func (e FaultParameterType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// Scope of a fault in the three-tier ACE taxonomy.
+type FaultScope string
+
+const (
+	FaultScopeGeneral     FaultScope = "GENERAL"
+	FaultScopeDomain      FaultScope = "DOMAIN"
+	FaultScopeAppSpecific FaultScope = "APP_SPECIFIC"
+)
+
+var AllFaultScope = []FaultScope{
+	FaultScopeGeneral,
+	FaultScopeDomain,
+	FaultScopeAppSpecific,
+}
+
+func (e FaultScope) IsValid() bool {
+	switch e {
+	case FaultScopeGeneral, FaultScopeDomain, FaultScopeAppSpecific:
+		return true
+	}
+	return false
+}
+
+func (e FaultScope) String() string {
+	return string(e)
+}
+
+func (e *FaultScope) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FaultScope(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FaultScope", str)
+	}
+	return nil
+}
+
+func (e FaultScope) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
 type FileType string
 
 const (
@@ -3342,6 +4273,54 @@ func (e *FileType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e FileType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// Category of the ground truth impact — drives certifier scoring dimensions.
+type GroundTruthCategory string
+
+const (
+	GroundTruthCategoryAvailability  GroundTruthCategory = "AVAILABILITY"
+	GroundTruthCategoryPerformance   GroundTruthCategory = "PERFORMANCE"
+	GroundTruthCategorySecurity      GroundTruthCategory = "SECURITY"
+	GroundTruthCategoryDataIntegrity GroundTruthCategory = "DATA_INTEGRITY"
+	GroundTruthCategoryConfiguration GroundTruthCategory = "CONFIGURATION"
+)
+
+var AllGroundTruthCategory = []GroundTruthCategory{
+	GroundTruthCategoryAvailability,
+	GroundTruthCategoryPerformance,
+	GroundTruthCategorySecurity,
+	GroundTruthCategoryDataIntegrity,
+	GroundTruthCategoryConfiguration,
+}
+
+func (e GroundTruthCategory) IsValid() bool {
+	switch e {
+	case GroundTruthCategoryAvailability, GroundTruthCategoryPerformance, GroundTruthCategorySecurity, GroundTruthCategoryDataIntegrity, GroundTruthCategoryConfiguration:
+		return true
+	}
+	return false
+}
+
+func (e GroundTruthCategory) String() string {
+	return string(e)
+}
+
+func (e *GroundTruthCategory) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = GroundTruthCategory(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid GroundTruthCategory", str)
+	}
+	return nil
+}
+
+func (e GroundTruthCategory) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
@@ -3689,6 +4668,53 @@ func (e Mode) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
+// How ACE selects the LLM model for a run of this experiment.
+type ModelSelectionMode string
+
+const (
+	// Use the model configured in the agent's saved Model Library config (default).
+	ModelSelectionModeAgentDefault ModelSelectionMode = "AGENT_DEFAULT"
+	// Always use the model specified in fixedModel — must be in agent's allowedModels.
+	ModelSelectionModeFixed ModelSelectionMode = "FIXED"
+	// Show a model picker in the Run dialog — user selects at run time.
+	ModelSelectionModeUserChoosesAtRun ModelSelectionMode = "USER_CHOOSES_AT_RUN"
+)
+
+var AllModelSelectionMode = []ModelSelectionMode{
+	ModelSelectionModeAgentDefault,
+	ModelSelectionModeFixed,
+	ModelSelectionModeUserChoosesAtRun,
+}
+
+func (e ModelSelectionMode) IsValid() bool {
+	switch e {
+	case ModelSelectionModeAgentDefault, ModelSelectionModeFixed, ModelSelectionModeUserChoosesAtRun:
+		return true
+	}
+	return false
+}
+
+func (e ModelSelectionMode) String() string {
+	return string(e)
+}
+
+func (e *ModelSelectionMode) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModelSelectionMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModelSelectionMode", str)
+	}
+	return nil
+}
+
+func (e ModelSelectionMode) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
 // Defines the different statuses of Probes
 type ProbeStatus string
 
@@ -3871,6 +4897,59 @@ func (e *ScheduleType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e ScheduleType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// Type of a step in the experiment step sequence.
+type StepType string
+
+const (
+	// Quiet observation window with no fault injection.
+	StepTypeObserve StepType = "OBSERVE"
+	// Single fault injection (create ChaosEngine, wait, delete).
+	StepTypeFault StepType = "FAULT"
+	// HTTP health probe against the app — fails run if non-2xx.
+	StepTypeVerify StepType = "VERIFY"
+	// Pause for a fixed duration.
+	StepTypeWait StepType = "WAIT"
+	// Multiple faults injected simultaneously.
+	StepTypeParallelFault StepType = "PARALLEL_FAULT"
+)
+
+var AllStepType = []StepType{
+	StepTypeObserve,
+	StepTypeFault,
+	StepTypeVerify,
+	StepTypeWait,
+	StepTypeParallelFault,
+}
+
+func (e StepType) IsValid() bool {
+	switch e {
+	case StepTypeObserve, StepTypeFault, StepTypeVerify, StepTypeWait, StepTypeParallelFault:
+		return true
+	}
+	return false
+}
+
+func (e StepType) String() string {
+	return string(e)
+}
+
+func (e *StepType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = StepType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid StepType", str)
+	}
+	return nil
+}
+
+func (e StepType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

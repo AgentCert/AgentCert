@@ -1,41 +1,88 @@
+.catalogLayout {
+  align-items: flex-start;
+}
+
+.sidebar {
+  width: 200px;
+  min-width: 180px;
+  flex-shrink: 0;
+  background: var(--grey-50, #fafafa);
+  border-radius: 4px;
+  padding: 16px;
+  border: 1px solid var(--grey-200, #e5e7eb);
+}
+
+.domainFilter {
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+
+  &:hover {
+    background: var(--blue-50, #eff6ff);
+  }
+}
+
+.domainFilterActive {
+  background: var(--blue-50, #eff6ff);
+}
+
+.mainContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.searchBar {
+  max-width: 400px;
+}
+
 .appGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-medium);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
 }
 
 .appCard {
-  width: 360px;
-  min-height: 180px;
+  width: 100%;
+  min-height: 160px;
   cursor: pointer;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.15s;
 
   &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 }
 
-.expandToggle {
-  cursor: pointer;
-
-  &:hover {
-    opacity: 0.8;
-  }
+.tierBadgeOfficial {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
-.microserviceList {
-  background-color: var(--grey-50);
-  border-radius: 4px;
-  padding: 8px;
-  max-height: 200px;
-  overflow-y: auto;
+.tierBadgeCommunity {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
-.microserviceRow {
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--grey-100);
+.domainBadge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f0fdf4;
+  color: #166534;
+  text-transform: capitalize;
+}
 
-  &:last-child {
-    border-bottom: none;
-  }
+.contributeBanner {
+  border: 1px dashed var(--grey-300, #d1d5db);
+  border-radius: 6px;
+  margin-top: 16px;
 }

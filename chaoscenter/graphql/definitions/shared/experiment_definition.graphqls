@@ -1,0 +1,346 @@
+"""
+How ACE selects the LLM model for a run of this experiment.
+"""
+enum ModelSelectionMode {
+  """Use the model configured in the agent's saved Model Library config (default)."""
+  AGENT_DEFAULT
+  """Always use the model specified in fixedModel — must be in agent's allowedModels."""
+  FIXED
+  """Show a model picker in the Run dialog — user selects at run time."""
+  USER_CHOOSES_AT_RUN
+}
+
+"""
+Type of a step in the experiment step sequence.
+"""
+enum StepType {
+  """Quiet observation window with no fault injection."""
+  OBSERVE
+  """Single fault injection (create ChaosEngine, wait, delete)."""
+  FAULT
+  """HTTP health probe against the app — fails run if non-2xx."""
+  VERIFY
+  """Pause for a fixed duration."""
+  WAIT
+  """Multiple faults injected simultaneously."""
+  PARALLEL_FAULT
+}
+
+"""
+Status of an experiment definition.
+"""
+enum ExperimentDefinitionStatus {
+  """Being built in Chaos Studio — not yet committed."""
+  DRAFT
+  """Saved and valid — ready to create runs."""
+  READY
+}
+
+"""
+Identifies the target microservice within the app.
+"""
+type StepTarget {
+  microservice: String!
+  explicitPodName: String
+}
+
+"""
+HTTP health probe for a verify step.
+"""
+type StepProbe {
+  url: String!
+  expectedStatus: Int!
+  timeoutSecs: Int
+  retries: Int
+}
+
+"""
+Per-step override of the fault's default detection/mitigation SLAs.
+"""
+type GroundTruthOverride {
+  detectWithinSecs: Int
+  mitigateWithinSecs: Int
+}
+
+"""
+One fault entry within a parallel-fault step.
+"""
+type ParallelFaultEntry {
+  faultRef: String!
+  target: StepTarget!
+  params: [KeyValuePair!]
+}
+
+"""
+A single step in the experiment sequence.
+"""
+type AceExperimentStep {
+  name: String!
+  type: StepType!
+  description: String
+
+  """Duration string for observe/wait steps (e.g. '30s', '2m')."""
+  duration: String
+
+  """Reference to a fault in the catalog (for fault steps)."""
+  faultRef: String
+  target: StepTarget
+  params: [KeyValuePair!]
+  dependsOn: String
+  groundTruthOverride: GroundTruthOverride
+
+  """HTTP probe configuration (for verify steps)."""
+  probe: StepProbe
+
+  """Faults to inject simultaneously (for parallel-fault steps)."""
+  faults: [ParallelFaultEntry!]
+}
+
+"""
+Success criteria for a single fault step.
+"""
+type PerStepCriteria {
+  stepName: String!
+  detectWithinSecs: Int!
+  mitigateWithinSecs: Int!
+}
+
+"""
+Experiment-level success thresholds applied across all steps.
+"""
+type OverallCriteria {
+  toolCallEfficiencyMin: Float!
+  falsePositiveRateMax: Float!
+  rootCauseAccuracyMin: Float!
+}
+
+"""
+Success criteria block for an experiment definition.
+"""
+type AceSuccessCriteria {
+  perStep: [PerStepCriteria!]
+  overall: OverallCriteria
+}
+
+"""
+Agent compatibility constraints for this experiment.
+"""
+type AgentConstraints {
+  requiredCapabilities: [String!]
+  supportedAgents: [String!]
+  blockedAgents: [String!]
+}
+
+"""
+Model selection configuration for this experiment.
+"""
+type AceModelSelection {
+  mode: ModelSelectionMode!
+  fixedModel: String
+}
+
+"""
+The app targeted by this experiment.
+"""
+type AceTargetApp {
+  name: String!
+  version: String!
+  installParams: [KeyValuePair!]
+}
+
+"""
+An ACE experiment definition — a reusable blueprint for running an
+AI agent under controlled fault injection. NOT the same as the existing
+Argo-manifest-based Experiment type.
+"""
+type AceExperimentDefinition {
+  name: String!
+  displayName: String
+  version: String!
+  hypothesis: String
+  tags: [String!]
+  status: ExperimentDefinitionStatus!
+  createdAt: String!
+  updatedAt: String!
+  createdBy: String!
+
+  targetApp: AceTargetApp!
+  agentConstraints: AgentConstraints
+  modelSelection: AceModelSelection!
+  steps: [AceExperimentStep!]!
+  successCriteria: AceSuccessCriteria
+  evaluationMetrics: [String!]
+}
+
+"""
+Input for creating a step target.
+"""
+input StepTargetInput {
+  microservice: String!
+  explicitPodName: String
+}
+
+"""
+Input for a parallel fault entry.
+"""
+input ParallelFaultEntryInput {
+  faultRef: String!
+  target: StepTargetInput!
+  params: [KeyValuePairInput!]
+}
+
+"""
+Input for a ground truth override.
+"""
+input GroundTruthOverrideInput {
+  detectWithinSecs: Int
+  mitigateWithinSecs: Int
+}
+
+"""
+Input for a health probe.
+"""
+input StepProbeInput {
+  url: String!
+  expectedStatus: Int!
+  timeoutSecs: Int
+  retries: Int
+}
+
+"""
+Input for a single experiment step.
+"""
+input AceExperimentStepInput {
+  name: String!
+  type: StepType!
+  description: String
+  duration: String
+  faultRef: String
+  target: StepTargetInput
+  params: [KeyValuePairInput!]
+  dependsOn: String
+  groundTruthOverride: GroundTruthOverrideInput
+  probe: StepProbeInput
+  faults: [ParallelFaultEntryInput!]
+}
+
+"""
+Input for per-step success criteria.
+"""
+input PerStepCriteriaInput {
+  stepName: String!
+  detectWithinSecs: Int!
+  mitigateWithinSecs: Int!
+}
+
+"""
+Input for overall success criteria.
+"""
+input OverallCriteriaInput {
+  toolCallEfficiencyMin: Float!
+  falsePositiveRateMax: Float!
+  rootCauseAccuracyMin: Float!
+}
+
+"""
+Input for the success criteria block.
+"""
+input AceSuccessCriteriaInput {
+  perStep: [PerStepCriteriaInput!]
+  overall: OverallCriteriaInput
+}
+
+"""
+Input for the target app spec.
+"""
+input AceTargetAppInput {
+  name: String!
+  version: String!
+  installParams: [KeyValuePairInput!]
+}
+
+"""
+Input for model selection.
+"""
+input AceModelSelectionInput {
+  mode: ModelSelectionMode!
+  fixedModel: String
+}
+
+"""
+Input for agent constraints.
+"""
+input AgentConstraintsInput {
+  requiredCapabilities: [String!]
+  supportedAgents: [String!]
+  blockedAgents: [String!]
+}
+
+"""
+Input for creating or updating an experiment definition.
+"""
+input AceExperimentInput {
+  name: String!
+  displayName: String
+  hypothesis: String
+  tags: [String!]
+  targetApp: AceTargetAppInput!
+  agentConstraints: AgentConstraintsInput
+  modelSelection: AceModelSelectionInput!
+  steps: [AceExperimentStepInput!]!
+  successCriteria: AceSuccessCriteriaInput
+  evaluationMetrics: [String!]
+}
+
+"""
+Filter for listing experiment definitions.
+"""
+input AceExperimentListFilter {
+  targetApp: String
+  tags: [String!]
+  status: ExperimentDefinitionStatus
+}
+
+extend type Mutation {
+  """
+  Create a new experiment definition. Returns the saved definition.
+  """
+  createExperiment(
+    projectID: ID!
+    input: AceExperimentInput!
+  ): AceExperimentDefinition! @authorized
+
+  """
+  Update an existing experiment definition by name.
+  Increments the version. Returns the updated definition.
+  """
+  updateExperiment(
+    projectID: ID!
+    name: String!
+    input: AceExperimentInput!
+  ): AceExperimentDefinition! @authorized
+
+  """
+  Delete an experiment definition by name.
+  Fails if active runs exist for this definition.
+  """
+  deleteExperiment(
+    projectID: ID!
+    name: String!
+  ): Boolean! @authorized
+}
+
+extend type Query {
+  """
+  Retrieve an ACE experiment definition by name within a project.
+  """
+  getAceExperiment(projectID: ID!, name: String!): AceExperimentDefinition @authorized
+
+  """
+  List all ACE experiment definitions in a project, with optional filtering.
+  """
+  listAceExperiments(
+    projectID: ID!
+    filter: AceExperimentListFilter
+  ): [AceExperimentDefinition!]! @authorized
+}

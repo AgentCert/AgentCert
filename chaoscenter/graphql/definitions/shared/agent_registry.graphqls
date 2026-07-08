@@ -66,6 +66,21 @@ type Agent {
   
   """Audit information for tracking creation and updates"""
   auditInfo: AuditInfo!
+
+  displayName:       String
+  tier:              String
+  agentDescription:  AgentDescription
+  install:           AgentInstallSpec
+  llmConfig:         LLMConfig
+  inputs:            [AgentInput!]
+  contextInjection:  [ContextInjection!]
+  requiredTools:     [RequiredTool!]
+  evaluationMetrics: [String!]
+  compatibility:     AgentCompatibility
+  agentOwner:        AgentOwner
+  repository:        String
+  license:           String
+  schemaVersion:     String
 }
 
 """
@@ -247,6 +262,20 @@ input RegisterAgentInput {
   
   """Helm release name for Helm-deployed agents"""
   helmReleaseName: String
+
+  displayName:       String
+  agentDescription:  AgentDescriptionInput
+  install:           AgentInstallInput
+  llmConfig:         LLMConfigInput
+  inputs:            [AgentInputDefinition!]
+  contextInjection:  [ContextInjectionInput!]
+  requiredTools:     [RequiredToolInput!]
+  evaluationMetrics: [String!]
+  compatibility:     AgentCompatibilityInput
+  agentOwner:        AgentOwnerInput
+  tier:              String
+  repository:        String
+  license:           String
 }
 
 """
@@ -656,6 +685,186 @@ enum SyncStatus {
   SKIPPED
 }
 
+type AgentDescription {
+  short:        String!
+  long:         String!
+  approach:     String
+  llmDependent: Boolean!
+}
+
+input AgentDescriptionInput {
+  short:        String!
+  long:         String!
+  approach:     String
+  llmDependent: Boolean
+}
+
+type AgentInstallSpec {
+  method:    String!
+  image:     String
+  folder:    String
+  namespace: String!
+  timeout:   String!
+  cpu:       String
+  memory:    String
+  replicas:  Int!
+}
+
+input AgentInstallInput {
+  method:    String!
+  image:     String
+  folder:    String
+  namespace: String
+  timeout:   String
+  cpu:       String
+  memory:    String
+}
+
+type AgentInput {
+  key:         String!
+  displayName: String!
+  description: String
+  type:        String!
+  required:    Boolean!
+  default:     String
+  placeholder: String
+  helmPath:    String!
+  values:      [String!]
+  min:         Int
+  max:         Int
+  unit:        String
+  advanced:    Boolean!
+  group:       String
+}
+
+input AgentInputDefinition {
+  key:         String!
+  displayName: String!
+  description: String
+  type:        String!
+  required:    Boolean
+  default:     String
+  placeholder: String
+  helmPath:    String!
+  values:      [String!]
+  min:         Int
+  max:         Int
+  unit:        String
+  advanced:    Boolean
+  group:       String
+}
+
+type ContextInjection {
+  helmPath:    String!
+  source:      String!
+  required:    Boolean!
+  description: String
+}
+
+input ContextInjectionInput {
+  helmPath:    String!
+  source:      String!
+  required:    Boolean
+  description: String
+}
+
+type RequiredTool {
+  name:         String!
+  purpose:      String
+  critical:     Boolean!
+  minCallCount: Int!
+  maxCallCount: Int
+}
+
+input RequiredToolInput {
+  name:         String!
+  purpose:      String
+  critical:     Boolean
+  minCallCount: Int
+  maxCallCount: Int
+}
+
+type AgentCompatibility {
+  supportedApps:     [String!]!
+  unsupportedApps:   [String!]!
+  minimumFaultCount: Int!
+  maximumFaultCount: Int!
+}
+
+input AgentCompatibilityInput {
+  supportedApps:     [String!]
+  unsupportedApps:   [String!]
+  minimumFaultCount: Int
+  maximumFaultCount: Int
+}
+
+type LLMConfig {
+  configRef:       String
+  provider:        String
+  model:           String
+  allowUserChoice: Boolean!
+  allowedModels:   [String!]!
+  defaultModel:    String
+  llmDependent:    Boolean!
+}
+
+input LLMConfigInput {
+  configRef:       String
+  provider:        String
+  model:           String
+  allowUserChoice: Boolean
+  allowedModels:   [String!]
+  defaultModel:    String
+  llmDependent:    Boolean
+}
+
+type AgentOwner {
+  name:  String!
+  email: String!
+  org:   String
+}
+
+input AgentOwnerInput {
+  name:  String!
+  email: String!
+  org:   String
+}
+
+type MCPImportResult {
+  tools:  [String!]!
+  errors: [String!]!
+}
+
+type ModelConfig {
+  alias:       String!
+  provider:    String!
+  model:       String!
+  baseURL:     String
+  secretRef:   String!
+  agentsUsing: [String!]!
+  status:      String!
+  lastTested:  String
+}
+
+input ModelConfigInput {
+  alias:    String!
+  provider: String!
+  model:    String!
+  baseURL:  String
+  apiKey:   String!
+}
+
+type ModelConfigResult {
+  config:  ModelConfig!
+  message: String!
+}
+
+type ModelConfigTestResult {
+  success:      Boolean!
+  latencyMs:    Int
+  errorMessage: String
+}
+
 # Queries
 
 extend type Query {
@@ -685,6 +894,15 @@ extend type Query {
   
   """Get pre-populated environment variables from backend configuration (e.g., .env file)"""
   getEnvironmentVariables: [EnvironmentVariable!]!
+
+  """Get the raw YAML specification for an agent"""
+  getAgentYAML(projectID: ID!, agentName: String!): String!
+
+  """List all model configs for a project"""
+  listModelConfigs(projectID: ID!): [ModelConfig!]!
+
+  """Get a specific model config by alias"""
+  getModelConfig(projectID: ID!, alias: String!): ModelConfig
 }
 
 # Mutations
@@ -722,4 +940,22 @@ extend type Mutation {
   
   """Manually sync an agent's metadata to Langfuse"""
   syncAgentToLangfuse(agentID: ID!): SyncResponse!
+
+  """Import tools from an MCP server and register them"""
+  importMCPTools(serverURL: String!): MCPImportResult!
+
+  """Create a new model config for a project"""
+  createModelConfig(projectID: ID!, input: ModelConfigInput!): ModelConfigResult!
+
+  """Update an existing model config"""
+  updateModelConfig(projectID: ID!, alias: String!, input: ModelConfigInput!): ModelConfig!
+
+  """Delete a model config"""
+  deleteModelConfig(projectID: ID!, alias: String!): Boolean!
+
+  """Test a model config's connectivity"""
+  testModelConfig(input: ModelConfigInput!): ModelConfigTestResult!
+
+  """Rotate the API key for a model config"""
+  rotateModelConfigKey(projectID: ID!, alias: String!, newApiKey: String!): ModelConfig!
 }

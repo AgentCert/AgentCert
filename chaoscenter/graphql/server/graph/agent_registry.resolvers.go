@@ -6,7 +6,9 @@ package graph
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/model_library"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 )
 
@@ -393,6 +396,108 @@ func (r *mutationResolver) SyncAgentToLangfuse(ctx context.Context, agentID stri
 	return agent_registry.MapSyncResponseToModel(response), nil
 }
 
+// ImportMCPTools is the resolver for the importMCPTools field.
+func (r *mutationResolver) ImportMCPTools(ctx context.Context, serverURL string) (*model.MCPImportResult, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(serverURL + "/tools")
+	if err != nil {
+		return &model.MCPImportResult{
+			Tools:  []string{},
+			Errors: []string{fmt.Sprintf("could not reach MCP server: %v", err)},
+		}, nil
+	}
+	defer resp.Body.Close()
+
+	var payload struct {
+		Tools []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"tools"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return &model.MCPImportResult{
+			Tools:  []string{},
+			Errors: []string{fmt.Sprintf("failed to parse MCP response: %v", err)},
+		}, nil
+	}
+
+	names := make([]string, 0, len(payload.Tools))
+	for _, t := range payload.Tools {
+		names = append(names, t.Name)
+	}
+	return &model.MCPImportResult{Tools: names, Errors: []string{}}, nil
+}
+
+// CreateModelConfig is the resolver for the createModelConfig field.
+func (r *mutationResolver) CreateModelConfig(ctx context.Context, projectID string, input model.ModelConfigInput) (*model.ModelConfigResult, error) {
+	req := model_library.CreateModelConfigRequest{
+		Alias:    input.Alias,
+		Provider: input.Provider,
+		Model:    input.Model,
+		BaseURL:  input.BaseURL,
+		APIKey:   input.APIKey,
+	}
+	cfg, err := r.modelLibraryService.CreateModelConfig(ctx, projectID, req)
+	if err != nil {
+		return nil, err
+	}
+	return &model.ModelConfigResult{
+		Config:  mapModelConfig(cfg),
+		Message: "Model config created successfully",
+	}, nil
+}
+
+// UpdateModelConfig is the resolver for the updateModelConfig field.
+func (r *mutationResolver) UpdateModelConfig(ctx context.Context, projectID string, alias string, input model.ModelConfigInput) (*model.ModelConfig, error) {
+	req := model_library.UpdateModelConfigRequest{
+		Provider: input.Provider,
+		Model:    input.Model,
+		BaseURL:  input.BaseURL,
+		APIKey:   input.APIKey,
+	}
+	cfg, err := r.modelLibraryService.UpdateModelConfig(ctx, projectID, alias, req)
+	if err != nil {
+		return nil, err
+	}
+	return mapModelConfig(cfg), nil
+}
+
+// DeleteModelConfig is the resolver for the deleteModelConfig field.
+func (r *mutationResolver) DeleteModelConfig(ctx context.Context, projectID string, alias string) (bool, error) {
+	if err := r.modelLibraryService.DeleteModelConfig(ctx, projectID, alias); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// TestModelConfig is the resolver for the testModelConfig field.
+func (r *mutationResolver) TestModelConfig(ctx context.Context, input model.ModelConfigInput) (*model.ModelConfigTestResult, error) {
+	req := model_library.TestModelConfigRequest{
+		Provider: input.Provider,
+		Model:    input.Model,
+		APIKey:   input.APIKey,
+		BaseURL:  input.BaseURL,
+	}
+	result, err := r.modelLibraryService.TestModelConfig(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return &model.ModelConfigTestResult{
+		Success:      result.Success,
+		LatencyMs:    result.LatencyMs,
+		ErrorMessage: result.ErrorMessage,
+	}, nil
+}
+
+// RotateModelConfigKey is the resolver for the rotateModelConfigKey field.
+func (r *mutationResolver) RotateModelConfigKey(ctx context.Context, projectID string, alias string, newAPIKey string) (*model.ModelConfig, error) {
+	cfg, err := r.modelLibraryService.RotateAPIKey(ctx, projectID, alias, newAPIKey)
+	if err != nil {
+		return nil, err
+	}
+	return mapModelConfig(cfg), nil
+}
+
 // GetAgent is the resolver for the getAgent field.
 func (r *queryResolver) GetAgent(ctx context.Context, agentID string) (*model.Agent, error) {
 	// Call service layer
@@ -498,12 +603,55 @@ func (r *queryResolver) GetEnvironmentVariables(ctx context.Context) ([]*model.E
 	return envVars, nil
 }
 
+// GetAgentYaml is the resolver for the getAgentYAML field.
+func (r *queryResolver) GetAgentYaml(ctx context.Context, projectID string, agentName string) (string, error) {
+	agentDoc, err := r.agentRegistryService.GetAgentByName(ctx, projectID, agentName)
+	if err != nil {
+		return "", err
+	}
+	return agent_registry.GenerateAgentYAML(agentDoc)
+}
+
+// ListModelConfigs is the resolver for the listModelConfigs field.
+func (r *queryResolver) ListModelConfigs(ctx context.Context, projectID string) ([]*model.ModelConfig, error) {
+	configs, err := r.modelLibraryService.ListModelConfigs(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*model.ModelConfig, len(configs))
+	for i, c := range configs {
+		result[i] = mapModelConfig(c)
+	}
+	return result, nil
+}
+
+// GetModelConfig is the resolver for the getModelConfig field.
+func (r *queryResolver) GetModelConfig(ctx context.Context, projectID string, alias string) (*model.ModelConfig, error) {
+	cfg, err := r.modelLibraryService.GetModelConfig(ctx, projectID, alias)
+	if err != nil {
+		return nil, err
+	}
+	return mapModelConfig(cfg), nil
+}
+
 // !!! WARNING !!!
 // The code below was going to be deleted when updating resolvers. It has been copied here so you have
 // one last chance to move it out of harms way if you want. There are two reasons this happens:
 //   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
 //     it when you're done.
 //   - You have helper methods in this file. Move them out to keep these resolver files clean.
+func mapModelConfig(cfg *model_library.ModelConfig) *model.ModelConfig {
+	return &model.ModelConfig{
+		Alias:       cfg.Alias,
+		Provider:    cfg.Provider,
+		Model:       cfg.Model,
+		BaseURL:     cfg.BaseURL,
+		SecretRef:   cfg.SecretRef,
+		AgentsUsing: cfg.AgentsUsing,
+		Status:      cfg.Status,
+		LastTested:  cfg.LastTested,
+	}
+}
 func resolveAgentInstallNamespace(userNamespace string) (string, string) {
 	sysNs := strings.TrimSpace(os.Getenv("AGENT_INSTALL_NAMESPACE"))
 	if sysNs == "" {

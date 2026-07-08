@@ -185,3 +185,112 @@ extend type Query {
   """Get the AppsHub status (sync state, counts)"""
   getAppHubStatus(projectID: ID!): AppHubStatus! @authorized
 }
+
+# ──────────────────────────────────────────────────
+# ApplicationSpec — Full Catalog Types (spec §17.2)
+# ──────────────────────────────────────────────────
+
+"""
+Full application spec as read from catalog/apps/<tier>/<name>/app.yaml.
+"""
+type ApplicationSpec {
+  name:               String!
+  displayName:        String!
+  version:            String!
+  tier:               String!
+  domain:             String!
+  capabilityDomains:  [String!]!
+  tags:               [String!]!
+  description:        CatalogAppDescription!
+  install:            CatalogInstallSpec!
+  healthProbe:        CatalogHealthProbeSpec!
+  loadTest:           CatalogLoadTestSpec!
+  microservices:      [CatalogMicroserviceSpec!]!
+  faultCompatibility: [FaultCompatibilityEntry!]!
+  inputs:             [CatalogAppInput!]!
+  schemaVersion:      String!
+}
+
+type CatalogAppDescription {
+  short:          String!
+  long:           String!
+  suitableFor:    [String!]!
+  notSuitableFor: [String!]!
+}
+
+type CatalogInstallSpec {
+  method:     String!
+  folder:     String
+  chartRef:   CatalogChartRef
+  namespace:  CatalogNamespaceSpec!
+  timeout:    String!
+  wait:       Boolean!
+}
+
+type CatalogChartRef {
+  repo:    String!
+  chart:   String!
+  version: String!
+}
+
+type CatalogNamespaceSpec {
+  default:      String!
+  configurable: Boolean!
+}
+
+type CatalogHealthProbeSpec {
+  urlTemplate:         String!
+  expectedStatus:      String!
+  initialDelaySeconds: Int!
+  periodSeconds:       Int!
+  failureThreshold:    Int!
+}
+
+type CatalogLoadTestSpec {
+  enabled: Boolean!
+  method:  String
+  image:   String
+  args:    [String!]
+}
+
+type CatalogMicroserviceSpec {
+  name:           String!
+  displayName:    String!
+  description:    String
+  k8sLabel:       String!
+  k8sKind:        String!
+  k8sNamespace:   String!
+  criticality:    String!
+  relevantFaults: [String!]!
+  dependsOn:      [String!]!
+}
+
+type FaultCompatibilityEntry {
+  faultName:          String!
+  compatible:         Boolean!
+  notes:              String
+  recommendedTargets: [String!]!
+}
+
+type CatalogAppInput {
+  key:         String!
+  displayName: String!
+  description: String
+  type:        String!
+  required:    Boolean!
+  default:     String
+  helmPath:    String!
+  values:      [String!]
+  min:         Int
+  max:         Int
+  unit:        String
+  advanced:    Boolean!
+}
+
+extend type Query {
+  """List all applications in the catalog (official first, then community; alphabetical within tier)"""
+  listApplications(projectID: ID!): [ApplicationSpec!]! @authorized
+
+  """Get a single application by name"""
+  getApplication(projectID: ID!, appName: String!): ApplicationSpec @authorized
+}

@@ -2352,6 +2352,10 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", fmt.Sprintf("sidecar.image.repository=%s", sidecarImageRepo),
 		"--set", fmt.Sprintf("sidecar.image.tag=%s", sidecarImageTag),
 		"--set", "sidecar.image.pullPolicy=Always",
+		// Stage 7: wire the per-experiment K8s Secret (ace-agent-secret-<id>) into the
+		// Helm chart so the agent pod can read secret-type inputs at runtime.
+		// {{workflow.labels.workflow_id}} is resolved by Argo before the container starts.
+		"--set", "agent.secretRef=ace-agent-secret-{{workflow.labels.workflow_id}}",
 	}
 
 	// Ground truth is emitted directly to Langfuse via EmitFaultSpansForTrace
@@ -2398,7 +2402,9 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 			strings.HasPrefix(arg, "sidecar.upstream=") ||
 			strings.HasPrefix(arg, "sidecar.image.repository=") ||
 			strings.HasPrefix(arg, "sidecar.image.tag=") ||
-			strings.HasPrefix(arg, "sidecar.image.pullPolicy=")
+			strings.HasPrefix(arg, "sidecar.image.pullPolicy=") ||
+			// Stage 7: strip stale secretRef so the fresh workflow_id label is always used
+			strings.HasPrefix(arg, "agent.secretRef=")
 	}
 	// isStaleFlag returns true for named binary flags (not --set values) that
 	// carry a subsequent value and should be replaced by fresh injection.

@@ -36,6 +36,9 @@ export interface UseRouteDefinitionsProps {
   toProjectMembers(): string;
   toImageRegistry(): string;
   toGitops(): string;
+  // Chaos Studio Wizard Routes
+  toChaosStudioNew(): string;
+  toChaosStudioRun(params: { runID: string }): string;
 }
 
 export const paths: UseRouteDefinitionsProps = {
@@ -84,5 +87,8 @@ export const paths: UseRouteDefinitionsProps = {
   toProjectSetup: () => '/setup',
   toProjectMembers: () => '/setup/members',
   toImageRegistry: () => `/setup/image-registry`,
-  toGitops: () => `/setup/gitops`
+  toGitops: () => `/setup/gitops`,
+  // Chaos Studio Wizard Routes
+  toChaosStudioNew: () => '/chaos-studio/new',
+  toChaosStudioRun: ({ runID }) => `/chaos-studio/runs/${runID}`
 };

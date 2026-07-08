@@ -9,6 +9,7 @@ import (
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/catalog"
 )
 
 // ListAgentHubCategories is the resolver for the listAgentHubCategories field.
@@ -53,4 +54,32 @@ func (r *queryResolver) GetAppHubStatus(ctx context.Context, projectID string) (
 		return nil, err
 	}
 	return r.appHubService.GetAppHubStatus(ctx, projectID)
+}
+
+// ListApplications is the resolver for the listApplications field.
+func (r *queryResolver) ListApplications(ctx context.Context, projectID string) ([]*model.ApplicationSpec, error) {
+	if r.catalogService == nil {
+		return []*model.ApplicationSpec{}, nil
+	}
+	entries, err := r.catalogService.ListApplications(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*model.ApplicationSpec, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, catalog.ToGraphQLModel(e))
+	}
+	return result, nil
+}
+
+// GetApplication is the resolver for the getApplication field.
+func (r *queryResolver) GetApplication(ctx context.Context, projectID string, appName string) (*model.ApplicationSpec, error) {
+	if r.catalogService == nil {
+		return nil, nil
+	}
+	e, err := r.catalogService.GetApplication(ctx, projectID, appName)
+	if err != nil {
+		return nil, err
+	}
+	return catalog.ToGraphQLModel(e), nil
 }

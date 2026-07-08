@@ -57,6 +57,7 @@ type Configuration struct {
 	DefaultAppHubGitURL         string   `split_words:"true" default:"https://github.com/agentcert/app-charts"`
 	DefaultAppHubBranchName     string   `split_words:"true" default:"main"`
 	DefaultAppHubPath           string   `split_words:"true" default:"/tmp/default-apps/"`
+	CatalogDir                  string   `split_words:"true" default:"/catalog"`
 	HelmBinary                  string   `split_words:"true" default:"helm"`
 	HelmTimeout                 string   `split_words:"true" default:"5m"`
 	PreCleanupWaitSeconds       string   `split_words:"true" default:"0"`

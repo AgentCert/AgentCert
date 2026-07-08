@@ -1,4 +1,5 @@
 export * from './listAgents';
+export * from './listAgentsForStudio';
 export * from './registerAgent';
 export * from './deployAgentWithHelm';
 export * from './validateHelmDeployment';

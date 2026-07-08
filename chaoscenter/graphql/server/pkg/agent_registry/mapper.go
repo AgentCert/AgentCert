@@ -334,6 +334,123 @@ func MapAgentToModel(agent *Agent) *model.Agent {
 		}
 	}
 
+	// Map spec-aligned fields
+	if agent.DisplayName != "" {
+		gqlAgent.DisplayName = &agent.DisplayName
+	}
+	if agent.Tier != "" {
+		gqlAgent.Tier = &agent.Tier
+	}
+	if agent.Repository != "" {
+		gqlAgent.Repository = &agent.Repository
+	}
+	if agent.License != "" {
+		gqlAgent.License = &agent.License
+	}
+	if agent.SchemaVersion != "" {
+		gqlAgent.SchemaVersion = &agent.SchemaVersion
+	}
+	if agent.SpecDescription != nil {
+		gqlAgent.AgentDescription = &model.AgentDescription{
+			Short:        agent.SpecDescription.Short,
+			Long:         agent.SpecDescription.Long,
+			Approach:     &agent.SpecDescription.Approach,
+			LlmDependent: agent.SpecDescription.LLMDependent,
+		}
+	}
+	if agent.SpecInstall != nil {
+		replicas := agent.SpecInstall.Replicas
+		gqlAgent.Install = &model.AgentInstallSpec{
+			Method:    agent.SpecInstall.Method,
+			Image:     &agent.SpecInstall.Image,
+			Folder:    &agent.SpecInstall.Folder,
+			Namespace: agent.SpecInstall.Namespace,
+			Timeout:   agent.SpecInstall.Timeout,
+			CPU:       &agent.SpecInstall.CPU,
+			Memory:    &agent.SpecInstall.Memory,
+			Replicas:  replicas,
+		}
+	}
+	if agent.AgentLLMConfig != nil {
+		gqlAgent.LlmConfig = &model.LLMConfig{
+			ConfigRef:       &agent.AgentLLMConfig.ConfigRef,
+			Provider:        &agent.AgentLLMConfig.Provider,
+			Model:           &agent.AgentLLMConfig.Model,
+			AllowUserChoice: agent.AgentLLMConfig.AllowUserChoice,
+			AllowedModels:   agent.AgentLLMConfig.AllowedModels,
+			DefaultModel:    &agent.AgentLLMConfig.DefaultModel,
+			LlmDependent:    agent.AgentLLMConfig.LLMDependent,
+		}
+	}
+	if len(agent.AgentInputDefs) > 0 {
+		inputs := make([]*model.AgentInput, len(agent.AgentInputDefs))
+		for i, inp := range agent.AgentInputDefs {
+			inp := inp // capture loop variable
+			inputs[i] = &model.AgentInput{
+				Key:         inp.Key,
+				DisplayName: inp.DisplayName,
+				Description: &inp.Description,
+				Type:        inp.Type,
+				Required:    inp.Required,
+				Default:     &inp.Default,
+				Placeholder: &inp.Placeholder,
+				HelmPath:    inp.HelmPath,
+				Values:      inp.Values,
+				Min:         inp.Min,
+				Max:         inp.Max,
+				Unit:        &inp.Unit,
+				Advanced:    inp.Advanced,
+				Group:       &inp.Group,
+			}
+		}
+		gqlAgent.Inputs = inputs
+	}
+	if len(agent.ContextInjection) > 0 {
+		cis := make([]*model.ContextInjection, len(agent.ContextInjection))
+		for i, ci := range agent.ContextInjection {
+			ci := ci // capture loop variable
+			cis[i] = &model.ContextInjection{
+				HelmPath:    ci.HelmPath,
+				Source:      ci.Source,
+				Required:    ci.Required,
+				Description: &ci.Description,
+			}
+		}
+		gqlAgent.ContextInjection = cis
+	}
+	if len(agent.RequiredTools) > 0 {
+		tools := make([]*model.RequiredTool, len(agent.RequiredTools))
+		for i, t := range agent.RequiredTools {
+			t := t // capture loop variable
+			tools[i] = &model.RequiredTool{
+				Name:         t.Name,
+				Purpose:      &t.Purpose,
+				Critical:     t.Critical,
+				MinCallCount: t.MinCallCount,
+				MaxCallCount: t.MaxCallCount,
+			}
+		}
+		gqlAgent.RequiredTools = tools
+	}
+	if len(agent.EvalMetrics) > 0 {
+		gqlAgent.EvaluationMetrics = agent.EvalMetrics
+	}
+	if agent.Compatibility != nil {
+		gqlAgent.Compatibility = &model.AgentCompatibility{
+			SupportedApps:     agent.Compatibility.SupportedApps,
+			UnsupportedApps:   agent.Compatibility.UnsupportedApps,
+			MinimumFaultCount: agent.Compatibility.MinFaultCount,
+			MaximumFaultCount: agent.Compatibility.MaxFaultCount,
+		}
+	}
+	if agent.AgentOwner != nil {
+		gqlAgent.AgentOwner = &model.AgentOwner{
+			Name:  agent.AgentOwner.Name,
+			Email: agent.AgentOwner.Email,
+			Org:   &agent.AgentOwner.Org,
+		}
+	}
+
 	return gqlAgent
 }
 

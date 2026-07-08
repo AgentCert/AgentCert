@@ -1,0 +1,68 @@
+apiVersion: ace.io/v1
+kind: FaultCatalogEntry
+
+metadata:
+  name: pod-delete
+  displayName: "Pod Delete"
+  version: "1.0.0"
+  tier: official
+  scope: general
+  domain: null
+  targetApp: null
+  tags: [resilience, availability]
+  maintainers:
+    - name: "ACE Team"
+      email: "ace@example.io"
+
+spec:
+  description:
+    short: "Forcefully deletes one or more target pods"
+    long: "Injects pod failure by deleting the target pod(s)."
+    suitableFor:
+      - "Stateless services"
+    notSuitableFor:
+      - "StatefulSets"
+
+  implementation:
+    type: litmus
+    chaosKind: ChaosEngine
+    experimentRef: pod-delete
+    namespace: litmus
+
+  targetSpec:
+    required: true
+    resolutionMode: microservice-label
+
+  parameters:
+    - key: CHAOS_DURATION
+      displayName: "Chaos Duration"
+      type: integer
+      unit: seconds
+      default: "30"
+      min: 10
+      max: 600
+      required: true
+      description: "How long the chaos lasts."
+      litmusEnv: TOTAL_CHAOS_DURATION
+
+  compatibility:
+    targetDomains: ["*"]
+    incompatibleApps: []
+    requiredCapabilities: []
+
+  observability:
+    expectedSymptoms:
+      - "Pod transitions to Terminating"
+    expectedAlerts:
+      - KubePodNotReady
+    detectionWindowSecs: 60
+
+  groundTruth:
+    category: availability
+    impact: high
+    detectWithinSecs: 60
+    mitigateWithinSecs: 120
+    detectionHints:
+      - "kubectl get pods"
+    remediationHints:
+      - "Verify replicas restored"

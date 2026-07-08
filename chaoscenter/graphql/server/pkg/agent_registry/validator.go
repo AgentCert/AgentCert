@@ -24,19 +24,21 @@ type Validator interface {
 
 // validatorImpl is the concrete implementation of the Validator interface.
 type validatorImpl struct {
-	operator           Operator
+	operator             Operator
+	vocab                *CapabilityVocab
 	capabilitiesTaxonomy map[string]bool
-	nameRegex          *regexp.Regexp
-	semverRegex        *regexp.Regexp
+	nameRegex            *regexp.Regexp
+	semverRegex          *regexp.Regexp
 }
 
 // NewValidator creates a new Validator instance.
-func NewValidator(operator Operator) Validator {
+func NewValidator(operator Operator, vocab *CapabilityVocab) Validator {
 	return &validatorImpl{
-		operator:           operator,
+		operator:             operator,
+		vocab:                vocab,
 		capabilitiesTaxonomy: loadCapabilitiesTaxonomy(),
-		nameRegex:          regexp.MustCompile(AgentNameRegex),
-		semverRegex:        regexp.MustCompile(SemverRegex),
+		nameRegex:            regexp.MustCompile(AgentNameRegex),
+		semverRegex:          regexp.MustCompile(SemverRegex),
 	}
 }
 
@@ -119,14 +121,20 @@ func (v *validatorImpl) ValidateCapabilities(ctx context.Context, capabilities [
 	if len(capabilities) == 0 {
 		return NewValidationError("capabilities", "at least one capability is required")
 	}
-	
+
 	for _, capability := range capabilities {
-		if !v.capabilitiesTaxonomy[capability] {
-			return NewValidationError("capabilities", 
+		var valid bool
+		if v.vocab != nil {
+			valid = v.vocab.IsValid(capability)
+		} else {
+			valid = v.capabilitiesTaxonomy[capability]
+		}
+		if !valid {
+			return NewValidationError("capabilities",
 				fmt.Sprintf("unknown capability '%s'. Must be one of the supported capabilities", capability))
 		}
 	}
-	
+
 	return nil
 }
 

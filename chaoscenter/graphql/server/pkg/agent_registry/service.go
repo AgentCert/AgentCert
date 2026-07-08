@@ -74,6 +74,9 @@ type Service interface {
 
 	// GetKubernetesNamespaces returns the list of available Kubernetes namespaces
 	GetKubernetesNamespaces(ctx context.Context) ([]string, error)
+
+	// GetAgentByName retrieves an agent by project ID and name
+	GetAgentByName(ctx context.Context, projectID, name string) (*Agent, error)
 // Implementation for these methods is below, outside the interface block.
 }
 
@@ -82,16 +85,18 @@ type serviceImpl struct {
 	operator       Operator
 	validator      Validator
 	langfuseClient LangfuseClient
+	vocab          *CapabilityVocab
 	//k8sClient      kubernetes.Interface
 	// logger will be added for structured logging
 }
 
 // NewService creates a new Service instance.
-func NewService(operator Operator, validator Validator, langfuseClient LangfuseClient, k8sClient interface{}) Service {
+func NewService(operator Operator, validator Validator, langfuseClient LangfuseClient, k8sClient interface{}, vocab *CapabilityVocab) Service {
 	return &serviceImpl{
 		operator:       operator,
 		validator:      validator,
 		langfuseClient: langfuseClient,
+		vocab:          vocab,
 		//k8sClient:      k8sClient,
 	}
 }
@@ -109,6 +114,21 @@ type RegisterAgentRequest struct {
 	Endpoint        *AgentEndpoint
 	LangfuseConfig  *LangfuseConfig
 	Metadata        *AgentMetadata
+
+	// Spec-aligned fields
+	DisplayName      string
+	Tier             string
+	SpecDescription  *AgentSpecDescription
+	SpecInstall      *AgentSpecInstall
+	AgentLLMConfig   *AgentLLMConfig
+	AgentInputDefs   []AgentInputDef
+	ContextInjection []ContextInjectDef
+	RequiredTools    []RequiredToolDef
+	EvalMetrics      []string
+	Compatibility    *AgentCompatibility
+	AgentOwner       *AgentOwnerInfo
+	Repository       string
+	License          string
 }
 
 // UpdateAgentRequest represents the input for agent updates.
@@ -183,6 +203,10 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 		return nil, err
 	}
 
+	// Merge caller-provided context injections with the 3 mandatory defaults
+	defaults := DefaultContextInjections()
+	input.ContextInjection = MergeContextInjections(defaults, input.ContextInjection)
+
 	// Generate UUID for agentId
 	agentID := uuid.New().String()
 	
@@ -212,19 +236,32 @@ func (s *serviceImpl) RegisterAgent(ctx context.Context, input *RegisterAgentReq
 	
 	// Create Agent struct with status REGISTERED
 	agent := &Agent{
-		AgentID:         agentID,
-		ProjectID:       input.ProjectID,
-		Name:            input.Name,
-		Version:         input.Version,
-		Vendor:          input.Vendor,
-		Capabilities:    input.Capabilities,
-		ContainerImage:  input.ContainerImage,
-		Namespace:       input.Namespace,
-		HelmReleaseName: input.HelmReleaseName,
-		Endpoint:        endpoint,
-		LangfuseConfig:  input.LangfuseConfig,
-		Status:          AgentStatusRegistered,
-		Metadata:        input.Metadata,
+		AgentID:          agentID,
+		ProjectID:        input.ProjectID,
+		Name:             input.Name,
+		Version:          input.Version,
+		Vendor:           input.Vendor,
+		Capabilities:     input.Capabilities,
+		ContainerImage:   input.ContainerImage,
+		Namespace:        input.Namespace,
+		HelmReleaseName:  input.HelmReleaseName,
+		Endpoint:         endpoint,
+		LangfuseConfig:   input.LangfuseConfig,
+		Status:           AgentStatusRegistered,
+		Metadata:         input.Metadata,
+		DisplayName:      input.DisplayName,
+		Tier:             input.Tier,
+		SpecDescription:  input.SpecDescription,
+		SpecInstall:      input.SpecInstall,
+		AgentLLMConfig:   input.AgentLLMConfig,
+		AgentInputDefs:   input.AgentInputDefs,
+		ContextInjection: input.ContextInjection,
+		RequiredTools:    input.RequiredTools,
+		EvalMetrics:      input.EvalMetrics,
+		Compatibility:    input.Compatibility,
+		AgentOwner:       input.AgentOwner,
+		Repository:       input.Repository,
+		License:          input.License,
 		AuditInfo: &AuditInfo{
 			CreatedAt: now,
 			CreatedBy: userID,
@@ -834,6 +871,19 @@ func (s *serviceImpl) SyncToLangfuse(ctx context.Context, agent *Agent) error {
 }
 // GetAgentCapabilitiesTaxonomy returns the list of supported capabilities.
 func (s *serviceImpl) GetAgentCapabilitiesTaxonomy(ctx context.Context) ([]*CapabilityDefinition, error) {
+	if s.vocab != nil {
+		entries := s.vocab.AllEntries()
+		defs := make([]*CapabilityDefinition, len(entries))
+		for i, e := range entries {
+			defs[i] = &CapabilityDefinition{
+				ID:          e.Key,
+				Name:        e.DisplayName,
+				Description: e.Description,
+				Category:    e.Domain + "/" + e.Category,
+			}
+		}
+		return defs, nil
+	}
 	return s.GetCapabilitiesTaxonomy(ctx)
 }
 
@@ -958,4 +1008,9 @@ func (s *serviceImpl) GetKubernetesNamespaces(ctx context.Context) ([]string, er
 	}
 
 	return namespaces, nil
+}
+
+// GetAgentByName retrieves an agent by project ID and name.
+func (s *serviceImpl) GetAgentByName(ctx context.Context, projectID, name string) (*Agent, error) {
+	return s.operator.GetAgentByProjectAndName(ctx, projectID, name)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
 	data_store "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/data-store"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/model_library"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -101,6 +102,24 @@ func (r *mutationResolver) SaveChaosExperiment(ctx context.Context, request mode
 		return "", err
 	}
 
+	// Stage 7: upsert K8s Secret for agent secret-type inputs.
+	// The secret is named ace-agent-secret-<experimentID> in the litmus namespace.
+	// Outside the cluster GetK8sClient returns nil and CreateAgentSecret is a no-op.
+	{
+		k8sClient := model_library.GetK8sClient()
+		secretData := make(map[string][]byte)
+		if request.AgentConfig != nil {
+			for _, si := range request.AgentConfig.SecretInputs {
+				if si != nil {
+					secretData[si.Key] = []byte(si.Value)
+				}
+			}
+		}
+		if secErr := model_library.CreateAgentSecret(ctx, k8sClient, request.ID, secretData); secErr != nil {
+			logrus.WithFields(logFields).WithError(secErr).Warn("failed to upsert agent experiment secret (non-fatal)")
+		}
+	}
+
 	// Auto-deploy CronWorkflow to K8s when saving a scheduled experiment
 	query := bson.D{
 		{"experiment_id", request.ID},
@@ -182,6 +201,16 @@ func (r *mutationResolver) DeleteChaosExperiment(ctx context.Context, experiment
 		logrus.WithFields(logFields).Error(err)
 		return false, err
 	}
+
+	// Stage 7: clean up the K8s Secret for this experiment's agent inputs (non-fatal).
+	// Outside the cluster GetK8sClient returns nil and DeleteAgentSecret is a no-op.
+	{
+		k8sClient := model_library.GetK8sClient()
+		if delErr := model_library.DeleteAgentSecret(ctx, k8sClient, experimentID); delErr != nil {
+			logrus.WithFields(logFields).WithError(delErr).Warn("failed to delete agent experiment secret (non-fatal)")
+		}
+	}
+
 	return uiResponse, err
 }
 

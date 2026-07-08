@@ -33,6 +33,8 @@ import AgentHubController from '@controllers/AgentHub';
 import AppsHubController from '@controllers/AppsHub';
 import AgentDetailController from '@controllers/AgentDetail';
 import AppDetailController from '@controllers/AppDetail';
+import ChaosStudioNewController from '@controllers/ChaosStudioNew';
+import ChaosStudioRunStatusController from '@controllers/ChaosStudioRunStatus';
 
 const experimentID = ':experimentID';
 const runID = ':runID';
@@ -123,6 +125,9 @@ export function RoutesWithAuthentication(): React.ReactElement {
       {/* Apps Hub */}
       <Route exact path={projectMatchPaths.toAppsHub()} component={AppsHubController} />
       <Route exact path={projectMatchPaths.toAppDetail({ appName })} component={AppDetailController} />
+      {/* Chaos Studio Wizard */}
+      <Route exact path={projectMatchPaths.toChaosStudioNew()} component={ChaosStudioNewController} />
+      <Route exact path={projectMatchPaths.toChaosStudioRun({ runID })} component={ChaosStudioRunStatusController} />
       {/*Environments */}
       <Route exact path={projectMatchPaths.toEnvironments()} component={EnvironmentController} />
       {/* Kubernetes Chaos Infrastructure */}

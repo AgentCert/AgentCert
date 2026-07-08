@@ -1,12 +1,13 @@
 declare namespace AppDetailModuleScssNamespace {
   export interface IAppDetailModuleScss {
+    advancedSection: string;
+    advancedToggle: string;
+    configCard: string;
     container: string;
     detailCard: string;
-    infoRow: string;
-    microserviceHeader: string;
-    microserviceList: string;
-    microserviceRow: string;
-    section: string;
+    inputField: string;
+    inputPlaceholder: string;
+    tagCloud: string;
   }
 }
 

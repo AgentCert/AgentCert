@@ -1,42 +1,67 @@
+import React, { useState } from 'react';
 import { Color, FontVariation } from '@harnessio/design-system';
-import { Card, Container, Layout, Text } from '@harnessio/uicore';
+import { Button, ButtonVariation, Card, Container, Layout, Tag, Text } from '@harnessio/uicore';
 import { Icon } from '@harnessio/icons';
-import React from 'react';
-import { useParams } from 'react-router-dom';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
-import type { AppHubCategory, AppHubEntry } from '@api/entities';
+import type { ApplicationSpec, CatalogAppInput } from '@api/entities';
 import { useDocumentTitle, useRouteWithBaseUrl } from '@hooks';
-import { useStrings } from '@strings';
 import css from './AppDetail.module.scss';
 
 interface AppDetailViewProps {
-  categories?: AppHubCategory[];
+  app: ApplicationSpec | null | undefined;
   loading: boolean;
 }
 
-export default function AppDetailView({ categories, loading }: AppDetailViewProps): React.ReactElement {
-  const { getString } = useStrings();
+function SuitabilityList({ items, suitable }: { items: string[]; suitable: boolean }): React.ReactElement {
+  return (
+    <Layout.Vertical spacing="xsmall">
+      {items.map((item, idx) => (
+        <Layout.Horizontal key={idx} spacing="xsmall" flex={{ alignItems: 'flex-start' }}>
+          <Text color={suitable ? Color.GREEN_600 : Color.RED_600} font={{ variation: FontVariation.BODY }}>
+            {suitable ? '✅' : '❌'}
+          </Text>
+          <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>{item}</Text>
+        </Layout.Horizontal>
+      ))}
+    </Layout.Vertical>
+  );
+}
+
+function InputField({ input }: { input: CatalogAppInput }): React.ReactElement {
+  return (
+    <Layout.Vertical spacing="xsmall" className={css.inputField}>
+      <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
+        <Text font={{ variation: FontVariation.FORM_LABEL }} color={Color.GREY_700}>
+          {input.displayName}
+        </Text>
+        {input.required && (
+          <Text font={{ variation: FontVariation.SMALL }} color={Color.RED_600}>*</Text>
+        )}
+      </Layout.Horizontal>
+      {input.description && (
+        <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>{input.description}</Text>
+      )}
+      <div className={css.inputPlaceholder}>
+        <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_500}>
+          {input.default ?? (input.type === 'enum' ? input.values?.[0] : '')}
+          {input.unit ? ` ${input.unit}` : ''}
+        </Text>
+      </div>
+    </Layout.Vertical>
+  );
+}
+
+export default function AppDetailView({ app, loading }: AppDetailViewProps): React.ReactElement {
   const paths = useRouteWithBaseUrl();
-  const { appName } = useParams<{ appName: string }>();
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const app: AppHubEntry | undefined = React.useMemo(() => {
-    if (!categories) return undefined;
-    for (const cat of categories) {
-      const found = cat.applications.find(a => a.name === appName);
-      if (found) return found;
-    }
-    return undefined;
-  }, [categories, appName]);
+  useDocumentTitle(app?.displayName ?? 'App Detail');
 
-  useDocumentTitle(app?.displayName ?? getString('appsHub'));
-
-  const breadcrumbs = [
-    { label: getString('appsHub'), url: paths.toAppsHub() }
-  ];
+  const breadcrumbs = [{ label: 'App Catalog', url: paths.toAppsHub() }];
 
   if (loading) {
     return (
-      <DefaultLayoutTemplate title={getString('appsHub')} breadcrumbs={breadcrumbs}>
+      <DefaultLayoutTemplate title="App Catalog" breadcrumbs={breadcrumbs}>
         <Container padding="xlarge">
           <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_500}>Loading...</Text>
         </Container>
@@ -46,111 +71,122 @@ export default function AppDetailView({ categories, loading }: AppDetailViewProp
 
   if (!app) {
     return (
-      <DefaultLayoutTemplate title={getString('appsHub')} breadcrumbs={breadcrumbs}>
+      <DefaultLayoutTemplate title="App Catalog" breadcrumbs={breadcrumbs}>
         <Container padding="xlarge">
           <Layout.Vertical flex={{ justifyContent: 'center', alignItems: 'center' }} height={400} spacing="medium">
             <Icon name="nav-settings" size={48} color={Color.GREY_400} />
-            <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_500}>
-              Application not found
-            </Text>
+            <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_500}>Application not found</Text>
           </Layout.Vertical>
         </Container>
       </DefaultLayoutTemplate>
     );
   }
 
+  const standardInputs = app.inputs.filter(i => !i.advanced);
+  const advancedInputs = app.inputs.filter(i => i.advanced);
+  const compatibleFaults = app.faultCompatibility.filter(f => f.compatible);
+  const incompatibleFaults = app.faultCompatibility.filter(f => !f.compatible);
+
   return (
     <DefaultLayoutTemplate title={app.displayName} breadcrumbs={breadcrumbs}>
       <Container padding="xlarge" className={css.container}>
-        <Card className={css.detailCard} elevation={1}>
-          <Layout.Vertical spacing="large" padding="xlarge">
-            {/* Header */}
-            <Layout.Horizontal spacing="medium" flex={{ alignItems: 'center' }}>
-              <Icon name="nav-settings" size={36} color={Color.PRIMARY_7} />
-              <Layout.Vertical spacing="xsmall">
-                <Text font={{ variation: FontVariation.H3 }} color={Color.GREY_800}>
-                  {app.displayName}
-                </Text>
-                <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.GREY_500}>
-                  v{app.version}
-                </Text>
-              </Layout.Vertical>
-            </Layout.Horizontal>
-
-            {/* Description */}
-            <Layout.Vertical spacing="xsmall" className={css.section}>
-              <Text font={{ variation: FontVariation.H6 }} color={Color.GREY_600}>Description</Text>
-              <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
-                {app.description}
-              </Text>
-            </Layout.Vertical>
-
-            {/* Details */}
-            <Layout.Vertical spacing="small" className={css.section}>
-              <Text font={{ variation: FontVariation.H6 }} color={Color.GREY_600}>Details</Text>
-              <Layout.Horizontal spacing="xlarge">
-                <Layout.Vertical spacing="xsmall" className={css.infoRow}>
-                  <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>Name</Text>
-                  <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800}>{app.name}</Text>
+        <Layout.Horizontal spacing="xlarge" flex={{ alignItems: 'flex-start' }}>
+          <Card className={css.detailCard} elevation={1}>
+            <Layout.Vertical spacing="large" padding="xlarge">
+              <Layout.Horizontal spacing="medium" flex={{ alignItems: 'center' }}>
+                <Icon name="nav-settings" size={36} color={Color.PRIMARY_7} />
+                <Layout.Vertical spacing="xsmall">
+                  <Text font={{ variation: FontVariation.H3 }} color={Color.GREY_800}>{app.displayName}</Text>
+                  <Layout.Horizontal spacing="small">
+                    <Tag>{app.tier === 'official' ? 'Official' : 'Community'}</Tag>
+                    <Tag>{app.domain}</Tag>
+                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>v{app.version}</Text>
+                  </Layout.Horizontal>
                 </Layout.Vertical>
-                <Layout.Vertical spacing="xsmall" className={css.infoRow}>
-                  <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>Version</Text>
-                  <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800}>v{app.version}</Text>
-                </Layout.Vertical>
-                {app.namespace && (
-                  <Layout.Vertical spacing="xsmall" className={css.infoRow}>
-                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>Namespace</Text>
-                    <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800}>{app.namespace}</Text>
-                  </Layout.Vertical>
-                )}
-                {app.helmReleaseName && (
-                  <Layout.Vertical spacing="xsmall" className={css.infoRow}>
-                    <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>Helm Release</Text>
-                    <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800}>{app.helmReleaseName}</Text>
-                  </Layout.Vertical>
-                )}
               </Layout.Horizontal>
-            </Layout.Vertical>
 
-            {/* Microservices */}
-            {app.microservices && app.microservices.length > 0 && (
+              <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
+                {app.description.long}
+              </Text>
+
+              {app.description.suitableFor.length > 0 && (
+                <Layout.Vertical spacing="small">
+                  <SuitabilityList items={app.description.suitableFor} suitable={true} />
+                  {app.description.notSuitableFor.length > 0 && (
+                    <SuitabilityList items={app.description.notSuitableFor} suitable={false} />
+                  )}
+                </Layout.Vertical>
+              )}
+
               <Layout.Vertical spacing="small">
                 <Text font={{ variation: FontVariation.H6 }} color={Color.GREY_600}>
                   Microservices ({app.microservices.length})
                 </Text>
-                <Layout.Vertical spacing="none" className={css.microserviceList}>
-                  <Layout.Horizontal
-                    flex={{ justifyContent: 'space-between', alignItems: 'center' }}
-                    className={css.microserviceHeader}
-                  >
-                    <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.GREY_600}>Service</Text>
-                    <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.GREY_600}>Replicas</Text>
-                  </Layout.Horizontal>
-                  {app.microservices.map(svc => (
-                    <Layout.Horizontal
-                      key={svc.name}
-                      spacing="small"
-                      flex={{ justifyContent: 'space-between', alignItems: 'center' }}
-                      className={css.microserviceRow}
-                    >
-                      <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
-                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="4" cy="4" r="4" fill={svc.isRunning ? '#0AB000' : '#CF2318'} />
-                        </svg>
-                        <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_700}>
-                          {svc.name}
-                        </Text>
-                      </Layout.Horizontal>
-                      <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_500}>
-                        {svc.readyReplicas}/{svc.desiredReplicas}
-                      </Text>
-                    </Layout.Horizontal>
+                <div className={css.tagCloud}>
+                  {app.microservices.map(ms => (
+                    <Tag key={ms.name}>{ms.name}</Tag>
                   ))}
-                </Layout.Vertical>
+                </div>
               </Layout.Vertical>
-            )}
-          </Layout.Vertical>
-        </Card>
+
+              <Layout.Vertical spacing="small">
+                <Text font={{ variation: FontVariation.H6 }} color={Color.GREY_600}>Available Faults</Text>
+                <div className={css.tagCloud}>
+                  {compatibleFaults.map(f => <Tag key={f.faultName}>{f.faultName}</Tag>)}
+                </div>
+                {incompatibleFaults.length > 0 && (
+                  <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_400}>
+                    + {incompatibleFaults.length} incompatible faults
+                  </Text>
+                )}
+              </Layout.Vertical>
+
+              <Layout.Horizontal spacing="xlarge">
+                <Layout.Vertical spacing="xsmall">
+                  <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>Namespace</Text>
+                  <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800}>{app.install.namespace.default}</Text>
+                </Layout.Vertical>
+                <Layout.Vertical spacing="xsmall">
+                  <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>Install timeout</Text>
+                  <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800}>{app.install.timeout}</Text>
+                </Layout.Vertical>
+              </Layout.Horizontal>
+
+              <Layout.Horizontal spacing="medium">
+                <Button variation={ButtonVariation.TERTIARY} text="View Documentation" icon="link" />
+                <Button variation={ButtonVariation.PRIMARY} text="Select This App →" />
+              </Layout.Horizontal>
+            </Layout.Vertical>
+          </Card>
+
+          <Card className={css.configCard} elevation={1}>
+            <Layout.Vertical spacing="medium" padding="large">
+              <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800}>
+                Configure: {app.displayName}
+              </Text>
+
+              {standardInputs.length > 0 && (
+                <Layout.Vertical spacing="medium">
+                  {standardInputs.map(input => <InputField key={input.key} input={input} />)}
+                </Layout.Vertical>
+              )}
+
+              {advancedInputs.length > 0 && (
+                <Layout.Vertical spacing="medium">
+                  <div className={css.advancedToggle} onClick={() => setShowAdvanced(v => !v)}>
+                    <Icon name={showAdvanced ? 'chevron-down' : 'chevron-right'} size={12} />
+                    <Text font={{ variation: FontVariation.SMALL_BOLD }} color={Color.GREY_600}>Advanced</Text>
+                  </div>
+                  {showAdvanced && (
+                    <Layout.Vertical spacing="medium" className={css.advancedSection}>
+                      {advancedInputs.map(input => <InputField key={input.key} input={input} />)}
+                    </Layout.Vertical>
+                  )}
+                </Layout.Vertical>
+              )}
+            </Layout.Vertical>
+          </Card>
+        </Layout.Horizontal>
       </Container>
     </DefaultLayoutTemplate>
   );
