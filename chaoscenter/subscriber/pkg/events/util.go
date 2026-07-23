@@ -44,6 +44,11 @@ func (ev *subscriberEvents) getChaosData(nodeStatus v1alpha13.NodeStatus, engine
 		cd.ExperimentStatus = string(crd.Status.EngineStatus)
 	}
 	if len(crd.Status.Experiments) == 0 {
+		// ChaosResult not yet created; seed ExperimentName from the engine spec so
+		// handler.go never falls back to the random generateName suffix as the fault key.
+		if len(crd.Spec.Experiments) > 0 {
+			cd.ExperimentName = crd.Spec.Experiments[0].Name
+		}
 		return cd, nil
 	}
 
