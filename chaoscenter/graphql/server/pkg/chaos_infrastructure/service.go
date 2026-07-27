@@ -90,7 +90,7 @@ func (in *infraService) RegisterInfra(c context.Context, projectID string, input
 		return nil, errors.New("Invalid EnvironmentID")
 	}
 
-	if (*input.InfraNsExists && input.InfraNamespace == nil) || (*input.InfraNsExists && *input.InfraNamespace == "") {
+	if input.InfraNsExists != nil && *input.InfraNsExists && (input.InfraNamespace == nil || *input.InfraNamespace == "") {
 		return nil, errors.New("InfraNamespace parameter is required if InfraNsExists is true")
 	}
 
@@ -135,12 +135,17 @@ func (in *infraService) RegisterInfra(c context.Context, projectID string, input
 		input.Tags = []string{}
 	}
 
+	var infraDescription string
+	if input.Description != nil {
+		infraDescription = *input.Description
+	}
+
 	// TODO add mongo transaction
 	newInfra := dbChaosInfra.ChaosInfra{
 		InfraID: infraID,
 		ResourceDetails: mongodb.ResourceDetails{
 			Name:        input.Name,
-			Description: *input.Description,
+			Description: infraDescription,
 			Tags:        input.Tags,
 		},
 		ProjectID: projectID,

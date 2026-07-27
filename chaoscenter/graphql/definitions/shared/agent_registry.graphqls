@@ -488,56 +488,74 @@ type DeleteAgentResponse {
 }
 
 """
+HelmEnvVarInput passes an environment variable into the agent's Helm chart.
+Sensitive variables (API keys, tokens) are injected via a Kubernetes Secret
+(--set-string secrets.<name>=<value>); non-sensitive ones via a ConfigMap
+(--set configMap.<name>=<value>).  The target agent's Helm chart must expose
+a `secrets` map and a `configMap` map in its values.yaml for this to work.
+"""
+input HelmEnvVarInput {
+  """Environment variable name, e.g. OPENAI_API_KEY"""
+  name: String!
+
+  """Environment variable value"""
+  value: String!
+
+  """
+  When true the value is stored in a Kubernetes Secret (masked in UI and logs).
+  When false (default) it is stored in a ConfigMap.
+  """
+  sensitive: Boolean
+}
+
+"""
 DeployAgentWithHelmRequest contains information to deploy an agent using Helm.
+LLM provider credentials and any other agent-specific environment variables
+are passed via the generic helmEnvVars list rather than provider-specific
+fields, so any agent Helm chart can be targeted without schema changes.
 """
 input DeployAgentWithHelmRequest {
   """Unique name for the agent within the project"""
   name: String!
-  
+
   """Optional description of the agent"""
   description: String
-  
+
   """Kubernetes namespace for deployment"""
   namespace: String!
-  
+
   """Cluster name for deployment"""
   clusterName: String
-  
+
   """List of capabilities this agent supports"""
   capabilities: [String!]!
-  
+
   """Semantic version of the agent"""
   version: String
-  
+
   """Helm release name"""
   helmReleaseName: String!
-  
+
   """Helm chart version"""
   helmChartVersion: String!
-  
+
   """YAML content for Helm values"""
   valuesYaml: String
-  
+
   """Base64-encoded Helm chart .tgz file data"""
   chartData: String
-  
+
   """Kubeconfig for cluster access (optional)"""
   kubeconfig: String
-  
-  """Azure OpenAI API Key"""
-  azureOpenAIKey: String
-  
-  """Azure OpenAI Endpoint URL"""
-  azureOpenAIEndpoint: String
-  
-  """Azure OpenAI Deployment Model Name"""
-  azureOpenAIDeployment: String
-  
-  """Azure OpenAI API Version"""
-  azureOpenAIAPIVersion: String
-  
-  """Azure OpenAI Embedding Deployment Name"""
-  azureOpenAIEmbeddingDeployment: String
+
+  """
+  Generic environment variables injected into the agent's Helm chart.
+  Replaces the former provider-specific fields (azureOpenAIKey, etc.).
+  Sensitive entries are stored in a Kubernetes Secret; others in a ConfigMap.
+  Example: [{name: "OPENAI_API_KEY", value: "sk-…", sensitive: true},
+            {name: "OPENAI_BASE_URL", value: "https://…", sensitive: false}]
+  """
+  helmEnvVars: [HelmEnvVarInput!]
 }
 
 """

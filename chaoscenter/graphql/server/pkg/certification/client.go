@@ -46,6 +46,14 @@ func (e *APIError) Error() string {
 
 type TraceSource struct {
 	Type string `json:"type"`
+	// TraceID, when set, is the canonical notify_id/workflow-run trace key --
+	// the same value agent-sidecar stamps as Langfuse's own trace_id on every
+	// LLM call it forwards. The certifier resolves the trace by direct ID
+	// lookup when this is present, bypassing its experiment_id/experiment_run_id
+	// metadata-filter search entirely. That search can never match traces from
+	// agent-sidecar-instrumented agents, which deliberately omit those two
+	// metadata keys to preserve blind-observer integrity (see agent-sidecar/proxy.py).
+	TraceID string `json:"trace_id,omitempty"`
 }
 
 type StorageConfig struct {

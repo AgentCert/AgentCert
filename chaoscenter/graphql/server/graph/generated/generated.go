@@ -7286,56 +7286,58 @@ type DeleteAgentResponse {
 }
 
 """
+HelmEnvVarInput passes an environment variable into the agent's Helm chart.
+"""
+input HelmEnvVarInput {
+  """Environment variable name, e.g. OPENAI_API_KEY"""
+  name: String!
+
+  """Environment variable value"""
+  value: String!
+
+  """When true stored in a Kubernetes Secret; otherwise in a ConfigMap."""
+  sensitive: Boolean
+}
+
+"""
 DeployAgentWithHelmRequest contains information to deploy an agent using Helm.
 """
 input DeployAgentWithHelmRequest {
   """Unique name for the agent within the project"""
   name: String!
-  
+
   """Optional description of the agent"""
   description: String
-  
+
   """Kubernetes namespace for deployment"""
   namespace: String!
-  
+
   """Cluster name for deployment"""
   clusterName: String
-  
+
   """List of capabilities this agent supports"""
   capabilities: [String!]!
-  
+
   """Semantic version of the agent"""
   version: String
-  
+
   """Helm release name"""
   helmReleaseName: String!
-  
+
   """Helm chart version"""
   helmChartVersion: String!
-  
+
   """YAML content for Helm values"""
   valuesYaml: String
-  
+
   """Base64-encoded Helm chart .tgz file data"""
   chartData: String
-  
+
   """Kubeconfig for cluster access (optional)"""
   kubeconfig: String
-  
-  """Azure OpenAI API Key"""
-  azureOpenAIKey: String
-  
-  """Azure OpenAI Endpoint URL"""
-  azureOpenAIEndpoint: String
-  
-  """Azure OpenAI Deployment Model Name"""
-  azureOpenAIDeployment: String
-  
-  """Azure OpenAI API Version"""
-  azureOpenAIAPIVersion: String
-  
-  """Azure OpenAI Embedding Deployment Name"""
-  azureOpenAIEmbeddingDeployment: String
+
+  """Generic environment variables injected into the agent's Helm chart."""
+  helmEnvVars: [HelmEnvVarInput!]
 }
 
 """
@@ -52649,7 +52651,7 @@ func (ec *executionContext) unmarshalInputDeployAgentWithHelmRequest(ctx context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "namespace", "clusterName", "capabilities", "version", "helmReleaseName", "helmChartVersion", "valuesYaml", "chartData", "kubeconfig", "azureOpenAIKey", "azureOpenAIEndpoint", "azureOpenAIDeployment", "azureOpenAIAPIVersion", "azureOpenAIEmbeddingDeployment"}
+	fieldsInOrder := [...]string{"name", "description", "namespace", "clusterName", "capabilities", "version", "helmReleaseName", "helmChartVersion", "valuesYaml", "chartData", "kubeconfig", "helmEnvVars"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -52733,41 +52735,13 @@ func (ec *executionContext) unmarshalInputDeployAgentWithHelmRequest(ctx context
 				return it, err
 			}
 			it.Kubeconfig = data
-		case "azureOpenAIKey":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIKey"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+		case "helmEnvVars":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("helmEnvVars"))
+			data, err := ec.unmarshalOHelmEnvVarInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInputᚄ(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.AzureOpenAIKey = data
-		case "azureOpenAIEndpoint":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIEndpoint"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.AzureOpenAIEndpoint = data
-		case "azureOpenAIDeployment":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIDeployment"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.AzureOpenAIDeployment = data
-		case "azureOpenAIAPIVersion":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIAPIVersion"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.AzureOpenAIAPIVersion = data
-		case "azureOpenAIEmbeddingDeployment":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("azureOpenAIEmbeddingDeployment"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.AzureOpenAIEmbeddingDeployment = data
+			it.HelmEnvVars = data
 		}
 	}
 
@@ -53959,6 +53933,47 @@ func (ec *executionContext) unmarshalInputKeyValuePairInput(ctx context.Context,
 				return it, err
 			}
 			it.Value = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputHelmEnvVarInput(ctx context.Context, obj interface{}) (model.HelmEnvVarInput, error) {
+	var it model.HelmEnvVarInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "value", "sensitive"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "value":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Value = data
+		case "sensitive":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sensitive"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Sensitive = data
 		}
 	}
 
@@ -67719,6 +67734,31 @@ func (ec *executionContext) unmarshalOKeyValuePairInput2ᚕᚖgithubᚗcomᚋlit
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
 		res[i], err = ec.unmarshalNKeyValuePairInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNHelmEnvVarInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInput(ctx context.Context, v interface{}) (*model.HelmEnvVarInput, error) {
+	res, err := ec.unmarshalInputHelmEnvVarInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOHelmEnvVarInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInputᚄ(ctx context.Context, v interface{}) ([]*model.HelmEnvVarInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]*model.HelmEnvVarInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNHelmEnvVarInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}

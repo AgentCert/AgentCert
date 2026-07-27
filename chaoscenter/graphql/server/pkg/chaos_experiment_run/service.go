@@ -75,6 +75,8 @@ func (c *chaosExperimentRunService) ProcessExperimentRunDelete(ctx context.Conte
 func (c *chaosExperimentRunService) ProcessExperimentRunStop(ctx context.Context, query bson.D, experimentRunID *string, experiment dbChaosExperiment.ChaosExperimentRequest, username string, projectID string, r *store.StateData) error {
 	update := bson.D{
 		{"$set", bson.D{
+			{"phase", "Stopped"},
+			{"completed", true},
 			{"updated_at", time.Now().UnixMilli()},
 			{"updated_by", mongodb.UserDetailResponse{
 				Username: username,

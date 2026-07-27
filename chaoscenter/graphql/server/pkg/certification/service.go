@@ -46,6 +46,14 @@ type StartInput struct {
 	ExperimentID    string
 	ExperimentRunID string
 	ExpectedRuns    int
+	// NotifyID is the canonical Langfuse trace key (ChaosCenter's notify_id,
+	// preferred over ExperimentRunID when known -- see traceID derivation in
+	// chaos_experiment_run/handler.go). Threaded through to the certifier's
+	// trace_source.trace_id so it can resolve the trace by direct ID lookup
+	// instead of an experiment_id/experiment_run_id metadata-filter search.
+	// May be empty for manually-triggered certification (the certifier falls
+	// back to the metadata-filter search in that case).
+	NotifyID string
 }
 
 type StartOutput struct {
@@ -185,7 +193,7 @@ func (s *Service) triggerBucketing(ctx context.Context, in StartInput) error {
 		AgentID:       in.AgentID,
 		ExperimentID:  in.ExperimentID,
 		RunID:         in.ExperimentRunID,
-		TraceSource:   TraceSource{Type: "langfuse"},
+		TraceSource:   TraceSource{Type: "langfuse", TraceID: in.NotifyID},
 		StorageConfig: StorageConfig{Type: "local"},
 	})
 	if err != nil {

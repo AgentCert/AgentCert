@@ -22,6 +22,9 @@ import { EnvVar } from 'models/k8s';
 import ExperimentFactory from './ExperimentFactory';
 import { ExperimentYamlService, GetFaultTunablesOperation, PreProcessChaosExperiment } from './ExperimentYamlService';
 
+const isInstallFaultsStep = (name: string): boolean =>
+  name === 'install-chaos-faults' || name === 'install-chaos-experiments';
+
 export class KubernetesYamlService extends ExperimentYamlService {
   async addFaultsToManifest(
     key: ChaosObjectStoresPrimaryKeys['experiments'],
@@ -60,7 +63,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       }
 
       // Get install-chaos-faults template artifacts
-      const installTemplateArtifacts = templates?.filter(template => template.name === 'install-chaos-faults')[0].inputs
+      const installTemplateArtifacts = templates?.filter(template => isInstallFaultsStep(template.name))?.[0]?.inputs
         ?.artifacts;
 
       if (faultCR?.spec?.definition) {
@@ -155,7 +158,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       }
 
       // Get install-chaos-faults template artifacts
-      const installTemplateArtifacts = templates?.filter(template => template.name === 'install-chaos-faults')[0].inputs
+      const installTemplateArtifacts = templates?.filter(template => isInstallFaultsStep(template.name))?.[0]?.inputs
         ?.artifacts;
 
       // Remove faults from install-chaos-faults template
@@ -195,7 +198,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       let index = 0;
       let expWeight = '10';
       templates?.map((template, i) => {
-        if (template.name === 'install-chaos-faults') {
+        if (isInstallFaultsStep(template.name)) {
           template.inputs?.artifacts?.map(artifact => {
             if (artifact.name === faultName) {
               if (faultCR?.spec?.definition) {
@@ -738,6 +741,12 @@ export class KubernetesYamlService extends ExperimentYamlService {
           workflow_run_id: '{{ workflow.uid }}'
         };
       }
+
+      if (!manifest.metadata.annotations) {
+        manifest.metadata.annotations = { probeRef: '[]' };
+      } else if (manifest.metadata.annotations.probeRef === undefined) {
+        manifest.metadata.annotations.probeRef = '[]';
+      }
     }
     return [manifest];
   }
@@ -834,7 +843,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
     const [templates] = this.getTemplatesAndSteps(manifest);
 
     // Get install-chaos-faults template artifacts
-    const installTemplateArtifacts = templates?.filter(template => template.name === 'install-chaos-faults')[0].inputs
+    const installTemplateArtifacts = templates?.filter(template => isInstallFaultsStep(template.name))?.[0]?.inputs
       ?.artifacts;
 
     // Check if experiment has faults
@@ -854,7 +863,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
     steps?.map(step => {
       if (step.length === 0) return;
 
-      if (isEditMode && (step[0].template === 'install-chaos-faults' || step[0].template === 'cleanup-chaos-resources'))
+      if (isEditMode && (isInstallFaultsStep(step[0].template ?? '') || step[0].template === 'cleanup-chaos-resources'))
         return;
 
       graphData.push({
@@ -906,7 +915,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
     const [templates] = this.getTemplatesAndSteps(manifest);
 
     // Get install-chaos-faults template artifacts
-    const installTemplateArtifacts = templates?.filter(template => template.name === 'install-chaos-faults')[0].inputs
+    const installTemplateArtifacts = templates?.filter(template => isInstallFaultsStep(template.name))?.[0]?.inputs
       ?.artifacts;
 
     // Get experiment from install-chaos-faults template

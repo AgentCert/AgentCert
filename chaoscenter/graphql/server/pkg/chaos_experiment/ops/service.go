@@ -422,7 +422,7 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	}
 
 	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
-	applyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
+	ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	applyAgentInstallNamespaceOverride(workflowManifest.Spec.Templates)
 	injectExperimentContextArgs(workflowManifest.Spec.Templates)
 
@@ -819,7 +819,7 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	}
 
 	applyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
-	applyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyAgentInstallNamespaceOverride(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	injectExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 
@@ -1743,16 +1743,17 @@ func applyInstallAgentTemplateOverridesFallback(templates []v1alpha1.Template, e
 	}
 }
 
-// applyInstallApplicationTemplateOverrides sets a safe imagePullPolicy on any
-// install-application template. The image itself is intentionally NOT overridden
-// here because install-application is app-specific: different experiments may use
-// different installer images (sock-shop, boutique, etc.). Only the pull policy is
-// normalised so that locally-loaded minikube images are used instead of always
-// pulling from a remote registry.
-//
-// If INSTALL_APPLICATION_IMAGE_PULL_POLICY is set in the environment it is used;
-// otherwise IfNotPresent is applied as a safe default.
-func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
+// applyInstallApplicationTemplateOverrides overrides the image and imagePullPolicy
+// on any install-application template. When INSTALL_APPLICATION_IMAGE is set in
+// the environment, it replaces whatever image the stored workflow template carries
+// (necessary when the local registry image differs from the Docker Hub image name).
+// INSTALL_APPLICATION_IMAGE_PULL_POLICY controls the pull policy; defaults to Always.
+func ApplyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
+	targetImage := strings.TrimSpace(utils.Config.InstallApplicationImage)
+	if targetImage == "" {
+		targetImage = strings.TrimSpace(os.Getenv("INSTALL_APPLICATION_IMAGE"))
+	}
+
 	targetPullPolicy := strings.TrimSpace(utils.Config.InstallApplicationImagePullPolicy)
 	if targetPullPolicy == "" {
 		targetPullPolicy = string(corev1.PullAlways)
@@ -1763,11 +1764,6 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 	default:
 		targetPullPolicy = string(corev1.PullAlways)
 	}
-
-	// MCP server enable flags are no longer force-disabled here. The sock-shop
-	// chart's values.yaml owns that decision so MCPs can be deployed alongside
-	// the app for namespace-scoped RBAC. The previous override pinned them to
-	// false because MCPs lived cluster-wide in the litmus ns.
 
 	changed := false
 	for i := range templates {
@@ -1781,6 +1777,11 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 			continue
 		}
 
+		if targetImage != "" && t.Container.Image != targetImage {
+			t.Container.Image = targetImage
+			changed = true
+		}
+
 		if t.Container.ImagePullPolicy != corev1.PullPolicy(targetPullPolicy) {
 			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
 			changed = true
@@ -1789,8 +1790,9 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 
 	if changed {
 		logrus.WithFields(logrus.Fields{
+			"image":       targetImage,
 			"pull_policy": targetPullPolicy,
-		}).Info("[Install App Patch] Applied install-application imagePullPolicy override")
+		}).Info("[Install App Patch] Applied install-application image/pullPolicy override")
 	}
 }
 

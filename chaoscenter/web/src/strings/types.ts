@@ -525,6 +525,11 @@ export interface StringsMap {
   'mostRecentDirection': unknown
   'multiRunAllCompleted': unknown
   'multiRunCompleted': unknown
+  'multiRunDelayHint': unknown
+  'multiRunDelayHours': unknown
+  'multiRunDelayLabel': unknown
+  'multiRunDelayMinutes': unknown
+  'multiRunDelaySeconds': unknown
   'multiRunMaxRunsLabel': unknown
   'multiRunMaxRunsPlaceholder': unknown
   'multiRunProgress': unknown

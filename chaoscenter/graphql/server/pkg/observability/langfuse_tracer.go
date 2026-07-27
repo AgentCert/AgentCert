@@ -822,6 +822,13 @@ func (t *LangfuseTracer) ClearTraceNameSet(traceID string) {
 // every upsert, so the canonical "<expName>:<argoRunID>" name is sent alongside the
 // metadata field; this also keeps the trace title in sync if SetTraceName has not
 // already run. One-shot per traceID.
+//
+// Langfuse's traces endpoint replaces the whole metadata object on every write
+// rather than merging (confirmed empirically). Sending {"experiment_run_id": ...}
+// alone would silently wipe out experiment_id and every other field
+// TraceExperimentExecution set when it opened the trace. So this fetches the
+// trace's current metadata first and merges the new field into it client-side
+// before writing back the full object.
 func (t *LangfuseTracer) SetTraceExperimentRunID(ctx context.Context, traceID, traceName, expRunID string) error {
 	if !t.IsEnabled() || traceID == "" || expRunID == "" || traceName == "" {
 		return nil
@@ -840,12 +847,25 @@ func (t *LangfuseTracer) SetTraceExperimentRunID(ctx context.Context, traceID, t
 
 	upsertCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
+	existing, err := t.client.GetTraceMetadata(upsertCtx, traceID)
+	if err != nil {
+		t.traceExpRunIDMu.Lock()
+		delete(t.traceExpRunIDSet, traceID)
+		t.traceExpRunIDMu.Unlock()
+		fmt.Printf("[Observability] Failed to fetch existing metadata for trace %s: %v\n", traceID, err)
+		return err
+	}
+	merged := make(map[string]interface{}, len(existing)+1)
+	for k, v := range existing {
+		merged[k] = v
+	}
+	merged["experiment_run_id"] = expRunID
+
 	if err := t.client.TraceExperiment(upsertCtx, &agent_registry.ExperimentTrace{
-		TraceID: traceID,
-		Name:    traceName,
-		Metadata: map[string]interface{}{
-			"experiment_run_id": expRunID,
-		},
+		TraceID:  traceID,
+		Name:     traceName,
+		Metadata: merged,
 	}); err != nil {
 		// Roll back the cache flag so a subsequent tick can retry.
 		t.traceExpRunIDMu.Lock()

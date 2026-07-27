@@ -751,7 +751,22 @@ type DeleteAgentResponse struct {
 	Message string `json:"message"`
 }
 
+// HelmEnvVarInput passes an environment variable into the agent's Helm chart.
+// Sensitive variables are stored in a Kubernetes Secret; others in a ConfigMap.
+type HelmEnvVarInput struct {
+	// Environment variable name, e.g. OPENAI_API_KEY
+	Name string `json:"name"`
+	// Environment variable value
+	Value string `json:"value"`
+	// When true the value is stored in a Kubernetes Secret (masked in logs).
+	// When false (default) it is stored in a ConfigMap.
+	Sensitive *bool `json:"sensitive,omitempty"`
+}
+
 // DeployAgentWithHelmRequest contains information to deploy an agent using Helm.
+// LLM provider credentials and any other agent-specific environment variables
+// are passed via the generic HelmEnvVars list rather than provider-specific
+// fields, so any agent Helm chart can be targeted without schema changes.
 type DeployAgentWithHelmRequest struct {
 	// Unique name for the agent within the project
 	Name string `json:"name"`
@@ -775,16 +790,9 @@ type DeployAgentWithHelmRequest struct {
 	ChartData *string `json:"chartData,omitempty"`
 	// Kubeconfig for cluster access (optional)
 	Kubeconfig *string `json:"kubeconfig,omitempty"`
-	// Azure OpenAI API Key
-	AzureOpenAIKey *string `json:"azureOpenAIKey,omitempty"`
-	// Azure OpenAI Endpoint URL
-	AzureOpenAIEndpoint *string `json:"azureOpenAIEndpoint,omitempty"`
-	// Azure OpenAI Deployment Model Name
-	AzureOpenAIDeployment *string `json:"azureOpenAIDeployment,omitempty"`
-	// Azure OpenAI API Version
-	AzureOpenAIAPIVersion *string `json:"azureOpenAIAPIVersion,omitempty"`
-	// Azure OpenAI Embedding Deployment Name
-	AzureOpenAIEmbeddingDeployment *string `json:"azureOpenAIEmbeddingDeployment,omitempty"`
+	// Generic environment variables injected into the agent's Helm chart.
+	// Replaces the former provider-specific fields (azureOpenAIKey, etc.).
+	HelmEnvVars []*HelmEnvVarInput `json:"helmEnvVars,omitempty"`
 }
 
 // DeployAgentWithHelmResponse returned after successful Helm deployment.

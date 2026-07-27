@@ -2121,6 +2121,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	if normalizeInstallTemplates(workflowManifest.Spec.Templates) {
 		ensureInstallTimeoutParam(&workflowManifest.Spec.Arguments)
 	}
+	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
 	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
 
@@ -2525,6 +2526,7 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 	if normalizeInstallTemplates(cronExperimentManifest.Spec.WorkflowSpec.Templates) {
 		ensureInstallTimeoutParam(&cronExperimentManifest.Spec.WorkflowSpec.Arguments)
 	}
+	ops.ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 	applyUninstallAllPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 
@@ -3026,6 +3028,10 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				ExperimentID:    event.ExperimentID,
 				ExperimentRunID: event.ExperimentRunID,
 				ExpectedRuns:    plannedRuns,
+				// traceID is the canonical notify_id-preferred trace key computed
+				// above (line ~2765) -- the same value agent-sidecar stamps as
+				// Langfuse's trace_id on every LLM call for this run.
+				NotifyID: traceID,
 			}
 			lf := logFields
 			go func(in certification.StartInput) {

@@ -16,16 +16,8 @@ RUN go env
 RUN go mod download
 RUN go mod tidy
 
-# Clean existing generated files to force regeneration
-RUN rm -rf graph/generated/ graph/model/models_gen.go graph/model/models.go 2>/dev/null || true
-
-# Debug: Show what files we have
-RUN echo "=== Current Directory ===" && pwd && ls -la
-
-# Generate GraphQL code
-RUN echo "=== Running go generate ===" && go generate ./... && echo "=== go generate completed ===" 
-
-# Verify generated files exist and are non-empty
+# Use the committed generated files — the resolver implementation has diverged from
+# what gqlgen can regenerate cleanly, so we skip the delete-and-regenerate cycle.
 RUN echo "=== Checking generated files ===" \
     && ls -lh graph/generated/ \
     && test -s graph/generated/generated.go \
