@@ -1073,6 +1073,7 @@ export interface StringsMap {
   'viewProbeDetails': unknown
   'viewProbeProperties': unknown
   'viewRun': unknown
+  'viewTraceInLangfuse': unknown
   'viewer': unknown
   'warning': unknown
   'weekly': unknown

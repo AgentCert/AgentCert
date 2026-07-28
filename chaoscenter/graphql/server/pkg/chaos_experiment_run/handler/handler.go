@@ -924,18 +924,31 @@ func detectNodeContainerRuntime(clientset *kubernetes.Clientset) (runtime, socke
 		return "", ""
 	}
 
-	// ContainerRuntimeVersion format: "docker://28.2.2", "containerd://1.7.x", "cri-o://..."
+	// ContainerRuntimeVersion format: "docker://28.2.2", "containerd://1.7.x", "containerd://1.7.x-k3s2...", "cri-o://..."
 	rv := nodes.Items[0].Status.NodeInfo.ContainerRuntimeVersion
 	switch {
 	case strings.HasPrefix(rv, "docker://"):
-		return "docker", "/run/docker.sock"
+		runtime, socketPath = "docker", "/run/docker.sock"
 	case strings.HasPrefix(rv, "containerd://"):
-		return "containerd", "/run/containerd/containerd.sock"
+		// k3s bundles containerd at a different socket path
+		if strings.Contains(rv, "-k3s") {
+			runtime, socketPath = "containerd", "/run/k3s/containerd/containerd.sock"
+		} else {
+			runtime, socketPath = "containerd", "/run/containerd/containerd.sock"
+		}
 	case strings.HasPrefix(rv, "cri-o://"):
-		return "cri-o", "/var/run/crio/crio.sock"
+		runtime, socketPath = "cri-o", "/var/run/crio/crio.sock"
 	default:
 		return "", ""
 	}
+
+	// CONTAINER_SOCKET_PATH allows operators to override the auto-detected path
+	// for non-standard distributions without rebuilding the image.
+	if override := os.Getenv("CONTAINER_SOCKET_PATH"); override != "" {
+		socketPath = override
+	}
+
+	return runtime, socketPath
 }
 
 // normalizeContainerRuntimeInYAML injects or updates CONTAINER_RUNTIME and SOCKET_PATH

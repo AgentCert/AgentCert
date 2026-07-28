@@ -73,14 +73,15 @@ func (c *chaosExperimentRunService) ProcessExperimentRunDelete(ctx context.Conte
 
 // ProcessExperimentRunStop deletes a workflow entry and updates the database
 func (c *chaosExperimentRunService) ProcessExperimentRunStop(ctx context.Context, query bson.D, experimentRunID *string, experiment dbChaosExperiment.ChaosExperimentRequest, username string, projectID string, r *store.StateData) error {
+	now := time.Now().UnixMilli()
+	updatedBy := mongodb.UserDetailResponse{Username: username}
+
 	update := bson.D{
 		{"$set", bson.D{
 			{"phase", "Stopped"},
 			{"completed", true},
-			{"updated_at", time.Now().UnixMilli()},
-			{"updated_by", mongodb.UserDetailResponse{
-				Username: username,
-			}},
+			{"updated_at", now},
+			{"updated_by", updatedBy},
 		}},
 	}
 
@@ -88,6 +89,26 @@ func (c *chaosExperimentRunService) ProcessExperimentRunStop(ctx context.Context
 	if err != nil {
 		return err
 	}
+
+	// Also update the denormalized copy in chaosExperiments.recent_experiment_run_details
+	// so the UI reflects Stopped immediately without waiting for the Argo callback.
+	if experimentRunID != nil && *experimentRunID != "" {
+		expFilter := bson.D{
+			{"experiment_id", experiment.ExperimentID},
+			{"recent_experiment_run_details.experiment_run_id", *experimentRunID},
+		}
+		expUpdate := bson.D{
+			{"$set", bson.D{
+				{"recent_experiment_run_details.$.phase", "Stopped"},
+				{"recent_experiment_run_details.$.completed", true},
+				{"recent_experiment_run_details.$.updated_at", now},
+				{"recent_experiment_run_details.$.updated_by", updatedBy},
+			}},
+		}
+		// Non-fatal: the Argo terminal event will eventually reconcile this.
+		_ = c.chaosExperimentOperator.UpdateChaosExperiment(ctx, expFilter, expUpdate)
+	}
+
 	if r != nil {
 		chaos_infrastructure.SendExperimentToSubscriber(projectID, &model.ChaosExperimentRequest{
 			InfraID: experiment.InfraID,

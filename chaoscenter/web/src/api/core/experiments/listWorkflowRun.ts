@@ -58,6 +58,7 @@ export function listExperimentRunForHistory({
             experimentID
             experimentName
             experimentRunID
+            notifyID
             experimentType
             updatedBy {
               username

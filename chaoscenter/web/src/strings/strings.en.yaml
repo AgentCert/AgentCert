@@ -1254,6 +1254,7 @@ viewManifest: View YAML Manifest
 viewProbeDetails: View Probe Details
 viewProbeProperties: View Probe Properties
 viewRun: View Run
+viewTraceInLangfuse: View Trace in Langfuse
 viewer: Viewer
 warning: Warning
 weekly: Weekly

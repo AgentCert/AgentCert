@@ -49,6 +49,7 @@ export function generateExperimentRunTableContent(
       experimentID: individualRun.experimentID,
       experimentRunName: experimentRunExecutionData.name,
       experimentRunID: individualRun.experimentRunID,
+      notifyID: individualRun.notifyID,
       experimentStatus: individualRun.phase,
       executedBy: individualRun.updatedBy,
       resilienceScore: individualRun.resiliencyScore,

@@ -13,6 +13,7 @@ import CopyButton from '@components/CopyButton';
 import StatusBadgeV2, { StatusBadgeEntity } from '@components/StatusBadgeV2';
 import { ExperimentRunStatus } from '@api/entities';
 import Duration from '@components/Duration';
+import { getLangfuseTraceURL } from '@config';
 import { MemoisedExperimentRunFaultsTable } from './ExperimentRunFaultTable';
 import css from './ExperimentRunHistoryTable.module.scss';
 
@@ -178,6 +179,12 @@ const ExperimentRunHistoryTable = ({ content, pagination }: ExperimentRunHistory
                     text={getString('openInNewTab')}
                     onClick={() => window.open(`${window.location.href}/runs/${data.experimentRunID}`, '_blank')}
                     className={css.menuItem}
+                  />
+                  <MenuItem
+                    disabled={!data.notifyID}
+                    text={getString('viewTraceInLangfuse')}
+                    className={css.menuItem}
+                    onClick={() => data.notifyID && window.open(getLangfuseTraceURL(data.notifyID), '_blank')}
                   />
                 </Menu>
               </Popover>
