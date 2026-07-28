@@ -72,10 +72,10 @@ function AppCard({ app }: { app: AppHubEntry }): React.ReactElement {
       onClick={() => history.push(paths.toAppDetail({ appName: app.name }))}
     >
       <Layout.Vertical spacing="medium" padding="medium">
-        <Layout.Horizontal flex={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <Layout.Horizontal spacing="small" flex={{ alignItems: 'center' }}>
+        <Layout.Horizontal flex={{ justifyContent: 'space-between', alignItems: 'center' }} style={{ minWidth: 0 }}>
+          <Layout.Horizontal spacing="small" flex={{ alignItems: 'center' }} style={{ minWidth: 0 }}>
             <Icon name="nav-settings" size={24} color={Color.PRIMARY_7} />
-            <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800}>
+            <Text font={{ variation: FontVariation.H5 }} color={Color.GREY_800} lineClamp={1}>
               {app.displayName}
             </Text>
           </Layout.Horizontal>
@@ -126,7 +126,7 @@ export default function AppsHubView({
                   <Text font={{ variation: FontVariation.H4 }} color={Color.GREY_800}>
                     {category.displayName}
                   </Text>
-                  <Layout.Horizontal spacing="medium" className={css.appGrid}>
+                  <Layout.Horizontal className={css.appGrid}>
                     {category.applications.map(app => (
                       <AppCard key={app.name} app={app} />
                     ))}

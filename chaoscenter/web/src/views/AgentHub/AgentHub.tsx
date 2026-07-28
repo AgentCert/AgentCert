@@ -110,7 +110,7 @@ export default function AgentHubView({
                   <Text font={{ variation: FontVariation.H4 }} color={Color.GREY_800}>
                     {category.displayName}
                   </Text>
-                  <Layout.Horizontal spacing="medium" className={css.agentGrid}>
+                  <Layout.Horizontal className={css.agentGrid}>
                     {category.agents.map(agent => (
                       <AgentCard key={agent.name} agent={agent} />
                     ))}
