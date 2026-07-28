@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
+	"github.com/sirupsen/logrus"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 
@@ -105,8 +106,13 @@ func (c *chaosExperimentRunService) ProcessExperimentRunStop(ctx context.Context
 				{"recent_experiment_run_details.$.updated_by", updatedBy},
 			}},
 		}
-		// Non-fatal: the Argo terminal event will eventually reconcile this.
-		_ = c.chaosExperimentOperator.UpdateChaosExperiment(ctx, expFilter, expUpdate)
+		// Non-fatal but always logged: without this update the UI reads stale "Running"
+		// from recent_experiment_run_details even though chaosExperimentRuns is Stopped.
+		// Note: the subscriber's terminal event cannot reconcile this on its own because
+		// the completed=true guard on chaosExperimentRuns causes the transaction to abort.
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx, expFilter, expUpdate); err != nil {
+			logrus.WithError(err).Warn("failed to update recent_experiment_run_details on stop; UI may show stale Running state")
+		}
 	}
 
 	if r != nil {

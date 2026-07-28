@@ -3160,17 +3160,27 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				return err
 			}
 		} else if experimentRunCount > 0 {
+			// Build the $elemMatch conditions for the positional update.
+			// Two separate array.field conditions without $elemMatch would give an
+			// ambiguous positional $ index when multiple elements match — this is the
+			// classic MongoDB positional operator bug.
+			//
+			// Terminal events (event.Completed=true) intentionally skip the
+			// "completed=false" guard so that the UI is updated even when the run was
+			// already marked Stopped by ProcessExperimentRunStop. Without this,
+			// completed=true on chaosExperimentRuns would cause the UpdateExperimentRun
+			// guard to return count=0, abort the whole transaction, and permanently
+			// strand recent_experiment_run_details in a stale "Running" state.
+			expRunElemMatch := bson.D{{"experiment_run_id", event.ExperimentRunID}}
+			if event.NotifyID != nil {
+				expRunElemMatch = bson.D{{"notify_id", event.NotifyID}}
+			}
+			if !event.Completed {
+				expRunElemMatch = append(expRunElemMatch, bson.E{"completed", false})
+			}
 			filter := bson.D{
 				{"experiment_id", event.ExperimentID},
-				{"recent_experiment_run_details.experiment_run_id", event.ExperimentRunID},
-				{"recent_experiment_run_details.completed", false},
-			}
-			if event.NotifyID != nil {
-				filter = bson.D{
-					{"experiment_id", event.ExperimentID},
-					{"recent_experiment_run_details.completed", false},
-					{"recent_experiment_run_details.notify_id", event.NotifyID},
-				}
+				{"recent_experiment_run_details", bson.D{{"$elemMatch", expRunElemMatch}}},
 			}
 			updatedByModel := mongodb.UserDetailResponse{
 				Username: string(updatedBy),
@@ -3232,8 +3242,19 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 		}
 
 		if count == 0 {
-			err := fmt.Sprintf("experiment run has been discarded due the duplicate event, workflowId: %s, workflowRunId: %s", event.ExperimentID, event.ExperimentRunID)
-			return errors.New(err)
+			if !event.Completed {
+				// Non-terminal event for an already-stopped run — discard.
+				return errors.New(fmt.Sprintf("experiment run has been discarded due the duplicate event, workflowId: %s, workflowRunId: %s", event.ExperimentID, event.ExperimentRunID))
+			}
+			// Terminal event for an already-stopped run: chaosExperimentRuns already has
+			// completed=true so the guard returned count=0, but we still commit here so
+			// the recent_experiment_run_details update above is persisted and the UI
+			// reflects the final phase rather than staying stuck on "Running".
+			if err = session.CommitTransaction(sessionContext); err != nil {
+				logrus.WithFields(logFields).Errorf("failed to commit session transaction for terminal event on stopped run %v", err)
+				return err
+			}
+			return nil
 		}
 
 		if err = session.CommitTransaction(sessionContext); err != nil {
