@@ -2,6 +2,8 @@ package projects
 
 import (
 	"context"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,14 +24,28 @@ func ProjectInitializer(ctx context.Context, project project.Project, role strin
 	var bl_true = true
 	currentTime := time.Now().UnixMilli()
 
+	// Use IMAGE_REGISTRY env var if set, fall back to docker.io
+	registryName := "docker.io"
+	registryType := "public"
+	var secretName *string
+	var secretNamespace *string
+	if reg := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); reg != "" {
+		registryName = reg
+		registryType = "private"
+		sn := "jfrog-registry"
+		sns := "litmus"
+		secretName = &sn
+		secretNamespace = &sns
+	}
+
 	imageRegistry := image_registry.ImageRegistry{
 		ImageRegistryID:   uuid.New().String(),
 		ProjectID:         project.ID,
-		ImageRegistryName: "docker.io",
+		ImageRegistryName: registryName,
 		ImageRepoName:     "litmuschaos",
-		ImageRegistryType: "public",
-		SecretName:        nil,
-		SecretNamespace:   nil,
+		ImageRegistryType: registryType,
+		SecretName:        secretName,
+		SecretNamespace:   secretNamespace,
 		EnableRegistry:    &bl_true,
 		IsDefault:         true,
 		Audit: mongodb.Audit{

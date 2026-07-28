@@ -4,6 +4,8 @@ kind: ServiceAccount
 metadata:
   name: litmus-admin
   namespace: #{INFRA_NAMESPACE}
+imagePullSecrets:
+- name: #{IMAGE_PULL_SECRET_NAME}
   labels:
     name: litmus-admin
 ---

@@ -59,27 +59,27 @@ func SanitizeReleaseName(name string) string {
 
 // HelmDeployRequest captures parameters required for Helm deployment.
 type HelmDeployRequest struct {
-	ReleaseName                  string
+	ReleaseName string
 	// Namespace is where the agent's Helm release is INSTALLED.  In prod-grade
 	// mode this is a stable system namespace (e.g. "agentcert-system") so the
 	// agent pod survives target-namespace teardown between experiments.
-	Namespace                    string
+	Namespace string
 	// TargetNamespace, when non-empty, is the namespace the agent should
 	// OBSERVE (passed to the chart as agent.config.K8S_NAMESPACE).  When
 	// empty, the chart falls back to the install namespace for back-compat.
-	TargetNamespace              string
-	ChartPath                    string
-	ChartData                    *string // Base64-encoded .tgz chart data
-	ChartVersion                 *string
-	ValuesYAML                   *string
-	Kubeconfig                   *string
-	AgentID                      string
-	ImageTag                     *string
+	TargetNamespace string
+	ChartPath       string
+	ChartData       *string // Base64-encoded .tgz chart data
+	ChartVersion    *string
+	ValuesYAML      *string
+	Kubeconfig      *string
+	AgentID         string
+	ImageTag        *string
 	// Azure OpenAI Environment Variables
-	AzureOpenAIKey               *string
-	AzureOpenAIEndpoint          *string
-	AzureOpenAIDeployment        *string
-	AzureOpenAIAPIVersion        *string
+	AzureOpenAIKey                 *string
+	AzureOpenAIEndpoint            *string
+	AzureOpenAIDeployment          *string
+	AzureOpenAIAPIVersion          *string
 	AzureOpenAIEmbeddingDeployment *string
 }
 
@@ -118,7 +118,7 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		if err != nil {
 			return "", fmt.Errorf("failed to create temp chart file: %w", err)
 		}
-		
+
 		if _, err := tmpFile.Write(decoded); err != nil {
 			tmpFile.Close()
 			os.Remove(tmpFile.Name())
@@ -146,12 +146,15 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 			applyCmd.Stdin = strings.NewReader(string(nsOutput))
 			applyCmd.Run()
 		}
+		// Immediately seed jfrog-registry into the namespace so Helm-managed pods
+		// can pull images without waiting up to 60s for the jfrog-secret-sync Deployment.
+		syncJFrogSecret(ctx, req.Namespace)
 	}
 
 	// Create ConfigMap and Secret for environment variables in the target namespace
 	// First, clean up any orphaned resources from previous failed deployments
 	cleanupOrphanedResources(ctx, req.Namespace, req.ReleaseName)
-	
+
 	// COMMENTED OUT: Don't create ConfigMap/Secret manually - let Helm manage them
 	// This was creating resources without Helm ownership labels, causing conflicts
 	// The Helm chart will create its own ConfigMap/Secret with proper labels
@@ -176,8 +179,8 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		"--create-namespace",
 		"--wait",
 		"--timeout", timeout,
-		"--atomic",           // Rollback on failure, prevents orphaned resources
-		"--cleanup-on-fail",  // Clean up resources if install fails
+		"--atomic",          // Rollback on failure, prevents orphaned resources
+		"--cleanup-on-fail", // Clean up resources if install fails
 	}
 
 	if req.ChartVersion != nil && strings.TrimSpace(*req.ChartVersion) != "" {
@@ -236,6 +239,13 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		args = append(args, "--set", fmt.Sprintf("image.tag=%s", *req.ImageTag))
 	}
 
+	// Forward IMAGE_REGISTRY from the server's environment so all agent images
+	// are pulled from the configured registry (e.g. Artifactory) without
+	// requiring per-request changes.
+	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
+		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
+	}
+
 	// Tie agent.name to the (sanitized) release name so cluster-scoped
 	// resources (ClusterRole, ClusterRoleBinding) get unique names per
 	// install.  Without this, installing a second agent collides on the
@@ -266,6 +276,11 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 	}
 	if req.AzureOpenAIEmbeddingDeployment != nil && strings.TrimSpace(*req.AzureOpenAIEmbeddingDeployment) != "" {
 		args = append(args, "--set", fmt.Sprintf("configMap.AZURE_OPENAI_EMBEDDING_DEPLOYMENT=%s", *req.AzureOpenAIEmbeddingDeployment))
+	}
+
+	// Inject global image registry from environment
+	if imageRegistry := os.Getenv("IMAGE_REGISTRY"); imageRegistry != "" {
+		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
 	}
 
 	log.Printf("[Helm Deploy] Executing: %s %s", helmBin, strings.Join(args, " "))
@@ -579,6 +594,38 @@ func cleanupOrphanedResources(ctx context.Context, namespace, releaseName string
 		log.Printf("[Cleanup] Failed to delete orphaned configmap: %v (output: %s)", err, string(output))
 	} else if len(output) > 0 {
 		log.Printf("[Cleanup] Deleted orphaned configmap: %s", string(output))
+	}
+}
+
+// syncJFrogSecret copies the jfrog-registry imagePullSecret from kube-system
+// into the target namespace and patches its default SA additively.
+// Called immediately after namespace creation so pods never wait for the
+// jfrog-secret-sync Deployment's next watch event.
+func syncJFrogSecret(ctx context.Context, namespace string) {
+	if strings.TrimSpace(namespace) == "" {
+		return
+	}
+	script := fmt.Sprintf(`
+		CONFIG=$(kubectl get secret jfrog-registry -n kube-system \
+			-o jsonpath='{.data.\.dockerconfigjson}' 2>/dev/null) || exit 0
+		[ -z "$CONFIG" ] && exit 0
+		TMP=$(mktemp)
+		echo "$CONFIG" | base64 -d > "$TMP" 2>/dev/null || { rm -f "$TMP"; exit 0; }
+		kubectl create secret generic jfrog-registry \
+			--namespace '%s' \
+			--type=kubernetes.io/dockerconfigjson \
+			"--from-file=.dockerconfigjson=$TMP" \
+			--dry-run=client -o yaml 2>/dev/null | kubectl apply -f - 2>/dev/null || true
+		rm -f "$TMP"
+		kubectl patch serviceaccount default -n '%s' --type=json \
+			-p '[{"op":"add","path":"/imagePullSecrets/-","value":{"name":"jfrog-registry"}}]' \
+			2>/dev/null || \
+		kubectl patch serviceaccount default -n '%s' --type=merge \
+			-p '{"imagePullSecrets":[{"name":"jfrog-registry"}]}' 2>/dev/null || true
+	`, namespace, namespace, namespace)
+	cmd := exec.CommandContext(ctx, "bash", "-c", script)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("[Helm Deploy] Warning: jfrog secret sync to %s: %v (%s)", namespace, err, string(output))
 	}
 }
 

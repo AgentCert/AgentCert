@@ -40,6 +40,8 @@ spec:
         app: kubernetes-mcp-server
     spec:
       serviceAccountName: mcp-server
+      imagePullSecrets:
+        - name: #{IMAGE_PULL_SECRET_NAME}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -113,6 +115,8 @@ spec:
         app: prometheus-mcp-server
     spec:
       serviceAccountName: prometheus-mcp-server
+      imagePullSecrets:
+        - name: #{IMAGE_PULL_SECRET_NAME}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:

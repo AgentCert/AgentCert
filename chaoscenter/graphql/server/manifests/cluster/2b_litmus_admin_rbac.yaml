@@ -6,6 +6,8 @@ metadata:
   namespace: #{INFRA_NAMESPACE}
   labels:
     name: litmus-admin
+imagePullSecrets:
+  - name: #{IMAGE_PULL_SECRET_NAME}
 ---
 # Source: openebs/templates/clusterrole.yaml
 apiVersion: rbac.authorization.k8s.io/v1

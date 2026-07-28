@@ -41,6 +41,8 @@ spec:
         app: subscriber
     spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
+      imagePullSecrets:
+        - name: #{IMAGE_PULL_SECRET_NAME}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -87,6 +89,8 @@ spec:
       labels:
         app: event-tracker
     spec:
+      imagePullSecrets:
+        - name: #{IMAGE_PULL_SECRET_NAME}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
