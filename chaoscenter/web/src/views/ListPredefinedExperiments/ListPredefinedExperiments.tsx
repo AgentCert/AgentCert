@@ -11,7 +11,7 @@ import type { ExperimentManifest } from '@models';
 import experimentYamlService from 'services/experiment';
 import type { CustomizedMultiSelectOption } from '@controllers/ListChaosHubsTab';
 import config from '@config';
-import { getScope } from '@utils';
+import { getScope, toTitleCase } from '@utils';
 import css from './ListPredefinedExperiments.module.scss';
 
 interface ListPredefinedExperimentsViewProps {
@@ -109,22 +109,90 @@ export default function ListPredefinedExperimentsView({
   hub,
   onClose
 }: ListPredefinedExperimentsViewProps): React.ReactElement {
-  if (!predefinedExperiments || (predefinedExperiments && predefinedExperiments.length === 0)) return <></>;
+  const { getString } = useStrings();
+  const [activeCategory, setActiveCategory] = React.useState<string>('All');
+
+  if (!predefinedExperiments || predefinedExperiments.length === 0) return <></>;
+
+  const categoryCountMap = new Map<string, number>();
+  predefinedExperiments.forEach(exp => {
+    const category: string = parse(exp.experimentCSV)?.metadata?.annotations?.categories ?? 'Other';
+    categoryCountMap.set(category, (categoryCountMap.get(category) ?? 0) + 1);
+  });
+
+  const filteredExperiments =
+    activeCategory === 'All'
+      ? predefinedExperiments
+      : predefinedExperiments.filter(
+          exp => (parse(exp.experimentCSV)?.metadata?.annotations?.categories ?? 'Other') === activeCategory
+        );
 
   return (
     <Container padding={{ top: 'small', bottom: 'small' }}>
       <Text font={{ variation: FontVariation.H3, weight: 'semi-bold' }}>{hub?.label}</Text>
-      <Container margin={{ top: 'medium' }} className={css.hubCardMainCont}>
-        {predefinedExperiments.map(experiment => (
-          <PredefinedExperimentCard
-            hub={hub}
-            key={experiment.experimentName}
-            manifest={experiment.experimentManifest}
-            csv={experiment.experimentCSV}
-            onClose={onClose}
-          />
-        ))}
-      </Container>
+      <Layout.Horizontal margin={{ top: 'medium' }} className={css.mainLayout}>
+        <Layout.Vertical width="200px" padding="medium" background={Color.WHITE} className={css.sidebar}>
+          <Layout.Horizontal
+            flex
+            padding={{ left: 'small', right: 'small', top: 'medium', bottom: 'medium' }}
+            className={`${css.tagCard} ${activeCategory === 'All' ? css.activeTag : ''}`}
+            onClick={() => setActiveCategory('All')}
+          >
+            <Layout.Horizontal flex={{ alignItems: 'center', justifyContent: 'flex-start' }} className={css.gap1}>
+              <Icon name="nav-settings" size={22} />
+              <Text className={css.tagText} font={{ variation: FontVariation.SMALL }}>
+                {getString('all')}
+              </Text>
+            </Layout.Horizontal>
+            <Text
+              font={{ variation: FontVariation.TINY }}
+              color={activeCategory === 'All' ? Color.WHITE : Color.PRIMARY_7}
+              background={activeCategory === 'All' ? Color.PRIMARY_7 : Color.PRIMARY_BG}
+              height={25}
+              width={25}
+              flex={{ alignItems: 'center', justifyContent: 'center' }}
+              className={css.rounded}
+            >
+              {predefinedExperiments.length}
+            </Text>
+          </Layout.Horizontal>
+          {[...categoryCountMap.entries()].map(([category, count]) => (
+            <Layout.Horizontal
+              key={category}
+              flex
+              padding={{ left: 'small', right: 'small', top: 'medium', bottom: 'medium' }}
+              className={`${css.tagCard} ${activeCategory === category ? css.activeTag : ''}`}
+              onClick={() => setActiveCategory(category)}
+            >
+              <Text className={css.tagText} font={{ variation: FontVariation.SMALL }} lineClamp={1}>
+                {toTitleCase({ text: category, separator: '-' })}
+              </Text>
+              <Text
+                font={{ variation: FontVariation.TINY }}
+                color={activeCategory === category ? Color.WHITE : Color.PRIMARY_7}
+                background={activeCategory === category ? Color.PRIMARY_7 : Color.PRIMARY_BG}
+                height={25}
+                width={25}
+                flex={{ alignItems: 'center', justifyContent: 'center' }}
+                className={css.rounded}
+              >
+                {count}
+              </Text>
+            </Layout.Horizontal>
+          ))}
+        </Layout.Vertical>
+        <Container className={css.experimentGrid}>
+          {filteredExperiments.map(experiment => (
+            <PredefinedExperimentCard
+              hub={hub}
+              key={experiment.experimentName}
+              manifest={experiment.experimentManifest}
+              csv={experiment.experimentCSV}
+              onClose={onClose}
+            />
+          ))}
+        </Container>
+      </Layout.Horizontal>
     </Container>
   );
 }
