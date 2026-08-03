@@ -63,7 +63,7 @@ type Configuration struct {
 	PreCleanupWaitSeconds       string   `split_words:"true" default:"0"`
 	CertifierBaseURL            string   `split_words:"true" default:"http://localhost:8088"`
 	CertificatePDFBaseURL       string   `split_words:"true" default:"http://localhost:8089"`
-	AllowedOrigins              []string `split_words:"true" default:"^(http://|https://|)litmuschaos.io(:[0-9]+|)?,^(http://|https://|)localhost(:[0-9]+|)"`
+	AllowedOrigins              []string `split_words:"true" default:"^(http://|https://|)litmuschaos.io(:[0-9]+|)?,^(http://|https://|)localhost(:[0-9]+|),^[a-z0-9.-]+\\.svc\\.cluster\\.local(:[0-9]+)?"`
 }
 
 var Config Configuration
