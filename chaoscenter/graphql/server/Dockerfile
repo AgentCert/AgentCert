@@ -23,7 +23,7 @@ RUN echo "=== Checking generated files ===" \
     && test -s graph/generated/generated.go \
     && echo "Generated GraphQL code is present"
 
-RUN CGO_ENABLED=0 go build -o /output/server -v
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /output/server
 
 # DEPLOY STAGE
 # Use Red Hat UBI minimal image as base

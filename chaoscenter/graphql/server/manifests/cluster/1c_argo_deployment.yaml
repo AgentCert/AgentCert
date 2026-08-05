@@ -9,6 +9,7 @@ data:
   executor: |
     imagePullPolicy: IfNotPresent
   instanceID: #{INFRA_ID}
+  workflowSA: argo-chaos
 ---
 apiVersion: v1
 kind: Service

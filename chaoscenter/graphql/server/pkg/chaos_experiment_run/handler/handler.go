@@ -257,6 +257,21 @@ func normalizeRBACNamePart(in string) string {
 	return out
 }
 
+// discoverWorkflowSA reads the "workflowSA" key from workflow-controller-configmap in
+// the infra namespace. That key is stamped at infra-setup time by the chaos-enable manifest,
+// so handler.go never needs to know the SA name out-of-band. Falls back to the subscriber
+// SA (infra.ServiceAccount) when the key is absent for backward compatibility with older installs.
+func discoverWorkflowSA(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, fallback string) string {
+	cm, err := clientset.CoreV1().ConfigMaps(infraNamespace).Get(ctx, "workflow-controller-configmap", metav1.GetOptions{})
+	if err != nil {
+		return fallback
+	}
+	if sa := strings.TrimSpace(cm.Data["workflowSA"]); sa != "" {
+		return sa
+	}
+	return fallback
+}
+
 func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccount string) error {
 	const roleName = "litmus-dynamic-app-helm"
 
@@ -1061,9 +1076,12 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 		infraNamespace = *infra.InfraNamespace
 	}
 
-	serviceAccount := "argo-chaos"
+	// subscriberSA is the SA the subscriber pod runs as (stored in infra.ServiceAccount).
+	// workflowSA is the SA Argo actually uses to execute workflow steps — discovered from
+	// workflow-controller-configmap so this code never needs to know the name out-of-band.
+	subscriberSA := "argo-chaos"
 	if infra.ServiceAccount != nil && *infra.ServiceAccount != "" {
-		serviceAccount = *infra.ServiceAccount
+		subscriberSA = *infra.ServiceAccount
 	}
 
 	clientset, err := buildKubeClientset()
@@ -1071,10 +1089,13 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 		return fmt.Errorf("failed RBAC preflight: unable to create kubernetes client: %w", err)
 	}
 
-	if err := ensureDynamicAppHelmRBAC(ctx, clientset, infraNamespace, serviceAccount); err != nil {
+	workflowSA := discoverWorkflowSA(ctx, clientset, infraNamespace, subscriberSA)
+	serviceAccount := workflowSA
+
+	if err := ensureDynamicAppHelmRBAC(ctx, clientset, infraNamespace, workflowSA); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"infraNamespace": infraNamespace,
-			"serviceAccount": serviceAccount,
+			"workflowSA":     workflowSA,
 		}).WithError(err).Warn("RBAC preflight auto-remediation skipped; continuing with RBAC validation")
 	}
 
@@ -2135,6 +2156,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		ensureInstallTimeoutParam(&workflowManifest.Spec.Arguments)
 	}
 	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
+	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
 	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
 
@@ -2540,6 +2562,7 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 		ensureInstallTimeoutParam(&cronExperimentManifest.Spec.WorkflowSpec.Arguments)
 	}
 	ops.ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ops.ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 	applyUninstallAllPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 

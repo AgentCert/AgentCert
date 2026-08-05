@@ -12,7 +12,7 @@ ENV GOOS=${TARGETOS} \
 
 RUN go env
 
-RUN CGO_ENABLED=0 go build -o /output/server -v ./api/
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /output/server ./api/
 
 # PACKAGING STAGE
 # Use RedHat UBI minimal image as base

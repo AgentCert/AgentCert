@@ -423,6 +423,7 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 
 	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
+	ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
 	applyAgentInstallNamespaceOverride(workflowManifest.Spec.Templates)
 	injectExperimentContextArgs(workflowManifest.Spec.Templates)
 
@@ -820,6 +821,7 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 
 	applyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyAgentInstallNamespaceOverride(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	injectExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 
@@ -1796,6 +1798,123 @@ func ApplyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 	}
 }
 
+// ApplyLitmusHelperImageOverrides rewrites litmuschaos helper image refs and
+// imagePullPolicy in all workflow templates at submission time.
+//
+// This mirrors the pattern of applyInstallAgentTemplateOverrides and
+// ApplyInstallApplicationTemplateOverrides: experiment manifests are stored
+// verbatim in MongoDB and may reference any registry (Docker Hub, Scarf proxy,
+// JFrog Artifactory). At run time the deployment may target a different registry
+// without editing every stored manifest.
+//
+// Exported so that RunChaosWorkFlow / RunCronExperiment in the
+// chaos_experiment_run handler package can also apply it at run time — ensuring
+// that manifests saved before the env var was set still get normalised.
+//
+// Controlled by two env / Configuration fields:
+//
+//	LITMUS_HELPER_IMAGES_REGISTRY_PREFIX — registry prefix to apply, e.g.
+//	    "infyartifactory.jfrog.io/docker-local/" for JFrog, "" for Docker Hub.
+//	LITMUS_HELPER_IMAGES_PULL_POLICY — imagePullPolicy to set, e.g.
+//	    "IfNotPresent" for pre-loaded KinD images, "Always" for live registry pulls.
+//
+// If both env vars are empty/unset the function is a no-op (images left as-is).
+func ApplyLitmusHelperImageOverrides(templates []v1alpha1.Template) {
+	prefix := strings.TrimSpace(utils.Config.LitmusHelperImagesRegistryPrefix)
+	if prefix == "" {
+		prefix = strings.TrimSpace(os.Getenv("LITMUS_HELPER_IMAGES_REGISTRY_PREFIX"))
+	}
+
+	pullPolicyStr := strings.TrimSpace(utils.Config.LitmusHelperImagesPullPolicy)
+	if pullPolicyStr == "" {
+		pullPolicyStr = strings.TrimSpace(os.Getenv("LITMUS_HELPER_IMAGES_PULL_POLICY"))
+	}
+
+	// Nothing configured — leave images completely untouched.
+	if prefix == "" && pullPolicyStr == "" {
+		return
+	}
+
+	var pullPolicy corev1.PullPolicy
+	if pullPolicyStr != "" {
+		switch corev1.PullPolicy(pullPolicyStr) {
+		case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+			pullPolicy = corev1.PullPolicy(pullPolicyStr)
+		default:
+			pullPolicy = corev1.PullAlways
+		}
+	}
+
+	changed := false
+	for i := range templates {
+		t := &templates[i]
+		if t.Container == nil {
+			continue
+		}
+		if !isLitmusHelperImage(t.Container.Image) {
+			continue
+		}
+
+		if prefix != "" {
+			newImage := rewriteLitmusImageRegistry(t.Container.Image, prefix)
+			if t.Container.Image != newImage {
+				t.Container.Image = newImage
+				changed = true
+			}
+		}
+
+		if pullPolicyStr != "" && t.Container.ImagePullPolicy != pullPolicy {
+			t.Container.ImagePullPolicy = pullPolicy
+			changed = true
+		}
+	}
+
+	if changed {
+		logrus.WithFields(logrus.Fields{
+			"registry_prefix": prefix,
+			"pull_policy":     pullPolicyStr,
+		}).Info("[Litmus Helper Patch] Applied litmus helper image overrides")
+	}
+}
+
+// isLitmusHelperImage reports whether img is a litmus workflow helper image
+// (as opposed to ACE-owned images or LitmusChaos operator/runner images that
+// are already handled by dedicated config fields).
+func isLitmusHelperImage(img string) bool {
+	fragments := []string{
+		"litmuschaos/k8s",
+		"litmuschaos/litmus-app-deployer",
+		"litmuschaos/litmus-checker",
+		"litmuschaos/go-runner",
+		"alexeiled/stress-ng",
+		"gaiadocker/iproute2",
+	}
+	for _, f := range fragments {
+		if strings.Contains(img, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// rewriteLitmusImageRegistry strips any existing registry prefix from img and
+// prepends prefix. The "base" repo/name is identified as the last two slash-
+// separated components (e.g. "litmuschaos/k8s:latest"), which works for both
+// plain Docker Hub names and images stored under JFrog or Scarf proxy paths.
+func rewriteLitmusImageRegistry(img, prefix string) string {
+	parts := strings.Split(img, "/")
+	var base string
+	if len(parts) >= 3 {
+		// First component contains a '.' → it is a registry host; strip it
+		// (and any intermediate path components like "docker-local").
+		// Keep only the final two components: repo/name:tag.
+		base = strings.Join(parts[len(parts)-2:], "/")
+	} else {
+		base = img
+	}
+	return strings.TrimSuffix(prefix, "/") + "/" + base
+}
+
 // chaosEngineManifest is a minimal struct used to extract fault names + per-fault
 // static config (target metadata, timing knobs, target containers) from
 // ChaosEngine resource manifests embedded in Argo Workflow templates.
@@ -2253,7 +2372,14 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		chaosNamespace = "litmus-exp"
 	}
 
-	modelAlias := strings.TrimSpace(os.Getenv("MODEL_ALIAS"))
+	// FLASH_AGENT_MODEL is what scripts/setup.sh actually prompts for and writes
+	// into .env / the ace-env secret (see setup.sh's OLLAMA/Azure/Gemini model
+	// selection flow). MODEL_ALIAS is kept as a back-compat override for anyone
+	// setting it directly on the graphql-server deployment.
+	modelAlias := strings.TrimSpace(os.Getenv("FLASH_AGENT_MODEL"))
+	if modelAlias == "" {
+		modelAlias = strings.TrimSpace(os.Getenv("MODEL_ALIAS"))
+	}
 	if modelAlias == "" {
 		// Fallback: derive from AZURE_OPENAI_DEPLOYMENT so any provider works
 		modelAlias = strings.TrimSpace(os.Getenv("AZURE_OPENAI_DEPLOYMENT"))

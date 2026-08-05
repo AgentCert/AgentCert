@@ -19,13 +19,20 @@ type Configuration struct {
 	LitmusChaosExporterImage    string   `required:"true" split_words:"true"`
 	ContainerRuntimeExecutor    string   `required:"true" split_words:"true"`
 	KubernetesMcpServerImage    string   `split_words:"true" default:"quay.io/containers/kubernetes_mcp_server:latest"`
-	PrometheusMcpServerImage    string   `split_words:"true" default:"agentcert/prometheus-mcp-server:latest"`
+	PrometheusMcpServerImage    string   `split_words:"true" default:"ghcr.io/pab1it0/prometheus-mcp-server:latest"`
 	PrometheusMcpUrl            string   `split_words:"true" default:"http://prometheus.monitoring.svc.cluster.local:9090"`
 	WorkflowHelperImageVersion  string   `required:"true" split_words:"true"`
-	InstallApplicationImage     string   `split_words:"true" default:"agentcert/agentcert-install-app:latest"`
-	InstallApplicationImagePullPolicy string `split_words:"true" default:"IfNotPresent"`
-	InstallAgentImage           string   `split_words:"true" default:"agentcert/agentcert-install-agent:latest"`
-	InstallAgentImagePullPolicy string   `split_words:"true" default:"IfNotPresent"`
+	InstallApplicationImage            string `split_words:"true" default:"agentcert/agentcert-install-app:latest"`
+	InstallApplicationImagePullPolicy  string `split_words:"true" default:"IfNotPresent"`
+	InstallAgentImage                  string `split_words:"true" default:"agentcert/agentcert-install-agent:latest"`
+	InstallAgentImagePullPolicy        string `split_words:"true" default:"IfNotPresent"`
+	// LitmusHelperImagesRegistryPrefix is prepended to all litmus helper image refs at workflow
+	// submission time (e.g. "infyartifactory.jfrog.io/docker-local/" for JFrog, "" for Docker Hub).
+	LitmusHelperImagesRegistryPrefix   string `split_words:"true" default:""`
+	// LitmusHelperImagesPullPolicy is applied to all litmus helper image templates at submission
+	// time. Use "IfNotPresent" when images are pre-loaded into KinD (local mode) and "Always"
+	// when they are pulled from a registry at run time (jfrog / dockerhub).
+	LitmusHelperImagesPullPolicy       string `split_words:"true" default:""`
 	FlashAgentImage             string   `split_words:"true" default:"agentcert/agentcert-flash-agent:latest"`
 	AgentSidecarImage           string   `split_words:"true" default:"agentcert/agent-sidecar:latest"`
 	ChaosCenterUiEndpoint       string   `split_words:"true" default:"https://localhost:8080"`
