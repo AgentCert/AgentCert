@@ -88,12 +88,12 @@ func InitializeLangfuseTracer() error {
 
 	// Initialize tracer with buffered channel for async trace submission
 	tracer := &LangfuseTracer{
-		client:         client,
-		enabled:        true,
-		orgID:          orgID,
-		projectID:      projectID,
-		traceChan:      make(chan *agent_registry.ExperimentTrace, 100),
-		workerDone:     make(chan struct{}),
+		client:           client,
+		enabled:          true,
+		orgID:            orgID,
+		projectID:        projectID,
+		traceChan:        make(chan *agent_registry.ExperimentTrace, 100),
+		workerDone:       make(chan struct{}),
 		emittedFaults:    make(map[string]string),
 		nodeStateCache:   make(map[string]string),
 		traceNameSet:     make(map[string]bool),
@@ -164,15 +164,15 @@ func (t *LangfuseTracer) TraceExperimentExecution(ctx context.Context, details *
 			"priority":       details.Priority,
 		},
 		Metadata: map[string]interface{}{
-			"agent_name":        details.AgentName,
-			"agent_platform":    details.AgentPlatform,
-			"agent_version":     details.AgentVersion,
-			"agent_id":          details.AgentID,
-			"service_account":   details.AgentServiceAccount,
-			"experimentType":    details.ExperimentType,
-			"phase":             details.Phase,
-			"priority":          details.Priority,
-			"experiment_id":     details.ExperimentID,
+			"agent_name":      details.AgentName,
+			"agent_platform":  details.AgentPlatform,
+			"agent_version":   details.AgentVersion,
+			"agent_id":        details.AgentID,
+			"service_account": details.AgentServiceAccount,
+			"experimentType":  details.ExperimentType,
+			"phase":           details.Phase,
+			"priority":        details.Priority,
+			"experiment_id":   details.ExperimentID,
 			// experiment_run_id is intentionally omitted at trigger time —
 			// the Argo workflow UID isn't known yet. It is upserted onto the
 			// root trace metadata via SetTraceExperimentRunID once the
@@ -451,8 +451,14 @@ func (t *LangfuseTracer) EmitFaultSpansForTrace(
 // once node.ChaosExp.ChaosResult and node.FinishedAt populate). The signature
 // dedup in EmitFaultSpanAtInjection collapses no-op upserts.
 type FaultInjectionDetails struct {
-	FaultName       string
-	EngineName      string
+	FaultName  string
+	EngineName string
+	// EngineUID is the ChaosEngine's Kubernetes object UID — assigned once at
+	// creation and stable for the object's lifetime, unlike FaultName (which
+	// falls back to the raw generateName-suffixed engine name on ticks where
+	// ExperimentName hasn't resolved yet). Used as the Langfuse observation ID
+	// key so an early mis-keyed tick can never orphan a second permanent span.
+	EngineUID       string
 	Namespace       string
 	TargetNamespace string
 	TargetLabel     string
@@ -624,11 +630,24 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 		spanAttrs["fault.ground_truth.sla.max_tool_calls"] = slaToolCalls
 	}
 
+	// identityKey anchors both the dedup cache key and the Langfuse observation
+	// ID. It must be stable across ticks for the same underlying ChaosEngine —
+	// fname is NOT: on ticks before ExperimentName resolves, handler.go falls
+	// back to the raw generateName-suffixed EngineName, which differs from the
+	// eventual canonical fname and would otherwise mint a second, permanently
+	// orphaned span (traceID-fault-<suffixed-name> vs traceID-fault-<name>).
+	// EngineUID is assigned once at ChaosEngine creation and never changes, so
+	// prefer it; fall back to fname only if a caller hasn't populated it.
+	identityKey := details.EngineUID
+	if identityKey == "" {
+		identityKey = fname
+	}
+
 	// Build a signature over fields that change as run state evolves. Static
 	// identity bits (name/engine/start) are excluded — they don't change after
 	// the first emit and including them just bloats the cache key.
 	signature := buildFaultSpanSignature(details, finishedISO)
-	cacheKey := traceID + ":" + fname
+	cacheKey := traceID + ":" + identityKey
 	t.emittedMu.RLock()
 	prev, seen := t.emittedFaults[cacheKey]
 	t.emittedMu.RUnlock()
@@ -656,7 +675,7 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 	}
 
 	payload := &agent_registry.LangfuseObservationPayload{
-		ID:        faultObservationID(traceID, fname),
+		ID:        faultObservationID(traceID, identityKey),
 		TraceID:   traceID,
 		Name:      spanName,
 		Type:      "SPAN",
@@ -679,8 +698,10 @@ func (t *LangfuseTracer) EmitFaultSpanAtInjection(
 
 // faultObservationID returns the deterministic Langfuse observation ID for a
 // fault span. Same scheme as UpsertWorkflowNodeSpan ("traceID-<discriminator>").
-func faultObservationID(traceID, faultName string) string {
-	return traceID + "-fault-" + faultName
+// discriminator should be a value stable across ticks for the same fault
+// (EngineUID) — see the identityKey comment in EmitFaultSpanAtInjection.
+func faultObservationID(traceID, discriminator string) string {
+	return traceID + "-fault-" + discriminator
 }
 
 // buildFaultSpanSignature is the dedup key for repeat upserts. Includes every

@@ -2898,6 +2898,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				details := observability.FaultInjectionDetails{
 					FaultName:                faultName,
 					EngineName:               node.ChaosExp.ExperimentName,
+					EngineUID:                node.ChaosExp.EngineUID,
 					Namespace:                node.ChaosExp.Namespace,
 					StartedAt:                node.StartedAt,
 					FinishedAt:               node.FinishedAt,
