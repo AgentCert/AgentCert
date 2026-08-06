@@ -2338,14 +2338,14 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 
 	openAIBaseURL := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
 	if openAIBaseURL == "" {
-		openAIBaseURL = "http://litellm-proxy.litellm.svc.cluster.local:4000/v1"
+		openAIBaseURL = "http://litellm.ace.svc.cluster.local:14000/v1"
 	}
 
 	// Derive sidecar upstream: strip /v1 path suffix so the sidecar can forward raw
 	// HTTP requests to the base URL (self.path already contains /v1/chat/completions).
 	sidecarUpstream := strings.TrimRight(strings.TrimSuffix(openAIBaseURL, "/v1"), "/")
 	if sidecarUpstream == "" {
-		sidecarUpstream = "http://litellm-proxy.litellm.svc.cluster.local:4000"
+		sidecarUpstream = "http://litellm.ace.svc.cluster.local:14000"
 	}
 
 	k8sMCPURL := strings.TrimSpace(os.Getenv("K8S_MCP_URL"))
