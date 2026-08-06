@@ -475,6 +475,7 @@ fieldMaxLength: Length should be {{length}} characters maximum.
 fieldMinLength: Length should be {{length}} characters minimum.
 fieldSelector: Field Selector
 fixAllErrors: Fix all the errors indicated in the YAML Editor to resolve the issue.
+folder: Folder
 generateSSH: Generate New SSH Key
 genericResourceNotFoundError: >-
   {{resource}} [{{resourceID}}] under Project [{{projectID}}] does not exist or
@@ -540,6 +541,14 @@ infrastructures: Infrastructures
 initialDelay: Initial Delay
 initialDelaySeconds: Initial Delay Seconds
 insecureSkipVerify: Insecure skip verify
+installAgent: Install Agent
+installAgentDescription: >-
+  Pick an agent from the AgentHub. The folder name is taken directly from the
+  chart, so there's no need to guess or type it by hand.
+installApplication: Install Application
+installApplicationDescription: >-
+  Pick an application from the AppHub. The folder name is taken directly from
+  the chart, so there's no need to guess or type it by hand.
 installYaml: Install Chaos Infrastructure using YML
 interval: Interval
 intervalOptional: Interval (Optional)
@@ -703,6 +712,7 @@ nextSelectChaosExperiments: Next -> Select Chaos Experiments
 noAnalysis: No Analysis
 noApiTokensFound: No API Tokens found
 noChaosHubSelected: No ChaosHubs selected
+noEntriesFound: No entries found
 noChaosInfrastructure: There are no Kubernetes Chaos Infrastructures in this Environment
 noChaosInfrastructureFound: No Kuberenetes chaos infrastructure found!
 noClustersFound: Sorry, we can’t find any available clusters

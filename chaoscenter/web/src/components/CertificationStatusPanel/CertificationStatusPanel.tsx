@@ -73,6 +73,11 @@ function derivePipelineStages(cert: CertificationExperimentSummary | null | unde
         { label: 'Analysing Run', state: 'done', detail: bucketingDetail },
         { label: 'Generating Certificate', state: 'running', detail: 'Aggregating run data and generating report…' }
       ];
+    case 'AGGREGATION_FAILED':
+      return [
+        { label: 'Analysing Run', state: 'done', detail: bucketingDetail },
+        { label: 'Generating Certificate', state: 'failed', detail: 'Failed — check the certifier task for details' }
+      ];
     case 'EXPERIMENT_CERTIFICATE_READY': {
       const certDetail = cert.generatedAt
         ? `Ready · ${new Date(cert.generatedAt).toLocaleString()}`

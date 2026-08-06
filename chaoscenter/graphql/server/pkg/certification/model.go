@@ -31,6 +31,7 @@ const (
 	ExperimentStatusReadyForAggregation      = "READY_FOR_AGGREGATION"
 	ExperimentStatusAggregationInProgress    = "AGGREGATION_IN_PROGRESS"
 	ExperimentStatusCertificateReady         = "EXPERIMENT_CERTIFICATE_READY"
+	ExperimentStatusAggregationFailed        = "AGGREGATION_FAILED"
 )
 
 // PdfStatus values for the latest certificate.

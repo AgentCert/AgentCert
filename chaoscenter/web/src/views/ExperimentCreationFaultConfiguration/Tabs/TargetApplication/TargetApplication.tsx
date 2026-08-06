@@ -9,6 +9,7 @@ import type { AppInfoData, TargetApplicationData } from '@controllers/TargetAppl
 interface TargetApplicationViewProps {
   appInfoData: AppInfoData;
   namespaceData: string[];
+  pendingNamespaces?: string[];
   targetApp: TargetApplicationData | undefined;
   setTargetApp: React.Dispatch<React.SetStateAction<TargetApplicationData>>;
   engineCR: ChaosEngine | undefined;
@@ -22,6 +23,7 @@ interface TargetApplicationViewProps {
 export default function TargetApplicationTab({
   appInfoData,
   namespaceData,
+  pendingNamespaces = [],
   targetApp,
   setTargetApp,
   engineCR,
@@ -41,10 +43,21 @@ export default function TargetApplicationTab({
 
   function getAppNamespaceItems(): SelectOption[] {
     if (loadingNamespace) return [];
-    return namespaceData.map(data => ({
+    const liveItems = namespaceData.map(data => ({
       label: data,
       value: data
     }));
+    // Namespaces an earlier install-app step in this same, not-yet-run
+    // workflow will create — offered ahead of time since the live cluster
+    // can't know about them yet. Tagged so they're distinguishable from
+    // namespaces that already exist.
+    const pendingItems = pendingNamespaces
+      .filter(ns => !namespaceData.includes(ns))
+      .map(ns => ({
+        label: `${ns} (pending install)`,
+        value: ns
+      }));
+    return [...liveItems, ...pendingItems];
   }
 
   function getAppLabelItems(): SelectOption[] {

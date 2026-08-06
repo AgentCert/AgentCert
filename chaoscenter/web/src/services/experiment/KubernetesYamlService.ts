@@ -182,6 +182,54 @@ export class KubernetesYamlService extends ExperimentYamlService {
     }
   }
 
+  // Adds (or updates) an install-application / install-agent step, sourced
+  // from a real AppHub/AgentHub entry — so `-folder=` is always the actual
+  // chart directory name, never a hand-typed guess. install-application
+  // always runs first; install-agent runs right after it (a fault can't
+  // target an app/agent that isn't installed yet).
+  async addInstallStepToManifest(
+    key: ChaosObjectStoresPrimaryKeys['experiments'],
+    kind: 'application' | 'agent',
+    entry: { folder: string; namespace: string }
+  ): Promise<Experiment | undefined> {
+    try {
+      const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
+      const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
+      const experiment = await store.get(key);
+      if (!experiment) return;
+
+      experiment.unsavedChanges = true;
+      const [templates, steps] = this.getTemplatesAndSteps(experiment?.manifest as KubernetesExperimentManifest);
+      if (!templates || !steps) return experiment;
+
+      const templateName = kind === 'application' ? 'install-application' : 'install-agent';
+      const image =
+        kind === 'application' ? 'agentcert/agentcert-install-app:latest' : 'agentcert/agentcert-install-agent:latest';
+      const args = [`-folder=${entry.folder}`, `-namespace=${entry.namespace}`, '-create-namespace', '-wait'];
+
+      const existingTemplate = templates.find(template => template.name === templateName);
+      if (existingTemplate) {
+        existingTemplate.container = { name: '', image, args };
+      } else {
+        templates.push({ name: templateName, container: { name: '', image, args } });
+
+        let insertIndex = 0;
+        if (kind === 'agent') {
+          const appIndex = steps.findIndex(step => step.some(s => s.template === 'install-application'));
+          insertIndex = appIndex >= 0 ? appIndex + 1 : 0;
+        }
+        steps.splice(insertIndex, 0, [{ name: templateName, template: templateName }]);
+      }
+
+      await store.put({ ...experiment }, key);
+      await tx.done;
+
+      return experiment;
+    } catch (_) {
+      this.handleIDBFailure();
+    }
+  }
+
   async updateExperimentManifestWithFaultData(
     key: ChaosObjectStoresPrimaryKeys['experiments'],
     { faultName, faultCR, engineCR, probes }: FaultData
@@ -863,7 +911,13 @@ export class KubernetesYamlService extends ExperimentYamlService {
     steps?.map(step => {
       if (step.length === 0) return;
 
-      if (isEditMode && (isInstallFaultsStep(step[0].template ?? '') || step[0].template === 'cleanup-chaos-resources'))
+      if (
+        isEditMode &&
+        (isInstallFaultsStep(step[0].template ?? '') ||
+          step[0].template === 'cleanup-chaos-resources' ||
+          step[0].template === 'install-application' ||
+          step[0].template === 'install-agent')
+      )
         return;
 
       graphData.push({

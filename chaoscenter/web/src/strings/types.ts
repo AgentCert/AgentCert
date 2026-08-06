@@ -385,6 +385,7 @@ export interface StringsMap {
   'fieldMinLength': PrimitiveObject<'length'>
   'fieldSelector': unknown
   'fixAllErrors': unknown
+  'folder': unknown
   'generateSSH': unknown
   'genericResourceNotFoundError': PrimitiveObject<'resource' | 'resourceID' | 'projectID'>
   'gitConnection': unknown
@@ -435,6 +436,10 @@ export interface StringsMap {
   'initialDelay': unknown
   'initialDelaySeconds': unknown
   'insecureSkipVerify': unknown
+  'installAgent': unknown
+  'installAgentDescription': unknown
+  'installApplication': unknown
+  'installApplicationDescription': unknown
   'installYaml': unknown
   'interval': unknown
   'intervalOptional': unknown
@@ -576,6 +581,7 @@ export interface StringsMap {
   'noAnalysis': unknown
   'noApiTokensFound': unknown
   'noChaosHubSelected': unknown
+  'noEntriesFound': unknown
   'noChaosInfrastructure': unknown
   'noChaosInfrastructureFound': unknown
   'noClustersFound': unknown

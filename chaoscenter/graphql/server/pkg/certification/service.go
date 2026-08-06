@@ -375,6 +375,7 @@ func (s *Service) startAggregation(ctx context.Context, in StartInput, runIDs []
 			{Key: "status", Value: AggStatusFailed},
 			{Key: "error", Value: WorkflowError{Code: "AGGREGATION_TRIGGER_FAILED", Reason: err.Error(), LastFailedAt: &now}},
 		})
+		_ = s.op.UpdateExperimentStatus(ctx, in.ProjectID, in.ExperimentID, ExperimentStatusAggregationFailed)
 		return version, false, err
 	}
 
@@ -428,6 +429,7 @@ func (s *Service) pollAggregation(ctx context.Context, in StartInput, version in
 					code = status.Error.ErrorCode
 				}
 			}
+			_ = s.op.UpdateExperimentStatus(ctx, in.ProjectID, in.ExperimentID, ExperimentStatusAggregationFailed)
 			return s.op.UpdateAggregationWorkflow(ctx, in.ProjectID, in.AgentID, in.ExperimentID, version, bson.D{
 				{Key: "status", Value: AggStatusFailed},
 				{Key: "aggregation.lastPolledAt", Value: now},

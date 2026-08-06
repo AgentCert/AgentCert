@@ -84,14 +84,18 @@ func (o *Operator) UpsertExperiment(ctx context.Context, doc *CertificateExperim
 }
 
 // ResetStatusIfCertified transitions the experiment from EXPERIMENT_CERTIFICATE_READY
-// back to RUNS_IN_PROGRESS when a new or replacement run arrives after the
-// previous certificate was finalized.  It is a no-op for any other status.
+// or AGGREGATION_FAILED back to RUNS_IN_PROGRESS when a new or replacement run
+// arrives after the previous attempt finalized or failed. It is a no-op for
+// any other status.
 func (o *Operator) ResetStatusIfCertified(ctx context.Context, projectID, experimentID string) error {
 	_, err := o.op.Update(ctx, o.experimentCol,
 		bson.D{
 			{Key: "projectId", Value: projectID},
 			{Key: "experimentId", Value: experimentID},
-			{Key: "status", Value: ExperimentStatusCertificateReady},
+			{Key: "status", Value: bson.D{{Key: "$in", Value: bson.A{
+				ExperimentStatusCertificateReady,
+				ExperimentStatusAggregationFailed,
+			}}}},
 		},
 		bson.D{{Key: "$set", Value: bson.D{
 			{Key: "status", Value: ExperimentStatusRunsInProgress},

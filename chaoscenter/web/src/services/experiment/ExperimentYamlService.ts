@@ -167,6 +167,12 @@ export abstract class ExperimentYamlService extends ChaosIDB {
     faultName: string
   ): Promise<Experiment | undefined>;
 
+  abstract addInstallStepToManifest(
+    key: ChaosObjectStoresPrimaryKeys['experiments'],
+    kind: 'application' | 'agent',
+    entry: { folder: string; namespace: string }
+  ): Promise<Experiment | undefined>;
+
   abstract extractChaosFaultsWithWeights(manifest: ExperimentManifest | undefined): Array<Weightages>;
 
   abstract getFaultsFromExperimentManifest(

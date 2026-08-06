@@ -13,6 +13,7 @@ import { useStrings } from '@strings';
 import ExperimentBuilderTemplateSelectionView from '@views/ExperimentBuilderTemplateSelection';
 import type { FaultData, ExperimentManifest, StudioTabs, InfraDetails } from '@models';
 import ExperimentCreationSelectFaultController from '@controllers/ExperimentCreationSelectFault';
+import ExperimentCreationSelectInstallStepController from '@controllers/ExperimentCreationSelectInstallStep';
 import ExperimentAdvancedTuningOptionsView from '@views/ExperimentAdvancedTuningOptions';
 import ExperimentCreationTuneFaultView from '@views/ExperimentCreationFaultConfiguration';
 import { useUpdateSearchParams, useSearchParams } from '@hooks';
@@ -55,6 +56,10 @@ export default function ExperimentVisualBuilderView({
     operation: GetFaultTunablesOperation.InitialEnvs
   });
   const [isSelectTemplateDrawerOpen, setIsSelectTemplateDrawerOpen] = React.useState<boolean>(false);
+  const [installStepDrawer, setInstallStepDrawer] = React.useState<{ open: boolean; kind: 'application' | 'agent' }>({
+    open: false,
+    kind: 'application'
+  });
   const [selectedFaultData, setSelectedFaultData] = React.useState<FaultData>();
   const [serviceIdentifiers, setServiceIdentifiers] = React.useState<ServiceIdentifiers | undefined>();
   const [parallelNodeIdentifier, setParallelNodeIdentifier] = React.useState<string>('');
@@ -84,6 +89,15 @@ export default function ExperimentVisualBuilderView({
     if (prevNodeIdentifier !== '') setPrevNodeIdentifier('');
     // Open the tuning drawer
     setTuneFaultDrawerOpen({ open: true, operation: GetFaultTunablesOperation.InitialEnvs });
+  };
+
+  const handleInstallStepSelection = (entry: { folder: string; namespace: string }): void => {
+    experimentHandler?.addInstallStepToManifest(experimentKey, installStepDrawer.kind, entry).then(experiment => {
+      const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
+      setExperimentSteps(steps);
+      setUnsavedChanges();
+    });
+    setInstallStepDrawer({ open: false, kind: installStepDrawer.kind });
   };
 
   const handleSelectTemplateDrawerClose = (manifest: ExperimentManifest, yamlUploaded?: boolean): void => {
@@ -175,6 +189,24 @@ export default function ExperimentVisualBuilderView({
         />
 
         <Text
+          icon="chaos-scenario-builder"
+          iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+          onClick={() => setInstallStepDrawer({ open: true, kind: 'application' })}
+          className={css.advanced}
+        >
+          {getString('installApplication')}
+        </Text>
+
+        <Text
+          icon="chaos-scenario-builder"
+          iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+          onClick={() => setInstallStepDrawer({ open: true, kind: 'agent' })}
+          className={css.advanced}
+        >
+          {getString('installAgent')}
+        </Text>
+
+        <Text
           icon="ci-build-pipeline"
           iconProps={{ name: 'ci-build-pipeline', size: 16 }}
           onClick={() => setIsAdvancedExperimentTuningDrawerOpen(true)}
@@ -201,6 +233,14 @@ export default function ExperimentVisualBuilderView({
           isOpen={isSelectFaultDrawerOpen}
           onSelect={handleFaultSelection}
           onClose={() => setIsSelectFaultDrawerOpen(false)}
+        />
+      )}
+      {installStepDrawer.open && (
+        <ExperimentCreationSelectInstallStepController
+          isOpen={installStepDrawer.open}
+          kind={installStepDrawer.kind}
+          onSelect={handleInstallStepSelection}
+          onClose={() => setInstallStepDrawer({ open: false, kind: installStepDrawer.kind })}
         />
       )}
       {tuneFaultDrawerOpen.open && (
