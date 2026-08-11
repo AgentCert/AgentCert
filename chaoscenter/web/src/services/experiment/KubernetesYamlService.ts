@@ -911,13 +911,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
     steps?.map(step => {
       if (step.length === 0) return;
 
-      if (
-        isEditMode &&
-        (isInstallFaultsStep(step[0].template ?? '') ||
-          step[0].template === 'cleanup-chaos-resources' ||
-          step[0].template === 'install-application' ||
-          step[0].template === 'install-agent')
-      )
+      if (isEditMode && (isInstallFaultsStep(step[0].template ?? '') || step[0].template === 'cleanup-chaos-resources'))
         return;
 
       graphData.push({
