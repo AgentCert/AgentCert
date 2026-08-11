@@ -19,6 +19,26 @@ import (
 const GRPCErrorPrefix string = "rpc error: code = Unknown desc ="
 const UnitValidationRegex string = `\b(\d+(\.\d+)?)((ns|us|ms|s|m|h))\b`
 
+// MaxK8sNameLength is the maximum length Kubernetes (and Argo Workflow) accept
+// for an object's metadata.name, per the DNS-1123 label rule.
+const MaxK8sNameLength = 63
+
+// SuffixedK8sName appends "-"+suffix to base and truncates base as needed so the
+// result never exceeds the Kubernetes 63-character object name limit. Without this,
+// long experiment/scenario names combined with a timestamp or UUID suffix can produce
+// a metadata.name that Kubernetes rejects outright at admission.
+func SuffixedK8sName(base, suffix string) string {
+	sep := "-"
+	maxBaseLen := MaxK8sNameLength - len(sep) - len(suffix)
+	if maxBaseLen < 0 {
+		maxBaseLen = 0
+	}
+	if len(base) > maxBaseLen {
+		base = strings.TrimRight(base[:maxBaseLen], "-")
+	}
+	return base + sep + suffix
+}
+
 // WriteHeaders adds important headers to API responses
 func WriteHeaders(w *gin.ResponseWriter, statusCode int) {
 	(*w).Header().Set("Content-Type", "application/json; charset=utf-8")

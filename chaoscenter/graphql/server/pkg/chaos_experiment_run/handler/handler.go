@@ -2233,7 +2233,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, errors.New("failed to rerun the chaos experiment due to invalid metadata/labels. Check the troubleshooting guide or contact support")
 	}
 	workflowManifest.Labels["notify_id"] = notifyID
-	workflowManifest.Name = workflowManifest.Name + "-" + strconv.FormatInt(currentTime, 10)
+	workflowManifest.Name = utils.SuffixedK8sName(workflowManifest.Name, strconv.FormatInt(currentTime, 10))
 
 	// Detect container runtime once for all ChaosEngine templates in this workflow
 	var (

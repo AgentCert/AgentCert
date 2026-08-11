@@ -21,6 +21,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/grpc"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -89,7 +90,7 @@ func (g *gitOpsService) GitOpsNotificationHandler(ctx context.Context, infra cha
 	if strings.ToLower(resKind) == "cronexperiment" { // no op
 		return "Request Acknowledged for experimentID: " + experimentID, nil
 	}
-	experiments[0].Revision[len(experiments[0].Revision)-1].ExperimentManifest, err = sjson.Set(experiments[0].Revision[len(experiments[0].Revision)-1].ExperimentManifest, "metadata.name", experiments[0].Name+"-"+strconv.FormatInt(time.Now().UnixMilli(), 10))
+	experiments[0].Revision[len(experiments[0].Revision)-1].ExperimentManifest, err = sjson.Set(experiments[0].Revision[len(experiments[0].Revision)-1].ExperimentManifest, "metadata.name", utils.SuffixedK8sName(experiments[0].Name, strconv.FormatInt(time.Now().UnixMilli(), 10)))
 	if err != nil {
 		log.Error("Failed to updated experiment name :", err)
 		return "", errors.New("Failed to updated experiment name " + err.Error())
