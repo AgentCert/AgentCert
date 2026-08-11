@@ -15,10 +15,10 @@ func TestUpdateWorkflowStatus(t *testing.T) {
 		{v1alpha1.WorkflowRunning, "Running"},
 		{v1alpha1.WorkflowSucceeded, "Completed"},
 		{v1alpha1.WorkflowFailed, "Completed"},
-		{v1alpha1.WorkflowPending, "Pending"},
+		{v1alpha1.WorkflowPending, "Queued"},
 		{v1alpha1.WorkflowError, "Error"},
-		{v1alpha1.WorkflowPhase("Unknown"), "Pending"},
-		{v1alpha1.WorkflowPhase(""), "Pending"},
+		{v1alpha1.WorkflowPhase("Unknown"), "Queued"},
+		{v1alpha1.WorkflowPhase(""), "Queued"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.in), func(t *testing.T) {

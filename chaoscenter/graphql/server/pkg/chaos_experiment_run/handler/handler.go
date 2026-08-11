@@ -2246,6 +2246,20 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	}
 	wfParams := buildWorkflowParameterMap(workflowManifest.Spec.Arguments)
 
+	// Serialize workflows that target the same app namespace: LitmusChaos fault
+	// injection is scoped by ChaosEngine appns/applabel, not by workflow, so two
+	// concurrent runs against the same namespace corrupt each other's fault
+	// injection and the agent metrics observed during it. An Argo mutex keyed on
+	// the resolved appNamespace holds the second workflow in Pending until the
+	// first completes, while different namespaces still run concurrently.
+	if appNS := wfParams["appNamespace"]; appNS != "" {
+		workflowManifest.Spec.Synchronization = &v1alpha1.Synchronization{
+			Mutex: &v1alpha1.Mutex{
+				Name: "ace-app-ns-" + appNS,
+			},
+		}
+	}
+
 	var probes []dbChaosExperimentRun.Probes
 	for i, template := range workflowManifest.Spec.Templates {
 		artifacts := template.Inputs.Artifacts
@@ -2576,6 +2590,17 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 		cronRuntime, cronSocketPath = detectNodeContainerRuntime(cs)
 	}
 	cronParams := buildWorkflowParameterMap(cronExperimentManifest.Spec.WorkflowSpec.Arguments)
+
+	// See matching comment in RunChaosWorkFlow: serialize per app namespace so a
+	// cron-triggered run can't overlap fault injection with another run (cron or
+	// manual) targeting the same namespace.
+	if appNS := cronParams["appNamespace"]; appNS != "" {
+		cronExperimentManifest.Spec.WorkflowSpec.Synchronization = &v1alpha1.Synchronization{
+			Mutex: &v1alpha1.Mutex{
+				Name: "ace-app-ns-" + appNS,
+			},
+		}
+	}
 
 	for i, template := range cronExperimentManifest.Spec.WorkflowSpec.Templates {
 		artifacts := template.Inputs.Artifacts

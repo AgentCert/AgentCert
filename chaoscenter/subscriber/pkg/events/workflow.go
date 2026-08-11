@@ -282,11 +282,11 @@ func updateWorkflowStatus(status v1alpha1.WorkflowPhase) string {
 	case v1alpha1.WorkflowFailed:
 		return "Completed"
 	case v1alpha1.WorkflowPending:
-		return "Pending"
+		return "Queued"
 	case v1alpha1.WorkflowError:
 		return "Error"
 	default:
-		return "Pending"
+		return "Queued"
 	}
 }
 
