@@ -2348,16 +2348,22 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		sidecarUpstream = "http://litellm.ace.svc.cluster.local:14000"
 	}
 
+	// Default to the target app's own namespace rather than a literal app name
+	// (e.g. "sock-shop"): every app-chart (sock-shop, book-info, otel-demo) deploys
+	// both MCP servers alongside the app itself, so {{workflow.parameters.appNamespace}}
+	// — the same Argo template variable used for readiness/uninstall steps above —
+	// always resolves to wherever this run's app actually landed. Explicit
+	// K8S_MCP_URL/PROM_MCP_URL env vars still take precedence for non-standard setups.
 	k8sMCPURL := strings.TrimSpace(os.Getenv("K8S_MCP_URL"))
 	if k8sMCPURL == "" {
-		k8sMCPURL = "http://kubernetes-mcp-server.litmus.svc.cluster.local:8081/mcp"
+		k8sMCPURL = "http://kubernetes-mcp-server.{{workflow.parameters.appNamespace}}.svc.cluster.local:8081/mcp"
 	}
 
 	promMCPURL := strings.TrimSpace(os.Getenv("PROM_MCP_URL"))
 	if promMCPURL == "" {
-		// Match the sock-shop chart Service: port 8083 (targetPort 9090).
+		// Port 8083 (targetPort 9090) matches every current app-chart's Service;
 		// 9090 is container-side only — unreachable via cluster DNS.
-		promMCPURL = "http://prometheus-mcp-server.sock-shop.svc.cluster.local:8083/mcp"
+		promMCPURL = "http://prometheus-mcp-server.{{workflow.parameters.appNamespace}}.svc.cluster.local:8083/mcp"
 	}
 
 	// Build comma-separated MCP_URLS list for flash-agent
