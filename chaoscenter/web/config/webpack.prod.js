@@ -1,6 +1,7 @@
 const { merge } = require('webpack-merge');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CircularDependencyPlugin = require('circular-dependency-plugin');
+const { DefinePlugin } = require('webpack');
 
 const commonConfig = require('./webpack.common');
 
@@ -14,6 +15,9 @@ const prodConfig = {
     chunkFilename: '[name].[id].[contenthash:6].js'
   },
   plugins: [
+    new DefinePlugin({
+      __DEV__: false
+    }),
     new MiniCssExtractPlugin({
       filename: '[name].[contenthash:6].css',
       chunkFilename: '[name].[id].[contenthash:6].css',

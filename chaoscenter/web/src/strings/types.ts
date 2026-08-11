@@ -70,6 +70,9 @@ export interface StringsMap {
   'appNotDeployed': unknown
   'apply': unknown
   'applyChanges': unknown
+  'applyManifestOnHostFallbackPrompt': unknown
+  'applyManifestOnHostPrompt': unknown
+  'applyManifestOnHostTitle': unknown
   'appsHub': unknown
   'appsHubDescription': unknown
   'appsOnboarding': unknown

@@ -43,6 +43,9 @@ addViewSummaryNotes: Add/View Summary Notes
 addtoHubLoading: Adding to ChaosHub, please wait...
 advanced: Advanced (Optional)
 advancedOptions: Advanced Options
+advancedOptionsDescription: >-
+  Set scheduling constraints for the experiment's infrastructure, such as
+  Node Selector and Toleration.
 all: All
 allChaosEnabled: All Chaos Enabled Infrastructures
 allExecutions: All Executions
@@ -58,6 +61,15 @@ appLabelName: app_label
 appNameSpace: App Namespace
 apply: Apply
 applyChanges: Apply Changes
+applyManifestOnHostFallbackPrompt: >-
+  If that machine can't reach this server directly, the manifest was also
+  downloaded to this browser — copy it over manually instead.
+applyManifestOnHostPrompt: >-
+  This fetches and applies the manifest directly, so nothing needs to be
+  downloaded in your browser and copied over separately.
+applyManifestOnHostTitle: >-
+  Recommended: run this on the machine that has kubectl access to your
+  cluster
 at: At
 atAGlance: At a Glance
 attempt: Attempt
@@ -208,6 +220,7 @@ command: Command
 comparator: Comparator
 comparisonCriteria: Comparison Criteria
 completed: Completed
+configuration: Configuration
 configure: Configure
 configureChaosInfrastructure: Configure Chaos Infrastructure
 configureDetails: Configure Details
@@ -1106,6 +1119,7 @@ serviceHealthScore: Service Health Score
 setFaultWeights: Set fault weights
 setSchedule: Set Schedule
 settings: Settings
+setup: Setup
 setupChaosInfrastructures: >-
   Enabling Chaos on infrastructure helps to inject chaos by studying your
   infrastructure and discover services

@@ -26,6 +26,10 @@ export interface connectChaosInfraRequest {
 export interface connectChaosInfraManifestModeResponse {
   registerInfra: {
     manifest: string;
+    // JWT used to fetch the manifest directly from `/file/<token>.yaml` — lets
+    // `kubectl apply -f <url>` run straight on the target host, no browser
+    // download + manual copy required.
+    token: string;
   };
 }
 
@@ -40,6 +44,7 @@ export function connectChaosInfraManifestMode(
       mutation registerInfra($projectID: ID!, $request: RegisterInfraRequest!) {
         registerInfra(projectID: $projectID, request: $request) {
           manifest
+          token
         }
       }
     `,

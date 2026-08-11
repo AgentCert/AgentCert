@@ -195,22 +195,26 @@ func (in *infraService) RegisterInfra(c context.Context, projectID string, input
 		return nil, err
 	}
 
-	reqHeader, ok := c.Value("request-header").(http.Header)
-	if !ok {
-		return nil, fmt.Errorf("unable to parse request header")
+	// Prefer the browser Referer when present (it reflects the page the user is
+	// actually on), but don't hard-fail without it: GetK8sInfraYaml/GetEndpoint
+	// already prefer the configured CHAOS_CENTER_UI_ENDPOINT over this host hint,
+	// and callers other than the ChaosCenter web UI (scripts, direct API calls)
+	// never send a Referer at all.
+	host := ""
+	if reqHeader, ok := c.Value("request-header").(http.Header); ok {
+		if referrer := reqHeader.Get("Referer"); referrer != "" {
+			if referrerURL, err := url.Parse(referrer); err == nil && referrerURL.Host != "" {
+				host = fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host)
+			}
+		}
+	}
+	if host == "" {
+		if requestHost, ok := c.Value("request-host").(string); ok && requestHost != "" {
+			host = fmt.Sprintf("http://%s", requestHost)
+		}
 	}
 
-	referrer := reqHeader.Get("Referer")
-	if referrer == "" {
-		return nil, fmt.Errorf("unable to parse referer header")
-	}
-
-	referrerURL, err := url.Parse(referrer)
-	if err != nil {
-		return nil, err
-	}
-
-	manifestYaml, err := GetK8sInfraYaml(fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host), newInfra)
+	manifestYaml, err := GetK8sInfraYaml(host, newInfra)
 	if err != nil {
 		return nil, err
 	}

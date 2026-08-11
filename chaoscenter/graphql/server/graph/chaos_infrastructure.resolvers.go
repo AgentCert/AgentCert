@@ -75,6 +75,26 @@ func (r *mutationResolver) DeleteInfra(ctx context.Context, projectID string, in
 	return dcaResponse, err
 }
 
+// resolveManifestHost derives the host to embed as the infra manifest's
+// SERVER_ADDR fallback. GetK8sInfraYaml/GetEndpoint always prefer the
+// configured CHAOS_CENTER_UI_ENDPOINT over this value, so it only matters for
+// deployments that leave that setting unset. It must not require a Referer:
+// callers other than the ChaosCenter web UI (curl, kubectl, scripted
+// onboarding against the /file/:key route) never send one.
+func resolveManifestHost(ctx context.Context) string {
+	if reqHeader, ok := ctx.Value("request-header").(http.Header); ok {
+		if referrer := reqHeader.Get("Referer"); referrer != "" {
+			if referrerURL, err := url.Parse(referrer); err == nil && referrerURL.Host != "" {
+				return fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host)
+			}
+		}
+	}
+	if requestHost, ok := ctx.Value("request-host").(string); ok && requestHost != "" {
+		return fmt.Sprintf("http://%s", requestHost)
+	}
+	return ""
+}
+
 // GetManifestWithInfraID is the resolver for the getManifestWithInfraID field.
 func (r *mutationResolver) GetManifestWithInfraID(ctx context.Context, projectID string, infraID string, accessKey string) (string, error) {
 	logFields := logrus.Fields{
@@ -83,22 +103,8 @@ func (r *mutationResolver) GetManifestWithInfraID(ctx context.Context, projectID
 		"chaosInfraId": infraID,
 	}
 
-	reqHeader, ok := ctx.Value("request-header").(http.Header)
-	if !ok {
-		return "", fmt.Errorf("unable to parse request header")
-	}
-
-	referrer := reqHeader.Get("Referer")
-	if referrer == "" {
-		return "", fmt.Errorf("unable to parse referer header")
-	}
-
-	referrerURL, err := url.Parse(referrer)
-	if err != nil {
-		return "", err
-	}
 	logrus.WithFields(logFields).Info("request received to get chaos infrastructure installation manifest")
-	manifest, err := r.chaosInfrastructureService.GetManifestWithInfraID(fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host), infraID, accessKey)
+	manifest, err := r.chaosInfrastructureService.GetManifestWithInfraID(resolveManifestHost(ctx), infraID, accessKey)
 	if err != nil {
 		return "", err
 	}
@@ -188,23 +194,8 @@ func (r *queryResolver) GetInfraManifest(ctx context.Context, infraID string, up
 		"projectId": projectID,
 	}
 
-	reqHeader, ok := ctx.Value("request-header").(http.Header)
-	if !ok {
-		return "", fmt.Errorf("unable to parse request header")
-	}
-
-	referrer := reqHeader.Get("Referer")
-	if referrer == "" {
-		return "", fmt.Errorf("unable to parse referer header")
-	}
-
-	referrerURL, err := url.Parse(referrer)
-	if err != nil {
-		return "", err
-	}
-
 	logrus.WithFields(logFields).Info("request received to get chaos infrastructure manifest")
-	err = authorization.ValidateRole(ctx, projectID,
+	err := authorization.ValidateRole(ctx, projectID,
 		authorization.MutationRbacRules[authorization.GetManifest],
 		model.InvitationAccepted.String())
 	if err != nil {
@@ -216,9 +207,7 @@ func (r *queryResolver) GetInfraManifest(ctx context.Context, infraID string, up
 		return "", err
 	}
 
-	gcaResponse, err := chaos_infrastructure.GetK8sInfraYaml(
-		fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host),
-		getInfra)
+	gcaResponse, err := chaos_infrastructure.GetK8sInfraYaml(resolveManifestHost(ctx), getInfra)
 
 	if err != nil {
 		logrus.WithFields(logFields).Error(err)

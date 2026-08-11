@@ -1,5 +1,6 @@
 import React from 'react';
 import { Layout, Switch, Text, VisualYamlSelectedView } from '@harnessio/uicore';
+import { Position } from '@blueprintjs/core';
 import classNames from 'classnames';
 import { useParams } from 'react-router-dom';
 import { DiagramFactory } from '@components/PipelineDiagram/DiagramFactory';
@@ -180,7 +181,7 @@ export default function ExperimentVisualBuilderView({
 
   return (
     <div className={css.graphContainer}>
-      <Layout.Horizontal className={css.options} flex>
+      <Layout.Vertical className={css.options} spacing="small">
         <Switch
           checked={!isEditMode}
           label={getString('preview')}
@@ -188,33 +189,47 @@ export default function ExperimentVisualBuilderView({
           className={isEditMode ? classNames(css.preview, css.greyText) : classNames(css.preview, css.activeText)}
         />
 
-        <Text
-          icon="chaos-scenario-builder"
-          iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
-          onClick={() => setInstallStepDrawer({ open: true, kind: 'application' })}
-          className={css.advanced}
-        >
-          {getString('installApplication')}
-        </Text>
+        <div className={css.divider} />
 
-        <Text
-          icon="chaos-scenario-builder"
-          iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
-          onClick={() => setInstallStepDrawer({ open: true, kind: 'agent' })}
-          className={css.advanced}
-        >
-          {getString('installAgent')}
-        </Text>
+        <Text className={css.groupLabel}>{getString('setup')}</Text>
+        <Layout.Vertical spacing="xsmall">
+          <Text
+            icon="chaos-scenario-builder"
+            iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+            onClick={() => setInstallStepDrawer({ open: true, kind: 'application' })}
+            className={css.actionItem}
+            tooltip={getString('installApplicationDescription')}
+            tooltipProps={{ position: Position.RIGHT }}
+          >
+            {getString('installApplication')}
+          </Text>
 
+          <Text
+            icon="chaos-scenario-builder"
+            iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+            onClick={() => setInstallStepDrawer({ open: true, kind: 'agent' })}
+            className={css.actionItem}
+            tooltip={getString('installAgentDescription')}
+            tooltipProps={{ position: Position.RIGHT }}
+          >
+            {getString('installAgent')}
+          </Text>
+        </Layout.Vertical>
+
+        <div className={css.divider} />
+
+        <Text className={css.groupLabel}>{getString('configuration')}</Text>
         <Text
           icon="ci-build-pipeline"
           iconProps={{ name: 'ci-build-pipeline', size: 16 }}
           onClick={() => setIsAdvancedExperimentTuningDrawerOpen(true)}
-          className={css.advanced}
+          className={css.actionItem}
+          tooltip={getString('advancedOptionsDescription')}
+          tooltipProps={{ position: Position.RIGHT }}
         >
           {getString('advancedOptions')}
         </Text>
-      </Layout.Horizontal>
+      </Layout.Vertical>
       {isAdvancedExperimentTuningDrawerOpen && (
         <ExperimentAdvancedTuningOptionsView
           isOpen={isAdvancedExperimentTuningDrawerOpen}
