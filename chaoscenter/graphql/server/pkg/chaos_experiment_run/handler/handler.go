@@ -2312,16 +2312,20 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 			})
 
 			meta.Annotations = annotation
+			// step_pod_name carries the full Argo pod name ({{pod.name}}), which
+			// routinely exceeds Kubernetes's 63-byte label *value* limit and would
+			// make the ChaosEngine create call fail outright. Annotation values have
+			// no such length limit, and nothing selects on step_pod_name via label
+			// selector (only workflow_run_id is used that way), so it belongs there.
+			meta.Annotations["step_pod_name"] = "{{pod.name}}"
 
 			if meta.Labels == nil {
 				meta.Labels = map[string]string{
 					"infra_id":        workflow.InfraID,
-					"step_pod_name":   "{{pod.name}}",
 					"workflow_run_id": "{{workflow.uid}}",
 				}
 			} else {
 				meta.Labels["infra_id"] = workflow.InfraID
-				meta.Labels["step_pod_name"] = "{{pod.name}}"
 				meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
 			}
 
@@ -2535,6 +2539,17 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, fmt.Errorf("failed to generate probes in workflow manifest, err: %v", err)
 	}
 
+	// Sanitize WF metadata labels: Kubernetes label values must be ≤ 63 bytes.
+	// Long experiment names (e.g. itbench-flash-agent-scenario-46-postgresql-...) can
+	// exceed this and cause the subscriber's Kubernetes create call to be rejected
+	// silently (the subscriber logs the error but the handler has already returned 200).
+	// Truncate any label value that exceeds 63 bytes before serializing the manifest.
+	for k, v := range workflowManifest.Labels {
+		if len(v) > 63 {
+			workflowManifest.Labels[k] = v[:63]
+		}
+	}
+
 	manifest, err := yaml.Marshal(workflowManifest)
 	if err != nil {
 		return nil, err
@@ -2631,16 +2646,20 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 				annotation = meta.Annotations
 			}
 			meta.Annotations = annotation
+			// step_pod_name carries the full Argo pod name ({{pod.name}}), which
+			// routinely exceeds Kubernetes's 63-byte label *value* limit and would
+			// make the ChaosEngine create call fail outright. Annotation values have
+			// no such length limit, and nothing selects on step_pod_name via label
+			// selector (only workflow_run_id is used that way), so it belongs there.
+			meta.Annotations["step_pod_name"] = "{{pod.name}}"
 
 			if meta.Labels == nil {
 				meta.Labels = map[string]string{
 					"infra_id":        workflow.InfraID,
-					"step_pod_name":   "{{pod.name}}",
 					"workflow_run_id": "{{workflow.uid}}",
 				}
 			} else {
 				meta.Labels["infra_id"] = workflow.InfraID
-				meta.Labels["step_pod_name"] = "{{pod.name}}"
 				meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
 			}
 
