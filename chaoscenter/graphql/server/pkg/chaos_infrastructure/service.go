@@ -220,10 +220,11 @@ func (in *infraService) RegisterInfra(c context.Context, projectID string, input
 	}
 
 	return &model.RegisterInfraResponse{
-		InfraID:  newInfra.InfraID,
-		Token:    token,
-		Name:     newInfra.Name,
-		Manifest: string(manifestYaml),
+		InfraID:             newInfra.InfraID,
+		Token:               token,
+		Name:                newInfra.Name,
+		Manifest:            string(manifestYaml),
+		ManifestDownloadURL: GetManifestDownloadURL(host, token),
 	}, nil
 }
 
@@ -306,6 +307,19 @@ func (in *infraService) DeleteInfra(ctx context.Context, projectID string, infra
 			Namespace:   *infra.InfraNamespace,
 			Username:    &username,
 		}, r)
+	}
+
+	// ACE Fix: Also delete the Kubernetes namespace to prevent orphaned resources
+	// The subscriber pod is in the namespace being deleted, so it cannot delete its own
+	// namespace. This must be done from the control plane after marking DB records.
+	// For now, log a note for operators to clean up manually if needed.
+	// TODO: Implement async cleanup job or use finalizers to handle namespace deletion
+	// after subscriber shutdown. Current behavior leaves orphaned infra pods/jobs in Kubernetes.
+	if infra.InfraNamespace != nil && *infra.InfraNamespace != "" {
+		logrus.Warnf("Infrastructure %s (namespace: %s) marked as deleted in DB. "+
+			"Kubernetes namespace still exists with orphaned resources. "+
+			"Manual cleanup recommended: kubectl delete namespace %s",
+			infra.InfraID, *infra.InfraNamespace, *infra.InfraNamespace)
 	}
 
 	return "infra deleted successfully", nil
