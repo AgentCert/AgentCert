@@ -10,6 +10,9 @@ interface TargetApplicationViewProps {
   appInfoData: AppInfoData;
   namespaceData: string[];
   pendingNamespaces?: string[];
+  // Restricts the App Kind dropdown to these gvrData resource names, per
+  // agents/FAULT_APPLICATION_COMPATIBILITY.md. Undefined = unrestricted.
+  allowedAppKinds?: string[];
   targetApp: TargetApplicationData | undefined;
   setTargetApp: React.Dispatch<React.SetStateAction<TargetApplicationData>>;
   engineCR: ChaosEngine | undefined;
@@ -24,6 +27,7 @@ export default function TargetApplicationTab({
   appInfoData,
   namespaceData,
   pendingNamespaces = [],
+  allowedAppKinds,
   targetApp,
   setTargetApp,
   engineCR,
@@ -35,7 +39,8 @@ export default function TargetApplicationTab({
   const { getString } = useStrings();
 
   function getAppKindItems(): SelectOption[] {
-    return gvrData.map(data => ({
+    const source = allowedAppKinds ? gvrData.filter(data => allowedAppKinds.includes(data.resource)) : gvrData;
+    return source.map(data => ({
       label: data.resource,
       value: data.resource
     }));

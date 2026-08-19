@@ -7,11 +7,13 @@ import experimentYamlService from '@services/experiment';
 import { TargetApplicationTab } from '@views/ExperimentCreationFaultConfiguration/Tabs';
 import type { AppInfoData, TargetApplicationData } from './types';
 import { gvrData } from './grvData';
+import { APP_NAMESPACES, APP_SERVICES, CompatibleApp, getFaultCompatibility } from './faultApplicationCompatibility';
 
 interface TargetApplicationControllerProps {
   engineCR: ChaosEngine | undefined;
   infrastructureID: string | undefined;
   setFaultData: React.Dispatch<React.SetStateAction<FaultData | undefined>>;
+  faultName: string | undefined;
 }
 
 // Chart-install steps (install-application/install-app) declare their target
@@ -41,7 +43,8 @@ function getPendingInstallNamespaces(manifest: KubernetesExperimentManifest | un
 export default function TargetApplicationTabController({
   engineCR,
   infrastructureID,
-  setFaultData
+  setFaultData,
+  faultName
 }: TargetApplicationControllerProps): React.ReactElement {
   const { experimentKey } = useParams<{ experimentKey: string }>();
   const experimentHandler = experimentYamlService.getInfrastructureTypeHandler(InfrastructureType.KUBERNETES);
@@ -127,11 +130,38 @@ export default function TargetApplicationTabController({
     }
   }, [resultObject?.getKubeObject, targetApp?.appns]);
 
+  // Fault -> app/kind/service compatibility, per
+  // agents/FAULT_APPLICATION_COMPATIBILITY.md (see faultApplicationCompatibility.ts).
+  // A fault with no known entry falls back to the unrestricted lists computed
+  // above, so uncatalogued faults behave exactly as before.
+  const compatibility = getFaultCompatibility(faultName);
+
+  const compatibleNamespaces = compatibility?.apps.map(app => APP_NAMESPACES[app]);
+  const filteredNamespaceData = compatibleNamespaces
+    ? namespaceData.filter(ns => compatibleNamespaces.includes(ns))
+    : namespaceData;
+  const filteredPendingNamespaces = compatibleNamespaces
+    ? pendingNamespaces.filter(ns => compatibleNamespaces.includes(ns))
+    : pendingNamespaces;
+
+  // Which known app the currently selected namespace corresponds to, so the
+  // AppLabel picker can be narrowed to that app's compatible service list.
+  const currentApp = (Object.entries(APP_NAMESPACES) as [CompatibleApp, string][]).find(
+    ([, namespace]) => namespace === targetApp?.appns
+  )?.[0];
+  const compatibleServices = currentApp
+    ? compatibility?.servicesByApp?.[currentApp] ?? (compatibility ? APP_SERVICES[currentApp] : undefined)
+    : undefined;
+  const filteredAppInfoData: AppInfoData = compatibleServices
+    ? { appLabels: appInfoData.appLabels.filter(option => compatibleServices.includes(option.name)) }
+    : appInfoData;
+
   return (
     <TargetApplicationTab
-      appInfoData={appInfoData}
-      namespaceData={namespaceData}
-      pendingNamespaces={pendingNamespaces}
+      appInfoData={filteredAppInfoData}
+      namespaceData={filteredNamespaceData}
+      pendingNamespaces={filteredPendingNamespaces}
+      allowedAppKinds={compatibility?.appKinds}
       targetApp={targetApp}
       setTargetApp={setTargetApp}
       engineCR={engineCR}

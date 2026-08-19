@@ -906,7 +906,21 @@ export class KubernetesYamlService extends ExperimentYamlService {
 
     if (!manifest) return graphData;
 
-    const [, steps] = this.getTemplatesAndSteps(manifest);
+    const [templates, steps] = this.getTemplatesAndSteps(manifest);
+
+    // A fault node has no target configured when its ChaosEngine declares
+    // spec.appinfo but appns/applabel are still blank -- see
+    // ExperimentCreationFaultConfiguration's Target Application tab, which is
+    // an optional step nothing forces the user through. Mirrors the same
+    // raw-artifact parse getFaultData() uses to read a fault's ChaosEngine.
+    const hasNoTarget = (faultName: string): boolean => {
+      const template = templates?.find(t => t.name === faultName);
+      const raw = template?.inputs?.artifacts?.[0]?.raw?.data;
+      if (!raw) return false;
+      const appinfo = (parse(raw) as ChaosEngine).spec?.appinfo;
+      if (!appinfo) return false;
+      return !appinfo.appns || !appinfo.applabel;
+    };
 
     steps?.map(step => {
       if (step.length === 0) return;
@@ -919,13 +933,13 @@ export class KubernetesYamlService extends ExperimentYamlService {
         name: step[0]?.name ?? '',
         type: 'ChaosNode',
         identifier: step[0]?.template ?? '',
-        data: {},
+        data: { isInComplete: hasNoTarget(step[0]?.template ?? '') },
         children: step.slice(1).map(subStep => ({
           id: subStep.template ?? '',
           name: subStep.name ?? '',
           type: 'ChaosNode',
           identifier: subStep.template ?? '',
-          data: {}
+          data: { isInComplete: hasNoTarget(subStep.template ?? '') }
         }))
       });
     });

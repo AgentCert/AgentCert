@@ -379,6 +379,7 @@ export interface StringsMap {
   'faultsContained': unknown
   'faultsHaveProbeFailures': unknown
   'faultsLibrary': unknown
+  'faultsMissingTargetApplication': PrimitiveObject<'faultNames'>
   'featureRestriction.experimentsPerMonthLevelUp': PrimitiveObject<'count' | 'experimentsLimit'>
   'featureRestriction.initialDeploymentsWarningActive': PrimitiveObject<'warningLimit'>
   'featureRestriction.resourceLevelUpFree': PrimitiveObject<'resourceLimit' | 'resourceName'>

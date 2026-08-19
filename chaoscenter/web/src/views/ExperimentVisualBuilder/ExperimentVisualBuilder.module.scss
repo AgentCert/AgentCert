@@ -3,6 +3,18 @@
   overflow: hidden;
 }
 
+// Lists fault nodes whose ChaosEngine has no appns/applabel configured, so
+// the gap is visible without clicking through every node's warning badge.
+.missingTargetBanner {
+  margin: 12px 33px 0 12px;
+  padding: 8px 12px;
+  background-color: var(--orange-50);
+  border: 1px solid var(--orange-200);
+  border-radius: 4px;
+  width: fit-content;
+  max-width: calc(100% - 45px);
+}
+
 .options {
   margin-top: 17px !important;
   margin-right: 33px !important;

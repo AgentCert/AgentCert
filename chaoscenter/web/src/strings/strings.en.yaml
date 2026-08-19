@@ -468,6 +468,9 @@ faults: Faults
 faultsContained: Faults Contained
 faultsHaveProbeFailures: Faults have Probe Failures
 faultsLibrary: Faults Library
+faultsMissingTargetApplication: >-
+  No target application configured, so it won't inject against anything:
+  {{faultNames}}
 featureRestriction:
   experimentsPerMonthLevelUp: >-
     You have used {{ count }} / {{ experimentsLimit }} free experiment runs this

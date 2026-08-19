@@ -181,6 +181,7 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
           engineCR={faultData?.engineCR}
           infrastructureID={infraID}
           setFaultData={setFaultData}
+          faultName={faultData?.faultName}
         />
       )
     },

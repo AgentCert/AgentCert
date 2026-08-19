@@ -142,6 +142,9 @@ function ChaosExperimentNode(props: BaseReactComponentProps): JSX.Element {
           // TODO: defaults to experiment icon
           name={defaultTo(props.icon, 'chaos-scenario-builder') as IconName}
         />
+        {props.data?.isInComplete && (
+          <Icon className={defaultCss.secondaryIcon} size={12} name="warning-sign" color="orange500" />
+        )}
         {!props.readonly && (
           <Button
             className={defaultCss.closeNode}

@@ -1,6 +1,8 @@
 import React from 'react';
 import { Layout, Switch, Text, VisualYamlSelectedView } from '@harnessio/uicore';
 import { Position } from '@blueprintjs/core';
+import { Icon } from '@harnessio/icons';
+import { Color } from '@harnessio/design-system';
 import classNames from 'classnames';
 import { useParams } from 'react-router-dom';
 import { DiagramFactory } from '@components/PipelineDiagram/DiagramFactory';
@@ -179,6 +181,17 @@ export default function ExperimentVisualBuilderView({
   };
   diagram.registerListeners(eventListeners);
 
+  // Fault nodes whose ChaosEngine has no appns/applabel configured -- see
+  // KubernetesYamlService.getFaultsFromExperimentManifest, which computes
+  // isInComplete per node. Surfaced as a single list here (rather than only
+  // the per-node warning badge) so a multi-fault experiment doesn't require
+  // clicking through every node to discover which ones won't inject
+  // against anything.
+  const faultsMissingTarget = experimentSteps
+    .flatMap(step => [step, ...(step.children ?? [])])
+    .filter(step => step.data?.isInComplete)
+    .map(step => step.name);
+
   return (
     <div className={css.graphContainer}>
       <Layout.Vertical className={css.options} spacing="small">
@@ -268,6 +281,14 @@ export default function ExperimentVisualBuilderView({
           faultTuneOperation={tuneFaultDrawerOpen.operation}
           initialServiceIdentifiers={serviceIdentifiers}
         />
+      )}
+      {faultsMissingTarget.length > 0 && (
+        <Layout.Horizontal className={css.missingTargetBanner} spacing="small" flex={{ alignItems: 'center' }}>
+          <Icon name="warning-sign" size={14} color="orange500" />
+          <Text font={{ size: 'small' }} color={Color.ORANGE_900}>
+            {getString('faultsMissingTargetApplication', { faultNames: faultsMissingTarget.join(', ') })}
+          </Text>
+        </Layout.Horizontal>
       )}
       <ChaosDiagram
         data={experimentSteps}
