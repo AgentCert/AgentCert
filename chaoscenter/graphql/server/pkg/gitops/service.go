@@ -26,7 +26,6 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"go.mongodb.org/mongo-driver/bson"
-	grpc2 "google.golang.org/grpc"
 )
 
 const (
@@ -113,16 +112,9 @@ func (g *gitOpsService) EnableGitOpsHandler(ctx context.Context, projectID strin
 	gitLock.Lock(config.RepoURL, &config.Branch)
 	defer gitLock.Unlock(config.RepoURL, &config.Branch)
 
-	var conn *grpc2.ClientConn
-	client, conn := grpc.GetAuthGRPCSvcClient(conn)
-	defer func(conn *grpc2.ClientConn) {
-		err := conn.Close()
-		if err != nil {
-			log.Error("Failed to close connection : ", err)
-		}
-	}(conn)
+	client := grpc.GetAuthGRPCSvcClient()
 
-	_, err := grpc.GetProjectById(client, projectID)
+	_, err := grpc.GetProjectById(ctx, client, projectID)
 	if err != nil {
 		return false, errors.New("Failed to setup GitOps : " + err.Error())
 	}

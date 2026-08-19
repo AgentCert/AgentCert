@@ -13,7 +13,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	grpc2 "google.golang.org/grpc"
 )
 
 // ProjectInitializer creates a default hub and default image registry for a new project
@@ -59,9 +58,7 @@ func ProjectEvents(projectEventChannel chan string, mongoClient *mongo.Client, m
 	if err != nil {
 		log.Error(err.Error())
 	}
-	var conn *grpc2.ClientConn
-	client, conn := grpc.GetAuthGRPCSvcClient(conn)
-	defer conn.Close()
+	client := grpc.GetAuthGRPCSvcClient()
 
 	for projectDetails.Next(context.Background()) {
 		var DbEvent project.ProjectCreationEvent
@@ -69,7 +66,7 @@ func ProjectEvents(projectEventChannel chan string, mongoClient *mongo.Client, m
 			log.Error(err.Error())
 		}
 		if DbEvent.OperationType == "insert" {
-			user, err := grpc.GetUserById(client, DbEvent.FullDocument.CreatedBy.UserID)
+			user, err := grpc.GetUserById(context.Background(), client, DbEvent.FullDocument.CreatedBy.UserID)
 			if err != nil {
 				log.Error(err)
 			}

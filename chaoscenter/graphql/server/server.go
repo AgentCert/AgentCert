@@ -29,14 +29,16 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/api/middleware"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/generated"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
-	handler2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
+	handler2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/config"
+	authgrpc "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/grpc"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/handlers"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/projects"
@@ -123,6 +125,13 @@ func main() {
 	var mongodbOperator mongodb.MongoOperator = mongodb.NewMongoOperations(mongoClient)
 	mongodb.Operator = mongodbOperator
 
+	// Single, long-lived connection to the Authentication service, reused by
+	// every ValidateRole/GetProjectById/GetUserById call for the life of this
+	// process instead of each dialing its own connection per request.
+	if err := authgrpc.InitAuthGRPCConn(); err != nil {
+		log.Fatalf("failed to initialize auth GRPC connection: %v", err)
+	}
+
 	if err := validateVersion(); err != nil {
 		log.Fatal(err)
 	}
@@ -154,7 +163,13 @@ func main() {
 		go startGRPCServer(utils.Config.GrpcPort, mongodbOperator) // start GRPC serve
 	}
 
-	srv := handler.New(generated.NewExecutableSchema(graph.NewConfig(mongodbOperator)))
+	graphqlConfig := graph.NewConfig(mongodbOperator)
+	srv := handler.New(generated.NewExecutableSchema(graphqlConfig))
+
+	// Initialize and start the finalizer controller watcher for infrastructure cleanup
+	if resolver, ok := graphqlConfig.Resolvers.(*graph.Resolver); ok {
+		go resolver.GetInfrastructureService().StartFinalizerWatcher(context.Background())
+	}
 
 	// Pass through actual error messages instead of generic "internal system error"
 	srv.SetErrorPresenter(func(ctx context.Context, e error) *gqlerror.Error {
@@ -236,12 +251,25 @@ func main() {
 	projectEventChannel := make(chan string)
 	go projects.ProjectEvents(projectEventChannel, mongodb.MgoClient, mongodbOperator)
 
-	// Graceful shutdown handler for Langfuse flush
+	// Store reference to infrastructure service for graceful shutdown
+	var infraService chaos_infrastructure.Service
+	if resolver, ok := graphqlConfig.Resolvers.(*graph.Resolver); ok {
+		infraService = resolver.GetInfrastructureService()
+	}
+
+	// Graceful shutdown handler for Langfuse flush and finalizer watcher
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigCh
-		log.Infof("Received signal %v, shutting down tracers...", sig)
+		log.Infof("Received signal %v, shutting down services...", sig)
+
+		// Stop the finalizer watcher
+		if infraService != nil {
+			infraService.StopFinalizerWatcher()
+		}
+
+		// Flush and close Langfuse tracer
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := observability.GetLangfuseTracer().Close(shutdownCtx); err != nil {
