@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -3113,6 +3114,11 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				// above (line ~2765) -- the same value agent-sidecar stamps as
 				// Langfuse's trace_id on every LLM call for this run.
 				NotifyID: traceID,
+				// FaultWindows lets the certifier split this run's trace into
+				// per-fault buckets by timestamp when it carries no `fault: *`
+				// spans (blind-observer agents). Empty for single-fault or
+				// non-Argo-orchestrated runs -- fully backward compatible.
+				FaultWindows: computeFaultWindows(executionData.Nodes),
 			}
 			lf := logFields
 			go func(in certification.StartInput) {
@@ -3618,4 +3624,85 @@ func computeFaultCohort(nodes map[string]types.Node) (map[string][]string, strin
 		mode = "parallel"
 	}
 	return cohorts, mode
+}
+
+// stdFaultStepNameRe / itbScenarioStepNameRe match this repo's fault-injection
+// Argo Workflow step naming convention for steps that do NOT go through a
+// ChaosEngine CR (see itbScenarioStepNameRe -- used by ITBench scenario
+// injectors): "std-<fault-name>" (e.g. "std-pod-delete") and
+// "itb-scenario-<N>-..." (e.g. "itb-scenario-42-kafka-preemption"). Matched
+// against the lowercased Argo node Name, which -- like the existing
+// strings.Contains(...,"install-agent") checks elsewhere in this file --
+// carries the step/template name as a substring even when wrapped in Argo's
+// own node-name/index formatting.
+var (
+	stdFaultStepNameRe    = regexp.MustCompile(`std-([a-z][a-z0-9-]*)`)
+	itbScenarioStepNameRe = regexp.MustCompile(`itb-scenario-(\d+)`)
+)
+
+// computeFaultWindows derives per-fault injection time windows from a
+// terminated run's Argo Workflow node map, for the certifier's
+// fault_windows request field (main/models/bucket_requests.py FaultWindow).
+// This lets Phase 0 fault-bucketing split a trace into per-fault buckets by
+// timestamp when the trace itself carries no `fault: *` OTel spans -- the
+// case for blind-observer agents like flash-agent, which are deliberately
+// never told which fault is running (see agent-sidecar/proxy.py).
+//
+// Two name sources are tried per node, in order:
+//  1. ChaosEngine nodes: node.ChaosExp.ExperimentName (falling back to
+//     EngineName) -- the same derivation already used elsewhere in this file
+//     (see computeFaultCohort, the fault-span emission loop above) and
+//     already a raw match for certifier/configs/fault_categories.json's
+//     sub-fault names (e.g. "pod-delete"), so no further transform is
+//     applied.
+//  2. Non-ChaosEngine workflow steps (e.g. ITBench scenario injectors that
+//     inject directly from a workflow step rather than a ChaosEngine CR):
+//     the node's Argo Name is matched against stdFaultStepNameRe /
+//     itbScenarioStepNameRe.
+//
+// Timestamps are normalized through observability.ParseArgoTime (which
+// already handles both epoch and RFC3339 forms coming from the subscriber)
+// and re-emitted as RFC3339 -- a valid ISO-8601 form -- so the certifier's
+// datetime.fromisoformat parsing never has to guess the source format.
+//
+// A node is skipped (not an error) when: its fault name can't be determined
+// by either source, or either timestamp is missing/unparseable. Callers
+// should treat a nil/empty result as "no known fault windows for this run"
+// -- the certifier falls back to its original single-bucket behavior in
+// that case, so this is always safe to leave empty.
+func computeFaultWindows(nodes map[string]types.Node) []certification.FaultWindow {
+	var windows []certification.FaultWindow
+	for _, node := range nodes {
+		faultName := ""
+		if node.Type == "ChaosEngine" && node.ChaosExp != nil {
+			faultName = node.ChaosExp.ExperimentName
+			if faultName == "" {
+				faultName = node.ChaosExp.EngineName
+			}
+		}
+		if faultName == "" {
+			lower := strings.ToLower(node.Name)
+			if m := itbScenarioStepNameRe.FindStringSubmatch(lower); m != nil {
+				faultName = "Scenario-" + m[1]
+			} else if m := stdFaultStepNameRe.FindStringSubmatch(lower); m != nil {
+				faultName = m[1]
+			}
+		}
+		if faultName == "" {
+			continue
+		}
+
+		start := observability.ParseArgoTime(node.StartedAt)
+		end := observability.ParseArgoTime(node.FinishedAt)
+		if start == nil || end == nil {
+			continue
+		}
+
+		windows = append(windows, certification.FaultWindow{
+			FaultName: faultName,
+			StartTime: start.Format(time.RFC3339),
+			EndTime:   end.Format(time.RFC3339),
+		})
+	}
+	return windows
 }

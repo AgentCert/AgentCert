@@ -54,12 +54,19 @@ type StartInput struct {
 	// May be empty for manually-triggered certification (the certifier falls
 	// back to the metadata-filter search in that case).
 	NotifyID string
+	// FaultWindows carries the per-fault injection time windows computed from
+	// the terminated run's Argo Workflow nodes (see
+	// chaos_experiment_run/handler.computeFaultWindows), so the certifier can
+	// split a trace lacking `fault: *` spans into per-fault buckets by
+	// timestamp. Empty for single-fault or non-Argo-orchestrated runs -- the
+	// certifier falls back to its original single-bucket behavior in that case.
+	FaultWindows []FaultWindow
 }
 
 type StartOutput struct {
-	Status                       string
-	ExperimentRunWorkflowStatus  string
-	Message                      string
+	Status                      string
+	ExperimentRunWorkflowStatus string
+	Message                     string
 }
 
 func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInput) (*StartOutput, error) {
@@ -195,6 +202,7 @@ func (s *Service) triggerBucketing(ctx context.Context, in StartInput) error {
 		RunID:         in.ExperimentRunID,
 		TraceSource:   TraceSource{Type: "langfuse", TraceID: in.NotifyID},
 		StorageConfig: StorageConfig{Type: "local"},
+		FaultWindows:  in.FaultWindows,
 	})
 	if err != nil {
 		// 409 with a parsed task_id is treated as "already active".
