@@ -1203,16 +1203,21 @@ func (c *chaosExperimentService) UpdateRuntimeCronWorkflowConfiguration(cronWork
 					}
 
 					meta.Annotations = annotation
+					// step_pod_name carries the full Argo pod name ({{pod.name}}), which
+					// routinely exceeds Kubernetes's 63-byte label *value* limit (workflow
+					// name + node-name hash easily runs past it) and would make the
+					// ChaosEngine create call fail outright. Annotation values have no such
+					// length limit, and nothing selects on step_pod_name via label selector
+					// (only workflow_run_id is used that way), so it belongs there instead.
+					meta.Annotations["step_pod_name"] = "{{pod.name}}"
 
 					if meta.Labels == nil {
 						meta.Labels = map[string]string{
 							"infra_id":        experiment.InfraID,
-							"step_pod_name":   "{{pod.name}}",
 							"workflow_run_id": "{{workflow.uid}}",
 						}
 					} else {
 						meta.Labels["infra_id"] = experiment.InfraID
-						meta.Labels["step_pod_name"] = "{{pod.name}}"
 						meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
 					}
 
