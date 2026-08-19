@@ -751,21 +751,9 @@ type DeleteAgentResponse struct {
 	Message string `json:"message"`
 }
 
-// HelmEnvVarInput passes an environment variable into the agent's Helm chart.
-// Sensitive variables are stored in a Kubernetes Secret; others in a ConfigMap.
-type HelmEnvVarInput struct {
-	// Environment variable name, e.g. OPENAI_API_KEY
-	Name string `json:"name"`
-	// Environment variable value
-	Value string `json:"value"`
-	// When true the value is stored in a Kubernetes Secret (masked in logs).
-	// When false (default) it is stored in a ConfigMap.
-	Sensitive *bool `json:"sensitive,omitempty"`
-}
-
 // DeployAgentWithHelmRequest contains information to deploy an agent using Helm.
 // LLM provider credentials and any other agent-specific environment variables
-// are passed via the generic HelmEnvVars list rather than provider-specific
+// are passed via the generic helmEnvVars list rather than provider-specific
 // fields, so any agent Helm chart can be targeted without schema changes.
 type DeployAgentWithHelmRequest struct {
 	// Unique name for the agent within the project
@@ -792,6 +780,9 @@ type DeployAgentWithHelmRequest struct {
 	Kubeconfig *string `json:"kubeconfig,omitempty"`
 	// Generic environment variables injected into the agent's Helm chart.
 	// Replaces the former provider-specific fields (azureOpenAIKey, etc.).
+	// Sensitive entries are stored in a Kubernetes Secret; others in a ConfigMap.
+	// Example: [{name: "OPENAI_API_KEY", value: "sk-…", sensitive: true},
+	//           {name: "OPENAI_BASE_URL", value: "https://…", sensitive: false}]
 	HelmEnvVars []*HelmEnvVarInput `json:"helmEnvVars,omitempty"`
 }
 
@@ -1504,6 +1495,21 @@ type HealthCheckResult struct {
 	ResponseTime int `json:"responseTime"`
 	// Timestamp when the check was performed
 	CheckedAt string `json:"checkedAt"`
+}
+
+// HelmEnvVarInput passes an environment variable into the agent's Helm chart.
+// Sensitive variables (API keys, tokens) are injected via a Kubernetes Secret
+// (--set-string secrets.<name>=<value>); non-sensitive ones via a ConfigMap
+// (--set configMap.<name>=<value>).  The target agent's Helm chart must expose
+// a `secrets` map and a `configMap` map in its values.yaml for this to work.
+type HelmEnvVarInput struct {
+	// Environment variable name, e.g. OPENAI_API_KEY
+	Name string `json:"name"`
+	// Environment variable value
+	Value string `json:"value"`
+	// When true the value is stored in a Kubernetes Secret (masked in UI and logs).
+	// When false (default) it is stored in a ConfigMap.
+	Sensitive *bool `json:"sensitive,omitempty"`
 }
 
 // HelmValidationResponse returned from Helm deployment validation.
@@ -2672,6 +2678,13 @@ type RegisterInfraResponse struct {
 	Name string `json:"name"`
 	// Infra Manifest
 	Manifest string `json:"manifest"`
+	// Fully-qualified URL for `kubectl apply -f <url>` / curl, pointing at the
+	// `/file/<token>.yaml` download route. Computed server-side (preferring
+	// CHAOS_CENTER_PUBLIC_ENDPOINT when configured) rather than left for the
+	// frontend to derive from the browser's own address bar, so it stays
+	// correct regardless of what host:port the browser was reached through
+	// (SSH tunnel, VS Code port-forward, etc.).
+	ManifestDownloadURL string `json:"manifestDownloadURL"`
 }
 
 type ResilienceScoreCategory struct {

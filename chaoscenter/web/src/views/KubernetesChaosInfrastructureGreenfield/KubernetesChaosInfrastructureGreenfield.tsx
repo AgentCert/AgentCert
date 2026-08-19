@@ -9,7 +9,6 @@ import { downloadYamlAsFile, getFormattedFileName, getScope } from '@utils';
 import type { StepData } from '@views/KubernetesChaosInfrastructureCreationModal/KubernetesChaosInfrastructureStepWizardConfiguration';
 import CodeBlock from '@components/CodeBlock';
 import { InfrastructureType } from '@api/entities';
-import config from '@config';
 import type {
   connectChaosInfraManifestModeResponse,
   connectChaosInfraRequest
@@ -78,7 +77,7 @@ export default function KubernetesChaosInfrastructureGreenfieldView({
               onCompleted: (result: connectChaosInfraManifestModeResponse) => {
                 setLoading(false);
                 showSuccess(getString('chaosInfrastructureSuccess'));
-                setApplyOnHostUrl(`${config.restEndpoints.chaosManagerUri}/file/${result.registerInfra.token}.yaml`);
+                setApplyOnHostUrl(result.registerInfra.manifestDownloadURL);
                 downloadYamlAsFile(result.registerInfra.manifest, `${fileName}-litmus-chaos-enable.yml`);
               },
               onError: err => {

@@ -988,10 +988,11 @@ type ComplexityRoot struct {
 	}
 
 	RegisterInfraResponse struct {
-		InfraID  func(childComplexity int) int
-		Manifest func(childComplexity int) int
-		Name     func(childComplexity int) int
-		Token    func(childComplexity int) int
+		InfraID             func(childComplexity int) int
+		Manifest            func(childComplexity int) int
+		ManifestDownloadURL func(childComplexity int) int
+		Name                func(childComplexity int) int
+		Token               func(childComplexity int) int
 	}
 
 	ResilienceScoreCategory struct {
@@ -6278,6 +6279,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.RegisterInfraResponse.Manifest(childComplexity), true
 
+	case "RegisterInfraResponse.manifestDownloadURL":
+		if e.complexity.RegisterInfraResponse.ManifestDownloadURL == nil {
+			break
+		}
+
+		return e.complexity.RegisterInfraResponse.ManifestDownloadURL(childComplexity), true
+
 	case "RegisterInfraResponse.name":
 		if e.complexity.RegisterInfraResponse.Name == nil {
 			break
@@ -6642,6 +6650,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputGetProbeYAMLRequest,
 		ec.unmarshalInputGitConfig,
 		ec.unmarshalInputHTTPProbeRequest,
+		ec.unmarshalInputHelmEnvVarInput,
 		ec.unmarshalInputImageRegistryInput,
 		ec.unmarshalInputInfraFilterInput,
 		ec.unmarshalInputInfraIdentity,
@@ -7287,6 +7296,10 @@ type DeleteAgentResponse {
 
 """
 HelmEnvVarInput passes an environment variable into the agent's Helm chart.
+Sensitive variables (API keys, tokens) are injected via a Kubernetes Secret
+(--set-string secrets.<name>=<value>); non-sensitive ones via a ConfigMap
+(--set configMap.<name>=<value>).  The target agent's Helm chart must expose
+a ` + "`" + `secrets` + "`" + ` map and a ` + "`" + `configMap` + "`" + ` map in its values.yaml for this to work.
 """
 input HelmEnvVarInput {
   """Environment variable name, e.g. OPENAI_API_KEY"""
@@ -7295,12 +7308,18 @@ input HelmEnvVarInput {
   """Environment variable value"""
   value: String!
 
-  """When true stored in a Kubernetes Secret; otherwise in a ConfigMap."""
+  """
+  When true the value is stored in a Kubernetes Secret (masked in UI and logs).
+  When false (default) it is stored in a ConfigMap.
+  """
   sensitive: Boolean
 }
 
 """
 DeployAgentWithHelmRequest contains information to deploy an agent using Helm.
+LLM provider credentials and any other agent-specific environment variables
+are passed via the generic helmEnvVars list rather than provider-specific
+fields, so any agent Helm chart can be targeted without schema changes.
 """
 input DeployAgentWithHelmRequest {
   """Unique name for the agent within the project"""
@@ -7336,7 +7355,13 @@ input DeployAgentWithHelmRequest {
   """Kubeconfig for cluster access (optional)"""
   kubeconfig: String
 
-  """Generic environment variables injected into the agent's Helm chart."""
+  """
+  Generic environment variables injected into the agent's Helm chart.
+  Replaces the former provider-specific fields (azureOpenAIKey, etc.).
+  Sensitive entries are stored in a Kubernetes Secret; others in a ConfigMap.
+  Example: [{name: "OPENAI_API_KEY", value: "sk-…", sensitive: true},
+            {name: "OPENAI_BASE_URL", value: "https://…", sensitive: false}]
+  """
   helmEnvVars: [HelmEnvVarInput!]
 }
 
@@ -7528,7 +7553,7 @@ extend type Mutation {
 # Server-side orchestrator that drives the four certifier APIs
 # (bucketing-extraction, poll, aggregation-certification, poll) on behalf
 # of the UI when an experiment run completes.  See
-# docs/mongo-collection-certiifcation.md for the full data model.
+# docs/certification-flow.md for the full data model.
 
 """
 Input for triggering the certification pipeline at the end of an
@@ -8685,6 +8710,15 @@ type RegisterInfraResponse {
   Infra Manifest
   """
   manifest: String!
+  """
+  Fully-qualified URL for ` + "`" + `kubectl apply -f <url>` + "`" + ` / curl, pointing at the
+  ` + "`" + `/file/<token>.yaml` + "`" + ` download route. Computed server-side (preferring
+  CHAOS_CENTER_PUBLIC_ENDPOINT when configured) rather than left for the
+  frontend to derive from the browser's own address bar, so it stays
+  correct regardless of what host:port the browser was reached through
+  (SSH tunnel, VS Code port-forward, etc.).
+  """
+  manifestDownloadURL: String!
 }
 
 """
@@ -37838,6 +37872,8 @@ func (ec *executionContext) fieldContext_Mutation_registerInfra(ctx context.Cont
 				return ec.fieldContext_RegisterInfraResponse_name(ctx, field)
 			case "manifest":
 				return ec.fieldContext_RegisterInfraResponse_manifest(ctx, field)
+			case "manifestDownloadURL":
+				return ec.fieldContext_RegisterInfraResponse_manifestDownloadURL(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type RegisterInfraResponse", field.Name)
 		},
@@ -47972,6 +48008,50 @@ func (ec *executionContext) fieldContext_RegisterInfraResponse_manifest(_ contex
 	return fc, nil
 }
 
+func (ec *executionContext) _RegisterInfraResponse_manifestDownloadURL(ctx context.Context, field graphql.CollectedField, obj *model.RegisterInfraResponse) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_RegisterInfraResponse_manifestDownloadURL(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ManifestDownloadURL, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_RegisterInfraResponse_manifestDownloadURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RegisterInfraResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ResilienceScoreCategory_id(ctx context.Context, field graphql.CollectedField, obj *model.ResilienceScoreCategory) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ResilienceScoreCategory_id(ctx, field)
 	if err != nil {
@@ -53594,6 +53674,47 @@ func (ec *executionContext) unmarshalInputHTTPProbeRequest(ctx context.Context, 
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputHelmEnvVarInput(ctx context.Context, obj interface{}) (model.HelmEnvVarInput, error) {
+	var it model.HelmEnvVarInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "value", "sensitive"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "value":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Value = data
+		case "sensitive":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sensitive"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Sensitive = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputImageRegistryInput(ctx context.Context, obj interface{}) (model.ImageRegistryInput, error) {
 	var it model.ImageRegistryInput
 	asMap := map[string]interface{}{}
@@ -53933,47 +54054,6 @@ func (ec *executionContext) unmarshalInputKeyValuePairInput(ctx context.Context,
 				return it, err
 			}
 			it.Value = data
-		}
-	}
-
-	return it, nil
-}
-
-func (ec *executionContext) unmarshalInputHelmEnvVarInput(ctx context.Context, obj interface{}) (model.HelmEnvVarInput, error) {
-	var it model.HelmEnvVarInput
-	asMap := map[string]interface{}{}
-	for k, v := range obj.(map[string]interface{}) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"name", "value", "sensitive"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "name":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Name = data
-		case "value":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Value = data
-		case "sensitive":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sensitive"))
-			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Sensitive = data
 		}
 	}
 
@@ -63141,6 +63221,11 @@ func (ec *executionContext) _RegisterInfraResponse(ctx context.Context, sel ast.
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "manifestDownloadURL":
+			out.Values[i] = ec._RegisterInfraResponse_manifestDownloadURL(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -65502,6 +65587,11 @@ func (ec *executionContext) marshalNGitConfigResponse2ᚖgithubᚗcomᚋlitmusch
 	return ec._GitConfigResponse(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNHelmEnvVarInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInput(ctx context.Context, v interface{}) (*model.HelmEnvVarInput, error) {
+	res, err := ec.unmarshalInputHelmEnvVarInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNHelmValidationResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmValidationResponse(ctx context.Context, sel ast.SelectionSet, v model.HelmValidationResponse) graphql.Marshaler {
 	return ec._HelmValidationResponse(ctx, sel, &v)
 }
@@ -67395,6 +67485,26 @@ func (ec *executionContext) marshalOHealthCheckResult2ᚖgithubᚗcomᚋlitmusch
 	return ec._HealthCheckResult(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOHelmEnvVarInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInputᚄ(ctx context.Context, v interface{}) ([]*model.HelmEnvVarInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]*model.HelmEnvVarInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNHelmEnvVarInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
 func (ec *executionContext) unmarshalOID2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
 	if v == nil {
 		return nil, nil
@@ -67734,31 +67844,6 @@ func (ec *executionContext) unmarshalOKeyValuePairInput2ᚕᚖgithubᚗcomᚋlit
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
 		res[i], err = ec.unmarshalNKeyValuePairInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐKeyValuePairInput(ctx, vSlice[i])
-		if err != nil {
-			return nil, err
-		}
-	}
-	return res, nil
-}
-
-func (ec *executionContext) unmarshalNHelmEnvVarInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInput(ctx context.Context, v interface{}) (*model.HelmEnvVarInput, error) {
-	res, err := ec.unmarshalInputHelmEnvVarInput(ctx, v)
-	return &res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalOHelmEnvVarInput2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInputᚄ(ctx context.Context, v interface{}) ([]*model.HelmEnvVarInput, error) {
-	if v == nil {
-		return nil, nil
-	}
-	var vSlice []interface{}
-	if v != nil {
-		vSlice = graphql.CoerceList(v)
-	}
-	var err error
-	res := make([]*model.HelmEnvVarInput, len(vSlice))
-	for i := range vSlice {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalNHelmEnvVarInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐHelmEnvVarInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}

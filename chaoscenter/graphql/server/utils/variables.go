@@ -36,6 +36,20 @@ type Configuration struct {
 	FlashAgentImage             string   `split_words:"true" default:"agentcert/agentcert-flash-agent:latest"`
 	AgentSidecarImage           string   `split_words:"true" default:"agentcert/agent-sidecar:latest"`
 	ChaosCenterUiEndpoint       string   `split_words:"true" default:"https://localhost:8080"`
+	// ChaosCenterPublicEndpoint, when set, is the base URL a human (or a
+	// `kubectl`/`curl` running on their behalf) should use to reach this
+	// ChaosCenter instance from outside the cluster — e.g. the KinD-mapped
+	// "http://localhost:<KIND_HOSTPORT_WEB>" for a local dev deployment.
+	// It is deliberately distinct from ChaosCenterUiEndpoint, which is the
+	// *in-cluster* address subscriber pods use to call back to graphql: the
+	// two audiences (a human's shell vs. a pod's network namespace) are
+	// rarely reachable via the same address. Used to build the
+	// `kubectl apply -f <url>` manifest-download link returned by
+	// RegisterInfra so it is correct regardless of what host:port the
+	// browser that requested it happened to be tunneled/forwarded through
+	// (see OPEN_WEIGHT_CERTIFICATION_HANDOFF.md for the incident that
+	// motivated this). Falls back to the request's Referer/Host when unset.
+	ChaosCenterPublicEndpoint   string   `split_words:"true" default:""`
 	TlsCertB64                  string   `split_words:"true"`
 	LitmusAuthGrpcEndpoint      string   `split_words:"true" default:"localhost"`
 	LitmusAuthGrpcPort          string   `split_words:"true" default:"3030"`

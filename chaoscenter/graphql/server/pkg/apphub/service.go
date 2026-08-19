@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -86,6 +87,35 @@ func getAppClonePath() string {
 		path = getDefaultBasePath()
 	}
 	return path
+}
+
+// GetKnownApplicationNamespaces returns the deduplicated, sorted list of
+// namespaces declared by every application in the app-charts catalog
+// (app-charts/charts/applications.chartserviceversion.yaml, synced into
+// getAppChartsPath() — see SyncDefaultAppHub). This is the single source of
+// truth for "which applications does ACE currently know how to onboard" used
+// to scope chaos-infrastructure RBAC: callers must not hardcode an app
+// namespace list, since it changes whenever an app chart is added, removed,
+// or its namespace is edited in that catalog file.
+func GetKnownApplicationNamespaces() ([]string, error) {
+	categories, err := GetAppChartsData(getAppChartsPath())
+	if err != nil {
+		return nil, fmt.Errorf("failed to read known application namespaces: %w", err)
+	}
+
+	seen := make(map[string]bool)
+	var namespaces []string
+	for _, category := range categories {
+		for _, app := range category.Applications {
+			if app.Namespace == "" || seen[app.Namespace] {
+				continue
+			}
+			seen[app.Namespace] = true
+			namespaces = append(namespaces, app.Namespace)
+		}
+	}
+	sort.Strings(namespaces)
+	return namespaces, nil
 }
 
 // ListAppHubCategories reads app charts from the filesystem and enriches

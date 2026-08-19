@@ -1,12 +1,14 @@
 package chaos_infrastructure
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
 	store "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/data-store"
 	dbChaosInfra "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
@@ -27,6 +29,32 @@ func GetEndpoint(host string) (string, error) {
 
 	// Priority 2: Fall back to Kubernetes service DNS (cluster mode)
 	return host + "/query", nil
+}
+
+// GetManifestDownloadURL builds the human/kubectl-facing `kubectl apply -f
+// <url>` link for a registered infra's manifest. Unlike GetEndpoint (which
+// resolves the in-cluster callback address subscriber pods use), this must
+// resolve to an address reachable from wherever the operator's shell
+// actually has cluster access — which is frequently NOT the same as the
+// browser's own address bar (SSH tunnels, VS Code port-forwarding, and
+// similar setups routinely present the ChaosCenter UI to the browser on a
+// different local port than the one actually reachable from a shell on the
+// deployment host). host is the best-effort Referer/Host-derived fallback
+// computed by the caller from the current request.
+//
+// base (whether from CHAOS_CENTER_PUBLIC_ENDPOINT or the host fallback) is
+// the web UI's own front door — nginx there proxies /api/ to this graphql
+// server's raw router (which itself registers the manifest route at
+// /file/:key, no /api prefix — see server.go) and has no route for a bare
+// /file/ path. So the /api segment must be added here; every supported
+// deployment (Helm/KinD, flat k8s, docker compose) uses the identical
+// nginx /api/ -> graphql proxy convention.
+func GetManifestDownloadURL(host, token string) string {
+	base := utils.Config.ChaosCenterPublicEndpoint
+	if base == "" {
+		base = host
+	}
+	return strings.TrimSuffix(base, "/") + "/api/file/" + token + ".yaml"
 }
 
 func GetK8sInfraYaml(host string, infra dbChaosInfra.ChaosInfra) ([]byte, error) {
@@ -94,6 +122,32 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 		namespaceConfig   = "---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: " + InfraNamespace + "\n"
 		serviceAccountStr = "---\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: " + ServiceAccountName + "\n  namespace: " + InfraNamespace + "\n"
 	)
+
+	// Namespace discovery for the cluster-scope infra's RBAC (infra-cluster-role
+	// in manifests/cluster/3a_agents_rbac.yaml) is intentionally get-by-name
+	// only, never list/watch — Kubernetes RBAC can't scope list/watch to a
+	// resourceNames subset, so granting list would let the infra's service
+	// account enumerate every namespace on the cluster. The allowed names are
+	// this infra's own namespace plus every application currently known to
+	// ACE's app-charts catalog — read live from apphub, never hardcoded, so
+	// adding/removing an app chart changes this on the next manifest fetch
+	// with no source edit here.
+	targetNamespaces := []string{InfraNamespace}
+	if appNamespaces, err := apphub.GetKnownApplicationNamespaces(); err != nil {
+		log.WithError(err).Warn("failed to read known application namespaces from app-charts catalog; " +
+			"generated infra RBAC will only be able to see its own namespace until this is retried")
+	} else {
+		for _, ns := range appNamespaces {
+			if ns != InfraNamespace {
+				targetNamespaces = append(targetNamespaces, ns)
+			}
+		}
+	}
+	targetNamespacesEnv := strings.Join(targetNamespaces, ",")
+	targetNamespacesResourceNamesJSON, err := json.Marshal(targetNamespaces)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal target namespace resourceNames: %w", err)
+	}
 
 	// Checking if the agent namespace does not exist and its scope of installation is not namespaced
 	if !*infra.InfraNsExists && infra.InfraScope != "namespace" {
@@ -175,6 +229,8 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 		newContent = strings.Replace(newContent, "#{INFRA_NAMESPACE}", InfraNamespace, -1)
 		newContent = strings.Replace(newContent, "#{INFRA_SERVICE_ACCOUNT}", ServiceAccountName, -1)
 		newContent = strings.Replace(newContent, "#{INFRA_SCOPE}", infra.InfraScope, -1)
+		newContent = strings.Replace(newContent, "#{TARGET_APP_NAMESPACES}", targetNamespacesEnv, -1)
+		newContent = strings.Replace(newContent, "#{TARGET_NAMESPACE_RESOURCE_NAMES}", string(targetNamespacesResourceNamesJSON), -1)
 		newContent = strings.Replace(newContent, "#{ARGO_WORKFLOW_CONTROLLER}", utils.Config.ArgoWorkflowControllerImage, -1)
 		newContent = strings.Replace(newContent, "#{LITMUS_CHAOS_OPERATOR}", utils.Config.LitmusChaosOperatorImage, -1)
 		newContent = strings.Replace(newContent, "#{ARGO_WORKFLOW_EXECUTOR}", utils.Config.ArgoWorkflowExecutorImage, -1)

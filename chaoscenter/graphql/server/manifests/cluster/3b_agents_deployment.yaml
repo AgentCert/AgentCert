@@ -12,6 +12,11 @@ data:
   SKIP_SSL_VERIFY: "#{SKIP_SSL_VERIFY}"
   CUSTOM_TLS_CERT: "#{CUSTOM_TLS_CERT}"
   IS_INFRA_CONFIRMED: #{IS_INFRA_CONFIRMED}
+  # Comma-separated namespace allowlist the subscriber resolves via individual
+  # Get calls instead of a cluster-wide List (see infra-cluster-role in
+  # 3a_agents_rbac.yaml — RBAC only grants `get` on exactly these names).
+  # Populated dynamically by ManifestParser from the app-charts catalog.
+  TARGET_APP_NAMESPACES: "#{TARGET_APP_NAMESPACES}"
   COMPONENTS: |
     DEPLOYMENTS: #{INFRA_DEPLOYMENTS}
 ---

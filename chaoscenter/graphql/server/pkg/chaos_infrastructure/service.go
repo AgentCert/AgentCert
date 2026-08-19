@@ -54,18 +54,31 @@ type Service interface {
 	KubeObj(request model.KubeObjectData, r store.StateData) (string, error)
 	UpdateInfra(query bson.D, update bson.D) error
 	GetDBInfra(infraID string) (dbChaosInfra.ChaosInfra, error)
+	StartFinalizerWatcher(ctx context.Context)
+	StopFinalizerWatcher()
 }
 
 type infraService struct {
-	infraOperator *dbChaosInfra.Operator
-	envOperator   *dbEnvironments.Operator
+	infraOperator         *dbChaosInfra.Operator
+	envOperator           *dbEnvironments.Operator
+	finalizerController   *FinalizerController
 }
 
 // NewChaosInfrastructureService returns a new instance of Service
 func NewChaosInfrastructureService(infraOperator *dbChaosInfra.Operator, envOperator *dbEnvironments.Operator) Service {
+	// Initialize finalizer controller for safe namespace cleanup
+	var finalizerController *FinalizerController
+	fc, err := NewFinalizerController()
+	if err != nil {
+		logrus.Warnf("Finalizer controller initialization failed: %v. Infrastructure namespace cleanup will require manual intervention.", err)
+	} else {
+		finalizerController = fc
+	}
+
 	return &infraService{
-		infraOperator: infraOperator,
-		envOperator:   envOperator,
+		infraOperator:       infraOperator,
+		envOperator:         envOperator,
+		finalizerController: finalizerController,
 	}
 }
 
@@ -309,17 +322,25 @@ func (in *infraService) DeleteInfra(ctx context.Context, projectID string, infra
 		}, r)
 	}
 
-	// ACE Fix: Also delete the Kubernetes namespace to prevent orphaned resources
-	// The subscriber pod is in the namespace being deleted, so it cannot delete its own
-	// namespace. This must be done from the control plane after marking DB records.
-	// For now, log a note for operators to clean up manually if needed.
-	// TODO: Implement async cleanup job or use finalizers to handle namespace deletion
-	// after subscriber shutdown. Current behavior leaves orphaned infra pods/jobs in Kubernetes.
+	// ACE Fix: Initiate Kubernetes namespace deletion with finalizer-based cleanup
+	// The finalizer controller will:
+	// 1. Add a cleanup finalizer to prevent immediate deletion
+	// 2. Delete completed jobs and error pods to free resources
+	// 3. Remove the finalizer to allow namespace deletion
+	// If the controller is not available, operators must manually clean up.
 	if infra.InfraNamespace != nil && *infra.InfraNamespace != "" {
-		logrus.Warnf("Infrastructure %s (namespace: %s) marked as deleted in DB. "+
-			"Kubernetes namespace still exists with orphaned resources. "+
-			"Manual cleanup recommended: kubectl delete namespace %s",
-			infra.InfraID, *infra.InfraNamespace, *infra.InfraNamespace)
+		if in.finalizerController != nil {
+			if err := in.finalizerController.DeleteInfrastructureNamespace(ctx, *infra.InfraNamespace); err != nil {
+				logrus.Warnf("Failed to initiate finalizer-based cleanup for namespace %s: %v. "+
+					"Manual cleanup may be required: kubectl delete namespace %s",
+					*infra.InfraNamespace, err, *infra.InfraNamespace)
+			}
+		} else {
+			logrus.Warnf("Finalizer controller unavailable for infrastructure %s (namespace: %s). "+
+				"Kubernetes namespace still exists with orphaned resources. "+
+				"Manual cleanup required: kubectl delete namespace %s",
+				infra.InfraID, *infra.InfraNamespace, *infra.InfraNamespace)
+		}
 	}
 
 	return "infra deleted successfully", nil
@@ -1181,4 +1202,23 @@ func (c *infraService) UpdateInfra(query bson.D, update bson.D) error {
 // GetDBInfra returns cluster details for a given clusterID
 func (c *infraService) GetDBInfra(infraID string) (dbChaosInfra.ChaosInfra, error) {
 	return c.infraOperator.GetInfra(infraID)
+}
+
+// StartFinalizerWatcher starts the background finalizer controller that manages
+// infrastructure namespace cleanup. This should be called once at application startup.
+func (in *infraService) StartFinalizerWatcher(ctx context.Context) {
+	if in.finalizerController != nil {
+		in.finalizerController.StartWatcher(ctx)
+		logrus.Info("Infrastructure finalizer watcher started")
+	} else {
+		logrus.Warn("Finalizer controller not available, finalizer-based namespace cleanup will not work. Manual cleanup will be required.")
+	}
+}
+
+// StopFinalizerWatcher gracefully stops the finalizer controller watcher
+func (in *infraService) StopFinalizerWatcher() {
+	if in.finalizerController != nil {
+		in.finalizerController.Stop()
+		logrus.Info("Infrastructure finalizer watcher stopped")
+	}
 }

@@ -61,10 +61,28 @@ rules:
     verbs: [ "get", "list", "watch" ]
 
   - apiGroups: [ "" ]
-    resources: [ "pods", "namespaces", "nodes", "services" ]
+    resources: [ "pods", "nodes", "services" ]
     verbs: [ "get", "list", "watch" ]
 
-  # for dynamic app onboarding via Helm across arbitrary namespaces
+  # Namespace discovery is deliberately NOT list/watch here. Kubernetes RBAC
+  # cannot restrict list/watch to a resourceNames subset (that verb pair only
+  # supports get/delete/patch/update on individually-named objects) — a
+  # list/watch grant on "namespaces" would let this service account enumerate
+  # every namespace on the cluster (kube-system, ace, monitoring, ...), not
+  # just its own target apps. Instead it can only `get` namespaces it already
+  # knows about by name: itself, plus every application currently onboarded
+  # in app-charts/charts/applications.chartserviceversion.yaml. This list is
+  # substituted dynamically by ManifestParser (infra_utils.go, via
+  # apphub.GetKnownApplicationNamespaces) at manifest-generation time — never
+  # hardcode namespace names here.
+  - apiGroups: [ "" ]
+    resources: [ "namespaces" ]
+    verbs: [ "get" ]
+    resourceNames: #{TARGET_NAMESPACE_RESOURCE_NAMES}
+
+  # for dynamic app onboarding via Helm across arbitrary namespaces — `create`
+  # can never be scoped by resourceNames (the object doesn't exist yet), so
+  # this stays cluster-wide regardless of the get-scoping above.
   - apiGroups: [ "" ]
     resources: [ "namespaces" ]
     verbs: [ "create", "patch", "update" ]

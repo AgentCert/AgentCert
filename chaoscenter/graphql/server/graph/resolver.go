@@ -150,3 +150,8 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	}
 	return config
 }
+
+// GetInfrastructureService returns the chaos infrastructure service for use in main initialization
+func (r *Resolver) GetInfrastructureService() chaos_infrastructure.Service {
+	return r.chaosInfrastructureService
+}
