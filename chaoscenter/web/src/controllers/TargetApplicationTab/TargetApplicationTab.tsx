@@ -9,6 +9,23 @@ import type { AppInfoData, TargetApplicationData } from './types';
 import { gvrData } from './grvData';
 import { APP_NAMESPACES, APP_SERVICES, CompatibleApp, getFaultCompatibility } from './faultApplicationCompatibility';
 
+const APP_LABEL_KEYS: Record<CompatibleApp, string> = {
+  'otel-demo': 'opentelemetry.io/name',
+  'sock-shop': 'name',
+  'book-info': 'app'
+};
+
+const APP_FOLDERS: Record<CompatibleApp, string[]> = {
+  'otel-demo': ['otel-demo'],
+  'sock-shop': ['sock-shop'],
+  'book-info': ['bookinfo', 'book-info']
+};
+
+interface PendingInstallApplication {
+  folder: string;
+  namespace: string;
+}
+
 interface TargetApplicationControllerProps {
   engineCR: ChaosEngine | undefined;
   infrastructureID: string | undefined;
@@ -17,27 +34,48 @@ interface TargetApplicationControllerProps {
 }
 
 // Chart-install steps (install-application/install-app) declare their target
-// namespace via a `-namespace=<value>` container arg. A namespace created by
-// one of these steps won't exist in the live cluster yet — the workflow
-// hasn't run — so the live kubeNamespaceSubscription can never surface it.
-// Scanning the in-progress manifest for these args lets the picker offer it
-// anyway, before the experiment has ever been run.
-function getPendingInstallNamespaces(manifest: KubernetesExperimentManifest | undefined): string[] {
+// app via `-folder=<value>` and target namespace via `-namespace=<value>`.
+// A namespace created by one of these steps won't exist in the live cluster
+// yet, so the live kube subscriptions cannot surface its workloads. Scanning
+// the in-progress manifest lets the picker offer both namespace and labels
+// before the experiment has ever run.
+function getPendingInstallApplications(
+  manifest: KubernetesExperimentManifest | undefined
+): PendingInstallApplication[] {
   const spec = manifest?.spec;
   const templates = spec && 'workflowSpec' in spec ? spec.workflowSpec?.templates : spec?.templates;
   if (!templates) return [];
 
-  const namespaces = new Set<string>();
+  const pendingApps = new Map<string, PendingInstallApplication>();
   for (const template of templates) {
     const image = template.container?.image ?? '';
     if (!image.includes('install-app')) continue;
+
     const args = template.container?.args ?? [];
-    for (const arg of args) {
-      const match = /^-namespace=(.+)$/.exec(arg);
-      if (match?.[1]) namespaces.add(match[1]);
+    const folder = args.find(arg => arg.startsWith('-folder='))?.slice('-folder='.length) ?? '';
+    const namespace = args.find(arg => arg.startsWith('-namespace='))?.slice('-namespace='.length) ?? '';
+    if (namespace) {
+      pendingApps.set(namespace, { folder, namespace });
     }
   }
-  return Array.from(namespaces);
+  return Array.from(pendingApps.values());
+}
+
+function resolveCompatibleApp(folder: string | undefined, namespace: string | undefined): CompatibleApp | undefined {
+  // Trim + lowercase both sides -- the `-folder=`/`-namespace=` args are copied
+  // verbatim from wherever the install step was authored (catalog picker, or a
+  // hand-edited manifest), so a stray case/whitespace difference from the
+  // hardcoded aliases here shouldn't be enough to silently fall back to "no
+  // known app" and drop the synthesized label options.
+  const normalizedFolder = folder?.trim().toLowerCase();
+  const normalizedNamespace = namespace?.trim().toLowerCase();
+  return (Object.entries(APP_NAMESPACES) as [CompatibleApp, string][]).find(([app, defaultNamespace]) => {
+    const folders = APP_FOLDERS[app];
+    return (
+      (!!normalizedFolder && folders.some(f => f.toLowerCase() === normalizedFolder)) ||
+      defaultNamespace.toLowerCase() === normalizedNamespace
+    );
+  })?.[0];
 }
 
 export default function TargetApplicationTabController({
@@ -49,12 +87,15 @@ export default function TargetApplicationTabController({
   const { experimentKey } = useParams<{ experimentKey: string }>();
   const experimentHandler = experimentYamlService.getInfrastructureTypeHandler(InfrastructureType.KUBERNETES);
   const [namespaceData, setNamespaceData] = React.useState<string[]>([]);
-  const [pendingNamespaces, setPendingNamespaces] = React.useState<string[]>([]);
+  const [pendingInstallApplications, setPendingInstallApplications] = React.useState<PendingInstallApplication[]>([]);
   const [appInfoData, setAppInfoData] = React.useState<AppInfoData>({ appLabels: [] });
   const [targetApp, setTargetApp] = React.useState<TargetApplicationData>({
     ...engineCR?.spec?.appinfo
   });
   const [selectedGVR, setSelectedGVR] = React.useState<KubeGVRRequest>();
+  const currentPendingApp = pendingInstallApplications.find(pendingApp => pendingApp.namespace === targetApp?.appns);
+  const selectedNamespaceIsPending = !!targetApp?.appns && currentPendingApp !== undefined;
+
   const { data: resultNamespace, loading: loadingNamespace } = kubeNamespaceSubscription({
     request: {
       infraID: infrastructureID ?? ''
@@ -64,7 +105,7 @@ export default function TargetApplicationTabController({
   });
   const { data: resultObject, loading: loadingObject } = kubeObjectSubscription({
     shouldResubscribe: true,
-    skip: targetApp?.appns === undefined || targetApp?.appns === '',
+    skip: targetApp?.appns === undefined || targetApp?.appns === '' || selectedNamespaceIsPending,
     request: {
       infraID: infrastructureID ?? '',
       kubeObjRequest: selectedGVR,
@@ -93,16 +134,16 @@ export default function TargetApplicationTabController({
     }
   }, [resultNamespace?.getKubeNamespace, targetApp?.appkind]);
 
-  // Surface namespaces that an install-app step earlier in this same,
+  // Surface apps that an install-app step earlier in this same,
   // not-yet-run workflow will create, so they're selectable ahead of time.
   React.useEffect(() => {
     if (!experimentKey) return;
     experimentHandler
       ?.getExperiment(experimentKey)
       .then(experiment => {
-        setPendingNamespaces(getPendingInstallNamespaces(experiment?.manifest));
+        setPendingInstallApplications(getPendingInstallApplications(experiment?.manifest));
       })
-      .catch(() => setPendingNamespaces([]));
+      .catch(() => setPendingInstallApplications([]));
   }, [experimentKey, experimentHandler]);
 
   React.useEffect(() => {
@@ -137,24 +178,38 @@ export default function TargetApplicationTabController({
   const compatibility = getFaultCompatibility(faultName);
 
   const compatibleNamespaces = compatibility?.apps.map(app => APP_NAMESPACES[app]);
+  const pendingNamespaces = pendingInstallApplications.map(pendingApp => pendingApp.namespace);
   const filteredNamespaceData = compatibleNamespaces
     ? namespaceData.filter(ns => compatibleNamespaces.includes(ns))
     : namespaceData;
-  const filteredPendingNamespaces = compatibleNamespaces
-    ? pendingNamespaces.filter(ns => compatibleNamespaces.includes(ns))
+  const filteredPendingNamespaces = compatibility
+    ? pendingInstallApplications
+        .filter(pendingApp => {
+          const app = resolveCompatibleApp(pendingApp.folder, pendingApp.namespace);
+          return app ? compatibility.apps.includes(app) : compatibleNamespaces?.includes(pendingApp.namespace);
+        })
+        .map(pendingApp => pendingApp.namespace)
     : pendingNamespaces;
 
   // Which known app the currently selected namespace corresponds to, so the
   // AppLabel picker can be narrowed to that app's compatible service list.
-  const currentApp = (Object.entries(APP_NAMESPACES) as [CompatibleApp, string][]).find(
-    ([, namespace]) => namespace === targetApp?.appns
-  )?.[0];
+  const currentApp = resolveCompatibleApp(currentPendingApp?.folder, targetApp?.appns);
   const compatibleServices = currentApp
     ? compatibility?.servicesByApp?.[currentApp] ?? (compatibility ? APP_SERVICES[currentApp] : undefined)
     : undefined;
+  const pendingAppInfoData: AppInfoData =
+    currentApp && selectedNamespaceIsPending
+      ? {
+          appLabels: (compatibleServices ?? APP_SERVICES[currentApp]).map(service => ({
+            name: service,
+            label: `${APP_LABEL_KEYS[currentApp]}=${service}`
+          }))
+        }
+      : { appLabels: [] };
+  const sourceAppInfoData = pendingAppInfoData.appLabels.length > 0 ? pendingAppInfoData : appInfoData;
   const filteredAppInfoData: AppInfoData = compatibleServices
-    ? { appLabels: appInfoData.appLabels.filter(option => compatibleServices.includes(option.name)) }
-    : appInfoData;
+    ? { appLabels: sourceAppInfoData.appLabels.filter(option => compatibleServices.includes(option.name)) }
+    : sourceAppInfoData;
 
   return (
     <TargetApplicationTab
@@ -168,7 +223,7 @@ export default function TargetApplicationTabController({
       setFaultData={setFaultData}
       infrastructureID={infrastructureID}
       loadingNamespace={loadingNamespace}
-      loadingObject={loadingObject}
+      loadingObject={selectedNamespaceIsPending ? false : loadingObject}
     />
   );
 }

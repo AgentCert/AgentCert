@@ -570,6 +570,38 @@ func applyPreCleanupWaitPatchToWorkflowSpec(spec *v1alpha1.WorkflowSpec) {
 	}).Info("[Pre-Cleanup Wait Patch] Injected dynamic pre-cleanup wait step in run handler")
 }
 
+// ensureAgentFolderParam guarantees {{workflow.parameters.agentFolder}} resolves
+// before applyUninstallAllPatchToWorkflowSpec (below) emits a reference to it.
+// This run-time path reads a manifest already saved to Mongo by
+// processExperimentManifest (chaos_experiment/ops/service.go), which normally
+// seeds this same parameter at save time -- but an experiment saved before that
+// fix existed (or one whose stored revision otherwise never picked it up) would
+// still be missing it here, so this is a second, independent safety net at
+// submission time, mirroring the agentId re-injection just above this call site.
+// An unresolved {{workflow.parameters.*}} reference fails Argo's spec validation
+// before a single step runs, and the run is then silently reported as completed
+// with zero fault injection and zero agent LLM traces.
+func ensureAgentFolderParam(spec *v1alpha1.WorkflowSpec) {
+	if spec == nil {
+		return
+	}
+	for _, p := range spec.Arguments.Parameters {
+		if p.Name == "agentFolder" {
+			return
+		}
+	}
+	if agentFolder := ops.ExtractInstallAgentFolder(spec.Templates); agentFolder != "" {
+		spec.Arguments.Parameters = append(spec.Arguments.Parameters, v1alpha1.Parameter{
+			Name:  "agentFolder",
+			Value: v1alpha1.AnyStringPtr(agentFolder),
+		})
+		logrus.WithField("agentFolder", agentFolder).Info("injected agentFolder workflow parameter (run-time fallback)")
+	} else {
+		logrus.Warn("agentFolder workflow parameter missing and no install-agent folder found to fall back to; " +
+			"any template referencing {{workflow.parameters.agentFolder}} will fail Argo spec validation")
+	}
+}
+
 // applyUninstallAllPatchToWorkflowSpec appends a final uninstall-all step that runs
 // helm uninstall for the agent and app releases after all chaos steps complete.
 // Release names are resolved dynamically via Argo workflow parameters at runtime:
@@ -2159,6 +2191,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
+	ensureAgentFolderParam(&workflowManifest.Spec)
 	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
 
 	// Emit "fault: <name>" SPAN observations to Langfuse for certifier fault bucketing.
@@ -2594,6 +2627,7 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 	ops.ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ops.ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
+	ensureAgentFolderParam(&cronExperimentManifest.Spec.WorkflowSpec)
 	applyUninstallAllPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 
 	// Detect container runtime once for all ChaosEngine templates in this cron workflow

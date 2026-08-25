@@ -619,7 +619,11 @@ export class KubernetesYamlService extends ExperimentYamlService {
    * @param maxRuns - Maximum number of sequential runs (1-100)
    * @param delaySeconds - Delay between runs in seconds (default: 120 = 2 minutes)
    */
-  async setMultiRunConfig(key: ChaosObjectStoresPrimaryKeys['experiments'], maxRuns: number, delaySeconds: number = 120): Promise<void> {
+  async setMultiRunConfig(
+    key: ChaosObjectStoresPrimaryKeys['experiments'],
+    maxRuns: number,
+    delaySeconds = 120
+  ): Promise<void> {
     try {
       const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
       const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
@@ -653,7 +657,9 @@ export class KubernetesYamlService extends ExperimentYamlService {
    * @param key - The experiment key
    * @returns Object containing maxRuns and currentRun, or null if not configured
    */
-  async getMultiRunConfig(key: ChaosObjectStoresPrimaryKeys['experiments']): Promise<{ maxRuns: number; currentRun: number } | null> {
+  async getMultiRunConfig(
+    key: ChaosObjectStoresPrimaryKeys['experiments']
+  ): Promise<{ maxRuns: number; currentRun: number } | null> {
     try {
       const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readonly');
       const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
@@ -966,7 +972,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       if (!raw) return false;
       const appinfo = (parse(raw) as ChaosEngine).spec?.appinfo;
       if (!appinfo) return false;
-      return !appinfo.appns || !appinfo.applabel;
+      return (['appkind', 'appns', 'applabel'] as const).some(field => appinfo[field] !== undefined && !appinfo[field]);
     };
 
     // install-agent/install-application nodes otherwise render with just the

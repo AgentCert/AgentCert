@@ -503,6 +503,37 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 		}
 	}
 
+	// Same gap, same fix, for agentFolder: applyUninstallAllPatch (below) emits
+	// {{workflow.parameters.agentFolder}} into the generated uninstall-all script
+	// whenever an install-agent step is present, but nothing ever wrote that
+	// parameter for a hand-built (blank canvas) experiment. An unresolved
+	// {{workflow.parameters.*}} reference fails Argo's spec validation before a
+	// single step runs -- the whole run is then silently reported as if it had
+	// completed, with zero fault injection and zero agent LLM traces, since Argo
+	// never even schedules the first pod (see subscriber's
+	// updateWorkflowStatus/resolveWorkflowStatus).
+	{
+		found := false
+		for _, p := range workflowManifest.Spec.Arguments.Parameters {
+			if p.Name == "agentFolder" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if agentFolder := ExtractInstallAgentFolder(workflowManifest.Spec.Templates); agentFolder != "" {
+				workflowManifest.Spec.Arguments.Parameters = append(workflowManifest.Spec.Arguments.Parameters, v1alpha1.Parameter{
+					Name:  "agentFolder",
+					Value: v1alpha1.AnyStringPtr(agentFolder),
+				})
+				logrus.WithField("agentFolder", agentFolder).Info("injected agentFolder workflow parameter (fallback)")
+			} else {
+				logrus.Warn("agentFolder workflow parameter missing and no install-agent folder found to fall back to; " +
+					"any template referencing {{workflow.parameters.agentFolder}} will fail Argo spec validation")
+			}
+		}
+	}
+
 	if workflowManifest.Labels == nil {
 		workflowManifest.Labels = map[string]string{
 			"workflow_id": *workflow.ExperimentID,
@@ -2697,6 +2728,33 @@ func ExtractInstallApplicationNamespace(templates []v1alpha1.Template) string {
 				return strings.TrimPrefix(arg, "--namespace=")
 			}
 			if (arg == "-namespace" || arg == "--namespace") && i+1 < len(t.Container.Args) {
+				return t.Container.Args[i+1]
+			}
+		}
+	}
+	return ""
+}
+
+// ExtractInstallAgentFolder scans the install-agent template's container args
+// for the -folder (or --folder) flag and returns its value -- the AgentHub
+// chart/release name (e.g. "sre-agent-comprehensive"), used as the helm
+// release name applyUninstallAllPatch(ToWorkflowSpec) needs to uninstall it.
+func ExtractInstallAgentFolder(templates []v1alpha1.Template) string {
+	for _, t := range templates {
+		if t.Container == nil {
+			continue
+		}
+		if t.Name != "install-agent" && !strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent") {
+			continue
+		}
+		for i, arg := range t.Container.Args {
+			if strings.HasPrefix(arg, "-folder=") {
+				return strings.TrimPrefix(arg, "-folder=")
+			}
+			if strings.HasPrefix(arg, "--folder=") {
+				return strings.TrimPrefix(arg, "--folder=")
+			}
+			if (arg == "-folder" || arg == "--folder") && i+1 < len(t.Container.Args) {
 				return t.Container.Args[i+1]
 			}
 		}

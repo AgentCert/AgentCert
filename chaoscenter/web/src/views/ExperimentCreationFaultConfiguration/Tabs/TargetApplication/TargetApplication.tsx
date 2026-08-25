@@ -86,12 +86,23 @@ export default function TargetApplicationTab({
               items={getAppKindItems()}
               value={targetApp?.appkind}
               onChange={selectedItem => {
-                setTargetApp({
-                  appkind: selectedItem.label,
-                  applabel: '',
-                  appns: ''
-                });
-                if (engineCR?.spec?.appinfo?.appkind !== undefined) engineCR.spec.appinfo.appkind = selectedItem.label;
+                const newKind = selectedItem.label;
+                // A dropdown re-fires onChange even when the user re-selects the
+                // already-active value (e.g. clicking through to confirm a
+                // pre-filled default like "deployment"). Only reset Namespace/Label
+                // -- and only when the kind has genuinely changed, since a live
+                // namespace/object query keyed to the old kind is no longer valid,
+                // but re-picking the same kind shouldn't silently discard work
+                // already entered in the other two fields below.
+                const kindChanged = newKind !== targetApp?.appkind;
+                setTargetApp(kindChanged ? { appkind: newKind, applabel: '', appns: '' } : { ...targetApp, appkind: newKind });
+                if (engineCR?.spec?.appinfo) {
+                  engineCR.spec.appinfo.appkind = newKind;
+                  if (kindChanged) {
+                    if (engineCR.spec.appinfo.appns !== undefined) engineCR.spec.appinfo.appns = '';
+                    if (engineCR.spec.appinfo.applabel !== undefined) engineCR.spec.appinfo.applabel = '';
+                  }
+                }
                 setFaultData(faultData => {
                   if (faultData?.faultName) return { ...faultData, engineCR: faultData?.engineCR };
                 });
