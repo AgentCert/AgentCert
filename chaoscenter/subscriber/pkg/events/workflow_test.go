@@ -29,6 +29,27 @@ func TestUpdateWorkflowStatus(t *testing.T) {
 	}
 }
 
+func TestResolveWorkflowStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		phase     v1alpha1.WorkflowPhase
+		nodeCount int
+		want      string
+	}{
+		{"failed with zero nodes -> spec-validation rejection, report as Error", v1alpha1.WorkflowFailed, 0, "Error"},
+		{"failed with nodes -> real per-node status still decides, stays Completed here", v1alpha1.WorkflowFailed, 3, "Completed"},
+		{"succeeded with zero nodes -> unaffected, still Completed", v1alpha1.WorkflowSucceeded, 0, "Completed"},
+		{"running -> unaffected", v1alpha1.WorkflowRunning, 0, "Running"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveWorkflowStatus(tt.phase, tt.nodeCount); got != tt.want {
+				t.Errorf("resolveWorkflowStatus(%q, %d) = %q, want %q", tt.phase, tt.nodeCount, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestWorkflowEventHandler_IgnoresInvalidMetadata(t *testing.T) {
 	ev := newEventsWithFakeGQL(t)
 	// No workflow_id label -> ignored, returns empty event and nil error,

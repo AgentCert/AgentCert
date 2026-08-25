@@ -8,6 +8,7 @@ import type { InstallStepEntry } from '@views/ExperimentCreationSelectInstallSte
 interface ExperimentCreationSelectInstallStepControllerProps {
   isOpen: boolean;
   kind: 'application' | 'agent';
+  initialSelection?: { folder: string; namespace: string };
   onSelect: (entry: { folder: string; namespace: string }) => void;
   onClose: () => void;
 }
@@ -15,6 +16,7 @@ interface ExperimentCreationSelectInstallStepControllerProps {
 export default function ExperimentCreationSelectInstallStepController({
   isOpen,
   kind,
+  initialSelection,
   onSelect,
   onClose
 }: ExperimentCreationSelectInstallStepControllerProps): React.ReactElement {
@@ -56,6 +58,7 @@ export default function ExperimentCreationSelectInstallStepController({
       kind={kind}
       loading={kind === 'application' ? appHubLoading : agentHubLoading}
       entries={entries}
+      initialSelection={initialSelection}
       onSelect={onSelect}
       onClose={onClose}
     />

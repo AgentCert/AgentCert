@@ -108,9 +108,16 @@ export default function TargetApplicationTab({
               items={getAppNamespaceItems()}
               value={targetApp?.appns}
               onChange={selectedItem => {
-                const tmp = { ...targetApp, appns: selectedItem.label, applabel: '' };
+                // "Pending install" namespace options display a decorated
+                // label (`${ns} (pending install)`) but carry the real
+                // namespace name in `value` — falling back to `.label` here
+                // (as opposed to the App Label dropdown below, which already
+                // does this correctly) wrote the decorated string itself into
+                // appns, which is never a real namespace.
+                const selectedNamespace = selectedItem.value ?? selectedItem.label;
+                const tmp = { ...targetApp, appns: selectedNamespace, applabel: '' };
                 setTargetApp(tmp);
-                if (engineCR?.spec?.appinfo?.appns !== undefined) engineCR.spec.appinfo.appns = selectedItem.label;
+                if (engineCR?.spec?.appinfo?.appns !== undefined) engineCR.spec.appinfo.appns = selectedNamespace;
                 setFaultData(faultData => {
                   if (faultData?.faultName) return { ...faultData, engineCR: faultData?.engineCR };
                 });

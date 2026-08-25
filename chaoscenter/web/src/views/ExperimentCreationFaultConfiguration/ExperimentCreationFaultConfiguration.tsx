@@ -126,7 +126,7 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
 
   const confirmationDialog = <ConfirmationDialog isOpen={isOpenTuneConfirmDialog} {...confirmationDialogProps} />;
 
-  const applyChanges = (): void => {
+  const applyChanges = async (): Promise<void> => {
     // Submit the env tuning form
     tuneExperimentRef.current?.handleSubmit();
     // Check for errors in env tuning form
@@ -134,10 +134,13 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
       showError(getString('errorApplyChanges'));
       return;
     }
-    // If there are no errors update experiment in IDB
+    // If there are no errors update experiment in IDB. Await both writes
+    // before closing -- the parent's onClose re-reads the manifest to
+    // refresh the canvas (node warning badges, missing-target banner), and
+    // that read must not race the IndexedDB write it depends on.
     if (faultData) {
-      experimentHandler?.updateExperimentManifestWithFaultData(experimentKey, faultData);
-      experimentHandler?.updateFaultWeight(experimentKey, faultData.faultName, faultWeight);
+      await experimentHandler?.updateExperimentManifestWithFaultData(experimentKey, faultData);
+      await experimentHandler?.updateFaultWeight(experimentKey, faultData.faultName, faultWeight);
     }
     onClose();
   };

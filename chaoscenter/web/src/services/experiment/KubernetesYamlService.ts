@@ -25,6 +25,22 @@ import { ExperimentYamlService, GetFaultTunablesOperation, PreProcessChaosExperi
 const isInstallFaultsStep = (name: string): boolean =>
   name === 'install-chaos-faults' || name === 'install-chaos-experiments';
 
+// install-agent/install-application steps use a fixed template name (see
+// addInstallStepToManifest), so unlike faults the step's own name can't be
+// used to tell which AgentHub/AppHub entry was chosen -- that's only ever
+// encoded in the container's `-folder=`/`-namespace=` args. These two
+// helpers are the single place that both reads it back out (for the canvas
+// label and for pre-filling the select-install-step drawer on re-open).
+const installStepTemplateName = (kind: 'application' | 'agent'): string =>
+  kind === 'application' ? 'install-application' : 'install-agent';
+
+const parseInstallStepArgs = (args: string[] | undefined): { folder: string; namespace: string } | undefined => {
+  const folder = args?.find(arg => arg.startsWith('-folder='))?.slice('-folder='.length);
+  const namespace = args?.find(arg => arg.startsWith('-namespace='))?.slice('-namespace='.length);
+  if (!folder) return undefined;
+  return { folder, namespace: namespace ?? '' };
+};
+
 export class KubernetesYamlService extends ExperimentYamlService {
   async addFaultsToManifest(
     key: ChaosObjectStoresPrimaryKeys['experiments'],
@@ -228,6 +244,19 @@ export class KubernetesYamlService extends ExperimentYamlService {
     } catch (_) {
       this.handleIDBFailure();
     }
+  }
+
+  // Reads back the AgentHub/AppHub entry currently installed by an
+  // install-agent/install-application step, so the select-install-step
+  // drawer can be re-opened pre-filled (and so the user has somewhere to
+  // actually see the selection) when they click that step on the canvas.
+  getInstallStepSelection(
+    manifest: KubernetesExperimentManifest | undefined,
+    kind: 'application' | 'agent'
+  ): { folder: string; namespace: string } | undefined {
+    const [templates] = this.getTemplatesAndSteps(manifest);
+    const template = templates?.find(t => t.name === installStepTemplateName(kind));
+    return parseInstallStepArgs(template?.container?.args);
   }
 
   async updateExperimentManifestWithFaultData(
@@ -580,7 +609,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       if (!experiment) return;
 
       experiment.unsavedChanges = true;
-      
+
       // Store multi-run config in experiment metadata
       const manifest = experiment?.manifest as Workflow;
       if (!manifest) return;
@@ -922,6 +951,17 @@ export class KubernetesYamlService extends ExperimentYamlService {
       return !appinfo.appns || !appinfo.applabel;
     };
 
+    // install-agent/install-application nodes otherwise render with just the
+    // fixed template name ("install-agent") on the canvas, with no
+    // indication of which AgentHub/AppHub entry was actually selected.
+    const displayName = (templateName: string): string => {
+      if (templateName !== 'install-agent' && templateName !== 'install-application') return templateName;
+      const template = templates?.find(t => t.name === templateName);
+      const selection = parseInstallStepArgs(template?.container?.args);
+      if (!selection) return templateName;
+      return `${templateName}: ${selection.folder}`;
+    };
+
     steps?.map(step => {
       if (step.length === 0) return;
 
@@ -930,13 +970,13 @@ export class KubernetesYamlService extends ExperimentYamlService {
 
       graphData.push({
         id: step[0]?.template ?? '',
-        name: step[0]?.name ?? '',
+        name: displayName(step[0]?.name ?? ''),
         type: 'ChaosNode',
         identifier: step[0]?.template ?? '',
         data: { isInComplete: hasNoTarget(step[0]?.template ?? '') },
         children: step.slice(1).map(subStep => ({
           id: subStep.template ?? '',
-          name: subStep.name ?? '',
+          name: displayName(subStep.name ?? ''),
           type: 'ChaosNode',
           identifier: subStep.template ?? '',
           data: { isInComplete: hasNoTarget(subStep.template ?? '') }

@@ -136,13 +136,13 @@ export abstract class ExperimentYamlService extends ChaosIDB {
 
   getExperimentScheduleType(manifest: ExperimentManifest | undefined): ExperimentType | undefined {
     if (!manifest) return;
-    
+
     // Check for multi-run annotations first
     const annotations = (manifest as { metadata?: { annotations?: Record<string, string> } })?.metadata?.annotations;
     if (annotations?.['litmuschaos.io/multiRunEnabled'] === 'true') {
       return ExperimentType.MULTI_RUN;
     }
-    
+
     switch (manifest.kind) {
       case 'Workflow':
         return ExperimentType.NON_CRON;
@@ -172,6 +172,11 @@ export abstract class ExperimentYamlService extends ChaosIDB {
     kind: 'application' | 'agent',
     entry: { folder: string; namespace: string }
   ): Promise<Experiment | undefined>;
+
+  abstract getInstallStepSelection(
+    manifest: ExperimentManifest | undefined,
+    kind: 'application' | 'agent'
+  ): { folder: string; namespace: string } | undefined;
 
   abstract extractChaosFaultsWithWeights(manifest: ExperimentManifest | undefined): Array<Weightages>;
 

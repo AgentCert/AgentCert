@@ -283,6 +283,7 @@ cronSelectOption: Cron (Recurring run)
 cronText: >-
   The experiment will run periodically according to the cron provided below. You
   can stop the schedule anytime you want.
+currentlySelected: Currently selected
 currentRun: Current Run
 currentUTCTime: Current UTC Time
 customImageRegistry: Custom Image Registry
@@ -740,7 +741,7 @@ noDataToDisplay: No data to display
 noDescriptionProvided: No description provided
 noEnvironmentFound: No Environments found
 noEnvironmentFoundNewMessage: >-
-  An environment represents where you are installing your chaos infrastructure 
+  An environment represents where you are installing your chaos infrastructure
   and acts as an additional level of abstraction for the same.
 noEnvironmentFoundMessage: >-
   No Environments found in this project, click on 'New Environment' to add

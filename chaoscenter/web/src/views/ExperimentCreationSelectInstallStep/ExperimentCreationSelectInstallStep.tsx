@@ -18,6 +18,7 @@ interface ExperimentCreationSelectInstallStepViewProps {
   kind: 'application' | 'agent';
   loading: boolean;
   entries: InstallStepEntry[];
+  initialSelection?: { folder: string; namespace: string };
   onSelect: (entry: { folder: string; namespace: string }) => void;
   onClose: () => void;
 }
@@ -27,12 +28,13 @@ export default function ExperimentCreationSelectInstallStepView({
   kind,
   loading,
   entries,
+  initialSelection,
   onSelect,
   onClose
 }: ExperimentCreationSelectInstallStepViewProps): React.ReactElement {
   const { getString } = useStrings();
-  const [selectedFolder, setSelectedFolder] = React.useState<string>('');
-  const [namespace, setNamespace] = React.useState<string>('');
+  const [selectedFolder, setSelectedFolder] = React.useState<string>(initialSelection?.folder ?? '');
+  const [namespace, setNamespace] = React.useState<string>(initialSelection?.namespace ?? '');
 
   const selectedEntry = entries.find(entry => entry.folder === selectedFolder);
 
@@ -42,9 +44,16 @@ export default function ExperimentCreationSelectInstallStepView({
   };
 
   const title = (
-    <Text font={{ variation: FontVariation.H5 }}>
-      {kind === 'application' ? getString('installApplication') : getString('installAgent')}
-    </Text>
+    <Layout.Vertical spacing="xsmall">
+      <Text font={{ variation: FontVariation.H5 }}>
+        {kind === 'application' ? getString('installApplication') : getString('installAgent')}
+      </Text>
+      {initialSelection && (
+        <Text font={{ variation: FontVariation.SMALL }} color={Color.GREY_500}>
+          {getString('currentlySelected')}: {selectedEntry?.displayName ?? initialSelection.folder}
+        </Text>
+      )}
+    </Layout.Vertical>
   );
 
   return (

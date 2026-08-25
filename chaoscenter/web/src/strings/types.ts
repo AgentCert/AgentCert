@@ -205,6 +205,7 @@ export interface StringsMap {
   'cronResumed': unknown
   'cronSelectOption': unknown
   'cronText': unknown
+  'currentlySelected': unknown
   'currentRun': unknown
   'currentUTCTime': unknown
   'customImageRegistry': unknown

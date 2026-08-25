@@ -59,7 +59,11 @@ export default function ExperimentVisualBuilderView({
     operation: GetFaultTunablesOperation.InitialEnvs
   });
   const [isSelectTemplateDrawerOpen, setIsSelectTemplateDrawerOpen] = React.useState<boolean>(false);
-  const [installStepDrawer, setInstallStepDrawer] = React.useState<{ open: boolean; kind: 'application' | 'agent' }>({
+  const [installStepDrawer, setInstallStepDrawer] = React.useState<{
+    open: boolean;
+    kind: 'application' | 'agent';
+    initialSelection?: { folder: string; namespace: string };
+  }>({
     open: false,
     kind: 'application'
   });
@@ -112,6 +116,22 @@ export default function ExperimentVisualBuilderView({
     if (yamlUploaded) setViewFilter(VisualYamlSelectedView.YAML);
   };
 
+  // The Tune Fault drawer (Target Application / Tune Fault / Probes tabs)
+  // writes fault edits straight to IndexedDB itself (see
+  // ExperimentCreationFaultConfiguration's applyChanges) rather than going
+  // through a handler here, unlike add/remove-fault and install-step above --
+  // so nothing previously refreshed `experimentSteps` after an edit. That
+  // left the canvas (node warning badges, missing-target banner) showing
+  // stale isInComplete state until the next unrelated refresh, e.g. a page
+  // reload, even though the underlying manifest was already correct.
+  const handleTuneFaultDrawerClose = (): void => {
+    setTuneFaultDrawerOpen({ open: false, operation: GetFaultTunablesOperation.UpdatedEnvs });
+    experimentHandler?.getExperiment(experimentKey).then(experiment => {
+      const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
+      setExperimentSteps(steps);
+    });
+  };
+
   const handleRemoveFault = (faultName: string): void => {
     experimentHandler?.removeFaultsFromManifest(experimentKey, faultName).then(experiment => {
       const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
@@ -155,6 +175,24 @@ export default function ExperimentVisualBuilderView({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [DiagramEvent.ClickNode]: (event: any) => {
       setSelectedNodeID(event.data.id);
+
+      // install-agent/install-application nodes carry no ChaosEngine/fault
+      // data -- the Tune Fault drawer has nothing to show for them (see
+      // KubernetesYamlService.getFaultData). Re-open the same drawer used to
+      // pick the install step in the first place, pre-filled with the
+      // current selection, so clicking the node is how you find out (and
+      // change) which agent/app it installs.
+      if (event.data.id === 'install-agent' || event.data.id === 'install-application') {
+        const kind = event.data.id === 'install-agent' ? 'agent' : 'application';
+        experimentHandler?.getExperiment(experimentKey).then(experiment => {
+          const initialSelection = experimentHandler.getInstallStepSelection(experiment?.manifest, kind);
+          if (isEditMode) {
+            setInstallStepDrawer({ open: true, kind, initialSelection });
+          }
+        });
+        return;
+      }
+
       experimentHandler?.getExperiment(experimentKey).then(experiment => {
         const faultData = experimentHandler.getFaultData(experiment?.manifest, event.data.id);
         setSelectedFaultData(faultData);
@@ -267,6 +305,7 @@ export default function ExperimentVisualBuilderView({
         <ExperimentCreationSelectInstallStepController
           isOpen={installStepDrawer.open}
           kind={installStepDrawer.kind}
+          initialSelection={installStepDrawer.initialSelection}
           onSelect={handleInstallStepSelection}
           onClose={() => setInstallStepDrawer({ open: false, kind: installStepDrawer.kind })}
         />
@@ -274,7 +313,7 @@ export default function ExperimentVisualBuilderView({
       {tuneFaultDrawerOpen.open && (
         <ExperimentCreationTuneFaultView
           isOpen={tuneFaultDrawerOpen.open}
-          onClose={() => setTuneFaultDrawerOpen({ open: false, operation: GetFaultTunablesOperation.UpdatedEnvs })}
+          onClose={handleTuneFaultDrawerClose}
           initialFaultData={selectedFaultData}
           infraID={infraDetails?.infraID}
           environmentID={infraDetails?.environmentID}

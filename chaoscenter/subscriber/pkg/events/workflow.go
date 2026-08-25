@@ -168,7 +168,7 @@ func (ev *subscriberEvents) WorkflowEventHandler(oldObj, workflowObj *v1alpha1.W
 		nodes[nodeStatus.ID] = details
 	}
 
-	status := updateWorkflowStatus(workflowObj.Status.Phase)
+	status := resolveWorkflowStatus(workflowObj.Status.Phase, len(nodes))
 
 	finishedTime := StrConvTime(workflowObj.Status.FinishedAt.Unix())
 	if workflowObj.Spec.Shutdown.Enabled() {
@@ -288,6 +288,23 @@ func updateWorkflowStatus(status v1alpha1.WorkflowPhase) string {
 	default:
 		return "Queued"
 	}
+}
+
+// resolveWorkflowStatus wraps updateWorkflowStatus with a correction for the
+// one case it gets wrong: updateWorkflowStatus collapses both
+// WorkflowSucceeded and WorkflowFailed to "Completed" by design -- the real
+// pass/fail signal is meant to come from getExperimentStatus, which inspects
+// each ChaosEngine node's result. But a Workflow can fail spec validation
+// (e.g. an unresolved {{workflow.parameters.*}} reference) before Argo ever
+// creates a single node/pod, so that node-based logic has nothing to inspect
+// and never overrides the "Completed" default -- a workflow that never ran a
+// single step was silently reported as having completed successfully.
+func resolveWorkflowStatus(phase v1alpha1.WorkflowPhase, nodeCount int) string {
+	status := updateWorkflowStatus(phase)
+	if phase == v1alpha1.WorkflowFailed && nodeCount == 0 {
+		status = string(types.Error)
+	}
+	return status
 }
 
 // getExperimentStatus is used to fetch the final experiment status
