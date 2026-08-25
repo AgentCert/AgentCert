@@ -51,7 +51,15 @@ spec:
       containers:
         - name: subscriber
           image: #{SUBSCRIBER_IMAGE}
-          imagePullPolicy: Always
+          # IfNotPresent (not Always): #{SUBSCRIBER_IMAGE} resolves to a fixed tag
+          # (agentcert/litmusportal-subscriber:<version>, not :latest), and local dev
+          # relies on `kind load docker-image` to get a freshly-built copy onto the
+          # node under that same tag. Always defeats that -- kubelet re-pulls from
+          # Docker Hub on every pod recreation, silently discarding the freshly
+          # loaded local image and replacing it with whatever's published under that
+          # tag upstream, even when a local rebuild just landed the fix moments
+          # earlier (see OPEN_WEIGHT_CERTIFICATION_HANDOFF.md).
+          imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 2000
             allowPrivilegeEscalation: false

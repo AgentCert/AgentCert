@@ -215,7 +215,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       if (!experiment) return;
 
       experiment.unsavedChanges = true;
-      const [templates, steps] = this.getTemplatesAndSteps(experiment?.manifest as KubernetesExperimentManifest);
+      const [templates, steps, spec] = this.getTemplatesAndSteps(experiment?.manifest as KubernetesExperimentManifest);
       if (!templates || !steps) return experiment;
 
       const templateName = kind === 'application' ? 'install-application' : 'install-agent';
@@ -235,6 +235,24 @@ export class KubernetesYamlService extends ExperimentYamlService {
           insertIndex = appIndex >= 0 ? appIndex + 1 : 0;
         }
         steps.splice(insertIndex, 0, [{ name: templateName, template: templateName }]);
+      }
+
+      // The backend unconditionally references {{workflow.parameters.appNamespace}}
+      // (readiness wait, uninstall, agent MCP URLs) but only ever *reads* it -- nothing
+      // ever wrote it into spec.arguments.parameters for a hand-built (blank canvas)
+      // experiment the way predefined ChaosHub templates hardcode it. Without this the
+      // generated Workflow fails Argo's spec validation before a single step runs
+      // (see OPEN_WEIGHT_CERTIFICATION_HANDOFF.md, experiment eb0a2ee3-...). Seed/refresh
+      // it here, the same place the target app's namespace is actually chosen.
+      if (kind === 'application' && spec) {
+        if (!spec.arguments) spec.arguments = {};
+        if (!spec.arguments.parameters) spec.arguments.parameters = [];
+        const appNamespaceParam = spec.arguments.parameters.find(p => p.name === 'appNamespace');
+        if (appNamespaceParam) {
+          appNamespaceParam.value = entry.namespace;
+        } else {
+          spec.arguments.parameters.push({ name: 'appNamespace', value: entry.namespace });
+        }
       }
 
       await store.put({ ...experiment }, key);

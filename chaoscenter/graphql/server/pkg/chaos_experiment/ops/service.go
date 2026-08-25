@@ -466,6 +466,43 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 		logrus.WithField("agentId", agentIDStr).Info("injected agentId workflow parameter")
 	}
 
+	// Ensure appNamespace is present as a workflow-level parameter. Several patches
+	// applied below (applyInstallApplicationReadinessPatch, applyUninstallAllPatch,
+	// injectExperimentContextArgs) unconditionally emit {{workflow.parameters.appNamespace}}
+	// into generated scripts/args, but nothing ever *wrote* that parameter for a
+	// hand-built experiment -- predefined ChaosHub templates (e.g.
+	// chaos-charts/experiments/sock-shop/experiment.yaml) hardcode it, but a manifest
+	// assembled from a blank canvas never gets it from anywhere. An unresolved
+	// {{workflow.parameters.*}} reference fails Argo's spec validation before a single
+	// step runs, and the whole run is then silently reported as if it had completed
+	// (see subscriber's updateWorkflowStatus/resolveWorkflowStatus). This mirrors the
+	// agentId safety net above, plus a matching fix on the frontend
+	// (KubernetesYamlService.addInstallStepToManifest) that seeds it at the point the
+	// target app is actually chosen; this backend fallback covers any manifest that
+	// reaches here without having gone through that path (older saved experiments,
+	// direct API/CLI submissions, custom experiments).
+	{
+		found := false
+		for _, p := range workflowManifest.Spec.Arguments.Parameters {
+			if p.Name == "appNamespace" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if appNS := ExtractInstallApplicationNamespace(workflowManifest.Spec.Templates); appNS != "" {
+				workflowManifest.Spec.Arguments.Parameters = append(workflowManifest.Spec.Arguments.Parameters, v1alpha1.Parameter{
+					Name:  "appNamespace",
+					Value: v1alpha1.AnyStringPtr(appNS),
+				})
+				logrus.WithField("appNamespace", appNS).Info("injected appNamespace workflow parameter (fallback)")
+			} else {
+				logrus.Warn("appNamespace workflow parameter missing and no install-application namespace found to fall back to; " +
+					"any template referencing {{workflow.parameters.appNamespace}} will fail Argo spec validation")
+			}
+		}
+	}
+
 	if workflowManifest.Labels == nil {
 		workflowManifest.Labels = map[string]string{
 			"workflow_id": *workflow.ExperimentID,
@@ -2633,6 +2670,33 @@ func ExtractInstallAgentNamespace(templates []v1alpha1.Template) string {
 		}
 		for i, arg := range t.Container.Args {
 			if (arg == "--namespace" || arg == "-namespace") && i+1 < len(t.Container.Args) {
+				return t.Container.Args[i+1]
+			}
+		}
+	}
+	return ""
+}
+
+// ExtractInstallApplicationNamespace scans the install-application template's
+// container args for the namespace flag and returns its value. Handles both
+// combined (-namespace=<x>) and split (-namespace <x>) forms -- the frontend
+// (KubernetesYamlService.addInstallStepToManifest) writes the combined form.
+func ExtractInstallApplicationNamespace(templates []v1alpha1.Template) string {
+	for _, t := range templates {
+		if t.Container == nil {
+			continue
+		}
+		if t.Name != "install-application" && !strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-app") {
+			continue
+		}
+		for i, arg := range t.Container.Args {
+			if strings.HasPrefix(arg, "-namespace=") {
+				return strings.TrimPrefix(arg, "-namespace=")
+			}
+			if strings.HasPrefix(arg, "--namespace=") {
+				return strings.TrimPrefix(arg, "--namespace=")
+			}
+			if (arg == "-namespace" || arg == "--namespace") && i+1 < len(t.Container.Args) {
 				return t.Container.Args[i+1]
 			}
 		}

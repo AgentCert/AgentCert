@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -175,6 +176,14 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 	if err != nil {
 		return nil, fmt.Errorf("failed to read the file %v", err)
 	}
+	// Readdirnames does not guarantee any order (filesystem/inode-dependent),
+	// but the manifests/{cluster,namespace} filenames use a "1a,1b,2a,2b,..."
+	// prefix specifically so RBAC (ServiceAccounts/Roles/*Bindings) lands
+	// before the Deployments that reference them once concatenated below.
+	// Without sorting, that ordering is left to chance -- observed in
+	// practice as ReplicaSet "FailedCreate: serviceaccount ... not found"
+	// races immediately after applying the generated manifest.
+	sort.Strings(list)
 
 	var nodeSelector string
 	if infra.NodeSelector != nil {
