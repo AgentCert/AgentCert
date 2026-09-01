@@ -40,6 +40,12 @@ export default function KubernetesChaosInfrastructureController(): React.ReactEl
     },
     options: {
       pollInterval: 5000,
+      // Apollo Client 3.x will not deliver poll results to the component for a
+      // `cache-and-network` query unless this is set — the network requests
+      // fire but the render never updates. Without it, a newly registered
+      // infrastructure only shows up after the query remounts (i.e. after
+      // navigating away from the environment and back). See CLAUDE.md.
+      notifyOnNetworkStatusChange: true,
       onError: err => {
         showError(err.message);
       }
@@ -82,7 +88,12 @@ export default function KubernetesChaosInfrastructureController(): React.ReactEl
     <KubernetesChaosInfrastructureView
       chaosInfrastructures={InfrastructureData.length <= 0 && searchTerm == '' ? undefined : InfrastructureData}
       loading={{
-        listChaosInfrastructure: listChaosInfrastructureLoading,
+        // Only surface the full-page spinner on the initial load. With
+        // `notifyOnNetworkStatusChange` enabled, `listChaosInfrastructureLoading`
+        // also flips true on every 5s poll and on `refetch()`; gating on `!data`
+        // keeps the existing table on screen during those background refreshes
+        // instead of flashing the loader.
+        listChaosInfrastructure: listChaosInfrastructureLoading && !data,
         getEnvironmentLoading: getEnvironmentLoading
       }}
       error={{

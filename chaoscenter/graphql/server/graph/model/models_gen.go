@@ -210,6 +210,13 @@ type AgentMetadataInput struct {
 	Annotations []*KeyValuePairInput `json:"annotations,omitempty"`
 }
 
+type AgentModelOption struct {
+	Alias     string `json:"alias"`
+	Label     string `json:"label"`
+	Provider  string `json:"provider"`
+	IsDefault bool   `json:"isDefault"`
+}
+
 // AgentStatusResponse provides health and sync status for an agent.
 type AgentStatusResponse struct {
 	// Agent ID

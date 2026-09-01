@@ -7,6 +7,9 @@ declare namespace ChaosStudioModuleScssNamespace {
     fullHeight: string;
     leftSideBar: string;
     mainContainer: string;
+    modelSelect: string;
+    modelSelector: string;
+    modelSelectorLabel: string;
     pageHeader: string;
     pipelineIcon: string;
     pipelineMetadataContainer: string;

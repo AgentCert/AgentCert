@@ -84,6 +84,56 @@ func GetK8sInfraYaml(host string, infra dbChaosInfra.ChaosInfra) ([]byte, error)
 	return respData, nil
 }
 
+func buildTargetNamespaceRBAC(infraNamespace, serviceAccountName string, targetNamespaces []string) string {
+	seen := make(map[string]bool)
+	var builder strings.Builder
+
+	for _, namespace := range targetNamespaces {
+		namespace = strings.TrimSpace(namespace)
+		if namespace == "" || namespace == infraNamespace || seen[namespace] {
+			continue
+		}
+		seen[namespace] = true
+
+		builder.WriteString("---\n")
+		builder.WriteString("apiVersion: v1\n")
+		builder.WriteString("kind: Namespace\n")
+		builder.WriteString("metadata:\n")
+		builder.WriteString("  name: ")
+		builder.WriteString(namespace)
+		builder.WriteString("\n")
+		builder.WriteString("  labels:\n")
+		builder.WriteString("    agentcert.io/target-namespace: \"true\"\n")
+		builder.WriteString("---\n")
+		builder.WriteString("apiVersion: rbac.authorization.k8s.io/v1\n")
+		builder.WriteString("kind: RoleBinding\n")
+		builder.WriteString("metadata:\n")
+		builder.WriteString("  name: litmus-admin-target-namespace-role-binding\n")
+		builder.WriteString("  namespace: ")
+		builder.WriteString(namespace)
+		builder.WriteString("\n")
+		builder.WriteString("  labels:\n")
+		builder.WriteString("    name: litmus-admin-target-namespace-role-binding\n")
+		builder.WriteString("    agentcert.io/infra-namespace: ")
+		builder.WriteString(infraNamespace)
+		builder.WriteString("\n")
+		builder.WriteString("roleRef:\n")
+		builder.WriteString("  apiGroup: rbac.authorization.k8s.io\n")
+		builder.WriteString("  kind: ClusterRole\n")
+		builder.WriteString("  name: litmus-admin-target-namespace-role\n")
+		builder.WriteString("subjects:\n")
+		builder.WriteString("  - kind: ServiceAccount\n")
+		builder.WriteString("    name: ")
+		builder.WriteString(serviceAccountName)
+		builder.WriteString("\n")
+		builder.WriteString("    namespace: ")
+		builder.WriteString(infraNamespace)
+		builder.WriteString("\n")
+	}
+
+	return strings.TrimSuffix(builder.String(), "\n")
+}
+
 // ManifestParser parses manifests yaml and generates dynamic manifest with specified keys
 func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *SubscriberConfigurations) ([]byte, error) {
 	var (
@@ -134,6 +184,7 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 	// adding/removing an app chart changes this on the next manifest fetch
 	// with no source edit here.
 	targetNamespaces := []string{InfraNamespace}
+	targetAppNamespaces := make([]string, 0)
 	if appNamespaces, err := apphub.GetKnownApplicationNamespaces(); err != nil {
 		log.WithError(err).Warn("failed to read known application namespaces from app-charts catalog; " +
 			"generated infra RBAC will only be able to see its own namespace until this is retried")
@@ -141,10 +192,12 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 		for _, ns := range appNamespaces {
 			if ns != InfraNamespace {
 				targetNamespaces = append(targetNamespaces, ns)
+				targetAppNamespaces = append(targetAppNamespaces, ns)
 			}
 		}
 	}
 	targetNamespacesEnv := strings.Join(targetNamespaces, ",")
+	targetNamespaceRBAC := buildTargetNamespaceRBAC(InfraNamespace, ServiceAccountName, targetAppNamespaces)
 	targetNamespacesResourceNamesJSON, err := json.Marshal(targetNamespaces)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal target namespace resourceNames: %w", err)
@@ -239,6 +292,7 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 		newContent = strings.Replace(newContent, "#{INFRA_SERVICE_ACCOUNT}", ServiceAccountName, -1)
 		newContent = strings.Replace(newContent, "#{INFRA_SCOPE}", infra.InfraScope, -1)
 		newContent = strings.Replace(newContent, "#{TARGET_APP_NAMESPACES}", targetNamespacesEnv, -1)
+		newContent = strings.Replace(newContent, "#{TARGET_APP_NAMESPACE_RBAC}", targetNamespaceRBAC, -1)
 		newContent = strings.Replace(newContent, "#{TARGET_NAMESPACE_RESOURCE_NAMES}", string(targetNamespacesResourceNamesJSON), -1)
 		newContent = strings.Replace(newContent, "#{ARGO_WORKFLOW_CONTROLLER}", utils.Config.ArgoWorkflowControllerImage, -1)
 		newContent = strings.Replace(newContent, "#{LITMUS_CHAOS_OPERATOR}", utils.Config.LitmusChaosOperatorImage, -1)

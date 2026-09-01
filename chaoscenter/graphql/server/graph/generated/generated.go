@@ -132,6 +132,13 @@ type ComplexityRoot struct {
 		Labels      func(childComplexity int) int
 	}
 
+	AgentModelOption struct {
+		Alias     func(childComplexity int) int
+		IsDefault func(childComplexity int) int
+		Label     func(childComplexity int) int
+		Provider  func(childComplexity int) int
+	}
+
 	AgentStatusResponse struct {
 		AgentID              func(childComplexity int) int
 		HealthCheckResult    func(childComplexity int) int
@@ -817,7 +824,7 @@ type ComplexityRoot struct {
 		RegisterAgent             func(childComplexity int, input model.RegisterAgentInput) int
 		RegisterInfra             func(childComplexity int, projectID string, request model.RegisterInfraRequest) int
 		RemoveFaultFromStudio     func(childComplexity int, projectID string, studioID string, faultName string) int
-		RunChaosExperiment        func(childComplexity int, experimentID string, projectID string) int
+		RunChaosExperiment        func(childComplexity int, experimentID string, projectID string, modelAlias *string) int
 		SaveChaosExperiment       func(childComplexity int, request model.SaveChaosExperimentRequest, projectID string) int
 		SaveChaosHub              func(childComplexity int, projectID string, request model.CreateChaosHubRequest) int
 		SetFaultStudioActive      func(childComplexity int, projectID string, studioID string, isActive bool) int
@@ -949,6 +956,7 @@ type ComplexityRoot struct {
 		GetVersionDetails            func(childComplexity int, projectID string) int
 		IsFaultStudioNameAvailable   func(childComplexity int, projectID string, name string, excludeStudioID *string) int
 		ListAgentHubCategories       func(childComplexity int, projectID string) int
+		ListAgentModelOptions        func(childComplexity int) int
 		ListAgents                   func(childComplexity int, filter *model.ListAgentsFilter, pagination model.PaginationInput) int
 		ListAppHubCategories         func(childComplexity int, projectID string) int
 		ListAvailableFaultsForStudio func(childComplexity int, projectID string, hubID string) int
@@ -1088,7 +1096,7 @@ type MutationResolver interface {
 	SyncAgentToLangfuse(ctx context.Context, agentID string) (*model.SyncResponse, error)
 	GenerateCertification(ctx context.Context, projectID string, request model.CertificationGenerationRequest) (*model.CertificationGenerationResponse, error)
 	ChaosExperimentRun(ctx context.Context, request model.ExperimentRunRequest) (string, error)
-	RunChaosExperiment(ctx context.Context, experimentID string, projectID string) (*model.RunChaosExperimentResponse, error)
+	RunChaosExperiment(ctx context.Context, experimentID string, projectID string, modelAlias *string) (*model.RunChaosExperimentResponse, error)
 	StopExperimentRuns(ctx context.Context, projectID string, experimentID string, experimentRunID *string, notifyID *string) (bool, error)
 	RegisterInfra(ctx context.Context, projectID string, request model.RegisterInfraRequest) (*model.RegisterInfraResponse, error)
 	ConfirmInfraRegistration(ctx context.Context, request model.InfraIdentity) (*model.ConfirmInfraRegistrationResponse, error)
@@ -1138,6 +1146,7 @@ type QueryResolver interface {
 	GetKubernetesNamespaces(ctx context.Context) ([]string, error)
 	GetEnvironmentVariables(ctx context.Context) ([]*model.EnvironmentVariable, error)
 	GetCertificationStatus(ctx context.Context, projectID string, experimentID string) (*model.CertificationExperimentSummary, error)
+	ListAgentModelOptions(ctx context.Context) ([]*model.AgentModelOption, error)
 	GetExperimentRun(ctx context.Context, projectID string, experimentRunID *string, notifyID *string) (*model.ExperimentRun, error)
 	ListExperimentRun(ctx context.Context, projectID string, request model.ListExperimentRunRequest) (*model.ListExperimentRunResponse, error)
 	GetExperimentRunStats(ctx context.Context, projectID string) (*model.GetExperimentRunStatsResponse, error)
@@ -1615,6 +1624,34 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AgentMetadata.Labels(childComplexity), true
+
+	case "AgentModelOption.alias":
+		if e.complexity.AgentModelOption.Alias == nil {
+			break
+		}
+
+		return e.complexity.AgentModelOption.Alias(childComplexity), true
+
+	case "AgentModelOption.isDefault":
+		if e.complexity.AgentModelOption.IsDefault == nil {
+			break
+		}
+
+		return e.complexity.AgentModelOption.IsDefault(childComplexity), true
+
+	case "AgentModelOption.label":
+		if e.complexity.AgentModelOption.Label == nil {
+			break
+		}
+
+		return e.complexity.AgentModelOption.Label(childComplexity), true
+
+	case "AgentModelOption.provider":
+		if e.complexity.AgentModelOption.Provider == nil {
+			break
+		}
+
+		return e.complexity.AgentModelOption.Provider(childComplexity), true
 
 	case "AgentStatusResponse.agentID":
 		if e.complexity.AgentStatusResponse.AgentID == nil {
@@ -5052,7 +5089,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.RunChaosExperiment(childComplexity, args["experimentID"].(string), args["projectID"].(string)), true
+		return e.complexity.Mutation.RunChaosExperiment(childComplexity, args["experimentID"].(string), args["projectID"].(string), args["modelAlias"].(*string)), true
 
 	case "Mutation.saveChaosExperiment":
 		if e.complexity.Mutation.SaveChaosExperiment == nil {
@@ -6005,6 +6042,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.ListAgentHubCategories(childComplexity, args["projectID"].(string)), true
+
+	case "Query.listAgentModelOptions":
+		if e.complexity.Query.ListAgentModelOptions == nil {
+			break
+		}
+
+		return e.complexity.Query.ListAgentModelOptions(childComplexity), true
 
 	case "Query.listAgents":
 		if e.complexity.Query.ListAgents == nil {
@@ -8421,6 +8465,11 @@ type Mutation {
 `, BuiltIn: false},
 	{Name: "../../../definitions/shared/chaos_experiment_run.graphqls", Input: `extend type Query {
   """
+  Returns the agent LLM model aliases currently configured for experiment runs
+  """
+  listAgentModelOptions: [AgentModelOption!]!
+
+  """
   Returns experiment run based on experiment run ID
   """
   getExperimentRun(projectID: ID!, experimentRunID: ID,   notifyID: ID): ExperimentRun!
@@ -8452,12 +8501,20 @@ extend type Mutation {
   runChaosExperiment(
     experimentID: String!
     projectID: ID!
+    modelAlias: String
   ): RunChaosExperimentResponse!
 
   """
   stopExperiment will halt all the ongoing runs of a particular experiment
   """
   stopExperimentRuns(projectID: ID!, experimentID:String!, experimentRunID: String, notifyID: String): Boolean! @authorized
+}
+
+type AgentModelOption {
+  alias: String!
+  label: String!
+  provider: String!
+  isDefault: Boolean!
 }`, BuiltIn: false},
 	{Name: "../../../definitions/shared/chaos_infrastructure.graphqls", Input: `directive @authorized on FIELD_DEFINITION
 
@@ -12778,6 +12835,15 @@ func (ec *executionContext) field_Mutation_runChaosExperiment_args(ctx context.C
 		}
 	}
 	args["projectID"] = arg1
+	var arg2 *string
+	if tmp, ok := rawArgs["modelAlias"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("modelAlias"))
+		arg2, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["modelAlias"] = arg2
 	return args, nil
 }
 
@@ -17090,6 +17156,182 @@ func (ec *executionContext) fieldContext_AgentMetadata_annotations(_ context.Con
 				return ec.fieldContext_KeyValuePair_value(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type KeyValuePair", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentModelOption_alias(ctx context.Context, field graphql.CollectedField, obj *model.AgentModelOption) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentModelOption_alias(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Alias, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentModelOption_alias(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentModelOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentModelOption_label(ctx context.Context, field graphql.CollectedField, obj *model.AgentModelOption) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentModelOption_label(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Label, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentModelOption_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentModelOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentModelOption_provider(ctx context.Context, field graphql.CollectedField, obj *model.AgentModelOption) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentModelOption_provider(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Provider, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentModelOption_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentModelOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentModelOption_isDefault(ctx context.Context, field graphql.CollectedField, obj *model.AgentModelOption) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentModelOption_isDefault(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDefault, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentModelOption_isDefault(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentModelOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -37705,7 +37947,7 @@ func (ec *executionContext) _Mutation_runChaosExperiment(ctx context.Context, fi
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().RunChaosExperiment(rctx, fc.Args["experimentID"].(string), fc.Args["projectID"].(string))
+		return ec.resolvers.Mutation().RunChaosExperiment(rctx, fc.Args["experimentID"].(string), fc.Args["projectID"].(string), fc.Args["modelAlias"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -43749,6 +43991,60 @@ func (ec *executionContext) fieldContext_Query_getCertificationStatus(ctx contex
 	if fc.Args, err = ec.field_Query_getCertificationStatus_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_listAgentModelOptions(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_listAgentModelOptions(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().ListAgentModelOptions(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.AgentModelOption)
+	fc.Result = res
+	return ec.marshalNAgentModelOption2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentModelOptionᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_listAgentModelOptions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "alias":
+				return ec.fieldContext_AgentModelOption_alias(ctx, field)
+			case "label":
+				return ec.fieldContext_AgentModelOption_label(ctx, field)
+			case "provider":
+				return ec.fieldContext_AgentModelOption_provider(ctx, field)
+			case "isDefault":
+				return ec.fieldContext_AgentModelOption_isDefault(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AgentModelOption", field.Name)
+		},
 	}
 	return fc, nil
 }
@@ -56861,6 +57157,60 @@ func (ec *executionContext) _AgentMetadata(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var agentModelOptionImplementors = []string{"AgentModelOption"}
+
+func (ec *executionContext) _AgentModelOption(ctx context.Context, sel ast.SelectionSet, obj *model.AgentModelOption) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, agentModelOptionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentModelOption")
+		case "alias":
+			out.Values[i] = ec._AgentModelOption_alias(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._AgentModelOption_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "provider":
+			out.Values[i] = ec._AgentModelOption_provider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDefault":
+			out.Values[i] = ec._AgentModelOption_isDefault(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var agentStatusResponseImplementors = []string{"AgentStatusResponse"}
 
 func (ec *executionContext) _AgentStatusResponse(ctx context.Context, sel ast.SelectionSet, obj *model.AgentStatusResponse) graphql.Marshaler {
@@ -62196,6 +62546,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "listAgentModelOptions":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_listAgentModelOptions(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "getExperimentRun":
 			field := field
 
@@ -64351,6 +64723,60 @@ func (ec *executionContext) marshalNAgentListResponse2ᚖgithubᚗcomᚋlitmusch
 		return graphql.Null
 	}
 	return ec._AgentListResponse(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAgentModelOption2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentModelOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AgentModelOption) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNAgentModelOption2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentModelOption(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNAgentModelOption2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentModelOption(ctx context.Context, sel ast.SelectionSet, v *model.AgentModelOption) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._AgentModelOption(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNAgentStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐAgentStatus(ctx context.Context, v interface{}) (model.AgentStatus, error) {

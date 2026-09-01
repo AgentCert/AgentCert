@@ -425,7 +425,7 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
 	applyAgentInstallNamespaceOverride(workflowManifest.Spec.Templates)
-	injectExperimentContextArgs(workflowManifest.Spec.Templates)
+	InjectExperimentContextArgs(workflowManifest.Spec.Templates, "")
 
 	// Inject agentId as a workflow-level parameter so that install-agent
 	// can forward it via --set agentId={{workflow.parameters.agentId}}.
@@ -901,7 +901,7 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyAgentInstallNamespaceOverride(cronExperimentManifest.Spec.WorkflowSpec.Templates)
-	injectExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	InjectExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates, "")
 
 	if strings.TrimSpace(cronExperimentManifest.Spec.Schedule) == "" {
 		return errors.New("failed to process cron workflow, cron syntax not provided in manifest")
@@ -1280,17 +1280,10 @@ func (c *chaosExperimentService) UpdateRuntimeCronWorkflowConfiguration(cronWork
 						annotation = meta.Annotations
 					}
 
-					var annotationArray []string
-					for _, key := range annotation {
-
-						var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-						err := json.Unmarshal([]byte(key), &manifestAnnotation)
-						if err != nil {
-							return cronWorkflowManifest, faults, errors.New("failed to unmarshal experiment annotation object")
-						}
-						for _, annotationKey := range manifestAnnotation {
-							annotationArray = append(annotationArray, annotationKey.Name)
-						}
+					// Validate the probeRef annotation (if any) up front; the parsed
+					// names are not otherwise consumed here.
+					if _, perr := probeUtils.ParseProbeRefNames(annotation); perr != nil {
+						return cronWorkflowManifest, faults, perr
 					}
 
 					meta.Annotations = annotation
@@ -2406,7 +2399,7 @@ func applyAgentInstallNamespaceOverride(templates []v1alpha1.Template) {
 	}
 }
 
-// injectExperimentContextArgs appends --set flags to the install-agent template
+// InjectExperimentContextArgs appends --set flags to the install-agent template
 // so that Argo Workflow template variables (experiment_id, run_id, workflow_name)
 // are passed through to the configured agent Helm chart as ConfigMap values.
 //
@@ -2415,7 +2408,7 @@ func applyAgentInstallNamespaceOverride(templates []v1alpha1.Template) {
 // These --set values override the empty defaults in values.yaml, flowing through:
 //
 //	Helm --set -> ConfigMap -> env var -> agent runtime reads os.environ["EXPERIMENT_ID"]
-func injectExperimentContextArgs(templates []v1alpha1.Template) {
+func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverride string) {
 	// Extract fault names from every ChaosEngine embedded in the workflow and
 	// load their ground truth definitions from the chaos hub filesystem.
 	// This is generic: any fault or category added to any hub is found automatically.
@@ -2486,6 +2479,9 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		// Fallback: derive from AZURE_OPENAI_DEPLOYMENT so any provider works
 		modelAlias = strings.TrimSpace(os.Getenv("AZURE_OPENAI_DEPLOYMENT"))
 	}
+	if override := strings.TrimSpace(modelAliasOverride); override != "" {
+		modelAlias = override
+	}
 
 	// Flash-agent mitigation knobs (see flash-agent/MITIGATION_PLAN.md). Without
 	// these the per-experiment pod runs in observe mode regardless of the image,
@@ -2501,6 +2497,20 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 	agentMemoryPath := strings.TrimSpace(os.Getenv("AGENT_MEMORY_PATH"))
 	memoryTTLDays := strings.TrimSpace(os.Getenv("MEMORY_TTL_DAYS"))
 	reviewerModelAlias := strings.TrimSpace(os.Getenv("REVIEWER_MODEL_ALIAS"))
+	langfuseHost := strings.TrimSpace(os.Getenv("LANGFUSE_HOST"))
+	if langfuseHost == "" {
+		langfuseHost = "http://langfuse-web.ace.svc.cluster.local:3000"
+	}
+	langfusePublicKey := strings.TrimSpace(os.Getenv("LANGFUSE_PUBLIC_KEY"))
+	langfuseSecretKey := strings.TrimSpace(os.Getenv("LANGFUSE_SECRET_KEY"))
+	agentMaxRuntimeSeconds := strings.TrimSpace(os.Getenv("SRE_AGENT_MAX_RUNTIME_SECONDS"))
+	if agentMaxRuntimeSeconds == "" {
+		agentMaxRuntimeSeconds = "780"
+	}
+	agentIdleAfterMaxRuntime := strings.TrimSpace(os.Getenv("SRE_AGENT_IDLE_AFTER_MAX_RUNTIME"))
+	if agentIdleAfterMaxRuntime == "" {
+		agentIdleAfterMaxRuntime = "true"
+	}
 
 	// Sidecar image — split registry/repo:tag so each part is set independently.
 	// AGENT_SIDECAR_IMAGE env var format: "registry/repository:tag" or "repository:tag".
@@ -2544,6 +2554,7 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", "agent.config.NOTIFY_ID={{workflow.labels.notify_id}}",
 		"--set", "agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}",
 		"--set", "agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}",
+		"--set", "agent.config.WORKFLOW_UID={{workflow.uid}}",
 		// WORKFLOW_NAME is the operator-typed experiment name (workflow.Labels
 		// ["experiment_name"], set in createChaosWorkflow). It flows into the
 		// agent-metadata ConfigMap so the agent-sidecar can mount it at
@@ -2566,6 +2577,12 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", fmt.Sprintf("agent.config.MODEL_ALIAS=%s", modelAlias),
 		"--set", fmt.Sprintf("agent.config.MCP_URLS=%s", mcpURLs),
 		"--set", fmt.Sprintf("agent.config.CHAOS_NAMESPACE=%s", chaosNamespace),
+		"--set", "agent.config.TARGET_NAMESPACE={{workflow.parameters.appNamespace}}",
+		"--set", fmt.Sprintf("agent.config.LANGFUSE_HOST=%s", langfuseHost),
+		"--set", fmt.Sprintf("agent.secret.LANGFUSE_PUBLIC_KEY=%s", langfusePublicKey),
+		"--set", fmt.Sprintf("agent.secret.LANGFUSE_SECRET_KEY=%s", langfuseSecretKey),
+		"--set", fmt.Sprintf("agent.config.AGENT_MAX_RUNTIME_SECONDS=%s", agentMaxRuntimeSeconds),
+		"--set", fmt.Sprintf("agent.config.AGENT_IDLE_AFTER_MAX_RUNTIME=%s", agentIdleAfterMaxRuntime),
 		"--set", fmt.Sprintf("agent.config.AGENT_MODE=%s", agentMode),
 		"--set", fmt.Sprintf("agent.config.AGENT_SCOPE_NAMESPACE=%s", agentScopeNamespace),
 		"--set", fmt.Sprintf("agent.config.MITIGATION_ALLOW_DISCOVERED_SCOPE=%s", mitigationAllowDiscoveredScope),
@@ -2603,15 +2620,22 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 			strings.HasPrefix(arg, "agent.config.EXPERIMENT_ID=") ||
 			strings.HasPrefix(arg, "agent.config.EXPERIMENT_RUN_ID=") ||
 			strings.HasPrefix(arg, "agent.config.WORKFLOW_NAME=") ||
+			strings.HasPrefix(arg, "agent.config.WORKFLOW_UID=") ||
 			strings.HasPrefix(arg, "agent.config.OPENAI_API_KEY=") ||
 			strings.HasPrefix(arg, "agent.secret.LITELLM_MASTER_KEY=") ||
 			strings.HasPrefix(arg, "agent.config.OPENAI_BASE_URL=") ||
+			strings.HasPrefix(arg, "agent.config.LANGFUSE_HOST=") ||
+			strings.HasPrefix(arg, "agent.secret.LANGFUSE_PUBLIC_KEY=") ||
+			strings.HasPrefix(arg, "agent.secret.LANGFUSE_SECRET_KEY=") ||
 			strings.HasPrefix(arg, "agent.config.MCP_URLS=") ||
 			strings.HasPrefix(arg, "agent.config.K8S_MCP_URL=") ||
 			strings.HasPrefix(arg, "agent.config.PROM_MCP_URL=") ||
 			strings.HasPrefix(arg, "agent.config.CHAOS_NAMESPACE=") ||
 			strings.HasPrefix(arg, "agent.config.K8S_NAMESPACE=") ||
 			strings.HasPrefix(arg, "agent.config.TARGET_APP_NAME=") ||
+			strings.HasPrefix(arg, "agent.config.TARGET_NAMESPACE=") ||
+			strings.HasPrefix(arg, "agent.config.AGENT_MAX_RUNTIME_SECONDS=") ||
+			strings.HasPrefix(arg, "agent.config.AGENT_IDLE_AFTER_MAX_RUNTIME=") ||
 			strings.HasPrefix(arg, "agent.config.MODEL_ALIAS=") ||
 			strings.HasPrefix(arg, "agent.config.AGENT_MODE=") ||
 			strings.HasPrefix(arg, "agent.config.AGENT_SCOPE_NAMESPACE=") ||

@@ -238,6 +238,75 @@ func AddK8SProbeProperties(newProbe *dbSchemaProbe.Probe, request model.ProbeReq
 	return newProbe
 }
 
+// ParseProbeRefAnnotation decodes the probe references carried by a ChaosEngine's
+// annotations.
+//
+// Only the "probeRef" annotation key ever holds this payload (written by
+// InsertProbeRefAnnotation). Every other annotation on the engine --
+// litmuschaos.io/*, step_pod_name, meta.helm.sh/*, or anything a user typed into
+// the Chaos Studio YAML editor -- must be ignored, never fed to json.Unmarshal.
+// The value under "probeRef" is also routinely blank ("") or an empty array
+// ("[]") for faults that have no probes (the ITBench teardown/uninstall steps in
+// particular), and neither of those is a parse error -- they mean "no probes".
+//
+// Returns (nil, nil) when there is nothing to parse; a non-nil error means a
+// non-empty "probeRef" value was genuinely malformed JSON.
+func ParseProbeRefAnnotation(annotations map[string]string) ([]dbChaosExperiment.ProbeAnnotations, error) {
+	raw, ok := annotations["probeRef"]
+	if !ok {
+		return nil, nil
+	}
+	var parsed []dbChaosExperiment.ProbeAnnotations
+	if err := UnmarshalProbeRef("probeRef", raw, &parsed); err != nil {
+		return nil, err
+	}
+	return parsed, nil
+}
+
+// IsEmptyProbeRef reports whether a "probeRef" annotation value carries no probe
+// references -- an empty/whitespace string, an empty JSON array, or a JSON null.
+// Faults with no probes (notably the ITBench teardown/uninstall steps) are
+// persisted with probeRef set to "" or "[]"; neither is a parse error.
+func IsEmptyProbeRef(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "", "[]", "null":
+		return true
+	default:
+		return false
+	}
+}
+
+// UnmarshalProbeRef decodes a single ChaosEngine annotation (key + value) into
+// probe-reference entries, for the historical call sites that scan
+// `for key := range engine.Annotations`. Only the "probeRef" key ever holds this
+// payload (written by InsertProbeRefAnnotation) -- every other key
+// (litmuschaos.io/*, step_pod_name, meta.helm.sh/*, editor-authored keys) and
+// every empty probeRef value decodes to nothing without error. A non-nil error
+// means a genuinely populated probeRef value was malformed JSON.
+func UnmarshalProbeRef(key, value string, out *[]dbChaosExperiment.ProbeAnnotations) error {
+	if key != "probeRef" || IsEmptyProbeRef(value) {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(value), out); err != nil {
+		return fmt.Errorf("failed to unmarshal experiment annotation object, error: %s", err.Error())
+	}
+	return nil
+}
+
+// ParseProbeRefNames is ParseProbeRefAnnotation reduced to just the probe names,
+// for the call sites that only need the name list stored on a Probes record.
+func ParseProbeRefNames(annotations map[string]string) ([]string, error) {
+	parsed, err := ParseProbeRefAnnotation(annotations)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, p := range parsed {
+		names = append(names, p.Name)
+	}
+	return names, nil
+}
+
 // ParseProbesFromManifest - Parses the manifest to return probes which is stored in the DB
 func ParseProbesFromManifest(wfType *dbChaosExperiment.ChaosExperimentType, manifest string) ([]dbChaosExperiment.Probes, error) {
 	var (
@@ -274,17 +343,9 @@ func ParseProbesFromManifest(wfType *dbChaosExperiment.ChaosExperimentType, mani
 						if meta.Annotations != nil {
 							annotation = meta.Annotations
 						}
-						var annotationArray []string
-						for _, key := range annotation {
-
-							var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-							err := json.Unmarshal([]byte(key), &manifestAnnotation)
-							if err != nil {
-								return nil, fmt.Errorf("failed to unmarshal experiment annotation object, error: %s", err.Error())
-							}
-							for _, annotationKey := range manifestAnnotation {
-								annotationArray = append(annotationArray, annotationKey.Name)
-							}
+						annotationArray, perr := ParseProbeRefNames(annotation)
+						if perr != nil {
+							return nil, perr
 						}
 						probes = append(probes, dbChaosExperiment.Probes{
 							FaultName:  artifact[0].Name,
@@ -322,17 +383,9 @@ func ParseProbesFromManifest(wfType *dbChaosExperiment.ChaosExperimentType, mani
 						if meta.Annotations != nil {
 							annotation = meta.Annotations
 						}
-						var annotationArray []string
-						for _, key := range annotation {
-
-							var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-							err := json.Unmarshal([]byte(key), &manifestAnnotation)
-							if err != nil {
-								return nil, fmt.Errorf("failed to unmarshal experiment annotation object, error: %s", err.Error())
-							}
-							for _, annotationKey := range manifestAnnotation {
-								annotationArray = append(annotationArray, annotationKey.Name)
-							}
+						annotationArray, perr := ParseProbeRefNames(annotation)
+						if perr != nil {
+							return nil, perr
 						}
 						probes = append(probes, dbChaosExperiment.Probes{
 							FaultName:  artifact[0].Name,
@@ -383,17 +436,9 @@ func ParseProbesFromManifestForRuns(wfType *dbChaosExperiment.ChaosExperimentTyp
 						if meta.Annotations != nil {
 							annotation = meta.Annotations
 						}
-						var annotationArray []string
-						for _, key := range annotation {
-
-							var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-							err := json.Unmarshal([]byte(key), &manifestAnnotation)
-							if err != nil {
-								return nil, fmt.Errorf("failed to unmarshal experiment annotation object, error: %v", err.Error())
-							}
-							for _, annotationKey := range manifestAnnotation {
-								annotationArray = append(annotationArray, annotationKey.Name)
-							}
+						annotationArray, perr := ParseProbeRefNames(annotation)
+						if perr != nil {
+							return nil, perr
 						}
 						probes = append(probes, dbChaosExperimentRun.Probes{
 							FaultName:  artifact[0].Name,
@@ -431,17 +476,9 @@ func ParseProbesFromManifestForRuns(wfType *dbChaosExperiment.ChaosExperimentTyp
 						if meta.Annotations != nil {
 							annotation = meta.Annotations
 						}
-						var annotationArray []string
-						for _, key := range annotation {
-
-							var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-							err := json.Unmarshal([]byte(key), &manifestAnnotation)
-							if err != nil {
-								return nil, fmt.Errorf("failed to unmarshal experiment annotation object, error: %v", err.Error())
-							}
-							for _, annotationKey := range manifestAnnotation {
-								annotationArray = append(annotationArray, annotationKey.Name)
-							}
+						annotationArray, perr := ParseProbeRefNames(annotation)
+						if perr != nil {
+							return nil, perr
 						}
 						probes = append(probes, dbChaosExperimentRun.Probes{
 							FaultName:  artifact[0].Name,

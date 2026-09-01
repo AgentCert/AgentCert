@@ -107,6 +107,23 @@ const (
 	perExperimentChaosRBACNameBase = "ace-chaos-runner"
 )
 
+// perExperimentChaosRBACEnabled gates the §99 per-experiment sandbox ServiceAccount.
+//
+// DISABLED. Every chaos experiment currently runs under its authored
+// chaosServiceAccount (litmus-admin), cluster-wide -- the same model as `main`. The
+// sandbox's rule set (perExperimentChaosRules) only covers the generic pod-level
+// LitmusChaos catalog, and several fault families ACE runs -- the ITBench SDK faults,
+// node faults, and the uninstall-agent/uninstall-application teardown steps -- need
+// cross-namespace / cluster-scoped access that a namespaced RoleBinding structurally
+// cannot grant. Until the sandbox is completed to cover every fault, it stays off.
+//
+// The scaffold is intentionally left in place: perExperimentChaosServiceAccountName,
+// perExperimentChaosRules, ensurePerExperimentChaosRBAC, cleanupPerExperimentChaosRBAC,
+// and utils.UsesUnscopedChaosServiceAccount (which marks the families that must keep
+// litmus-admin even once the sandbox is re-enabled). Flipping this to true resumes the
+// per-run SA rewrite for everything the helper does not exempt. See innovation.md §7.5.
+const perExperimentChaosRBACEnabled = false
+
 // NewChaosExperimentRunHandler returns a new instance of ChaosWorkflowHandler
 func NewChaosExperimentRunHandler(
 	chaosExperimentRunService types.Service,
@@ -2283,7 +2300,7 @@ func scoreExperimentRun(ctx context.Context, traceID string, experimentName stri
 }
 
 // RunChaosWorkFlow sends workflow run request(single run workflow only) to chaos_infra on workflow re-run request
-func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData) (*model.RunChaosExperimentResponse, error) {
+func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData, modelAliasOverride string) (*model.RunChaosExperimentResponse, error) {
 	var notifyID string
 	infra, err := dbChaosInfra.NewInfrastructureOperator(c.mongodbOperator).GetInfra(workflow.InfraID)
 	if err != nil {
@@ -2370,6 +2387,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	ops.ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
+	ops.InjectExperimentContextArgs(workflowManifest.Spec.Templates, modelAliasOverride)
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
 	ensureAgentFolderParam(&workflowManifest.Spec)
 	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
@@ -2512,16 +2530,9 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 				annotation = meta.Annotations
 			}
 
-			var annotationArray []string
-			for _, key := range annotation {
-				var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-				err := json.Unmarshal([]byte(key), &manifestAnnotation)
-				if err != nil {
-					return nil, errors.New("failed to unmarshal experiment annotation object")
-				}
-				for _, annotationKey := range manifestAnnotation {
-					annotationArray = append(annotationArray, annotationKey.Name)
-				}
+			annotationArray, perr := probeUtils.ParseProbeRefNames(annotation)
+			if perr != nil {
+				return nil, perr
 			}
 			probes = append(probes, dbChaosExperimentRun.Probes{
 				artifacts[j].Name,
@@ -2548,8 +2559,15 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 
 			meta.Spec.Appinfo.Appns = resolveWorkflowParameterValue(meta.Spec.Appinfo.Appns, wfParams)
 			meta.Spec.Appinfo.Applabel = resolveWorkflowParameterValue(meta.Spec.Appinfo.Applabel, wfParams)
-			meta.Spec.ChaosServiceAccount = chaosServiceAccount
-			targetNamespaces = appendUniqueNonEmpty(targetNamespaces, meta.Spec.Appinfo.Appns)
+			// §99 per-experiment sandbox is gated off (perExperimentChaosRBACEnabled) --
+			// every fault keeps its authored SA (litmus-admin). When re-enabled, the
+			// generic pod-level faults get the per-run SA; the families in
+			// utils.UsesUnscopedChaosServiceAccount stay on litmus-admin. See innovation.md §7.5.
+			if perExperimentChaosRBACEnabled &&
+				(len(meta.Spec.Experiments) == 0 || !utils.UsesUnscopedChaosServiceAccount(meta.Spec.Experiments[0].Name)) {
+				meta.Spec.ChaosServiceAccount = chaosServiceAccount
+				targetNamespaces = appendUniqueNonEmpty(targetNamespaces, meta.Spec.Appinfo.Appns)
+			}
 
 			// Normalize appkind by detecting actual resource type from cluster
 			if clusterClientset != nil {
@@ -2903,8 +2921,12 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 
 			meta.Spec.Appinfo.Appns = resolveWorkflowParameterValue(meta.Spec.Appinfo.Appns, cronParams)
 			meta.Spec.Appinfo.Applabel = resolveWorkflowParameterValue(meta.Spec.Appinfo.Applabel, cronParams)
-			meta.Spec.ChaosServiceAccount = chaosServiceAccount
-			targetNamespaces = appendUniqueNonEmpty(targetNamespaces, meta.Spec.Appinfo.Appns)
+			// §99 sandbox gated off -- see RunChaosWorkFlow / perExperimentChaosRBACEnabled.
+			if perExperimentChaosRBACEnabled &&
+				(len(meta.Spec.Experiments) == 0 || !utils.UsesUnscopedChaosServiceAccount(meta.Spec.Experiments[0].Name)) {
+				meta.Spec.ChaosServiceAccount = chaosServiceAccount
+				targetNamespaces = appendUniqueNonEmpty(targetNamespaces, meta.Spec.Appinfo.Appns)
+			}
 
 			// Normalize appkind by detecting actual resource type from cluster
 
@@ -3724,7 +3746,7 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 
 					// Trigger next run using fresh context with auth token
 					// IMPORTANT: Must pass store.Store (not nil) to actually send the workflow to subscriber
-					_, err = handler.RunChaosWorkFlow(newCtx, projID, updatedExperiment, store.Store)
+					_, err = handler.RunChaosWorkFlow(newCtx, projID, updatedExperiment, store.Store, "")
 					if err != nil {
 						logrus.Errorf("[Multi-Run] Failed to trigger run %d for %s: %v", nextRun, expID, err)
 					} else {

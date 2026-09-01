@@ -75,26 +75,6 @@ func (r *mutationResolver) DeleteInfra(ctx context.Context, projectID string, in
 	return dcaResponse, err
 }
 
-// resolveManifestHost derives the host to embed as the infra manifest's
-// SERVER_ADDR fallback. GetK8sInfraYaml/GetEndpoint always prefer the
-// configured CHAOS_CENTER_UI_ENDPOINT over this value, so it only matters for
-// deployments that leave that setting unset. It must not require a Referer:
-// callers other than the ChaosCenter web UI (curl, kubectl, scripted
-// onboarding against the /file/:key route) never send one.
-func resolveManifestHost(ctx context.Context) string {
-	if reqHeader, ok := ctx.Value("request-header").(http.Header); ok {
-		if referrer := reqHeader.Get("Referer"); referrer != "" {
-			if referrerURL, err := url.Parse(referrer); err == nil && referrerURL.Host != "" {
-				return fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host)
-			}
-		}
-	}
-	if requestHost, ok := ctx.Value("request-host").(string); ok && requestHost != "" {
-		return fmt.Sprintf("http://%s", requestHost)
-	}
-	return ""
-}
-
 // GetManifestWithInfraID is the resolver for the getManifestWithInfraID field.
 func (r *mutationResolver) GetManifestWithInfraID(ctx context.Context, projectID string, infraID string, accessKey string) (string, error) {
 	logFields := logrus.Fields{
@@ -369,3 +349,23 @@ func (r *subscriptionResolver) GetKubeNamespace(ctx context.Context, request mod
 func (r *Resolver) Subscription() generated.SubscriptionResolver { return &subscriptionResolver{r} }
 
 type subscriptionResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//     it when you're done.
+//   - You have helper methods in this file. Move them out to keep these resolver files clean.
+func resolveManifestHost(ctx context.Context) string {
+	if reqHeader, ok := ctx.Value("request-header").(http.Header); ok {
+		if referrer := reqHeader.Get("Referer"); referrer != "" {
+			if referrerURL, err := url.Parse(referrer); err == nil && referrerURL.Host != "" {
+				return fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host)
+			}
+		}
+	}
+	if requestHost, ok := ctx.Value("request-host").(string); ok && requestHost != "" {
+		return fmt.Sprintf("http://%s", requestHost)
+	}
+	return ""
+}

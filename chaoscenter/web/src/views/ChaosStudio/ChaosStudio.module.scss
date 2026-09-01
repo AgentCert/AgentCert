@@ -151,6 +151,30 @@
   }
 }
 
+.modelSelector {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  margin-right: var(--spacing-large);
+}
+
+.modelSelectorLabel {
+  color: var(--grey-600) !important;
+  font-size: var(--font-size-small) !important;
+  font-weight: 500 !important;
+  white-space: nowrap;
+}
+
+.modelSelect {
+  min-width: 240px;
+
+  :global {
+    .Select-control {
+      min-height: 30px;
+    }
+  }
+}
+
 // tabs
 
 .setupShell {

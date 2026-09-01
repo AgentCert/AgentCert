@@ -628,6 +628,21 @@ func (in *infraService) ListInfras(projectID string, request *model.ListInfraReq
 
 	}
 
+	// Sort newest-first so a freshly registered infrastructure lands on the
+	// first page of the paginated result. The aggregation has no inherent
+	// order otherwise (Mongo natural order), which meant a new infra could be
+	// appended past the page-1 limit and stay invisible until the client
+	// happened to page to it. Sorting on created_at (not updated_at) keeps the
+	// list order stable — heartbeat/confirmation writes bump updated_at and
+	// would otherwise reshuffle rows on every poll. Placed before the $lookup
+	// stages so the sort operates on the smaller pre-join documents.
+	sortStage := bson.D{
+		{"$sort", bson.D{
+			{"created_at", -1},
+		}},
+	}
+	pipeline = append(pipeline, sortStage)
+
 	fetchRunDetailsStage := bson.D{
 		{"$lookup", bson.D{
 			{"from", "chaosExperimentRuns"},

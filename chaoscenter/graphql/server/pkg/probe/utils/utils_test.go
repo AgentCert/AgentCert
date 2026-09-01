@@ -289,3 +289,52 @@ func TestParseProbesFromManifestForRuns(t *testing.T) {
 		t.Error("expected error for invalid manifest")
 	}
 }
+
+func TestParseProbeRefAnnotation(t *testing.T) {
+	// Regression: a ChaosEngine assembled from a blank Chaos Studio canvas
+	// carries a "probeRef" annotation whose value is "" or "[]" for faults with
+	// no probes (the ITBench teardown/uninstall steps in particular), and may
+	// carry unrelated annotation keys. None of these are parse errors.
+	cases := []struct {
+		name        string
+		annotations map[string]string
+		wantNames   []string
+		wantErr     bool
+	}{
+		{"nil map", nil, nil, false},
+		{"no probeRef key", map[string]string{"step_pod_name": "{{pod.name}}"}, nil, false},
+		{"empty probeRef", map[string]string{"probeRef": ""}, nil, false},
+		{"whitespace probeRef", map[string]string{"probeRef": "  "}, nil, false},
+		{"empty array probeRef", map[string]string{"probeRef": "[]"}, nil, false},
+		{"null probeRef", map[string]string{"probeRef": "null"}, nil, false},
+		{
+			"foreign key with non-json value is ignored",
+			map[string]string{"probeRef": "[]", "litmuschaos.io/multiRunEnabled": "true"},
+			nil, false,
+		},
+		{
+			"populated probeRef",
+			map[string]string{"probeRef": `[{"name":"p1","mode":"SOT"},{"name":"p2","mode":"Edge"}]`},
+			[]string{"p1", "p2"}, false,
+		},
+		{"malformed probeRef errors", map[string]string{"probeRef": "[{"}, nil, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			names, err := ParseProbeRefNames(tc.annotations)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got names=%v", names)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if strings.Join(names, ",") != strings.Join(tc.wantNames, ",") {
+				t.Errorf("names = %v, want %v", names, tc.wantNames)
+			}
+		})
+	}
+}

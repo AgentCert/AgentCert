@@ -47,6 +47,7 @@ export interface StringsMap {
   'addtoHubLoading': unknown
   'advanced': unknown
   'advancedOptions': unknown
+  'advancedOptionsDescription': unknown
   'agentCapabilities': unknown
   'agentDeployed': unknown
   'agentHub': unknown
@@ -157,6 +158,7 @@ export interface StringsMap {
   'comparator': unknown
   'comparisonCriteria': unknown
   'completed': unknown
+  'configuration': unknown
   'configure': unknown
   'configureChaosInfrastructure': unknown
   'configureDetails': unknown
@@ -205,9 +207,9 @@ export interface StringsMap {
   'cronResumed': unknown
   'cronSelectOption': unknown
   'cronText': unknown
-  'currentlySelected': unknown
   'currentRun': unknown
   'currentUTCTime': unknown
+  'currentlySelected': unknown
   'customImageRegistry': unknown
   'customLabel': unknown
   'customRepo': unknown
@@ -586,7 +588,6 @@ export interface StringsMap {
   'noAnalysis': unknown
   'noApiTokensFound': unknown
   'noChaosHubSelected': unknown
-  'noEntriesFound': unknown
   'noChaosInfrastructure': unknown
   'noChaosInfrastructureFound': unknown
   'noClustersFound': unknown
@@ -595,6 +596,7 @@ export interface StringsMap {
   'noDataCV': unknown
   'noDataToDisplay': unknown
   'noDescriptionProvided': unknown
+  'noEntriesFound': unknown
   'noEnvironmentFound': unknown
   'noEnvironmentFoundMessage': unknown
   'noEnvironmentFoundNewMessage': unknown
@@ -935,6 +937,7 @@ export interface StringsMap {
   'setFaultWeights': unknown
   'setSchedule': unknown
   'settings': unknown
+  'setup': unknown
   'setupChaosInfrastructures': unknown
   'setupProbe': unknown
   'setupProbeBtn': unknown
@@ -1041,7 +1044,7 @@ export interface StringsMap {
   'uninstallApplication': unknown
   'uninstallApplicationDescription': unknown
   'uninstallNoInstalledTargets': unknown
-  'uninstallStepFaultNotInHub': unknown
+  'uninstallStepFaultNotInHub': PrimitiveObject<'fault'>
   'uninstallStepHubUnavailable': unknown
   'uninstallTargetFolder': unknown
   'update': unknown

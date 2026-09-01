@@ -318,3 +318,29 @@ func TestIsTeardownExperiment(t *testing.T) {
 		}
 	}
 }
+
+func TestUsesUnscopedChaosServiceAccount(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"uninstall-agent", true},                          // teardown
+		{"uninstall-application-chn-3f9c2", true},          // teardown, runtime name
+		{"node-drain", true},                               // node fault
+		{"node-cpu-hog-abc12", true},                       // node fault, runtime name
+		{"kubelet-service-kill", true},                     // node-level
+		{"scaled-to-zero-kubernetes-workload", true},       // itbench SDK fault
+		{"scaled-to-zero-kubernetes-workload-mol9x", true}, // itbench, runtime name
+		{"cordoned-kubernetes-worker-node", true},          // itbench + node
+		{"chaos-mesh-pod-failure-replacement", true},       // itbench
+		{"pod-delete", false},                              // generic pod fault -> §99 SA
+		{"pod-network-loss", false},                        // generic pod fault -> §99 SA
+		{"container-kill-xyz", false},                      // generic pod fault -> §99 SA
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := UsesUnscopedChaosServiceAccount(c.name); got != c.want {
+			t.Errorf("UsesUnscopedChaosServiceAccount(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

@@ -406,10 +406,19 @@ export function DeploySetupStep({
           <Button
             disabled={!infraRegistered}
             className={css.stepButton}
-            onClick={() => {
+            onClick={async () => {
               prevStepData && (prevStepData.value = initialValues);
-              refetch.listChaosInfra();
-              kubernetesChaosInfrastructureCreationModalClose();
+              // Await the refetch before closing. Previously this was
+              // fire-and-forget and `kubernetesChaosInfrastructureCreationModalClose()`
+              // (which calls `startPolling`) ran on the next line — the
+              // synchronous `startPolling` superseded the in-flight `refetch`
+              // in Apollo 3.x, so the list was never refreshed and the new
+              // infrastructure only appeared after a full remount.
+              try {
+                await refetch.listChaosInfra();
+              } finally {
+                kubernetesChaosInfrastructureCreationModalClose();
+              }
             }}
             variation={ButtonVariation.PRIMARY}
             text={getString('done')}
