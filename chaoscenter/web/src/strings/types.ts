@@ -1036,6 +1036,14 @@ export interface StringsMap {
   'typeOfData': unknown
   'unableToGetProbes': unknown
   'unhealthy': unknown
+  'uninstallAgent': unknown
+  'uninstallAgentDescription': unknown
+  'uninstallApplication': unknown
+  'uninstallApplicationDescription': unknown
+  'uninstallNoInstalledTargets': unknown
+  'uninstallStepFaultNotInHub': unknown
+  'uninstallStepHubUnavailable': unknown
+  'uninstallTargetFolder': unknown
   'update': unknown
   'updatePassword': unknown
   'updatedAt': unknown

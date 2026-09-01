@@ -17,6 +17,7 @@ import ExperimentBuilderTemplateSelectionView from '@views/ExperimentBuilderTemp
 import type { FaultData, ExperimentManifest, StudioTabs, InfraDetails } from '@models';
 import ExperimentCreationSelectFaultController from '@controllers/ExperimentCreationSelectFault';
 import ExperimentCreationSelectInstallStepController from '@controllers/ExperimentCreationSelectInstallStep';
+import ExperimentCreationSelectUninstallStepController from '@controllers/ExperimentCreationSelectUninstallStep';
 import ExperimentAdvancedTuningOptionsView from '@views/ExperimentAdvancedTuningOptions';
 import ExperimentCreationTuneFaultView from '@views/ExperimentCreationFaultConfiguration';
 import { useUpdateSearchParams, useSearchParams } from '@hooks';
@@ -67,6 +68,13 @@ export default function ExperimentVisualBuilderView({
     open: false,
     kind: 'application'
   });
+  const [uninstallStepDrawer, setUninstallStepDrawer] = React.useState<{
+    open: boolean;
+    kind: 'application' | 'agent';
+  }>({
+    open: false,
+    kind: 'application'
+  });
   const [selectedFaultData, setSelectedFaultData] = React.useState<FaultData>();
   const [serviceIdentifiers, setServiceIdentifiers] = React.useState<ServiceIdentifiers | undefined>();
   const [parallelNodeIdentifier, setParallelNodeIdentifier] = React.useState<string>('');
@@ -105,6 +113,21 @@ export default function ExperimentVisualBuilderView({
       setUnsavedChanges();
     });
     setInstallStepDrawer({ open: false, kind: installStepDrawer.kind });
+  };
+
+  // uninstall-agent / uninstall-application are ChaosHub faults (teardown
+  // steps), not install-step templates -- so unlike handleInstallStepSelection
+  // they go through addFaultsToManifest like any other fault. The controller
+  // has already fetched the fault/engine CRs and stamped the chosen release
+  // into the engine's FOLDER / NAMESPACE env.
+  const handleUninstallStepSelection = (faultData: FaultData): void => {
+    experimentHandler?.addFaultsToManifest(experimentKey, faultData, '', '').then(experiment => {
+      const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
+      setExperimentSteps(steps);
+      setHasFaults(experimentHandler.doesExperimentHaveFaults(experiment?.manifest));
+      setUnsavedChanges();
+    });
+    setUninstallStepDrawer({ open: false, kind: uninstallStepDrawer.kind });
   };
 
   const handleSelectTemplateDrawerClose = (manifest: ExperimentManifest, yamlUploaded?: boolean): void => {
@@ -265,6 +288,28 @@ export default function ExperimentVisualBuilderView({
           >
             {getString('installAgent')}
           </Text>
+
+          <Text
+            icon="chaos-scenario-builder"
+            iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+            onClick={() => setUninstallStepDrawer({ open: true, kind: 'application' })}
+            className={css.actionItem}
+            tooltip={getString('uninstallApplicationDescription')}
+            tooltipProps={{ position: Position.RIGHT }}
+          >
+            {getString('uninstallApplication')}
+          </Text>
+
+          <Text
+            icon="chaos-scenario-builder"
+            iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+            onClick={() => setUninstallStepDrawer({ open: true, kind: 'agent' })}
+            className={css.actionItem}
+            tooltip={getString('uninstallAgentDescription')}
+            tooltipProps={{ position: Position.RIGHT }}
+          >
+            {getString('uninstallAgent')}
+          </Text>
         </Layout.Vertical>
 
         <div className={css.divider} />
@@ -308,6 +353,14 @@ export default function ExperimentVisualBuilderView({
           initialSelection={installStepDrawer.initialSelection}
           onSelect={handleInstallStepSelection}
           onClose={() => setInstallStepDrawer({ open: false, kind: installStepDrawer.kind })}
+        />
+      )}
+      {uninstallStepDrawer.open && (
+        <ExperimentCreationSelectUninstallStepController
+          isOpen={uninstallStepDrawer.open}
+          kind={uninstallStepDrawer.kind}
+          onSelect={handleUninstallStepSelection}
+          onClose={() => setUninstallStepDrawer({ open: false, kind: uninstallStepDrawer.kind })}
         />
       )}
       {tuneFaultDrawerOpen.open && (

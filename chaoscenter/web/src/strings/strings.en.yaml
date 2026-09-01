@@ -1235,6 +1235,24 @@ type: Type
 typeOfData: Type of data
 unableToGetProbes: Unable to get probe information
 unhealthy: Unhealthy
+uninstallAgent: Uninstall Agent
+uninstallAgentDescription: >-
+  Add a teardown step that removes a previously installed agent's Helm release.
+  Pick one of the agents this experiment installs so the release name and
+  namespace are filled in for you.
+uninstallApplication: Uninstall Application
+uninstallApplicationDescription: >-
+  Add a teardown step that tears down a previously installed application's
+  namespace. Pick one of the applications this experiment installs so the
+  release name and namespace are filled in for you.
+uninstallNoInstalledTargets: >-
+  This experiment has no install step yet. Add an Install Application / Install
+  Agent step first, or type the release name and namespace to remove.
+uninstallStepFaultNotInHub: >-
+  Could not find the "{{fault}}" fault in the default ChaosHub. Sync the hub and
+  try again.
+uninstallStepHubUnavailable: Could not load the default ChaosHub. Try again.
+uninstallTargetFolder: Release / folder name
 update: Update
 updatePassword: Update Password
 updatedAt: Updated at

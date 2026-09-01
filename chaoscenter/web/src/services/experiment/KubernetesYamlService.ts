@@ -277,6 +277,53 @@ export class KubernetesYamlService extends ExperimentYamlService {
     return parseInstallStepArgs(template?.container?.args);
   }
 
+  // Enumerates every AppHub/AgentHub target an install-application /
+  // install-agent step currently installs in this experiment, so the
+  // uninstall-step picker can offer them directly instead of making the user
+  // re-type the release/folder + namespace into the fault's FOLDER/NAMESPACE
+  // env. Matches by the agentcert.io/install-type annotation first (the
+  // forward-looking marker the Go backend's normalizeInstallTemplates already
+  // reads), falling back to the legacy fixed template name / install-image
+  // marker for manifests that predate the annotation. Returns an array and
+  // de-dupes on folder+namespace: today the visual builder writes at most one
+  // install step per kind, but Phase B (see innovation.md §"Multiple
+  // install/uninstall steps") lifts that and this method is already ready for
+  // it.
+  getInstalledTargets(
+    manifest: KubernetesExperimentManifest | undefined,
+    kind: 'application' | 'agent'
+  ): Array<{ folder: string; namespace: string }> {
+    const [templates] = this.getTemplatesAndSteps(manifest);
+    if (!templates) return [];
+
+    const legacyName = installStepTemplateName(kind);
+    const imageMarker = kind === 'application' ? 'agentcert-install-app' : 'agentcert-install-agent';
+
+    const seen = new Set<string>();
+    const targets: Array<{ folder: string; namespace: string }> = [];
+
+    templates.forEach(template => {
+      if (!template.container) return;
+
+      const installType = template.metadata?.annotations?.['agentcert.io/install-type'];
+      const isInstallStep =
+        installType === kind ||
+        (installType === undefined &&
+          (template.name === legacyName || (template.container.image ?? '').includes(imageMarker)));
+      if (!isInstallStep) return;
+
+      const parsed = parseInstallStepArgs(template.container.args);
+      if (!parsed) return;
+
+      const dedupeKey = `${parsed.folder} ${parsed.namespace}`;
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+      targets.push(parsed);
+    });
+
+    return targets;
+  }
+
   async updateExperimentManifestWithFaultData(
     key: ChaosObjectStoresPrimaryKeys['experiments'],
     { faultName, faultCR, engineCR, probes }: FaultData
@@ -978,12 +1025,26 @@ export class KubernetesYamlService extends ExperimentYamlService {
     // install-agent/install-application nodes otherwise render with just the
     // fixed template name ("install-agent") on the canvas, with no
     // indication of which AgentHub/AppHub entry was actually selected.
+    // uninstall-agent/uninstall-application nodes are hub faults whose
+    // template name carries a getHash suffix ("uninstall-agent-a1b"); show
+    // the target release they remove (their engine's FOLDER env) the same way.
     const displayName = (templateName: string): string => {
-      if (templateName !== 'install-agent' && templateName !== 'install-application') return templateName;
-      const template = templates?.find(t => t.name === templateName);
-      const selection = parseInstallStepArgs(template?.container?.args);
-      if (!selection) return templateName;
-      return `${templateName}: ${selection.folder}`;
+      if (templateName === 'install-agent' || templateName === 'install-application') {
+        const template = templates?.find(t => t.name === templateName);
+        const selection = parseInstallStepArgs(template?.container?.args);
+        return selection ? `${templateName}: ${selection.folder}` : templateName;
+      }
+
+      if (templateName.startsWith('uninstall-agent') || templateName.startsWith('uninstall-application')) {
+        const base = templateName.startsWith('uninstall-agent') ? 'uninstall-agent' : 'uninstall-application';
+        const raw = templates?.find(t => t.name === templateName)?.inputs?.artifacts?.[0]?.raw?.data;
+        if (!raw) return base;
+        const env = (parse(raw) as ChaosEngine).spec?.experiments?.[0]?.spec?.components?.env;
+        const folder = env?.find(e => e.name === 'FOLDER')?.value;
+        return folder ? `${base}: ${folder}` : base;
+      }
+
+      return templateName;
     };
 
     steps?.map(step => {
