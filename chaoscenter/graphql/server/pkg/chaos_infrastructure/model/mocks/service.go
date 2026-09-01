@@ -97,3 +97,11 @@ func (s *InfraService) GetDBInfra(infraID string) (dbChaosInfra.ChaosInfra, erro
 	args := s.Called(infraID)
 	return args.Get(0).(dbChaosInfra.ChaosInfra), args.Error(1)
 }
+
+func (s *InfraService) StartFinalizerWatcher(ctx context.Context) {
+	s.Called(ctx)
+}
+
+func (s *InfraService) StopFinalizerWatcher() {
+	s.Called()
+}

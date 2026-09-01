@@ -125,10 +125,10 @@ func TestTruncate(t *testing.T) {
 
 func TestSplit(t *testing.T) {
 	tests := []struct {
-		name           string
-		str            string
-		before, after  string
-		want           string
+		name          string
+		str           string
+		before, after string
+		want          string
 	}{
 		{"basic", "key=value;", "key=", ";", "value"},
 		{"no after found", "prefix:rest", "prefix:", ";", "rest"},
@@ -295,4 +295,26 @@ func TestTransformProbe(t *testing.T) {
 			t.Errorf("InitialDelay = %q, want 7s", out[0].RunProperties.InitialDelay)
 		}
 	})
+}
+
+func TestIsTeardownExperiment(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"uninstall-agent", true},                     // bare ChaosExperiment name
+		{"uninstall-application", true},               // bare ChaosExperiment name
+		{"uninstall-agent-wgy", true},                 // Chaos Studio generateName
+		{"uninstall-application-chn-3f9c2", true},     // runtime ChaosEngine name
+		{"scaled-to-zero-kubernetes-workload", false}, // a real fault
+		{"scaled-to-zero-kubernetes-workload-mol", false},
+		{"install-agent", false},
+		{"", false},
+		{"uninstall-agentx", false}, // not a "<teardown>-" prefix nor exact match
+	}
+	for _, c := range cases {
+		if got := IsTeardownExperiment(c.name); got != c.want {
+			t.Errorf("IsTeardownExperiment(%q) = %v, want %v", c.name, got, c.want)
+		}
+	}
 }

@@ -49,6 +49,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	corev1 "k8s.io/api/core/v1"
 	k8srbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -100,6 +101,11 @@ var dynamicAppHelmRBACRequirements = []rbacRequirement{
 	{APIGroup: "", Resource: "secrets", Verb: "patch"},
 	{APIGroup: "", Resource: "secrets", Verb: "delete"},
 }
+
+const (
+	perExperimentChaosRoleName     = "ace-per-experiment-chaos-runner"
+	perExperimentChaosRBACNameBase = "ace-chaos-runner"
+)
 
 // NewChaosExperimentRunHandler returns a new instance of ChaosWorkflowHandler
 func NewChaosExperimentRunHandler(
@@ -273,6 +279,13 @@ func discoverWorkflowSA(ctx context.Context, clientset *kubernetes.Clientset, in
 	return fallback
 }
 
+func infraNamespaceOrDefault(namespace *string) string {
+	if namespace != nil && strings.TrimSpace(*namespace) != "" {
+		return strings.TrimSpace(*namespace)
+	}
+	return "litmus"
+}
+
 func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccount string) error {
 	const roleName = "litmus-dynamic-app-helm"
 
@@ -343,6 +356,175 @@ func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clients
 	}).Info("ensured dynamic app Helm RBAC binding")
 
 	return nil
+}
+
+func perExperimentChaosServiceAccountName(runID string) string {
+	name := "ace-chaos-" + normalizeRBACNamePart(runID)
+	if len(name) > 63 {
+		name = name[:63]
+		name = strings.TrimRight(name, "-")
+	}
+	if name == "ace-chaos" || name == "ace-chaos-" {
+		return "ace-chaos-run"
+	}
+	return name
+}
+
+func perExperimentChaosRBACLabels(serviceAccountName string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/managed-by": "agentcert",
+		"agentcert.io/rbac-scope":      "experiment-run",
+		"agentcert.io/chaos-sa":        serviceAccountName,
+	}
+}
+
+func appendUniqueNonEmpty(values []string, more ...string) []string {
+	seen := make(map[string]struct{}, len(values)+len(more))
+	uniq := make([]string, 0, len(values)+len(more))
+	for _, value := range append(values, more...) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		uniq = append(uniq, value)
+	}
+	return uniq
+}
+
+func perExperimentChaosRules() []k8srbacv1.PolicyRule {
+	return []k8srbacv1.PolicyRule{
+		{APIGroups: []string{"", "apps", "batch", "extensions", "litmuschaos.io"}, Resources: []string{"pods", "pods/exec", "pods/eviction", "jobs", "cronjobs", "events", "chaosresults", "chaosengines"}, Verbs: []string{"create", "delete", "get", "list", "patch", "update", "deletecollection", "watch"}},
+		{APIGroups: []string{"litmuschaos.io"}, Resources: []string{"chaosexperiments"}, Verbs: []string{"create", "list", "get", "patch", "update", "delete"}},
+		{APIGroups: []string{""}, Resources: []string{"pods/log", "pods/status"}, Verbs: []string{"get", "list", "watch"}},
+		{APIGroups: []string{""}, Resources: []string{"pods/ephemeralcontainers"}, Verbs: []string{"get", "patch", "update"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"create", "get", "list", "patch"}},
+		{APIGroups: []string{""}, Resources: []string{"services"}, Verbs: []string{"create", "get", "list", "delete", "patch", "update"}},
+		{APIGroups: []string{""}, Resources: []string{"endpoints"}, Verbs: []string{"create", "get", "list", "patch", "update"}},
+		{APIGroups: []string{""}, Resources: []string{"serviceaccounts", "secrets"}, Verbs: []string{"create", "get", "list", "delete", "patch"}},
+		{APIGroups: []string{""}, Resources: []string{"resourcequotas"}, Verbs: []string{"create", "delete", "get", "list", "patch", "update"}},
+		{APIGroups: []string{"apps"}, Resources: []string{"deployments", "statefulsets", "replicasets", "daemonsets"}, Verbs: []string{"create", "get", "list", "delete", "patch", "update", "watch"}},
+		{APIGroups: []string{"apps"}, Resources: []string{"deployments/scale", "deployments/rollback", "statefulsets/scale"}, Verbs: []string{"get", "list", "patch", "update"}},
+		{APIGroups: []string{"autoscaling"}, Resources: []string{"horizontalpodautoscalers"}, Verbs: []string{"get", "list", "patch", "update"}},
+		{APIGroups: []string{"networking.k8s.io"}, Resources: []string{"networkpolicies"}, Verbs: []string{"create", "delete", "get", "list"}},
+		{APIGroups: []string{""}, Resources: []string{"persistentvolumeclaims"}, Verbs: []string{"create", "get", "list", "delete", "patch", "update"}},
+	}
+}
+
+func ensurePerExperimentChaosRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccountName string, targetNamespaces []string) error {
+	labels := perExperimentChaosRBACLabels(serviceAccountName)
+	requiredRole := &k8srbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   perExperimentChaosRoleName,
+			Labels: map[string]string{"app.kubernetes.io/managed-by": "agentcert"},
+		},
+		Rules: perExperimentChaosRules(),
+	}
+	if existingRole, err := clientset.RbacV1().ClusterRoles().Get(ctx, perExperimentChaosRoleName, metav1.GetOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed getting clusterrole %s: %w", perExperimentChaosRoleName, err)
+		}
+		if _, createErr := clientset.RbacV1().ClusterRoles().Create(ctx, requiredRole, metav1.CreateOptions{}); createErr != nil {
+			return fmt.Errorf("failed creating clusterrole %s: %w", perExperimentChaosRoleName, createErr)
+		}
+	} else {
+		requiredRole.ResourceVersion = existingRole.ResourceVersion
+		if _, updateErr := clientset.RbacV1().ClusterRoles().Update(ctx, requiredRole, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("failed updating clusterrole %s: %w", perExperimentChaosRoleName, updateErr)
+		}
+	}
+
+	serviceAccount := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: serviceAccountName, Namespace: infraNamespace, Labels: labels}}
+	if existingSA, err := clientset.CoreV1().ServiceAccounts(infraNamespace).Get(ctx, serviceAccountName, metav1.GetOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed getting serviceaccount %s/%s: %w", infraNamespace, serviceAccountName, err)
+		}
+		if _, createErr := clientset.CoreV1().ServiceAccounts(infraNamespace).Create(ctx, serviceAccount, metav1.CreateOptions{}); createErr != nil {
+			return fmt.Errorf("failed creating serviceaccount %s/%s: %w", infraNamespace, serviceAccountName, createErr)
+		}
+	} else {
+		serviceAccount.ResourceVersion = existingSA.ResourceVersion
+		if _, updateErr := clientset.CoreV1().ServiceAccounts(infraNamespace).Update(ctx, serviceAccount, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("failed updating serviceaccount %s/%s: %w", infraNamespace, serviceAccountName, updateErr)
+		}
+	}
+
+	for _, namespace := range appendUniqueNonEmpty([]string{infraNamespace}, targetNamespaces...) {
+		if _, err := clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed getting namespace %s: %w", namespace, err)
+			}
+			if _, createErr := clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}, metav1.CreateOptions{}); createErr != nil && !apierrors.IsAlreadyExists(createErr) {
+				return fmt.Errorf("failed creating target namespace %s for per-experiment RBAC: %w", namespace, createErr)
+			}
+		}
+
+		bindingName := perExperimentChaosRBACNameBase + "-" + serviceAccountName
+		if len(bindingName) > 63 {
+			bindingName = strings.TrimRight(bindingName[:63], "-")
+		}
+		requiredBinding := &k8srbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: bindingName, Namespace: namespace, Labels: labels},
+			Subjects: []k8srbacv1.Subject{{
+				Kind:      "ServiceAccount",
+				Name:      serviceAccountName,
+				Namespace: infraNamespace,
+			}},
+			RoleRef: k8srbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: perExperimentChaosRoleName},
+		}
+		if existingBinding, err := clientset.RbacV1().RoleBindings(namespace).Get(ctx, bindingName, metav1.GetOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed getting rolebinding %s/%s: %w", namespace, bindingName, err)
+			}
+			if _, createErr := clientset.RbacV1().RoleBindings(namespace).Create(ctx, requiredBinding, metav1.CreateOptions{}); createErr != nil {
+				return fmt.Errorf("failed creating rolebinding %s/%s: %w", namespace, bindingName, createErr)
+			}
+		} else {
+			requiredBinding.ResourceVersion = existingBinding.ResourceVersion
+			if _, updateErr := clientset.RbacV1().RoleBindings(namespace).Update(ctx, requiredBinding, metav1.UpdateOptions{}); updateErr != nil {
+				return fmt.Errorf("failed updating rolebinding %s/%s: %w", namespace, bindingName, updateErr)
+			}
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"serviceAccount":   serviceAccountName,
+		"serviceAccountNs": infraNamespace,
+		"targetNamespaces": appendUniqueNonEmpty(nil, targetNamespaces...),
+		"clusterRole":      perExperimentChaosRoleName,
+	}).Info("ensured per-experiment chaos RBAC")
+
+	return nil
+}
+
+func cleanupPerExperimentChaosRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccountName string) {
+	if serviceAccountName == "" {
+		return
+	}
+	labelSelector := "agentcert.io/rbac-scope=experiment-run,agentcert.io/chaos-sa=" + serviceAccountName
+	if namespaces, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{}); err == nil {
+		for _, namespace := range namespaces.Items {
+			bindings, bindErr := clientset.RbacV1().RoleBindings(namespace.Name).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+			if bindErr != nil {
+				logrus.WithField("namespace", namespace.Name).WithError(bindErr).Warn("failed listing per-experiment chaos RoleBindings for cleanup")
+				continue
+			}
+			for _, binding := range bindings.Items {
+				if err := clientset.RbacV1().RoleBindings(namespace.Name).Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+					logrus.WithFields(logrus.Fields{"namespace": namespace.Name, "roleBinding": binding.Name}).WithError(err).Warn("failed deleting per-experiment chaos RoleBinding")
+				}
+			}
+		}
+	} else {
+		logrus.WithError(err).Warn("failed listing namespaces for per-experiment chaos RBAC cleanup")
+	}
+
+	if err := clientset.CoreV1().ServiceAccounts(infraNamespace).Delete(ctx, serviceAccountName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		logrus.WithFields(logrus.Fields{"namespace": infraNamespace, "serviceAccount": serviceAccountName}).WithError(err).Warn("failed deleting per-experiment chaos ServiceAccount")
+	}
 }
 
 func normalizeInstallTemplateArgs(args []string) ([]string, bool) {
@@ -1104,10 +1286,7 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 		return errors.New("infra not found for RBAC preflight")
 	}
 
-	infraNamespace := "litmus"
-	if infra.InfraNamespace != nil && *infra.InfraNamespace != "" {
-		infraNamespace = *infra.InfraNamespace
-	}
+	infraNamespace := infraNamespaceOrDefault(infra.InfraNamespace)
 
 	// subscriberSA is the SA the subscriber pod runs as (stored in infra.ServiceAccount).
 	// workflowSA is the SA Argo actually uses to execute workflow steps — discovered from
@@ -2188,6 +2367,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	if normalizeInstallTemplates(workflowManifest.Spec.Templates) {
 		ensureInstallTimeoutParam(&workflowManifest.Spec.Arguments)
 	}
+	ops.ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
@@ -2279,6 +2459,9 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		clusterRuntime, clusterSocketPath = detectNodeContainerRuntime(cs)
 	}
 	wfParams := buildWorkflowParameterMap(workflowManifest.Spec.Arguments)
+	infraNamespace := infraNamespaceOrDefault(infra.InfraNamespace)
+	chaosServiceAccount := perExperimentChaosServiceAccountName(notifyID)
+	targetNamespaces := make([]string, 0)
 
 	// Serialize workflows that target the same app namespace: LitmusChaos fault
 	// injection is scoped by ChaosEngine appns/applabel, not by workflow, so two
@@ -2365,6 +2548,8 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 
 			meta.Spec.Appinfo.Appns = resolveWorkflowParameterValue(meta.Spec.Appinfo.Appns, wfParams)
 			meta.Spec.Appinfo.Applabel = resolveWorkflowParameterValue(meta.Spec.Appinfo.Applabel, wfParams)
+			meta.Spec.ChaosServiceAccount = chaosServiceAccount
+			targetNamespaces = appendUniqueNonEmpty(targetNamespaces, meta.Spec.Appinfo.Appns)
 
 			// Normalize appkind by detecting actual resource type from cluster
 			if clusterClientset != nil {
@@ -2400,6 +2585,15 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 				return nil, errors.New("failed to marshal chaosengine")
 			}
 			workflowManifest.Spec.Templates[i].Inputs.Artifacts[j].Raw.Data = string(res)
+		}
+	}
+
+	if len(targetNamespaces) > 0 {
+		if clusterClientset == nil {
+			return nil, errors.New("failed to prepare per-experiment chaos RBAC: kubernetes client unavailable")
+		}
+		if err := ensurePerExperimentChaosRBAC(ctx, clusterClientset, infraNamespace, chaosServiceAccount, targetNamespaces); err != nil {
+			return nil, err
 		}
 	}
 
@@ -2624,6 +2818,7 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 	if normalizeInstallTemplates(cronExperimentManifest.Spec.WorkflowSpec.Templates) {
 		ensureInstallTimeoutParam(&cronExperimentManifest.Spec.WorkflowSpec.Arguments)
 	}
+	ops.ApplyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ops.ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ops.ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
@@ -2640,6 +2835,14 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 		cronRuntime, cronSocketPath = detectNodeContainerRuntime(cs)
 	}
 	cronParams := buildWorkflowParameterMap(cronExperimentManifest.Spec.WorkflowSpec.Arguments)
+	infraNamespace := "litmus"
+	if infra, infraErr := dbChaosInfra.NewInfrastructureOperator(c.mongodbOperator).GetInfra(workflow.InfraID); infraErr == nil {
+		infraNamespace = infraNamespaceOrDefault(infra.InfraNamespace)
+	} else {
+		logrus.WithField("infraID", workflow.InfraID).WithError(infraErr).Warn("failed to lookup infra namespace for cron per-experiment RBAC; falling back to litmus")
+	}
+	chaosServiceAccount := perExperimentChaosServiceAccountName(workflow.ExperimentID)
+	targetNamespaces := make([]string, 0)
 
 	// See matching comment in RunChaosWorkFlow: serialize per app namespace so a
 	// cron-triggered run can't overlap fault injection with another run (cron or
@@ -2700,8 +2903,19 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 
 			meta.Spec.Appinfo.Appns = resolveWorkflowParameterValue(meta.Spec.Appinfo.Appns, cronParams)
 			meta.Spec.Appinfo.Applabel = resolveWorkflowParameterValue(meta.Spec.Appinfo.Applabel, cronParams)
+			meta.Spec.ChaosServiceAccount = chaosServiceAccount
+			targetNamespaces = appendUniqueNonEmpty(targetNamespaces, meta.Spec.Appinfo.Appns)
 
 			// Normalize appkind by detecting actual resource type from cluster
+
+			if len(targetNamespaces) > 0 {
+				if cronClientset == nil {
+					return errors.New("failed to prepare per-experiment chaos RBAC: kubernetes client unavailable")
+				}
+				if err := ensurePerExperimentChaosRBAC(ctx, cronClientset, infraNamespace, chaosServiceAccount, targetNamespaces); err != nil {
+					return err
+				}
+			}
 			if cronClientset != nil {
 				if normalizeChaosEngineAppKind(cronClientset, &meta) {
 					logrus.WithField("experiment", meta.Spec.Experiments[0].Name).Debug("Updated appkind for ChaosEngine in cron")
@@ -3093,6 +3307,25 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 			}
 		}
 		scoreExperimentRun(ctx, traceID, expName, expStart, metricsPtr, executionData.Phase)
+
+		cleanupKey := notifyID
+		if cleanupKey == "" {
+			cleanupKey = event.ExperimentRunID
+		}
+		if cleanupKey != "" {
+			if clientset, kubeErr := buildKubeClientset(); kubeErr == nil {
+				infraNamespace := "litmus"
+				if infra, infraErr := dbChaosInfra.NewInfrastructureOperator(c.mongodbOperator).GetInfra(experiment.InfraID); infraErr == nil {
+					infraNamespace = infraNamespaceOrDefault(infra.InfraNamespace)
+				} else {
+					logrus.WithField("infraID", experiment.InfraID).WithError(infraErr).Warn("failed to lookup infra namespace for per-experiment chaos RBAC cleanup; falling back to litmus")
+				}
+				cleanupPerExperimentChaosRBAC(ctx, clientset, infraNamespace, perExperimentChaosServiceAccountName(cleanupKey))
+			} else {
+				logrus.WithError(kubeErr).Warn("failed to create kubernetes client for per-experiment chaos RBAC cleanup")
+			}
+		}
+
 		// Auto-trigger certification (bucketing-extraction) on terminal phase.
 		// Mirrors the manual `generateCertification` mutation so that the
 		// certifier pipeline starts without requiring a UI/API caller.

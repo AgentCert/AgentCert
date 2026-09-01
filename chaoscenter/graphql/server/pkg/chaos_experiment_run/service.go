@@ -139,6 +139,13 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 	for _, rev := range chaosWorkflows.Revision {
 		if rev.RevisionID == execData.RevisionID {
 			for _, weights := range rev.Weightages {
+				// ITBench teardown steps (agent/app uninstall) can be present in an
+				// older revision's Weightages -- skip them so they never enter the
+				// resiliency-score denominator or the TotalExperiments count. See
+				// utils.IsTeardownExperiment / HANDOFF §102.
+				if utils.IsTeardownExperiment(weights.FaultName) {
+					continue
+				}
 				weightMap[weights.FaultName] = weights.Weightage
 				// Total weight calculated for all experiments
 				weightSum = weightSum + weights.Weightage
@@ -154,17 +161,25 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 				continue
 			}
 
+			// A ChaosEngine node that matches no weighted fault is not a graded fault
+			// (e.g. an ITBench teardown step) -- it must not affect the score or the
+			// pass/fail tallies.
+			if value.ChaosExp.EngineName == "" || utils.IsTeardownExperiment(value.ChaosExp.EngineName) {
+				continue
+			}
+
 			for expName := range weightMap {
 				if strings.Contains(value.ChaosExp.EngineName, expName) {
 					experimentName = expName
 				}
 			}
 			weight, ok := weightMap[experimentName]
-			// probeSuccessPercentage will be included only if chaosData is present
-			if ok {
-				x, _ := strconv.Atoi(value.ChaosExp.ProbeSuccessPercentage)
-				totalTestResult += weight * x
+			if !ok {
+				continue
 			}
+			// probeSuccessPercentage will be included only if chaosData is present
+			x, _ := strconv.Atoi(value.ChaosExp.ProbeSuccessPercentage)
+			totalTestResult += weight * x
 			if value.ChaosExp.ExperimentVerdict == "Pass" {
 				result.ExperimentsPassed += 1
 			}

@@ -18,8 +18,8 @@ import (
 
 	agentRegistry "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbChaosExperimentRun "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment_run"
@@ -421,7 +421,7 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 		return errors.New("failed to unmarshal workflow manifest")
 	}
 
-	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
+	ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
 	applyAgentInstallNamespaceOverride(workflowManifest.Spec.Templates)
@@ -588,6 +588,16 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 						}
 					} else {
 						return errors.New("no experiments specified in chaosengine - " + meta.Name)
+					}
+
+					// ITBench teardown steps (uninstall-agent / uninstall-application) are
+					// authored as ChaosExperiments so Chaos Studio can add them, but they
+					// are harness plumbing, not graded faults -- keep them out of
+					// Weightages (the resiliency-score denominator) and strip any weight
+					// label a client may have stamped on them. See HANDOFF §102.
+					if utils.IsTeardownExperiment(exprname) || utils.IsTeardownExperiment(meta.Spec.Experiments[0].Name) {
+						delete(workflowManifest.Spec.Templates[i].Metadata.Labels, "weight")
+						continue
 					}
 
 					// Check if probeRef annotation is present in chaosengine, if not then create new probes
@@ -887,7 +897,7 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 		return errors.New("failed to unmarshal workflow manifest")
 	}
 
-	applyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ApplyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyAgentInstallNamespaceOverride(cronExperimentManifest.Spec.WorkflowSpec.Templates)
@@ -971,6 +981,14 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 					} else {
 						return errors.New("no experiments specified in chaosengine - " + meta.Name)
 					}
+
+					// ITBench teardown steps are harness plumbing, not graded faults --
+					// keep them out of Weightages. See HANDOFF §102.
+					if utils.IsTeardownExperiment(exprname) || utils.IsTeardownExperiment(meta.Spec.Experiments[0].Name) {
+						delete(cronExperimentManifest.Spec.WorkflowSpec.Templates[i].Metadata.Labels, "weight")
+						continue
+					}
+
 					// Check if probeRef annotation is present in chaosengine, if not then create new probes
 					if _, ok := meta.GetObjectMeta().GetAnnotations()["probeRef"]; !ok {
 						// Check if probes are specified in chaosengine
@@ -1252,6 +1270,11 @@ func (c *chaosExperimentService) UpdateRuntimeCronWorkflowConfiguration(cronWork
 					return cronWorkflowManifest, faults, errors.New("failed to unmarshal chaosengine")
 				}
 				if strings.ToLower(meta.Kind) == "chaosengine" {
+					// ITBench teardown steps are harness plumbing, not graded faults -- see HANDOFF §102.
+					if utils.IsTeardownExperiment(meta.GenerateName) ||
+						(len(meta.Spec.Experiments) > 0 && utils.IsTeardownExperiment(meta.Spec.Experiments[0].Name)) {
+						continue
+					}
 					faults = append(faults, meta.GenerateName)
 					if meta.Annotations != nil {
 						annotation = meta.Annotations
@@ -1672,14 +1695,14 @@ echo "[uninstall-all] Done"`, agentInstallNs)
 	return nil
 }
 
-// applyInstallAgentTemplateOverrides enforces a configurable install-agent image
+// ApplyInstallAgentTemplateOverrides enforces a configurable install-agent image
 // and pull policy for all template-based workflow manifests.
 //
 // Phase 1 (metadata-driven with fallback):
 //   - Try reading agent metadata from chartserviceversion.yaml
 //   - If metadata exists -> match templates by installTemplateName / installImage
 //   - If metadata missing (CSV not synced, parse error) -> fall back to hardcoded matching
-func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
+func ApplyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
 	targetImage := strings.TrimSpace(utils.Config.InstallAgentImage)
 	if targetImage == "" {
 		targetImage = strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE"))
