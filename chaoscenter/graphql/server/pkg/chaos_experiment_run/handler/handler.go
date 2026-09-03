@@ -2299,6 +2299,29 @@ func scoreExperimentRun(ctx context.Context, traceID string, experimentName stri
 	})
 }
 
+// modelAliasManifestAnnotation is where a run-scoped agent-model pick from the
+// Chaos Studio "Agent model" selector is persisted so every backend-triggered run
+// of the same experiment (the [Multi-Run] loop, re-runs) reuses it rather than
+// falling back to the GraphQL server's environment default.
+const modelAliasManifestAnnotation = `metadata.annotations.litmuschaos\.io/modelAlias`
+
+// resolveEffectiveModelAlias implements the agent-model precedence for a run:
+//
+//	explicit per-run override (Chaos Studio selector) > alias persisted on the
+//	experiment manifest from an earlier picked run > "" (environment default,
+//	resolved later inside ops.InjectExperimentContextArgs).
+//
+// persist is true only when an explicit override is present and differs from what
+// is already stored, i.e. the caller should write it onto the manifest annotation.
+func resolveEffectiveModelAlias(override, latestManifest string) (effective string, persist bool) {
+	effective = strings.TrimSpace(override)
+	persisted := strings.TrimSpace(gjson.Get(latestManifest, modelAliasManifestAnnotation).String())
+	if effective == "" {
+		return persisted, false
+	}
+	return effective, effective != persisted
+}
+
 // RunChaosWorkFlow sends workflow run request(single run workflow only) to chaos_infra on workflow re-run request
 func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData, modelAliasOverride string) (*model.RunChaosExperimentResponse, error) {
 	var notifyID string
@@ -2387,7 +2410,51 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	ops.ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
-	ops.InjectExperimentContextArgs(workflowManifest.Spec.Templates, modelAliasOverride)
+
+	// Resolve the agent LLM model alias for this run, and make a run-scoped choice
+	// stick across the whole experiment.
+	//
+	// Precedence: explicit per-run override (the Chaos Studio "Agent model" selector,
+	// §114) > alias persisted on the experiment from an earlier picked run > "" (the
+	// GraphQL server's environment default, resolved inside InjectExperimentContextArgs).
+	//
+	// Without this, only the manual Run button carried the picked model:
+	// ChaosExperimentRunEvent's [Multi-Run] trigger and re-run cycles call
+	// RunChaosWorkFlow with an empty override, so runs 2..N of a blank-canvas
+	// N=30 certification batch silently reverted to the backend default. We persist
+	// the pick as a manifest annotation (same mechanism the multi-run loop already
+	// uses for currentRun) on the newest revision so every later backend-triggered
+	// run reuses it.
+	latestManifest := workflow.Revision[0].ExperimentManifest // newest: slice sorted desc above
+	effectiveModelAlias, persistModelAlias := resolveEffectiveModelAlias(modelAliasOverride, latestManifest)
+	if persistModelAlias {
+		if updated, serr := sjson.Set(latestManifest, modelAliasManifestAnnotation, effectiveModelAlias); serr != nil {
+			logrus.WithError(serr).Warn("[Model Selector] could not write modelAlias annotation into manifest; this run uses the selected model but multi-run may revert to the default")
+		} else {
+			workflow.Revision[0].ExperimentManifest = updated
+			// Persist with revisions back in ascending-UpdatedAt order — the
+			// [Multi-Run] loop indexes Revision[len-1] as the newest one.
+			revisionsAsc := make([]dbChaosExperiment.ExperimentRevision, len(workflow.Revision))
+			copy(revisionsAsc, workflow.Revision)
+			sort.Slice(revisionsAsc, func(i, j int) bool {
+				return revisionsAsc[i].UpdatedAt < revisionsAsc[j].UpdatedAt
+			})
+			filter := bson.D{{"experiment_id", workflow.ExperimentID}}
+			update := bson.D{{"$set", bson.D{
+				{"revision", revisionsAsc},
+				{"updated_at", time.Now().UnixMilli()},
+			}}}
+			if uerr := c.chaosExperimentOperator.UpdateChaosExperiment(ctx, filter, update); uerr != nil {
+				logrus.WithError(uerr).Warn("[Model Selector] failed to persist modelAlias annotation; this run uses the selected model but multi-run may revert to the default")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"experimentId": workflow.ExperimentID,
+					"modelAlias":   effectiveModelAlias,
+				}).Info("[Model Selector] persisted agent model alias for all runs of this experiment")
+			}
+		}
+	}
+	ops.InjectExperimentContextArgs(workflowManifest.Spec.Templates, effectiveModelAlias)
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
 	ensureAgentFolderParam(&workflowManifest.Spec)
 	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
