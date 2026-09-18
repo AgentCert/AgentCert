@@ -114,6 +114,13 @@ func (c *Operator) UpdateChaosExperiment(ctx context.Context, query bson.D, upda
 	return nil
 }
 
+// UpdateChaosExperimentWithResult is UpdateChaosExperiment but surfaces the
+// driver's UpdateResult. Compare-and-set callers need MatchedCount to learn
+// whether their conditional filter actually won the race.
+func (c *Operator) UpdateChaosExperimentWithResult(ctx context.Context, query bson.D, update bson.D, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
+	return c.operator.Update(ctx, mongodb.ChaosExperimentCollection, query, update, opts...)
+}
+
 // UpdateChaosExperiments takes query and update parameters to updates multiple experiment's details in the database
 func (c *Operator) UpdateChaosExperiments(ctx context.Context, query bson.D, update bson.D) error {
 

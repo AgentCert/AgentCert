@@ -46,6 +46,32 @@ type ChaosExperimentRequest struct {
 	// Sourced from manifest annotations `litmuschaos.io/multiRunEnabled` +
 	// `litmuschaos.io/maxRuns` stamped by the web UI.
 	PlannedRuns int `bson:"planned_runs,omitempty"`
+	// MultiRunState tracks progress of a sequential multi-run batch. It is held
+	// in first-class BSON fields rather than inside the manifest JSON string so
+	// the chain advances through atomic conditional updates, instead of a
+	// read-modify-write that concurrent completion events can interleave on.
+	//
+	// Pointer, not a value: omitempty does not omit a zero struct, so a value
+	// field would be persisted on insert with completed_run_ids encoded as BSON
+	// null — and $addToSet against a null field errors ("Cannot apply $addToSet
+	// to non-array field"), which would break the chain on its first completion.
+	// A nil pointer is omitted, leaving the field absent, and $addToSet creates
+	// the array cleanly on first use.
+	MultiRunState *MultiRunState `bson:"multi_run_state,omitempty"`
+}
+
+// MultiRunState is the durable state of one sequential multi-run batch.
+type MultiRunState struct {
+	// Launched counts runs the chain has dispatched for the current batch. It
+	// is claimed with $inc under an upper bound, so it hard-caps how many runs
+	// the chain can ever start regardless of how many completion events arrive.
+	Launched int `bson:"launched"`
+	// CompletedRunIDs de-duplicates completion events: the subscriber can
+	// re-deliver a terminal event for a run that was already counted.
+	CompletedRunIDs []string `bson:"completed_run_ids"`
+	// BatchDone latches once the batch reaches maxRuns, so a straggler
+	// completion arriving afterwards cannot start a fresh batch.
+	BatchDone bool `bson:"batch_done"`
 }
 
 // Probes details containing fault name and the probe name which it was mapped to

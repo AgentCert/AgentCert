@@ -37,7 +37,11 @@ rules:
     verbs: ["create", "delete", "get", "list"]
   - apiGroups: [""]
     resources: ["nodes"]
-    verbs: ["get", "list", "patch", "update"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  # metrics-server (shipped by the app charts) reads node metrics via this subresource.
+  - apiGroups: [""]
+    resources: ["nodes/metrics"]
+    verbs: ["get"]
   - apiGroups: [""]
     resources: ["services"]
     verbs: ["create", "delete", "get", "list", "patch", "update"]
@@ -46,10 +50,10 @@ rules:
     verbs: ["create", "get", "list", "patch", "update"]
   - apiGroups: [""]
     resources: ["configmaps"]
-    verbs: ["delete", "get", "list", "patch"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
   - apiGroups: [""]
     resources: ["secrets", "serviceaccounts"]
-    verbs: ["create", "delete", "get", "list", "patch"]
+    verbs: ["create", "delete", "get", "list", "patch", "update"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims", "resourcequotas"]
     verbs: ["create", "delete", "get", "list", "patch", "update"]
@@ -86,9 +90,20 @@ rules:
   - apiGroups: ["policy"]
     resources: ["poddisruptionbudgets"]
     verbs: ["delete", "get", "list"]
+  # bind/escalate are required because the app charts create the metrics-server
+  # ClusterRoles and bind them to system:auth-delegator and
+  # extension-apiserver-authentication-reader, which litmus-admin does not hold.
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
-    verbs: ["create", "delete", "get", "list"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "bind", "escalate"]
+  # The app charts register the aggregated metrics API (v1beta1.metrics.k8s.io);
+  # Helm must read this cluster-scoped object on every install/upgrade.
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources: ["apiservices"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["scheduling.k8s.io"]
     resources: ["priorityclasses"]
     verbs: ["create", "delete"]

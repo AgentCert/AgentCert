@@ -74,6 +74,23 @@ func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInpu
 		return nil, err
 	}
 
+	// Guard: if the run already has a completed pipeline entry, re-submitting it
+	// (e.g., the auto-trigger re-fires on page reload for old runs that are in the
+	// DB history but were part of a prior certification batch) must not call
+	// ResetStatusIfCertified — that would erase an already-finalized certificate.
+	// Return early so the caller sees a clear "already done" signal.
+	existingRun, err := s.op.GetRunWorkflow(ctx, in.ProjectID, in.AgentID, in.ExperimentID, in.ExperimentRunID)
+	if err != nil {
+		return nil, fmt.Errorf("check existing run workflow: %w", err)
+	}
+	if existingRun != nil && existingRun.Status == RunStatusBucketingCompleted {
+		return &StartOutput{
+			Status:                      "ALREADY_COMPLETED",
+			ExperimentRunWorkflowStatus: RunStatusBucketingCompleted,
+			Message:                     "run already bucketed; skipping re-dispatch to protect finalized certificate",
+		}, nil
+	}
+
 	// Parent summary: created on first sight; expectedRuns ratchets up via $max
 	// so adding runs to an already-certified experiment expands the gate target.
 	if err := s.op.UpsertExperiment(ctx, &CertificateExperiment{

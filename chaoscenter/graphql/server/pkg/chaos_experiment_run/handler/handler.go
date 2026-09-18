@@ -3704,143 +3704,234 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 
 	session.EndSession(ctx)
 
-	// Multi-run triggering: if experiment completed successfully and is a multi-run experiment, trigger next run
+	// Multi-run: advance the sequential chain when a run reaches a terminal phase.
 	if isCompleted && len(experiment.Revision) > 0 {
 		manifest := experiment.Revision[len(experiment.Revision)-1].ExperimentManifest
 
-		// Debug: Log raw annotation values
-		logrus.WithFields(logFields).Infof("[Multi-Run Debug] Checking manifest for multi-run annotations...")
-
 		multiRunEnabled := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunEnabled`).String()
 		maxRunsStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/maxRuns`).String()
-		currentRunStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/currentRun`).String()
-
-		logrus.WithFields(logFields).Infof("[Multi-Run Debug] multiRunEnabled='%s', maxRuns='%s', currentRun='%s'",
-			multiRunEnabled, maxRunsStr, currentRunStr)
 
 		if multiRunEnabled == "true" {
 			maxRuns := 1
 			if parsed, err := strconv.Atoi(maxRunsStr); err == nil && parsed > 1 {
 				maxRuns = parsed
 			}
-
-			currentRun := 0
-			if parsed, err := strconv.Atoi(currentRunStr); err == nil {
-				currentRun = parsed
-			}
-			// This completed run means currentRun should be incremented
-			currentRun++
-
-			logrus.WithFields(logFields).Infof("[Multi-Run] Experiment completed. multiRunEnabled=%s, currentRun=%d, maxRuns=%d",
-				multiRunEnabled, currentRun, maxRuns)
-
-			if currentRun < maxRuns {
-				// More runs needed - update manifest with new currentRun and trigger next
-				logrus.WithFields(logFields).Infof("[Multi-Run] Triggering run %d/%d...", currentRun+1, maxRuns)
-
-				// Update the experiment manifest with incremented currentRun
-				updatedManifest, err := sjson.Set(manifest, "metadata.annotations.litmuschaos\\.io/currentRun", strconv.Itoa(currentRun))
-				if err != nil {
-					logrus.WithFields(logFields).Errorf("[Multi-Run] Failed to update manifest currentRun: %v", err)
-				} else {
-					// Update revision in database
-					experiment.Revision[len(experiment.Revision)-1].ExperimentManifest = updatedManifest
-
-					filter := bson.D{{"experiment_id", experiment.ExperimentID}}
-					update := bson.D{
-						{"$set", bson.D{
-							{"revision", experiment.Revision},
-							{"updated_at", time.Now().UnixMilli()},
-						}},
-					}
-					if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx, filter, update); err != nil {
-						logrus.WithFields(logFields).Errorf("[Multi-Run] Failed to update experiment revision: %v", err)
-					}
-				}
-
-				// Trigger next run in a goroutine after a delay
-				// Capture values for goroutine
-				expID := experiment.ExperimentID
-				projID := experiment.ProjectID
-				nextRun := currentRun + 1
-				totalRuns := maxRuns
-				handler := c
-				// Extract auth token from context and store it for the goroutine
-				// We cannot use the original context because it will be canceled when this function returns
-				var authToken string
-				if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok {
-					authToken = tkn
-				}
-
-				// Read configurable delay from annotation (default: 120 seconds = 2 minutes)
-				delaySeconds := 120
-				if delayStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunDelay`).String(); delayStr != "" {
-					if parsed, err := strconv.Atoi(delayStr); err == nil && parsed > 0 {
-						delaySeconds = parsed
-					}
-				}
-				delayDuration := time.Duration(delaySeconds) * time.Second
-
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							logrus.Errorf("[Multi-Run] PANIC in trigger goroutine: %v", r)
-						}
-					}()
-
-					logrus.Infof("[Multi-Run] Goroutine started, waiting %v before triggering run %d/%d for experiment %s", delayDuration, nextRun, totalRuns, expID)
-
-					// Wait configured delay between runs
-					time.Sleep(delayDuration)
-
-					logrus.Infof("[Multi-Run] %v delay complete, fetching experiment %s", delayDuration, expID)
-
-					// Re-fetch experiment with updated manifest
-					updatedExperiment, err := handler.chaosExperimentOperator.GetExperiment(context.Background(), bson.D{{"experiment_id", expID}})
-					if err != nil {
-						logrus.Errorf("[Multi-Run] Failed to fetch updated experiment %s: %v", expID, err)
-						return
-					}
-
-					logrus.Infof("[Multi-Run] Experiment fetched, calling RunChaosWorkFlow for %s", expID)
-
-					// Create a fresh context with the auth token for the new run
-					// Using context.Background() ensures the context won't be canceled
-					newCtx := context.Background()
-					if authToken != "" {
-						newCtx = context.WithValue(newCtx, authorization.AuthKey, authToken)
-					}
-
-					// Trigger next run using fresh context with auth token
-					// IMPORTANT: Must pass store.Store (not nil) to actually send the workflow to subscriber
-					_, err = handler.RunChaosWorkFlow(newCtx, projID, updatedExperiment, store.Store, "")
-					if err != nil {
-						logrus.Errorf("[Multi-Run] Failed to trigger run %d for %s: %v", nextRun, expID, err)
-					} else {
-						logrus.Infof("[Multi-Run] Successfully triggered run %d/%d for %s", nextRun, totalRuns, expID)
-					}
-				}()
-			} else {
-				logrus.WithFields(logFields).Infof("[Multi-Run] All %d runs completed!", maxRuns)
-
-				// Reset currentRun to 0 for next batch
-				updatedManifest, err := sjson.Set(manifest, "metadata.annotations.litmuschaos\\.io/currentRun", "0")
-				if err == nil {
-					experiment.Revision[len(experiment.Revision)-1].ExperimentManifest = updatedManifest
-					filter := bson.D{{"experiment_id", experiment.ExperimentID}}
-					update := bson.D{
-						{"$set", bson.D{
-							{"revision", experiment.Revision},
-							{"updated_at", time.Now().UnixMilli()},
-						}},
-					}
-					_ = c.chaosExperimentOperator.UpdateChaosExperiment(ctx, filter, update)
-				}
-			}
+			c.advanceMultiRunChain(ctx, experiment, event.ExperimentRunID, maxRuns, manifest, logFields)
 		}
 	}
 
 	return fmt.Sprintf("Experiment run received for for ExperimentID: %s, ExperimentRunID: %s", event.ExperimentID, event.ExperimentRunID), nil
+}
+
+// advanceMultiRunChain advances a sequential multi-run batch by one step when a
+// run reaches a terminal phase, dispatching the next run if one is due.
+//
+// Progress lives in first-class BSON fields and every transition is a
+// conditional update, because completion events for a single experiment can
+// arrive concurrently: the subscriber re-delivers terminal events, and a batch
+// that has already forked has more than one run outstanding. Four guards:
+//
+//  1. De-duplication — a run ID is counted at most once, so a re-delivered
+//     event cannot advance the chain twice.
+//  2. In-flight gate — the next run is dispatched only when no run of this
+//     experiment is still Running or Queued, which is what keeps a batch
+//     sequential and lets an already-forked chain collapse back to one.
+//  3. Dispatch ceiling — the chain claims a slot with $inc under a hard cap of
+//     maxRuns-1. This, not the in-flight gate, is what bounds the batch: the
+//     gate cannot see a run during the delay window before it is created, so
+//     two completions can still both reach dispatch, and only the ceiling
+//     stops that from compounding.
+//  4. Terminal latch — on reaching maxRuns the batch latches BatchDone and the
+//     counter is never rewound. The previous implementation reset the counter
+//     to 0 here, which let any late completion event restart the whole batch;
+//     combined with a forked chain that produced unbounded runs.
+//
+// A claimed slot is released again if the dispatch does not happen, so a
+// cancelled or failed dispatch does not silently shorten the batch.
+func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
+	ctx context.Context,
+	experiment dbChaosExperiment.ChaosExperimentRequest,
+	runID string,
+	maxRuns int,
+	manifest string,
+	logFields logrus.Fields,
+) {
+	expID := experiment.ExperimentID
+	projID := experiment.ProjectID
+
+	// Guard 1: count this completion exactly once. MatchedCount==0 means the
+	// run was already counted, or the batch has already finished.
+	res, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(ctx,
+		bson.D{
+			{"experiment_id", expID},
+			{"multi_run_state.completed_run_ids", bson.D{{"$ne", runID}}},
+			{"multi_run_state.batch_done", bson.D{{"$ne", true}}},
+		},
+		bson.D{
+			{"$addToSet", bson.D{{"multi_run_state.completed_run_ids", runID}}},
+			{"$set", bson.D{{"updated_at", time.Now().UnixMilli()}}},
+		},
+	)
+	if err != nil {
+		logrus.WithFields(logFields).Errorf("[Multi-Run] failed to record completion of %s: %v", runID, err)
+		return
+	}
+	if res.MatchedCount == 0 {
+		logrus.WithFields(logFields).Infof("[Multi-Run] run %s already counted or batch finished; chain not advanced", runID)
+		return
+	}
+
+	updated, err := c.chaosExperimentOperator.GetExperiment(ctx, bson.D{{"experiment_id", expID}})
+	if err != nil {
+		logrus.WithFields(logFields).Errorf("[Multi-Run] failed to re-read experiment %s: %v", expID, err)
+		return
+	}
+	completed := 0
+	if updated.MultiRunState != nil {
+		completed = len(updated.MultiRunState.CompletedRunIDs)
+	}
+
+	// Guard 3: terminal latch.
+	if completed >= maxRuns {
+		logrus.WithFields(logFields).Infof("[Multi-Run] batch complete for %s: %d/%d runs", expID, completed, maxRuns)
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx,
+			bson.D{{"experiment_id", expID}},
+			bson.D{{"$set", bson.D{
+				{"multi_run_state.batch_done", true},
+				{"updated_at", time.Now().UnixMilli()},
+			}}},
+		); err != nil {
+			logrus.WithFields(logFields).Errorf("[Multi-Run] failed to latch batch completion for %s: %v", expID, err)
+		}
+		return
+	}
+
+	// Guard 2: in-flight gate. The just-completed run is already persisted in a
+	// terminal phase by this point, so anything still Running or Queued is a
+	// different run that will advance the chain when it finishes.
+	inFlight, err := c.chaosExperimentRunOperator.CountExperimentRuns(ctx, bson.D{
+		{"experiment_id", expID},
+		{"phase", bson.D{{"$in", bson.A{"Running", "Queued"}}}},
+		{"is_removed", false},
+	})
+	if err != nil {
+		logrus.WithFields(logFields).Errorf("[Multi-Run] in-flight check failed for %s: %v", expID, err)
+		return
+	}
+	if inFlight > 0 {
+		// A run wedged in Queued (its workflow never scheduled) never emits a
+		// completion event, so it holds the batch here indefinitely. That is
+		// deliberate — piling on more runs behind a wedged one is what produced
+		// the original runaway — but it is silent, so say how to clear it.
+		logrus.WithFields(logFields).Infof(
+			"[Multi-Run] %d run(s) still Running/Queued for %s; chain retires (completed=%d/%d). "+
+				"If a run is wedged and never completes, the batch stays here until it is set is_removed=true or the next run is started manually.",
+			inFlight, expID, completed, maxRuns)
+		return
+	}
+
+	// Claim a dispatch slot. The chain only ever starts runs 2..maxRuns — run 1
+	// is started by whoever kicked the batch off — so it owns at most
+	// maxRuns-1 dispatches. Claiming with $inc under that ceiling is what
+	// bounds the batch: however many completion events arrive, and however many
+	// chains are running, the chain cannot start more than the ceiling allows.
+	//
+	// The $exists arm is required, not defensive: $lt is type-bracketed and
+	// does NOT match a missing field, so without it every experiment predating
+	// this field would fail to claim and the batch would stall at one run.
+	maxDispatches := maxRuns - 1
+	claim, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(ctx,
+		bson.D{
+			{"experiment_id", expID},
+			{"multi_run_state.batch_done", bson.D{{"$ne", true}}},
+			{"$or", bson.A{
+				bson.D{{"multi_run_state.launched", bson.D{{"$exists", false}}}},
+				bson.D{{"multi_run_state.launched", bson.D{{"$lt", maxDispatches}}}},
+			}},
+		},
+		bson.D{{"$inc", bson.D{{"multi_run_state.launched", 1}}}},
+	)
+	if err != nil {
+		logrus.WithFields(logFields).Errorf("[Multi-Run] failed to claim dispatch slot for %s: %v", expID, err)
+		return
+	}
+	if claim.MatchedCount == 0 {
+		logrus.WithFields(logFields).Infof("[Multi-Run] dispatch ceiling (%d) reached for %s; chain retires", maxDispatches, expID)
+		return
+	}
+
+	nextRun := completed + 1
+	// Hand the claimed slot back if the dispatch does not actually happen,
+	// so a cancelled or failed dispatch does not silently shorten the batch.
+	releaseSlot := func(reason string) {
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(context.Background(),
+			bson.D{{"experiment_id", expID}},
+			bson.D{{"$inc", bson.D{{"multi_run_state.launched", -1}}}},
+		); err != nil {
+			logrus.Errorf("[Multi-Run] failed to release dispatch slot for %s after %s: %v", expID, reason, err)
+		}
+	}
+
+	var authToken string
+	if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok {
+		authToken = tkn
+	}
+
+	delaySeconds := 120
+	if delayStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunDelay`).String(); delayStr != "" {
+		if parsed, err := strconv.Atoi(delayStr); err == nil && parsed > 0 {
+			delaySeconds = parsed
+		}
+	}
+	delayDuration := time.Duration(delaySeconds) * time.Second
+	handler := c
+
+	logrus.WithFields(logFields).Infof("[Multi-Run] dispatching run %d/%d for %s in %v", nextRun, maxRuns, expID, delayDuration)
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logrus.Errorf("[Multi-Run] PANIC in dispatch goroutine: %v", r)
+			}
+		}()
+
+		time.Sleep(delayDuration)
+
+		// The batch may have finished, or multi-run may have been switched off,
+		// while this goroutine was sleeping — re-check before dispatching so a
+		// disabled experiment cannot be restarted by an already-queued timer.
+		current, err := handler.chaosExperimentOperator.GetExperiment(context.Background(), bson.D{{"experiment_id", expID}})
+		if err != nil {
+			logrus.Errorf("[Multi-Run] failed to fetch experiment %s before dispatch: %v", expID, err)
+			releaseSlot("fetch error")
+			return
+		}
+		if current.MultiRunState != nil && current.MultiRunState.BatchDone {
+			logrus.Infof("[Multi-Run] batch for %s finished while waiting; dispatch cancelled", expID)
+			releaseSlot("batch already done")
+			return
+		}
+		if len(current.Revision) > 0 {
+			latest := current.Revision[len(current.Revision)-1].ExperimentManifest
+			if gjson.Get(latest, `metadata.annotations.litmuschaos\.io/multiRunEnabled`).String() != "true" {
+				logrus.Infof("[Multi-Run] multi-run disabled for %s while waiting; dispatch cancelled", expID)
+				releaseSlot("multi-run disabled")
+				return
+			}
+		}
+
+		newCtx := context.Background()
+		if authToken != "" {
+			newCtx = context.WithValue(newCtx, authorization.AuthKey, authToken)
+		}
+
+		if _, err := handler.RunChaosWorkFlow(newCtx, projID, current, store.Store, ""); err != nil {
+			logrus.Errorf("[Multi-Run] failed to dispatch run %d/%d for %s: %v", nextRun, maxRuns, expID, err)
+			releaseSlot("dispatch error")
+			return
+		}
+		logrus.Infof("[Multi-Run] dispatched run %d/%d for %s", nextRun, maxRuns, expID)
+	}()
 }
 
 // loadFaultEnrichmentFromManifest parses the latest experiment manifest revision
