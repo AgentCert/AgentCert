@@ -908,9 +908,11 @@ export interface StringsMap {
   'seeAllEnvironments': unknown
   'seeAllFaults': unknown
   'selectAProbe': unknown
+  'selectAgentFirst': unknown
   'selectAppKind': unknown
   'selectAppLabel': unknown
   'selectAppNamespace': unknown
+  'selectApplicationFirst': unknown
   'selectChaosExperiment': unknown
   'selectChaosInfrastructure': unknown
   'selectChaosInfrastructureFormLabel': unknown

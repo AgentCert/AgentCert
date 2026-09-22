@@ -8,3 +8,4 @@ export * from './checkResourceID';
 export * from './agents';
 export * from './agenthub';
 export * from './apphub';
+export * from './faultCatalog';

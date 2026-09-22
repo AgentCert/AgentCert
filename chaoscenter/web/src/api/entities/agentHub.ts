@@ -4,6 +4,11 @@ export interface AgentHubEntry {
   description: string;
   version: string;
   capabilities: string[];
+  // Applications this agent may be paired with. `null`/undefined means the
+  // agent declared no restriction and works with every application, including
+  // ones onboarded after it; `[]` means it is deliberately not
+  // application-targeted and is never offered for one.
+  compatibleApplications?: string[] | null;
   isDeployed: boolean;
   deploymentStatus: string;
   agentID?: string;

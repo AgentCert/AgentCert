@@ -49,13 +49,19 @@ export function toTitleCase({
 export function phaseToUI(phase: string): string {
   if (phase === 'NA') {
     return 'N/A';
+  } else if (phase === ExperimentRunStatus.COMPLETED_NOT_GRADED) {
+    // Not a failure: the faults ran, but none of them could be graded.
+    return 'NOT GRADED';
   } else if (
+    // A run/fault that finished with failing probes is not a pass. Labelling it
+    // "COMPLETED" (with only an orange icon to tell it apart) read as a success
+    // even though its resiliency score was 0.
     phase === ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE ||
     phase === ExperimentRunStatus.COMPLETED_WITH_ERROR ||
     phase === ExperimentRunFaultStatus.COMPLETED_WITH_PROBE_FAILURE ||
     phase === ExperimentRunFaultStatus.COMPLETED_WITH_ERROR
   )
-    return ExperimentRunStatus.COMPLETED.toUpperCase();
+    return 'FAILED';
   else return phase?.replace(/_/g, ' ').toUpperCase();
 }
 

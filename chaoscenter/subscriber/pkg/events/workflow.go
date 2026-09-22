@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"subscriber/pkg/types"
@@ -168,7 +169,7 @@ func (ev *subscriberEvents) WorkflowEventHandler(oldObj, workflowObj *v1alpha1.W
 		nodes[nodeStatus.ID] = details
 	}
 
-	status := resolveWorkflowStatus(workflowObj.Status.Phase, len(nodes))
+	status := resolveWorkflowStatus(workflowObj.Status.Phase, nodes)
 
 	finishedTime := StrConvTime(workflowObj.Status.FinishedAt.Unix())
 	if workflowObj.Spec.Shutdown.Enabled() {
@@ -291,20 +292,29 @@ func updateWorkflowStatus(status v1alpha1.WorkflowPhase) string {
 }
 
 // resolveWorkflowStatus wraps updateWorkflowStatus with a correction for the
-// one case it gets wrong: updateWorkflowStatus collapses both
-// WorkflowSucceeded and WorkflowFailed to "Completed" by design -- the real
-// pass/fail signal is meant to come from getExperimentStatus, which inspects
-// each ChaosEngine node's result. But a Workflow can fail spec validation
-// (e.g. an unresolved {{workflow.parameters.*}} reference) before Argo ever
-// creates a single node/pod, so that node-based logic has nothing to inspect
-// and never overrides the "Completed" default -- a workflow that never ran a
-// single step was silently reported as having completed successfully.
-func resolveWorkflowStatus(phase v1alpha1.WorkflowPhase, nodeCount int) string {
+// case it gets wrong: updateWorkflowStatus collapses both WorkflowSucceeded and
+// WorkflowFailed to "Completed" by design -- for a chaos run the real pass/fail
+// signal is meant to come from getExperimentStatus, which inspects each
+// ChaosEngine node's result, and a workflow that merely carried a failing fault
+// did still complete.
+//
+// That only holds once a fault has actually run. A workflow that dies in a setup
+// step (install-application, install-agent) or fails spec validation -- e.g. an
+// unresolved {{workflow.parameters.*}} reference, where Argo never creates a
+// single node -- produces no ChaosEngine node at all, so the node-based logic
+// has nothing to inspect and never overrides the "Completed" default. A run that
+// never injected any chaos was therefore reported as having completed cleanly.
+func resolveWorkflowStatus(phase v1alpha1.WorkflowPhase, nodes map[string]types.Node) string {
 	status := updateWorkflowStatus(phase)
-	if phase == v1alpha1.WorkflowFailed && nodeCount == 0 {
-		status = string(types.Error)
+	if phase != v1alpha1.WorkflowFailed {
+		return status
 	}
-	return status
+	for _, node := range nodes {
+		if node.Type == "ChaosEngine" {
+			return status
+		}
+	}
+	return string(types.Error)
 }
 
 // getExperimentStatus is used to fetch the final experiment status
@@ -332,6 +342,19 @@ func getExperimentStatus(experiment types.WorkflowEvent) (string, error) {
 		if node.Type == "ChaosEngine" && node.ChaosExp == nil {
 			errorCount++
 			continue
+		}
+		// A fault's verdict outranks its phase. A ChaosResult can report phase
+		// "Completed" while the verdict is Fail, so deriving the run status from
+		// the phase alone reported a run whose faults all failed as a clean pass.
+		if node.ChaosExp != nil {
+			switch strings.ToLower(strings.TrimSpace(node.ChaosExp.ExperimentVerdict)) {
+			case "fail", "stopped":
+				completedWithProbeFailureCount++
+				continue
+			case "error", "awaited":
+				errorCount++
+				continue
+			}
 		}
 		switch node.Phase {
 		case string(types.FaultCompletedWithProbeFailure):

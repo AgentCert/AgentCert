@@ -92,19 +92,20 @@ type ComplexityRoot struct {
 	}
 
 	AgentHubEntry struct {
-		AgentID             func(childComplexity int) int
-		Capabilities        func(childComplexity int) int
-		ContextInjection    func(childComplexity int) int
-		DeploymentStatus    func(childComplexity int) int
-		Description         func(childComplexity int) int
-		DisplayName         func(childComplexity int) int
-		HelmReleaseName     func(childComplexity int) int
-		InstallImage        func(childComplexity int) int
-		InstallTemplateName func(childComplexity int) int
-		IsDeployed          func(childComplexity int) int
-		Name                func(childComplexity int) int
-		Namespace           func(childComplexity int) int
-		Version             func(childComplexity int) int
+		AgentID                func(childComplexity int) int
+		Capabilities           func(childComplexity int) int
+		CompatibleApplications func(childComplexity int) int
+		ContextInjection       func(childComplexity int) int
+		DeploymentStatus       func(childComplexity int) int
+		Description            func(childComplexity int) int
+		DisplayName            func(childComplexity int) int
+		HelmReleaseName        func(childComplexity int) int
+		InstallImage           func(childComplexity int) int
+		InstallTemplateName    func(childComplexity int) int
+		IsDeployed             func(childComplexity int) int
+		Name                   func(childComplexity int) int
+		Namespace              func(childComplexity int) int
+		Version                func(childComplexity int) int
 	}
 
 	AgentHubStatus struct {
@@ -437,6 +438,20 @@ type ComplexityRoot struct {
 		CSV  func(childComplexity int) int
 		Desc func(childComplexity int) int
 		Name func(childComplexity int) int
+	}
+
+	FaultCatalog struct {
+		Applications func(childComplexity int) int
+		Faults       func(childComplexity int) int
+	}
+
+	FaultCompatibility struct {
+		Classification      func(childComplexity int) int
+		CompatibleApps      func(childComplexity int) int
+		FaultName           func(childComplexity int) int
+		KnownFailingTargets func(childComplexity int) int
+		RequiredServices    func(childComplexity int) int
+		WorkloadKinds       func(childComplexity int) int
 	}
 
 	FaultDetails struct {
@@ -938,6 +953,7 @@ type ComplexityRoot struct {
 		GetExperimentRun             func(childComplexity int, projectID string, experimentRunID *string, notifyID *string) int
 		GetExperimentRunStats        func(childComplexity int, projectID string) int
 		GetExperimentStats           func(childComplexity int, projectID string) int
+		GetFaultCatalog              func(childComplexity int, projectID string) int
 		GetFaultStudio               func(childComplexity int, projectID string, studioID string) int
 		GetFaultStudioStats          func(childComplexity int, projectID string) int
 		GetGitOpsDetails             func(childComplexity int, projectID string) int
@@ -1063,6 +1079,14 @@ type ComplexityRoot struct {
 		SyncedAt func(childComplexity int) int
 	}
 
+	TargetApplication struct {
+		Folders   func(childComplexity int) int
+		Key       func(childComplexity int) int
+		LabelKey  func(childComplexity int) int
+		Namespace func(childComplexity int) int
+		Services  func(childComplexity int) int
+	}
+
 	ToggleFaultResponse struct {
 		FaultStudio func(childComplexity int) int
 		Message     func(childComplexity int) int
@@ -1166,6 +1190,7 @@ type QueryResolver interface {
 	GetChaosHubStats(ctx context.Context, projectID string) (*model.GetChaosHubStatsResponse, error)
 	GetEnvironment(ctx context.Context, projectID string, environmentID string) (*model.Environment, error)
 	ListEnvironments(ctx context.Context, projectID string, request *model.ListEnvironmentRequest) (*model.ListEnvironmentResponse, error)
+	GetFaultCatalog(ctx context.Context, projectID string) (*model.FaultCatalog, error)
 	ListFaultStudios(ctx context.Context, projectID string, request *model.ListFaultStudioRequest) (*model.ListFaultStudioResponse, error)
 	GetFaultStudio(ctx context.Context, projectID string, studioID string) (*model.FaultStudio, error)
 	ListAvailableFaultsForStudio(ctx context.Context, projectID string, hubID string) ([]*model.Chart, error)
@@ -1435,6 +1460,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AgentHubEntry.Capabilities(childComplexity), true
+
+	case "AgentHubEntry.compatibleApplications":
+		if e.complexity.AgentHubEntry.CompatibleApplications == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.CompatibleApplications(childComplexity), true
 
 	case "AgentHubEntry.contextInjection":
 		if e.complexity.AgentHubEntry.ContextInjection == nil {
@@ -3143,6 +3175,62 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Experiments.Name(childComplexity), true
+
+	case "FaultCatalog.applications":
+		if e.complexity.FaultCatalog.Applications == nil {
+			break
+		}
+
+		return e.complexity.FaultCatalog.Applications(childComplexity), true
+
+	case "FaultCatalog.faults":
+		if e.complexity.FaultCatalog.Faults == nil {
+			break
+		}
+
+		return e.complexity.FaultCatalog.Faults(childComplexity), true
+
+	case "FaultCompatibility.classification":
+		if e.complexity.FaultCompatibility.Classification == nil {
+			break
+		}
+
+		return e.complexity.FaultCompatibility.Classification(childComplexity), true
+
+	case "FaultCompatibility.compatibleApps":
+		if e.complexity.FaultCompatibility.CompatibleApps == nil {
+			break
+		}
+
+		return e.complexity.FaultCompatibility.CompatibleApps(childComplexity), true
+
+	case "FaultCompatibility.faultName":
+		if e.complexity.FaultCompatibility.FaultName == nil {
+			break
+		}
+
+		return e.complexity.FaultCompatibility.FaultName(childComplexity), true
+
+	case "FaultCompatibility.knownFailingTargets":
+		if e.complexity.FaultCompatibility.KnownFailingTargets == nil {
+			break
+		}
+
+		return e.complexity.FaultCompatibility.KnownFailingTargets(childComplexity), true
+
+	case "FaultCompatibility.requiredServices":
+		if e.complexity.FaultCompatibility.RequiredServices == nil {
+			break
+		}
+
+		return e.complexity.FaultCompatibility.RequiredServices(childComplexity), true
+
+	case "FaultCompatibility.workloadKinds":
+		if e.complexity.FaultCompatibility.WorkloadKinds == nil {
+			break
+		}
+
+		return e.complexity.FaultCompatibility.WorkloadKinds(childComplexity), true
 
 	case "FaultDetails.csv":
 		if e.complexity.FaultDetails.CSV == nil {
@@ -5837,6 +5925,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.GetExperimentStats(childComplexity, args["projectID"].(string)), true
 
+	case "Query.getFaultCatalog":
+		if e.complexity.Query.GetFaultCatalog == nil {
+			break
+		}
+
+		args, err := ec.field_Query_getFaultCatalog_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GetFaultCatalog(childComplexity, args["projectID"].(string)), true
+
 	case "Query.getFaultStudio":
 		if e.complexity.Query.GetFaultStudio == nil {
 			break
@@ -6599,6 +6699,41 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.SyncResponse.SyncedAt(childComplexity), true
+
+	case "TargetApplication.folders":
+		if e.complexity.TargetApplication.Folders == nil {
+			break
+		}
+
+		return e.complexity.TargetApplication.Folders(childComplexity), true
+
+	case "TargetApplication.key":
+		if e.complexity.TargetApplication.Key == nil {
+			break
+		}
+
+		return e.complexity.TargetApplication.Key(childComplexity), true
+
+	case "TargetApplication.labelKey":
+		if e.complexity.TargetApplication.LabelKey == nil {
+			break
+		}
+
+		return e.complexity.TargetApplication.LabelKey(childComplexity), true
+
+	case "TargetApplication.namespace":
+		if e.complexity.TargetApplication.Namespace == nil {
+			break
+		}
+
+		return e.complexity.TargetApplication.Namespace(childComplexity), true
+
+	case "TargetApplication.services":
+		if e.complexity.TargetApplication.Services == nil {
+			break
+		}
+
+		return e.complexity.TargetApplication.Services(childComplexity), true
 
 	case "ToggleFaultResponse.faultStudio":
 		if e.complexity.ToggleFaultResponse.FaultStudio == nil {
@@ -10082,6 +10217,73 @@ extend type Mutation{
     updateEnvironment( projectID:ID!,request:UpdateEnvironmentRequest): String! @authorized
     deleteEnvironment(projectID:ID!,environmentID: ID!): String! @authorized
 }`, BuiltIn: false},
+	{Name: "../../../definitions/shared/fault_catalog.graphqls", Input: `# Fault Capability Catalog GraphQL Schema
+#
+# Serves chaos-charts/faults/fault-capabilities.yaml to the Chaos Studio builder
+# so the fault/agent pickers can be narrowed to the selected target application,
+# instead of the UI carrying its own hardcoded copy of the compatibility matrix
+# (which could — and did — drift from the catalog the server validates against).
+#
+# The same catalog backs the server-side validator on the experiment Save/Run
+# path, so the builder and the validator can never disagree.
+
+"""
+A target application the AppsHub can install, and how a ChaosEngine addresses its
+workloads. Mirrors one entry of spec.applications in the fault capability catalog.
+"""
+type TargetApplication {
+  """Catalog key, e.g. "sock-shop"."""
+  key: String!
+  """Every ` + "`" + `-folder=` + "`" + ` value an install-application step may carry for this app."""
+  folders: [String!]!
+  """Namespace the chart installs into by default."""
+  namespace: String!
+  """Label key whose value is the microservice name, e.g. "name" or "app"."""
+  labelKey: String!
+  """
+  Microservices the application is made of, from its chart entry. Used to offer
+  target labels before the application has been deployed and its real labels can
+  be read from the cluster.
+  """
+  services: [String!]!
+}
+
+"""
+Resolved compatibility for a single fault.
+
+` + "`" + `compatibleApps` + "`" + ` is DERIVED, not restated in the catalog per fault: a ` + "`" + `generic` + "`" + `
+fault is compatible with every application in the catalog, an
+` + "`" + `application-specific` + "`" + ` fault only with the one it pins via requiredApp.
+"""
+type FaultCompatibility {
+  """Fault name, matching the fault's chart directory."""
+  faultName: String!
+  """` + "`" + `generic` + "`" + ` or ` + "`" + `application-specific` + "`" + `."""
+  classification: String!
+  """Keys of the TargetApplications this fault may be pointed at."""
+  compatibleApps: [String!]!
+  """Kubernetes kinds the fault acts on; empty means unrestricted."""
+  workloadKinds: [String!]!
+  """Microservices the fault hardcodes; empty means any service of the app."""
+  requiredServices: [String!]!
+  """` + "`" + `<app>/<service>` + "`" + ` pairs known to fail this fault, for a build-time warning."""
+  knownFailingTargets: [String!]!
+}
+
+"""
+The whole catalog in one payload — the builder needs the application registry and
+the fault matrix together to gate a single step, so they are fetched together.
+"""
+type FaultCatalog {
+  applications: [TargetApplication!]!
+  faults: [FaultCompatibility!]!
+}
+
+extend type Query {
+  """Target application registry and per-fault compatibility matrix."""
+  getFaultCatalog(projectID: ID!): FaultCatalog! @authorized
+}
+`, BuiltIn: false},
 	{Name: "../../../definitions/shared/fault_studio.graphqls", Input: `# Fault Studio GraphQL Schema
 # Fault Studio enables configuration of fault categories and types for AI agent testing
 
@@ -10685,6 +10887,15 @@ type AgentHubEntry {
   version: String!
   """List of capabilities this agent supports"""
   capabilities: [String!]!
+  """
+  Keys of the TargetApplications this agent can be paired with.
+
+  ` + "`" + `null` + "`" + ` means the agent declares no restriction and is offered for every
+  application — a custom agent hub that predates this field keeps working.
+  An empty list means the agent is deliberately not application-targeted
+  (e.g. a cluster-wide compliance agent) and is never offered for one.
+  """
+  compatibleApplications: [String!]
   """Template name used to identify the install step in workflow manifests"""
   installTemplateName: String
   """Default container image for the install step"""
@@ -13672,6 +13883,21 @@ func (ec *executionContext) field_Query_getExperiment_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_getFaultCatalog_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 string
+	if tmp, ok := rawArgs["projectID"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("projectID"))
+		arg0, err = ec.unmarshalNID2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["projectID"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_getFaultStudioStats_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -15837,6 +16063,8 @@ func (ec *executionContext) fieldContext_AgentHubCategory_agents(_ context.Conte
 				return ec.fieldContext_AgentHubEntry_version(ctx, field)
 			case "capabilities":
 				return ec.fieldContext_AgentHubEntry_capabilities(ctx, field)
+			case "compatibleApplications":
+				return ec.fieldContext_AgentHubEntry_compatibleApplications(ctx, field)
 			case "installTemplateName":
 				return ec.fieldContext_AgentHubEntry_installTemplateName(ctx, field)
 			case "installImage":
@@ -16068,6 +16296,47 @@ func (ec *executionContext) _AgentHubEntry_capabilities(ctx context.Context, fie
 }
 
 func (ec *executionContext) fieldContext_AgentHubEntry_capabilities(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_compatibleApplications(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_compatibleApplications(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CompatibleApplications, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_compatibleApplications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "AgentHubEntry",
 		Field:      field,
@@ -26862,6 +27131,384 @@ func (ec *executionContext) _Experiments_desc(ctx context.Context, field graphql
 func (ec *executionContext) fieldContext_Experiments_desc(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Experiments",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultCatalog_applications(ctx context.Context, field graphql.CollectedField, obj *model.FaultCatalog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultCatalog_applications(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Applications, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.TargetApplication)
+	fc.Result = res
+	return ec.marshalNTargetApplication2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐTargetApplicationᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultCatalog_applications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultCatalog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_TargetApplication_key(ctx, field)
+			case "folders":
+				return ec.fieldContext_TargetApplication_folders(ctx, field)
+			case "namespace":
+				return ec.fieldContext_TargetApplication_namespace(ctx, field)
+			case "labelKey":
+				return ec.fieldContext_TargetApplication_labelKey(ctx, field)
+			case "services":
+				return ec.fieldContext_TargetApplication_services(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TargetApplication", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultCatalog_faults(ctx context.Context, field graphql.CollectedField, obj *model.FaultCatalog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultCatalog_faults(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Faults, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.FaultCompatibility)
+	fc.Result = res
+	return ec.marshalNFaultCompatibility2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultCompatibilityᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultCatalog_faults(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultCatalog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "faultName":
+				return ec.fieldContext_FaultCompatibility_faultName(ctx, field)
+			case "classification":
+				return ec.fieldContext_FaultCompatibility_classification(ctx, field)
+			case "compatibleApps":
+				return ec.fieldContext_FaultCompatibility_compatibleApps(ctx, field)
+			case "workloadKinds":
+				return ec.fieldContext_FaultCompatibility_workloadKinds(ctx, field)
+			case "requiredServices":
+				return ec.fieldContext_FaultCompatibility_requiredServices(ctx, field)
+			case "knownFailingTargets":
+				return ec.fieldContext_FaultCompatibility_knownFailingTargets(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultCompatibility", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultCompatibility_faultName(ctx context.Context, field graphql.CollectedField, obj *model.FaultCompatibility) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultCompatibility_faultName(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FaultName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultCompatibility_faultName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultCompatibility",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultCompatibility_classification(ctx context.Context, field graphql.CollectedField, obj *model.FaultCompatibility) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultCompatibility_classification(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Classification, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultCompatibility_classification(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultCompatibility",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultCompatibility_compatibleApps(ctx context.Context, field graphql.CollectedField, obj *model.FaultCompatibility) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultCompatibility_compatibleApps(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CompatibleApps, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultCompatibility_compatibleApps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultCompatibility",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultCompatibility_workloadKinds(ctx context.Context, field graphql.CollectedField, obj *model.FaultCompatibility) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultCompatibility_workloadKinds(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.WorkloadKinds, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultCompatibility_workloadKinds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultCompatibility",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultCompatibility_requiredServices(ctx context.Context, field graphql.CollectedField, obj *model.FaultCompatibility) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultCompatibility_requiredServices(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.RequiredServices, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultCompatibility_requiredServices(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultCompatibility",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FaultCompatibility_knownFailingTargets(ctx context.Context, field graphql.CollectedField, obj *model.FaultCompatibility) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FaultCompatibility_knownFailingTargets(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.KnownFailingTargets, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FaultCompatibility_knownFailingTargets(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FaultCompatibility",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -45767,6 +46414,87 @@ func (ec *executionContext) fieldContext_Query_listEnvironments(ctx context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_getFaultCatalog(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_getFaultCatalog(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		directive0 := func(rctx context.Context) (interface{}, error) {
+			ctx = rctx // use context from middleware stack in children
+			return ec.resolvers.Query().GetFaultCatalog(rctx, fc.Args["projectID"].(string))
+		}
+		directive1 := func(ctx context.Context) (interface{}, error) {
+			if ec.directives.Authorized == nil {
+				return nil, errors.New("directive authorized is not implemented")
+			}
+			return ec.directives.Authorized(ctx, nil, directive0)
+		}
+
+		tmp, err := directive1(rctx)
+		if err != nil {
+			return nil, graphql.ErrorOnPath(ctx, err)
+		}
+		if tmp == nil {
+			return nil, nil
+		}
+		if data, ok := tmp.(*model.FaultCatalog); ok {
+			return data, nil
+		}
+		return nil, fmt.Errorf(`unexpected type %T from directive, should be *github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model.FaultCatalog`, tmp)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.FaultCatalog)
+	fc.Result = res
+	return ec.marshalNFaultCatalog2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultCatalog(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_getFaultCatalog(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "applications":
+				return ec.fieldContext_FaultCatalog_applications(ctx, field)
+			case "faults":
+				return ec.fieldContext_FaultCatalog_faults(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FaultCatalog", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_getFaultCatalog_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_listFaultStudios(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_listFaultStudios(ctx, field)
 	if err != nil {
@@ -49986,6 +50714,226 @@ func (ec *executionContext) _SyncResponse_message(ctx context.Context, field gra
 func (ec *executionContext) fieldContext_SyncResponse_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "SyncResponse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TargetApplication_key(ctx context.Context, field graphql.CollectedField, obj *model.TargetApplication) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_TargetApplication_key(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Key, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_TargetApplication_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TargetApplication",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TargetApplication_folders(ctx context.Context, field graphql.CollectedField, obj *model.TargetApplication) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_TargetApplication_folders(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Folders, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_TargetApplication_folders(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TargetApplication",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TargetApplication_namespace(ctx context.Context, field graphql.CollectedField, obj *model.TargetApplication) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_TargetApplication_namespace(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Namespace, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_TargetApplication_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TargetApplication",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TargetApplication_labelKey(ctx context.Context, field graphql.CollectedField, obj *model.TargetApplication) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_TargetApplication_labelKey(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LabelKey, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_TargetApplication_labelKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TargetApplication",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TargetApplication_services(ctx context.Context, field graphql.CollectedField, obj *model.TargetApplication) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_TargetApplication_services(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Services, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_TargetApplication_services(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TargetApplication",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -56939,6 +57887,8 @@ func (ec *executionContext) _AgentHubEntry(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "compatibleApplications":
+			out.Values[i] = ec._AgentHubEntry_compatibleApplications(ctx, field, obj)
 		case "installTemplateName":
 			out.Values[i] = ec._AgentHubEntry_installTemplateName(ctx, field, obj)
 		case "installImage":
@@ -59047,6 +59997,114 @@ func (ec *executionContext) _Experiments(ctx context.Context, sel ast.SelectionS
 			}
 		case "desc":
 			out.Values[i] = ec._Experiments_desc(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var faultCatalogImplementors = []string{"FaultCatalog"}
+
+func (ec *executionContext) _FaultCatalog(ctx context.Context, sel ast.SelectionSet, obj *model.FaultCatalog) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faultCatalogImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaultCatalog")
+		case "applications":
+			out.Values[i] = ec._FaultCatalog_applications(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "faults":
+			out.Values[i] = ec._FaultCatalog_faults(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var faultCompatibilityImplementors = []string{"FaultCompatibility"}
+
+func (ec *executionContext) _FaultCompatibility(ctx context.Context, sel ast.SelectionSet, obj *model.FaultCompatibility) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, faultCompatibilityImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FaultCompatibility")
+		case "faultName":
+			out.Values[i] = ec._FaultCompatibility_faultName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "classification":
+			out.Values[i] = ec._FaultCompatibility_classification(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "compatibleApps":
+			out.Values[i] = ec._FaultCompatibility_compatibleApps(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "workloadKinds":
+			out.Values[i] = ec._FaultCompatibility_workloadKinds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "requiredServices":
+			out.Values[i] = ec._FaultCompatibility_requiredServices(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "knownFailingTargets":
+			out.Values[i] = ec._FaultCompatibility_knownFailingTargets(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -62980,6 +64038,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "getFaultCatalog":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_getFaultCatalog(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "listFaultStudios":
 			field := field
 
@@ -64020,6 +65100,65 @@ func (ec *executionContext) _SyncResponse(ctx context.Context, sel ast.Selection
 			out.Values[i] = ec._SyncResponse_syncedAt(ctx, field, obj)
 		case "message":
 			out.Values[i] = ec._SyncResponse_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var targetApplicationImplementors = []string{"TargetApplication"}
+
+func (ec *executionContext) _TargetApplication(ctx context.Context, sel ast.SelectionSet, obj *model.TargetApplication) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, targetApplicationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TargetApplication")
+		case "key":
+			out.Values[i] = ec._TargetApplication_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "folders":
+			out.Values[i] = ec._TargetApplication_folders(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "namespace":
+			out.Values[i] = ec._TargetApplication_namespace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "labelKey":
+			out.Values[i] = ec._TargetApplication_labelKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "services":
+			out.Values[i] = ec._TargetApplication_services(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -65636,6 +66775,74 @@ func (ec *executionContext) marshalNExperiments2ᚖgithubᚗcomᚋlitmuschaosᚋ
 	return ec._Experiments(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNFaultCatalog2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultCatalog(ctx context.Context, sel ast.SelectionSet, v model.FaultCatalog) graphql.Marshaler {
+	return ec._FaultCatalog(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFaultCatalog2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultCatalog(ctx context.Context, sel ast.SelectionSet, v *model.FaultCatalog) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FaultCatalog(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFaultCompatibility2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultCompatibilityᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.FaultCompatibility) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNFaultCompatibility2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultCompatibility(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFaultCompatibility2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultCompatibility(ctx context.Context, sel ast.SelectionSet, v *model.FaultCompatibility) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FaultCompatibility(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNFaultDetails2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐFaultDetails(ctx context.Context, sel ast.SelectionSet, v model.FaultDetails) graphql.Marshaler {
 	return ec._FaultDetails(ctx, sel, &v)
 }
@@ -67067,6 +68274,60 @@ func (ec *executionContext) unmarshalNSyncStatus2githubᚗcomᚋlitmuschaosᚋli
 
 func (ec *executionContext) marshalNSyncStatus2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐSyncStatus(ctx context.Context, sel ast.SelectionSet, v model.SyncStatus) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNTargetApplication2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐTargetApplicationᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.TargetApplication) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNTargetApplication2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐTargetApplication(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTargetApplication2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐTargetApplication(ctx context.Context, sel ast.SelectionSet, v *model.TargetApplication) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TargetApplication(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNToggleFaultResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐToggleFaultResponse(ctx context.Context, sel ast.SelectionSet, v model.ToggleFaultResponse) graphql.Marshaler {

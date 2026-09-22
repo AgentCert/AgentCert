@@ -31,6 +31,15 @@ type AgentHubEntry {
   version: String!
   """List of capabilities this agent supports"""
   capabilities: [String!]!
+  """
+  Keys of the TargetApplications this agent can be paired with.
+
+  `null` means the agent declares no restriction and is offered for every
+  application — a custom agent hub that predates this field keeps working.
+  An empty list means the agent is deliberately not application-targeted
+  (e.g. a cluster-wide compliance agent) and is never offered for one.
+  """
+  compatibleApplications: [String!]
   """Template name used to identify the install step in workflow manifests"""
   installTemplateName: String
   """Default container image for the install step"""

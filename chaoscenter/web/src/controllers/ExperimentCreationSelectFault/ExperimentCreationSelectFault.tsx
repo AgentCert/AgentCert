@@ -7,12 +7,15 @@ import type { FaultData } from '@models';
 
 interface ExperimentCreationSelectFaultControllerProps {
   isOpen: boolean;
+  /** Application this experiment installs; narrows the fault list to compatible ones. */
+  targetApplicationKey?: string;
   onSelect: (data: FaultData) => void;
   onClose: () => void;
 }
 
 export default function ExperimentCreationSelectFaultController({
   isOpen,
+  targetApplicationKey,
   onSelect,
   onClose
 }: ExperimentCreationSelectFaultControllerProps): React.ReactElement {
@@ -34,6 +37,7 @@ export default function ExperimentCreationSelectFaultController({
     <ExperimentCreationSelectFaultView
       chaoshubs={chaoshubs?.listChaosHub}
       isOpen={isOpen}
+      targetApplicationKey={targetApplicationKey}
       loading={{
         listChaosHub: listChaosHubLoading,
         listChaosFaults: listChaosFaultsLoading

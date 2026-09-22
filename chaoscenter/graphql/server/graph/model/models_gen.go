@@ -140,6 +140,13 @@ type AgentHubEntry struct {
 	Version string `json:"version"`
 	// List of capabilities this agent supports
 	Capabilities []string `json:"capabilities"`
+	// Keys of the TargetApplications this agent can be paired with.
+	//
+	// `null` means the agent declares no restriction and is offered for every
+	// application — a custom agent hub that predates this field keeps working.
+	// An empty list means the agent is deliberately not application-targeted
+	// (e.g. a cluster-wide compliance agent) and is never offered for one.
+	CompatibleApplications []string `json:"compatibleApplications,omitempty"`
 	// Template name used to identify the install step in workflow manifests
 	InstallTemplateName *string `json:"installTemplateName,omitempty"`
 	// Default container image for the install step
@@ -1138,6 +1145,33 @@ type Experiments struct {
 	Name string `json:"name"`
 	CSV  string `json:"CSV"`
 	Desc string `json:"desc"`
+}
+
+// The whole catalog in one payload — the builder needs the application registry and
+// the fault matrix together to gate a single step, so they are fetched together.
+type FaultCatalog struct {
+	Applications []*TargetApplication  `json:"applications"`
+	Faults       []*FaultCompatibility `json:"faults"`
+}
+
+// Resolved compatibility for a single fault.
+//
+// `compatibleApps` is DERIVED, not restated in the catalog per fault: a `generic`
+// fault is compatible with every application in the catalog, an
+// `application-specific` fault only with the one it pins via requiredApp.
+type FaultCompatibility struct {
+	// Fault name, matching the fault's chart directory.
+	FaultName string `json:"faultName"`
+	// `generic` or `application-specific`.
+	Classification string `json:"classification"`
+	// Keys of the TargetApplications this fault may be pointed at.
+	CompatibleApps []string `json:"compatibleApps"`
+	// Kubernetes kinds the fault acts on; empty means unrestricted.
+	WorkloadKinds []string `json:"workloadKinds"`
+	// Microservices the fault hardcodes; empty means any service of the app.
+	RequiredServices []string `json:"requiredServices"`
+	// `<app>/<service>` pairs known to fail this fault, for a build-time warning.
+	KnownFailingTargets []string `json:"knownFailingTargets"`
 }
 
 // Fault Detail consists of all the fault related details
@@ -2783,6 +2817,23 @@ type SyncResponse struct {
 	SyncedAt *string `json:"syncedAt,omitempty"`
 	// Message describing the sync result
 	Message string `json:"message"`
+}
+
+// A target application the AppsHub can install, and how a ChaosEngine addresses its
+// workloads. Mirrors one entry of spec.applications in the fault capability catalog.
+type TargetApplication struct {
+	// Catalog key, e.g. "sock-shop".
+	Key string `json:"key"`
+	// Every `-folder=` value an install-application step may carry for this app.
+	Folders []string `json:"folders"`
+	// Namespace the chart installs into by default.
+	Namespace string `json:"namespace"`
+	// Label key whose value is the microservice name, e.g. "name" or "app".
+	LabelKey string `json:"labelKey"`
+	// Microservices the application is made of, from its chart entry. Used to offer
+	// target labels before the application has been deployed and its real labels can
+	// be read from the cluster.
+	Services []string `json:"services"`
 }
 
 // ToggleFaultResponse is returned after enabling/disabling a fault in a studio.

@@ -14,6 +14,7 @@ import ExperimentCreationListHubsView from './ExperimentCreationListHubs';
 interface ExperimentCreationSelectFaultViewProps {
   chaoshubs: ChaosHub[] | undefined;
   isOpen: boolean;
+  targetApplicationKey?: string;
   onSelect: (data: FaultData) => void;
   onClose: () => void;
   loading: {
@@ -26,6 +27,7 @@ interface ExperimentCreationSelectFaultViewProps {
 
 export default function ExperimentCreationSelectFaultView({
   isOpen,
+  targetApplicationKey,
   onSelect,
   onClose,
   chaoshubs,
@@ -51,6 +53,7 @@ export default function ExperimentCreationSelectFaultView({
           chaosCharts={chaosCharts}
           loading={loading}
           searchParam={searchQuery}
+          targetApplicationKey={targetApplicationKey}
         />
       }
       rightPanel={

@@ -169,6 +169,9 @@ func main() {
 	// Initialize and start the finalizer controller watcher for infrastructure cleanup
 	if resolver, ok := graphqlConfig.Resolvers.(*graph.Resolver); ok {
 		go resolver.GetInfrastructureService().StartFinalizerWatcher(context.Background())
+		// Safety net for sequential multi-run batches whose event-driven chain was
+		// broken by a lost dispatch or a restart mid-delay.
+		go resolver.GetChaosExperimentRunHandler().StartMultiRunReconciler(context.Background())
 	}
 
 	// Pass through actual error messages instead of generic "internal system error"

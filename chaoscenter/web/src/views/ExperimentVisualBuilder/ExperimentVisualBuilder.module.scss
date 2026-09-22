@@ -72,4 +72,14 @@
       color: var(--primary-8) !important;
     }
   }
+
+  .actionItemDisabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    color: var(--grey-500) !important;
+
+    &:hover {
+      color: var(--grey-500) !important;
+    }
+  }
 }

@@ -3,6 +3,8 @@ package events
 import (
 	"testing"
 
+	"subscriber/pkg/types"
+
 	"github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -30,21 +32,30 @@ func TestUpdateWorkflowStatus(t *testing.T) {
 }
 
 func TestResolveWorkflowStatus(t *testing.T) {
+	chaosNodes := map[string]types.Node{
+		"n1": {Type: "Pod"},
+		"n2": {Type: "ChaosEngine"},
+	}
+	setupOnlyNodes := map[string]types.Node{
+		"n1": {Type: "Pod"},
+		"n2": {Type: "Steps"},
+	}
 	tests := []struct {
-		name      string
-		phase     v1alpha1.WorkflowPhase
-		nodeCount int
-		want      string
+		name  string
+		phase v1alpha1.WorkflowPhase
+		nodes map[string]types.Node
+		want  string
 	}{
-		{"failed with zero nodes -> spec-validation rejection, report as Error", v1alpha1.WorkflowFailed, 0, "Error"},
-		{"failed with nodes -> real per-node status still decides, stays Completed here", v1alpha1.WorkflowFailed, 3, "Completed"},
-		{"succeeded with zero nodes -> unaffected, still Completed", v1alpha1.WorkflowSucceeded, 0, "Completed"},
-		{"running -> unaffected", v1alpha1.WorkflowRunning, 0, "Running"},
+		{"failed with zero nodes -> spec-validation rejection, report as Error", v1alpha1.WorkflowFailed, nil, "Error"},
+		{"failed before any fault ran -> setup failure, report as Error", v1alpha1.WorkflowFailed, setupOnlyNodes, "Error"},
+		{"failed with a fault node -> per-fault verdict still decides, stays Completed here", v1alpha1.WorkflowFailed, chaosNodes, "Completed"},
+		{"succeeded with zero nodes -> unaffected, still Completed", v1alpha1.WorkflowSucceeded, nil, "Completed"},
+		{"running -> unaffected", v1alpha1.WorkflowRunning, nil, "Running"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := resolveWorkflowStatus(tt.phase, tt.nodeCount); got != tt.want {
-				t.Errorf("resolveWorkflowStatus(%q, %d) = %q, want %q", tt.phase, tt.nodeCount, got, tt.want)
+			if got := resolveWorkflowStatus(tt.phase, tt.nodes); got != tt.want {
+				t.Errorf("resolveWorkflowStatus(%q, %d nodes) = %q, want %q", tt.phase, len(tt.nodes), got, tt.want)
 			}
 		})
 	}

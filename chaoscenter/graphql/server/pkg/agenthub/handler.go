@@ -19,14 +19,20 @@ type ContextInjectionMapping struct {
 
 // AgentEntry represents a single agent in the chartserviceversion YAML.
 type AgentEntry struct {
-	Name                string                    `yaml:"name"`
-	DisplayName         string                    `yaml:"displayName"`
-	Description         string                    `yaml:"description"`
-	Version             string                    `yaml:"version"`
-	Capabilities        []string                  `yaml:"capabilities"`
-	InstallTemplateName string                    `yaml:"installTemplateName,omitempty"`
-	InstallImage        string                    `yaml:"installImage,omitempty"`
-	ContextInjection    []ContextInjectionMapping `yaml:"contextInjection,omitempty"`
+	Name         string   `yaml:"name"`
+	DisplayName  string   `yaml:"displayName"`
+	Description  string   `yaml:"description"`
+	Version      string   `yaml:"version"`
+	Capabilities []string `yaml:"capabilities"`
+	// CompatibleApplications lists the fault-capability-catalog application keys
+	// this agent may be paired with. It is a pointer because YAML gives an
+	// omitted field and an explicitly empty list the same zero value, and the two
+	// mean opposite things here: omitted is "unrestricted" (so an agent hub that
+	// predates this field keeps working), empty is "never offered for an app".
+	CompatibleApplications *[]string                 `yaml:"compatibleApplications"`
+	InstallTemplateName    string                    `yaml:"installTemplateName,omitempty"`
+	InstallImage           string                    `yaml:"installImage,omitempty"`
+	ContextInjection       []ContextInjectionMapping `yaml:"contextInjection,omitempty"`
 }
 
 // AgentCSVSpec is the spec section of the agent chartserviceversion YAML.
@@ -86,6 +92,18 @@ func GetAgentChartsData(chartsPath string) ([]*model.AgentHubCategory, error) {
 				Version:      agent.Version,
 				Capabilities: agent.Capabilities,
 				IsDeployed:   false, // Will be enriched later
+			}
+			if entry.Capabilities == nil {
+				entry.Capabilities = []string{}
+			}
+			// Left nil when the chart omits the field, so the client sees null
+			// ("unrestricted") rather than [] ("never offered").
+			if agent.CompatibleApplications != nil {
+				compatible := *agent.CompatibleApplications
+				if compatible == nil {
+					compatible = []string{}
+				}
+				entry.CompatibleApplications = compatible
 			}
 
 			// Populate injection metadata from CSV (Item #3)

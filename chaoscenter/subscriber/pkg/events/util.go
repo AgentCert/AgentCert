@@ -76,7 +76,22 @@ func (ev *subscriberEvents) getChaosData(nodeStatus v1alpha13.NodeStatus, engine
 		if expRes.Status.ExperimentStatus.ErrorOutput != nil {
 			cd.FailStep = fmt.Sprintf("%s : %s", expRes.Status.ExperimentStatus.ErrorOutput.ErrorCode, expRes.Status.ExperimentStatus.ErrorOutput.Reason)
 		}
+		// Prefer the ChaosResult verdict over the engine's copy: the engine's
+		// experiments[].verdict lags behind and can still be empty/Awaited when
+		// the result is already final.
+		if v := strings.TrimSpace(string(expRes.Status.ExperimentStatus.Verdict)); v != "" && !strings.EqualFold(cd.ExperimentVerdict, "Fail") {
+			cd.ExperimentVerdict = v
+		}
 		cd.ExperimentStatus = string(expRes.Status.ExperimentStatus.Phase)
+		// ChaosResult.phase only reports that the fault finished executing; the
+		// verdict is what says whether it passed. Operator builds that leave the
+		// phase at plain "Completed" for a failing verdict made a failed fault --
+		// and therefore the whole run -- surface as a clean pass.
+		if cd.ExperimentVerdict != "" &&
+			!strings.EqualFold(cd.ExperimentVerdict, "Pass") &&
+			strings.EqualFold(cd.ExperimentStatus, string(types.FaultCompleted)) {
+			cd.ExperimentStatus = string(types.FaultCompletedWithProbeFailure)
+		}
 	}
 	return cd, nil
 }

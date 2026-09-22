@@ -23,6 +23,13 @@ type AppEntry struct {
 	Description   string              `yaml:"description"`
 	Version       string              `yaml:"version"`
 	Namespace     string              `yaml:"namespace"`
+	// LabelKey is the label key whose value is the microservice name, used to
+	// build a ChaosEngine applabel before the app is deployed and its real
+	// labels can be read from the cluster. Optional; see DefaultAppLabelKey.
+	LabelKey string `yaml:"labelKey"`
+	// Aliases are additional `-folder=` values that resolve to this app, for
+	// charts that have been renamed.
+	Aliases       []string            `yaml:"aliases"`
 	Microservices []MicroserviceEntry `yaml:"microservices"`
 }
 
@@ -100,6 +107,32 @@ func GetAppChartsData(chartsPath string) ([]*model.AppHubCategory, error) {
 	}
 
 	return categories, nil
+}
+
+// DefaultAppLabelKey is used when an application chart declares no labelKey.
+const DefaultAppLabelKey = "app.kubernetes.io/name"
+
+// GetAllAppEntries reads every application entry from the app-charts
+// chartserviceversion files, preserving the registry metadata (labelKey,
+// aliases) that GetAppChartsData drops because the AppsHub UI has no use for it.
+// This is the source of truth for "which applications exist", so onboarding an
+// application is a chart edit and nothing more.
+func GetAllAppEntries(chartsPath string) ([]AppEntry, error) {
+	csvFiles, err := findCSVFiles(chartsPath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading app charts directory %s: %w", chartsPath, err)
+	}
+
+	var entries []AppEntry
+	for _, csvFile := range csvFiles {
+		csv, err := readAppCSV(csvFile)
+		if err != nil {
+			log.WithError(err).Errorf("failed to read app CSV file: %s", csvFile)
+			continue
+		}
+		entries = append(entries, csv.Spec.Applications...)
+	}
+	return entries, nil
 }
 
 // findCSVFiles finds all chartserviceversion.yaml files in the charts directory.

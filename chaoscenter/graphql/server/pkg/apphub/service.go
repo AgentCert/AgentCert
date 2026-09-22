@@ -80,6 +80,11 @@ func getAppChartsPath() string {
 	return filepath.Join(path, "charts")
 }
 
+// ChartsPath exposes the app-charts working copy to other packages that need to
+// resolve the application registry (see faultcatalog), so the path convention
+// stays defined in exactly one place.
+func ChartsPath() string { return getAppChartsPath() }
+
 // getAppClonePath returns the filesystem path for the app hub clone.
 func getAppClonePath() string {
 	path := strings.TrimSpace(utils.Config.DefaultAppHubPath)

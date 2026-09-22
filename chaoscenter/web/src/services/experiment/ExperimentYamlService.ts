@@ -178,6 +178,12 @@ export abstract class ExperimentYamlService extends ChaosIDB {
     kind: 'application' | 'agent'
   ): { folder: string; namespace: string } | undefined;
 
+  abstract getExperimentContext(manifest: ExperimentManifest | undefined): {
+    application?: { folder: string; namespace: string };
+    agent?: { folder: string; namespace: string };
+    hasFaults: boolean;
+  };
+
   abstract extractChaosFaultsWithWeights(manifest: ExperimentManifest | undefined): Array<Weightages>;
 
   abstract getFaultsFromExperimentManifest(

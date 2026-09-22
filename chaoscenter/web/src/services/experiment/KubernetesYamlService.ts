@@ -237,23 +237,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
         steps.splice(insertIndex, 0, [{ name: templateName, template: templateName }]);
       }
 
-      // The backend unconditionally references {{workflow.parameters.appNamespace}}
-      // (readiness wait, uninstall, agent MCP URLs) but only ever *reads* it -- nothing
-      // ever wrote it into spec.arguments.parameters for a hand-built (blank canvas)
-      // experiment the way predefined ChaosHub templates hardcode it. Without this the
-      // generated Workflow fails Argo's spec validation before a single step runs
-      // (see OPEN_WEIGHT_CERTIFICATION_HANDOFF.md, experiment eb0a2ee3-...). Seed/refresh
-      // it here, the same place the target app's namespace is actually chosen.
-      if (kind === 'application' && spec) {
-        if (!spec.arguments) spec.arguments = {};
-        if (!spec.arguments.parameters) spec.arguments.parameters = [];
-        const appNamespaceParam = spec.arguments.parameters.find(p => p.name === 'appNamespace');
-        if (appNamespaceParam) {
-          appNamespaceParam.value = entry.namespace;
-        } else {
-          spec.arguments.parameters.push({ name: 'appNamespace', value: entry.namespace });
-        }
-      }
+      this.seedInstallStepParameters(spec, templates);
 
       await store.put({ ...experiment }, key);
       await tx.done;
@@ -262,6 +246,63 @@ export class KubernetesYamlService extends ExperimentYamlService {
     } catch (_) {
       this.handleIDBFailure();
     }
+  }
+
+  // The backend's own patches unconditionally reference
+  // {{workflow.parameters.appNamespace}} (install-application readiness wait,
+  // uninstall-all, agent MCP URLs) and {{workflow.parameters.agentFolder}}
+  // (uninstall-all), but nothing ever wrote either into spec.arguments.parameters
+  // for a hand-built (blank canvas) experiment the way predefined ChaosHub
+  // templates hardcode them. A missing one only produced a server-side warning,
+  // and the generated Workflow then failed Argo's spec validation before a single
+  // step ran (see OPEN_WEIGHT_CERTIFICATION_HANDOFF.md, experiment eb0a2ee3-...).
+  //
+  // Both are therefore re-derived from the install steps on every install-step
+  // edit, in one place, rather than only when the application step happens to be
+  // the one being added.
+  private seedInstallStepParameters(
+    spec: WorkflowSpec | undefined,
+    templates: Template[] | undefined
+  ): void {
+    if (!spec || !templates) return;
+
+    const appArgs = parseInstallStepArgs(
+      templates.find(template => template.name === 'install-application')?.container?.args
+    );
+    const agentArgs = parseInstallStepArgs(
+      templates.find(template => template.name === 'install-agent')?.container?.args
+    );
+
+    const upsert = (name: string, value: string | undefined): void => {
+      if (value === undefined || value === '') return;
+      if (!spec.arguments) spec.arguments = {};
+      if (!spec.arguments.parameters) spec.arguments.parameters = [];
+      const existing = spec.arguments.parameters.find(p => p.name === name);
+      if (existing) {
+        existing.value = value;
+      } else {
+        spec.arguments.parameters.push({ name, value });
+      }
+    };
+
+    upsert('appNamespace', appArgs?.namespace);
+    upsert('agentFolder', agentArgs?.folder);
+  }
+
+  // The builder's gating state: which application and agent this experiment
+  // installs, and whether it has any faults yet. Reading it from the manifest
+  // (rather than tracking it in component state) keeps a YAML-editor round trip
+  // and a page reload honest.
+  getExperimentContext(manifest: KubernetesExperimentManifest | undefined): {
+    application?: { folder: string; namespace: string };
+    agent?: { folder: string; namespace: string };
+    hasFaults: boolean;
+  } {
+    return {
+      application: this.getInstallStepSelection(manifest, 'application'),
+      agent: this.getInstallStepSelection(manifest, 'agent'),
+      hasFaults: this.doesExperimentHaveFaults(manifest)
+    };
   }
 
   // Reads back the AgentHub/AppHub entry currently installed by an

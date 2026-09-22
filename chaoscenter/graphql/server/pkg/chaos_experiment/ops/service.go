@@ -19,6 +19,7 @@ import (
 	agentRegistry "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultcatalog"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
@@ -61,16 +62,18 @@ type chaosExperimentService struct {
 	chaosExperimentRunOperator  *dbChaosExperimentRun.Operator
 	probeService                probe.Service
 	agentRegistryOperator       agentRegistry.Operator
+	faultCatalogService         faultcatalog.Service
 }
 
 // NewChaosExperimentService returns a new instance of the chaos workflow service
-func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator) Service {
+func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator, faultCatalogService faultcatalog.Service) Service {
 	return &chaosExperimentService{
 		chaosExperimentOperator:     chaosWorkflowOperator,
 		chaosInfrastructureOperator: clusterOperator,
 		chaosExperimentRunOperator:  chaosExperimentRunOperator,
 		probeService:                probeService,
 		agentRegistryOperator:       agentRegOp,
+		faultCatalogService:         faultCatalogService,
 	}
 }
 
@@ -419,6 +422,12 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	err := json.Unmarshal([]byte(workflow.ExperimentManifest), &workflowManifest)
 	if err != nil {
 		return errors.New("failed to unmarshal workflow manifest")
+	}
+
+	// Before any patch runs, because the patches themselves assume a well-formed
+	// composition (see validateExperimentComposition).
+	if err := c.validateExperimentComposition(ctx, projectID, &workflowManifest.Spec); err != nil {
+		return err
 	}
 
 	ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
@@ -895,6 +904,10 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	err := json.Unmarshal([]byte(workflow.ExperimentManifest), &cronExperimentManifest)
 	if err != nil {
 		return errors.New("failed to unmarshal workflow manifest")
+	}
+
+	if err := c.validateExperimentComposition(ctx, projectID, &cronExperimentManifest.Spec.WorkflowSpec); err != nil {
+		return err
 	}
 
 	ApplyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)

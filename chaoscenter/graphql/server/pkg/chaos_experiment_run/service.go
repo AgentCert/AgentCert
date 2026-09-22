@@ -154,6 +154,12 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 	}
 
 	result.TotalExperiments = len(weightMap)
+	// ungradedWeight is the weight of faults the itbench orchestrator could not grade
+	// (verdict N/A -- no target resolved, or no built-in recovery assertion for the
+	// target's kind). They are removed from the denominator rather than scored: counting
+	// them as a pass used to award a free 100%, and counting them as a failure would
+	// punish the agent for a measurement gap.
+	ungradedWeight := 0
 	for _, value := range execData.Nodes {
 		if value.Type == "ChaosEngine" {
 			experimentName := ""
@@ -177,6 +183,11 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 			if !ok {
 				continue
 			}
+			if value.ChaosExp.ExperimentVerdict == "N/A" {
+				result.ExperimentsNA += 1
+				ungradedWeight += weight
+				continue
+			}
 			// probeSuccessPercentage will be included only if chaosData is present
 			x, _ := strconv.Atoi(value.ChaosExp.ProbeSuccessPercentage)
 			totalTestResult += weight * x
@@ -192,13 +203,13 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 			if value.ChaosExp.ExperimentVerdict == "Stopped" {
 				result.ExperimentsStopped += 1
 			}
-			if value.ChaosExp.ExperimentVerdict == "N/A" || value.ChaosExp.ExperimentVerdict == "" {
+			if value.ChaosExp.ExperimentVerdict == "" {
 				result.ExperimentsNA += 1
 			}
 		}
 	}
-	if weightSum != 0 {
-		result.ResiliencyScore = utils.Truncate(float64(totalTestResult) / float64(weightSum))
+	if gradedWeight := weightSum - ungradedWeight; gradedWeight > 0 {
+		result.ResiliencyScore = utils.Truncate(float64(totalTestResult) / float64(gradedWeight))
 	}
 
 	return result, nil

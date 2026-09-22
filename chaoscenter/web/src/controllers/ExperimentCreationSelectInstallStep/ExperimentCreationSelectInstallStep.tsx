@@ -1,6 +1,7 @@
 import React from 'react';
 import { useToaster } from '@harnessio/uicore';
 import { listAppHubCategories, listAgentHubCategories } from '@api/core';
+import { isAgentCompatible } from '@hooks';
 import { getScope } from '@utils';
 import ExperimentCreationSelectInstallStepView from '@views/ExperimentCreationSelectInstallStep';
 import type { InstallStepEntry } from '@views/ExperimentCreationSelectInstallStep';
@@ -8,6 +9,8 @@ import type { InstallStepEntry } from '@views/ExperimentCreationSelectInstallSte
 interface ExperimentCreationSelectInstallStepControllerProps {
   isOpen: boolean;
   kind: 'application' | 'agent';
+  /** Application already installed by this experiment; narrows the agent list. */
+  targetApplicationKey?: string;
   initialSelection?: { folder: string; namespace: string };
   onSelect: (entry: { folder: string; namespace: string }) => void;
   onClose: () => void;
@@ -16,6 +19,7 @@ interface ExperimentCreationSelectInstallStepControllerProps {
 export default function ExperimentCreationSelectInstallStepController({
   isOpen,
   kind,
+  targetApplicationKey,
   initialSelection,
   onSelect,
   onClose
@@ -44,12 +48,16 @@ export default function ExperimentCreationSelectInstallStepController({
           }))
         )
       : (agentHubData?.listAgentHubCategories ?? []).flatMap(category =>
-          category.agents.map(agent => ({
-            folder: agent.name,
-            displayName: agent.displayName,
-            description: agent.description,
-            namespace: agent.namespace
-          }))
+          category.agents
+            // An agent that declares no restriction stays listed, so onboarding
+            // an application never requires editing an agent chart.
+            .filter(agent => isAgentCompatible(agent.compatibleApplications, targetApplicationKey))
+            .map(agent => ({
+              folder: agent.name,
+              displayName: agent.displayName,
+              description: agent.description,
+              namespace: agent.namespace
+            }))
         );
 
   return (

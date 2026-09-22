@@ -2333,22 +2333,42 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, errors.New("experiment re-run failed due to inactive infra")
 	}
 
+	// A run is only ever dispatched by pushing the manifest onto this infra's
+	// subscription channel; with no subscriber attached that push is a silent
+	// no-op and the run sits in Queued forever, holding any multi-run batch
+	// behind it shut. Fail here instead, so the caller — including the
+	// multi-run chain, which releases its dispatch slot on error — can react.
+	if r != nil {
+		r.Mutex.Lock()
+		_, subscriberConnected := r.ConnectedInfra[workflow.InfraID]
+		r.Mutex.Unlock()
+		if !subscriberConnected {
+			return nil, fmt.Errorf("experiment run failed: no subscriber is connected for infrastructure %s", workflow.InfraID)
+		}
+	}
+
 	if err := c.preflightInfraRBAC(ctx, &infra); err != nil {
 		return nil, err
 	}
 
-	// Check if this is a multi-run experiment and block concurrent runs
+	// Check if this is a multi-run experiment and block concurrent runs.
+	// Revisions are stored oldest-first, so the newest manifest — the one that
+	// decides whether multi-run is on right now — is the last element.
 	if len(workflow.Revision) > 0 {
-		manifest := workflow.Revision[0].ExperimentManifest
+		manifest := workflow.Revision[len(workflow.Revision)-1].ExperimentManifest
 		multiRunEnabled := gjson.Get(manifest, "metadata.annotations.litmuschaos\\.io/multiRunEnabled").String()
 
 		if multiRunEnabled == "true" {
-			// Query for any running experiment runs for this experiment
+			// Queued counts as in-flight: a run that has been created but not yet
+			// picked up by the subscriber is still a pending run of this batch.
 			runningRuns, err := dbChaosExperimentRun.NewChaosExperimentRunOperator(c.mongodbOperator).GetExperimentRuns(bson.D{
 				{"experiment_id", workflow.ExperimentID},
 				{"is_removed", false},
 				{"completed", false},
-				{"phase", string(model.ExperimentRunStatusRunning)},
+				{"phase", bson.D{{"$in", bson.A{
+					string(model.ExperimentRunStatusRunning),
+					string(model.ExperimentRunStatusQueued),
+				}}}},
 			})
 			if err == nil && len(runningRuns) > 0 {
 				return nil, errors.New("multi-run experiment already has a running instance. Please wait for it to complete before starting another run")
@@ -3116,6 +3136,58 @@ func (c *ChaosExperimentRunHandler) GetExperimentRunStats(ctx context.Context, p
 	}, nil
 }
 
+// runPhaseCompletedWithProbeFailure is the phase used for a run whose workflow
+// finished cleanly but whose chaos faults did not pass. It matches the string
+// the subscriber and the web UI already use (ExperimentRunStatus in
+// web/src/api/entities/common.ts); it is deliberately not in the GraphQL
+// ExperimentRunStatus enum, which only types the status *filter* input.
+const runPhaseCompletedWithProbeFailure = "Completed_With_Probe_Failure"
+
+// runPhaseCompletedNotGraded is the phase for a run that finished cleanly but
+// produced no gradeable fault at all -- every fault reported verdict N/A.
+//
+// Such a run is neither a pass nor a failure, and both of the other phases
+// misreport it: "Completed" reads as a clean success next to a 0% resiliency
+// score (the score is 0 because the denominator was empty, not because the agent
+// scored nothing), and "Completed_With_Probe_Failure" would blame the agent for
+// what is actually a measurement gap on our side.
+const runPhaseCompletedNotGraded = "Completed_Not_Graded"
+
+// reconcileRunPhase corrects a terminal run phase that disagrees with the
+// graded fault verdicts.
+//
+// The phase reported by the subscriber is, at bottom, the Argo workflow phase:
+// it says every step exited, not that the chaos succeeded. A run whose probes
+// all failed still finishes with every step exit-0, so it was stored -- and
+// shown -- as a clean "Completed" while its resiliency score sat at 0. The
+// verdict tallies computed by ProcessCompletedExperimentRun are the
+// authoritative signal, so they win here.
+//
+// Only the success phases are reconciled: a run already reported as failed,
+// errored or stopped keeps the more specific phase it arrived with.
+func reconcileRunPhase(phase string, metrics types.ExperimentRunMetrics) string {
+	if !strings.EqualFold(phase, "Completed") && !strings.EqualFold(phase, "Succeeded") {
+		return phase
+	}
+	// A run with no *graded* fault -- a teardown-only workflow, or one whose
+	// faults the orchestrator reported N/A because it could not assert on them --
+	// has no verdict to contradict the workflow phase.
+	if metrics.TotalExperiments-metrics.ExperimentsNA <= 0 {
+		// Faults ran, but not one of them could be graded: say so rather than
+		// letting a 0% score read as a failed run or a clean pass.
+		if metrics.TotalExperiments > 0 {
+			return runPhaseCompletedNotGraded
+		}
+		return phase
+	}
+	// ExperimentsPassed == 0 also catches the all-Awaited case, where no graded
+	// fault ever produced a verdict — that is not a pass either.
+	if metrics.ExperimentsFailed > 0 || metrics.ExperimentsStopped > 0 || metrics.ExperimentsPassed == 0 {
+		return runPhaseCompletedWithProbeFailure
+	}
+	return phase
+}
+
 func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.ExperimentRunRequest) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -3180,6 +3252,22 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 			return "", err
 		}
 
+		if reconciled := reconcileRunPhase(executionData.Phase, workflowRunMetrics); reconciled != executionData.Phase {
+			logrus.WithFields(logFields).Infof(
+				"[Verdict] run phase %q does not match fault verdicts (passed=%d failed=%d stopped=%d awaited=%d na=%d total=%d); persisting %q",
+				executionData.Phase, workflowRunMetrics.ExperimentsPassed, workflowRunMetrics.ExperimentsFailed,
+				workflowRunMetrics.ExperimentsStopped, workflowRunMetrics.ExperimentsAwaited,
+				workflowRunMetrics.ExperimentsNA, workflowRunMetrics.TotalExperiments, reconciled)
+			executionData.Phase = reconciled
+			// executionData is persisted verbatim as the run's execution_data and
+			// drives the run-detail view, so it has to carry the same phase as the
+			// top-level column.
+			if reEncoded, mErr := json.Marshal(executionData); mErr == nil {
+				exeData = reEncoded
+			} else {
+				logrus.WithFields(logFields).WithError(mErr).Warn("[Verdict] failed to re-encode execution data with the reconciled phase")
+			}
+		}
 	}
 
 	traceID := strings.TrimSpace(event.ExperimentRunID)
@@ -3759,9 +3847,23 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 	expID := experiment.ExperimentID
 	projID := experiment.ProjectID
 
+	var authToken string
+	if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok {
+		authToken = tkn
+	}
+
+	// ChaosExperimentRunEvent runs on a 10s request context, and the Langfuse
+	// calls, RBAC cleanup and mongo transaction that precede this call routinely
+	// outlive it. On an expired context every conditional update below fails,
+	// the completion is never recorded and the batch stalls at one run -- which
+	// is what made run 2 of a 2-run batch silently never start. The chain owns
+	// its own deadline instead.
+	chainCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	// Guard 1: count this completion exactly once. MatchedCount==0 means the
 	// run was already counted, or the batch has already finished.
-	res, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(ctx,
+	res, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(chainCtx,
 		bson.D{
 			{"experiment_id", expID},
 			{"multi_run_state.completed_run_ids", bson.D{{"$ne", runID}}},
@@ -3781,7 +3883,7 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 		return
 	}
 
-	updated, err := c.chaosExperimentOperator.GetExperiment(ctx, bson.D{{"experiment_id", expID}})
+	updated, err := c.chaosExperimentOperator.GetExperiment(chainCtx, bson.D{{"experiment_id", expID}})
 	if err != nil {
 		logrus.WithFields(logFields).Errorf("[Multi-Run] failed to re-read experiment %s: %v", expID, err)
 		return
@@ -3794,7 +3896,7 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 	// Guard 3: terminal latch.
 	if completed >= maxRuns {
 		logrus.WithFields(logFields).Infof("[Multi-Run] batch complete for %s: %d/%d runs", expID, completed, maxRuns)
-		if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx,
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(chainCtx,
 			bson.D{{"experiment_id", expID}},
 			bson.D{{"$set", bson.D{
 				{"multi_run_state.batch_done", true},
@@ -3809,7 +3911,7 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 	// Guard 2: in-flight gate. The just-completed run is already persisted in a
 	// terminal phase by this point, so anything still Running or Queued is a
 	// different run that will advance the chain when it finishes.
-	inFlight, err := c.chaosExperimentRunOperator.CountExperimentRuns(ctx, bson.D{
+	inFlight, err := c.chaosExperimentRunOperator.CountExperimentRuns(chainCtx, bson.D{
 		{"experiment_id", expID},
 		{"phase", bson.D{{"$in", bson.A{"Running", "Queued"}}}},
 		{"is_removed", false},
@@ -3820,12 +3922,12 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 	}
 	if inFlight > 0 {
 		// A run wedged in Queued (its workflow never scheduled) never emits a
-		// completion event, so it holds the batch here indefinitely. That is
-		// deliberate — piling on more runs behind a wedged one is what produced
-		// the original runaway — but it is silent, so say how to clear it.
+		// completion event, so it holds the batch here. Deliberate — piling on
+		// more runs behind a wedged one is what produced the original runaway —
+		// and reconcileMultiRunBatch sweeps those stale runs so the batch is not
+		// stuck forever waiting for an event that will never arrive.
 		logrus.WithFields(logFields).Infof(
-			"[Multi-Run] %d run(s) still Running/Queued for %s; chain retires (completed=%d/%d). "+
-				"If a run is wedged and never completes, the batch stays here until it is set is_removed=true or the next run is started manually.",
+			"[Multi-Run] %d run(s) still Running/Queued for %s; chain retires (completed=%d/%d)",
 			inFlight, expID, completed, maxRuns)
 		return
 	}
@@ -3840,7 +3942,7 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 	// does NOT match a missing field, so without it every experiment predating
 	// this field would fail to claim and the batch would stall at one run.
 	maxDispatches := maxRuns - 1
-	claim, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(ctx,
+	claim, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(chainCtx,
 		bson.D{
 			{"experiment_id", expID},
 			{"multi_run_state.batch_done", bson.D{{"$ne", true}}},
@@ -3870,11 +3972,6 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 		); err != nil {
 			logrus.Errorf("[Multi-Run] failed to release dispatch slot for %s after %s: %v", expID, reason, err)
 		}
-	}
-
-	var authToken string
-	if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok {
-		authToken = tkn
 	}
 
 	delaySeconds := 120

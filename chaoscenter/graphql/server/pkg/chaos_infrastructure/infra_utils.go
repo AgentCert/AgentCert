@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ghodss/yaml"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
@@ -324,6 +325,10 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 	return []byte(strings.Join(generatedYAML, "\n")), nil
 }
 
+// subscriberDispatchTimeout bounds how long a dispatch waits for the target
+// infra's subscription channel to free up before it is reported as undelivered.
+const subscriberDispatchTimeout = 15 * time.Second
+
 // SendRequestToSubscriber sends events from the graphQL server to the subscribers listening for the requests
 func SendRequestToSubscriber(subscriberRequest SubscriberRequests, r store.StateData) {
 	newAction := &model.InfraActionResponse{
@@ -338,10 +343,21 @@ func SendRequestToSubscriber(subscriberRequest SubscriberRequests, r store.State
 	}
 
 	r.Mutex.Lock()
-	if observer, ok := r.ConnectedInfra[subscriberRequest.InfraID]; ok {
-		observer <- newAction
-	}
+	observer, ok := r.ConnectedInfra[subscriberRequest.InfraID]
 	r.Mutex.Unlock()
+	if !ok {
+		log.Errorf("no subscriber connected for infra %s; dropping %q request", subscriberRequest.InfraID, subscriberRequest.RequestType)
+		return
+	}
+
+	// The per-infra channel holds a single message. Sending while holding the
+	// store mutex would block every other infra's traffic behind one slow
+	// subscriber, so the send happens outside the lock and cannot wait forever.
+	select {
+	case observer <- newAction:
+	case <-time.After(subscriberDispatchTimeout):
+		log.Errorf("timed out dispatching %q request to the subscriber for infra %s; the request was not delivered", subscriberRequest.RequestType, subscriberRequest.InfraID)
+	}
 }
 
 // SendExperimentToSubscriber sends the workflow to the subscriber to be handled

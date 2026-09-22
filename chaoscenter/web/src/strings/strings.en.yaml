@@ -1094,9 +1094,15 @@ seeAllChaosInfrastructures: See All Infrastructures
 seeAllEnvironments: See All Environments
 seeAllFaults: See All Faults
 selectAProbe: Select a Probe
+selectAgentFirst: >-
+  Add an agent before adding faults. Only agents compatible with the selected
+  target application are listed.
 selectAppKind: Select App Kind
 selectAppLabel: Select App Label
 selectAppNamespace: Select App Namespace
+selectApplicationFirst: >-
+  Add a target application first. The agent and the faults are chosen against
+  it, and the workflow cannot run without it.
 selectChaosExperiment: Select Chaos Experiment
 selectChaosInfrastructure: Select a Chaos Infrastructure
 selectChaosInfrastructureFormLabel: Select a Chaos Infrastructure to run this experiment

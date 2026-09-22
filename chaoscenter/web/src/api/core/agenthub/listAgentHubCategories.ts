@@ -29,6 +29,7 @@ export function listAgentHubCategories({
             description
             version
             capabilities
+            compatibleApplications
             isDeployed
             deploymentStatus
             agentID

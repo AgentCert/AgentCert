@@ -31,6 +31,7 @@ import (
 	dbSchemaProbe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/probe"
 	envHandler "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/environment/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/fault_studio"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultcatalog"
 	gitops3 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/image_registry"
 	probe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/handler"
@@ -54,6 +55,7 @@ type Resolver struct {
 	probeService               probe.Service
 	agentRegistryService       agent_registry.Service
 	faultStudioService         fault_studio.Service
+	faultCatalogService        faultcatalog.Service
 	agentHubService            agenthub.Service
 	appHubService              apphub.Service
 	certificationService       *certification.Service
@@ -73,9 +75,12 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 
 	//service
 	probeService := probe.NewProbeService(probeOperator)
+	// Fault capability catalog — backs the Chaos Studio builder's app/agent/fault
+	// gating and the server-side validator on the experiment Save/Run path.
+	faultCatalogService := faultcatalog.NewService()
 	chaosHubService := chaoshub.NewService(chaosHubOperator)
 	chaosInfrastructureService := chaos_infrastructure.NewChaosInfrastructureService(chaosInfraOperator, EnvironmentOperator)
-	chaosExperimentService := chaos_experiment2.NewChaosExperimentService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator, probeService, agentRegistryOperator)
+	chaosExperimentService := chaos_experiment2.NewChaosExperimentService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator, probeService, agentRegistryOperator, faultCatalogService)
 	chaosExperimentRunService := chaos_experiment_run2.NewChaosExperimentRunService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator)
 	gitOpsService := gitops3.NewGitOpsService(gitopsOperator, chaosExperimentService, *chaosExperimentOperator)
 	imageRegistryService := image_registry.NewImageRegistryService(imageRegistryOperator)
@@ -129,6 +134,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 			probeService:               probeService,
 			agentRegistryService:       agentRegistryService,
 			faultStudioService:         faultStudioService,
+			faultCatalogService:        faultCatalogService,
 			agentHubService:            agentHubService,
 			appHubService:              appHubService,
 		}}
@@ -154,4 +160,9 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 // GetInfrastructureService returns the chaos infrastructure service for use in main initialization
 func (r *Resolver) GetInfrastructureService() chaos_infrastructure.Service {
 	return r.chaosInfrastructureService
+}
+
+// GetChaosExperimentRunHandler returns the experiment run handler for use in main initialization
+func (r *Resolver) GetChaosExperimentRunHandler() *runHandler.ChaosExperimentRunHandler {
+	return &r.chaosExperimentRunHandler
 }

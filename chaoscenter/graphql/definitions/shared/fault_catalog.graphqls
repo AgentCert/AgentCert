@@ -1,0 +1,66 @@
+# Fault Capability Catalog GraphQL Schema
+#
+# Serves chaos-charts/faults/fault-capabilities.yaml to the Chaos Studio builder
+# so the fault/agent pickers can be narrowed to the selected target application,
+# instead of the UI carrying its own hardcoded copy of the compatibility matrix
+# (which could — and did — drift from the catalog the server validates against).
+#
+# The same catalog backs the server-side validator on the experiment Save/Run
+# path, so the builder and the validator can never disagree.
+
+"""
+A target application the AppsHub can install, and how a ChaosEngine addresses its
+workloads. Mirrors one entry of spec.applications in the fault capability catalog.
+"""
+type TargetApplication {
+  """Catalog key, e.g. "sock-shop"."""
+  key: String!
+  """Every `-folder=` value an install-application step may carry for this app."""
+  folders: [String!]!
+  """Namespace the chart installs into by default."""
+  namespace: String!
+  """Label key whose value is the microservice name, e.g. "name" or "app"."""
+  labelKey: String!
+  """
+  Microservices the application is made of, from its chart entry. Used to offer
+  target labels before the application has been deployed and its real labels can
+  be read from the cluster.
+  """
+  services: [String!]!
+}
+
+"""
+Resolved compatibility for a single fault.
+
+`compatibleApps` is DERIVED, not restated in the catalog per fault: a `generic`
+fault is compatible with every application in the catalog, an
+`application-specific` fault only with the one it pins via requiredApp.
+"""
+type FaultCompatibility {
+  """Fault name, matching the fault's chart directory."""
+  faultName: String!
+  """`generic` or `application-specific`."""
+  classification: String!
+  """Keys of the TargetApplications this fault may be pointed at."""
+  compatibleApps: [String!]!
+  """Kubernetes kinds the fault acts on; empty means unrestricted."""
+  workloadKinds: [String!]!
+  """Microservices the fault hardcodes; empty means any service of the app."""
+  requiredServices: [String!]!
+  """`<app>/<service>` pairs known to fail this fault, for a build-time warning."""
+  knownFailingTargets: [String!]!
+}
+
+"""
+The whole catalog in one payload — the builder needs the application registry and
+the fault matrix together to gate a single step, so they are fetched together.
+"""
+type FaultCatalog {
+  applications: [TargetApplication!]!
+  faults: [FaultCompatibility!]!
+}
+
+extend type Query {
+  """Target application registry and per-fault compatibility matrix."""
+  getFaultCatalog(projectID: ID!): FaultCatalog! @authorized
+}
