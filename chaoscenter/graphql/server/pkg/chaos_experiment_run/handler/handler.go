@@ -2430,6 +2430,9 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	ops.ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
+	if err := ops.ValidateExperimentStructure(&workflowManifest.Spec); err != nil {
+		return nil, fmt.Errorf("workflow composition is not runnable: %w", err)
+	}
 
 	// Resolve the agent LLM model alias for this run, and make a run-scoped choice
 	// stick across the whole experiment.
@@ -2477,7 +2480,9 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	ops.InjectExperimentContextArgs(workflowManifest.Spec.Templates, effectiveModelAlias)
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
 	ensureAgentFolderParam(&workflowManifest.Spec)
-	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
+	if err := ops.ApplyGuaranteedCleanupPatch(&workflowManifest.Spec); err != nil {
+		return nil, fmt.Errorf("apply guaranteed cleanup patch: %w", err)
+	}
 
 	// Emit "fault: <name>" SPAN observations to Langfuse for certifier fault bucketing.
 	// Also emits a preceding "experiment_context" SPAN carrying agent/experiment identity
@@ -2925,10 +2930,16 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 	}
 	ops.ApplyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ops.ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	if err := ops.ValidateExperimentStructure(&cronExperimentManifest.Spec.WorkflowSpec); err != nil {
+		return fmt.Errorf("cron workflow composition is not runnable: %w", err)
+	}
+
 	ops.ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 	ensureAgentFolderParam(&cronExperimentManifest.Spec.WorkflowSpec)
-	applyUninstallAllPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
+	if err := ops.ApplyGuaranteedCleanupPatch(&cronExperimentManifest.Spec.WorkflowSpec); err != nil {
+		return fmt.Errorf("apply guaranteed cleanup patch: %w", err)
+	}
 
 	// Detect container runtime once for all ChaosEngine templates in this cron workflow
 	var (
@@ -3334,6 +3345,9 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 						faultName = node.ChaosExp.EngineName
 					}
 					if faultName != "" {
+						if utils.IsTeardownExperiment(faultName) {
+							continue
+						}
 						faultNames = append(faultNames, faultName)
 					}
 				}
@@ -3362,6 +3376,9 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					faultName = node.ChaosExp.EngineName
 				}
 				if faultName == "" {
+					continue
+				}
+				if utils.IsTeardownExperiment(faultName) {
 					continue
 				}
 
@@ -3437,6 +3454,9 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					faultName := node.ChaosExp.ExperimentName
 					if faultName == "" {
 						faultName = node.ChaosExp.EngineName
+					}
+					if faultName == "" || utils.IsTeardownExperiment(faultName) {
+						continue
 					}
 					_ = tracer.TraceExperimentObservation(ctx, &observability.ExperimentObservationDetails{
 						TraceID:   langfuseTraceID,
@@ -4100,6 +4120,9 @@ func computeFaultCohort(nodes map[string]types.Node) (map[string][]string, strin
 		if fault == "" {
 			continue
 		}
+		if utils.IsTeardownExperiment(fault) {
+			continue
+		}
 		w := window{fault: fault}
 		if ts := observability.ParseArgoTime(node.StartedAt); ts != nil {
 			w.start = *ts
@@ -4233,6 +4256,9 @@ func computeFaultWindows(nodes map[string]types.Node) []certification.FaultWindo
 			}
 		}
 		if faultName == "" {
+			continue
+		}
+		if utils.IsTeardownExperiment(faultName) {
 			continue
 		}
 

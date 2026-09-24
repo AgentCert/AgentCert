@@ -195,7 +195,10 @@ func TestChaosFaultNamesReadsEnginesOnly(t *testing.T) {
 			engineYAML("pod-cpu-hog"),
 		),
 	}
-	got := chaosFaultNames(templates)
+	got, err := chaosFaultNames(templates)
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
 	if len(got) != 2 || got[0] != "pod-delete" || got[1] != "pod-cpu-hog" {
 		t.Errorf("want [pod-delete pod-cpu-hog], got %v", got)
 	}
@@ -210,5 +213,77 @@ func TestInstallStepArgAcceptsBothForms(t *testing.T) {
 	}
 	if got := installStepArg([]string{"-wait"}, "folder"); got != "" {
 		t.Errorf("absent flag should yield empty, got %q", got)
+	}
+}
+
+func targetedEngineYAML(faultName, namespace, kind, label string) string {
+	return "kind: ChaosEngine\nmetadata:\n  name: " + faultName +
+		"\nspec:\n  appinfo:\n    appns: \"" + namespace + "\"" +
+		"\n    appkind: " + kind +
+		"\n    applabel: " + label +
+		"\n  experiments:\n    - name: " + faultName + "\n"
+}
+
+func TestMalformedChaosArtifactIsRejected(t *testing.T) {
+	spec := &v1alpha1.WorkflowSpec{Templates: []v1alpha1.Template{
+		faultsTemplate("kind: ChaosEngine\nspec: ["),
+	}}
+	if err := ValidateExperimentStructure(spec); err == nil || !strings.Contains(err.Error(), "invalid chaos artifact") {
+		t.Fatalf("expected actionable parse error, got %v", err)
+	}
+}
+
+func TestIncompleteFaultTargetIsRejected(t *testing.T) {
+	spec := &v1alpha1.WorkflowSpec{Templates: []v1alpha1.Template{
+		installTemplate("install-application", "agentcert/agentcert-install-app:latest", "sock-shop", "sock-shop"),
+		faultsTemplate(targetedEngineYAML("pod-delete", "sock-shop", "deployment", "")),
+	}}
+	if err := ValidateExperimentStructure(spec); err == nil || !strings.Contains(err.Error(), "incomplete spec.appinfo") {
+		t.Fatalf("expected incomplete appinfo error, got %v", err)
+	}
+}
+
+func TestFaultTargetNamespaceMustMatchApplication(t *testing.T) {
+	spec := &v1alpha1.WorkflowSpec{Templates: []v1alpha1.Template{
+		installTemplate("install-application", "agentcert/agentcert-install-app:latest", "sock-shop", "sock-shop"),
+		faultsTemplate(targetedEngineYAML("pod-delete", "bookinfo", "deployment", "name=carts")),
+	}}
+	if err := ValidateExperimentStructure(spec); err == nil || !strings.Contains(err.Error(), "targets namespace") {
+		t.Fatalf("expected namespace mismatch error, got %v", err)
+	}
+}
+
+func TestFaultTargetMayUseWorkflowNamespaceParameter(t *testing.T) {
+	spec := &v1alpha1.WorkflowSpec{Templates: []v1alpha1.Template{
+		installTemplate("install-application", "agentcert/agentcert-install-app:latest", "sock-shop", "sock-shop"),
+		faultsTemplate(targetedEngineYAML("pod-delete", appNamespaceRef, "deployment", "name=carts")),
+	}}
+	if err := ValidateExperimentStructure(spec); err != nil {
+		t.Fatalf("expected parameterized target to pass, got %v", err)
+	}
+}
+
+func TestTeardownIsNotCountedAsCertifiableFault(t *testing.T) {
+	got, err := chaosFaultNames([]v1alpha1.Template{
+		faultsTemplate(engineYAML("pod-delete"), engineYAML("uninstall-agent")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "pod-delete" {
+		t.Fatalf("expected only the injected fault, got %v", got)
+	}
+}
+
+func TestExtractInstallAgentNamespaceAcceptsCombinedAndSplitForms(t *testing.T) {
+	combined := installTemplate("install-agent", "agentcert/agentcert-install-agent:latest", "flash-agent", "sock-shop")
+	if got := ExtractInstallAgentNamespace([]v1alpha1.Template{combined}); got != "sock-shop" {
+		t.Fatalf("combined namespace: got %q", got)
+	}
+	split := combined
+	split.Container = split.Container.DeepCopy()
+	split.Container.Args = []string{"--folder", "flash-agent", "--namespace", "bookinfo"}
+	if got := ExtractInstallAgentNamespace([]v1alpha1.Template{split}); got != "bookinfo" {
+		t.Fatalf("split namespace: got %q", got)
 	}
 }

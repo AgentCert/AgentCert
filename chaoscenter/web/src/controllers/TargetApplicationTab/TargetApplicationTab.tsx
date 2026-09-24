@@ -184,6 +184,16 @@ export default function TargetApplicationTabController({
   const currentApp = faultCatalog.resolveApplication(currentPendingApp?.folder, targetApp?.appns);
   const requiredServices = faultCatalog.faultRequiredServices(faultName);
   const compatibleServices = currentApp ? requiredServices ?? currentApp.services : undefined;
+
+  // Exclude concrete services known to violate this fault's injection
+  // preconditions. Keeping them selectable creates a platform injection error
+  // that is easily misreported as an agent failure.
+  const knownFailingServices = new Set(
+    faultCatalog
+      .faultKnownFailingTargets(faultName)
+      .filter(target => !currentApp || target.startsWith(`${currentApp.key}/`))
+      .map(target => target.slice(target.indexOf('/') + 1))
+  );
   const pendingAppInfoData: AppInfoData =
     currentApp && selectedNamespaceIsPending
       ? {
@@ -194,9 +204,12 @@ export default function TargetApplicationTabController({
         }
       : { appLabels: [] };
   const sourceAppInfoData = pendingAppInfoData.appLabels.length > 0 ? pendingAppInfoData : appInfoData;
-  const filteredAppInfoData: AppInfoData = requiredServices
-    ? { appLabels: sourceAppInfoData.appLabels.filter(option => requiredServices.includes(option.name)) }
-    : sourceAppInfoData;
+  const servicesForFault = requiredServices
+    ? sourceAppInfoData.appLabels.filter(option => requiredServices.includes(option.name))
+    : sourceAppInfoData.appLabels;
+  const filteredAppInfoData: AppInfoData = {
+    appLabels: servicesForFault.filter(option => !knownFailingServices.has(option.name))
+  };
 
   return (
     <TargetApplicationTab

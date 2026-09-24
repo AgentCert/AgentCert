@@ -1,6 +1,10 @@
 package faultcatalog
 
-import "testing"
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func testApps() []Application {
 	return []Application{
@@ -112,5 +116,18 @@ func TestAgentCompatibilityDefaultsToUnrestricted(t *testing.T) {
 	}
 	if IsAgentCompatible([]string{"sock-shop"}, "otel-demo") {
 		t.Error("undeclared application must not be compatible")
+	}
+}
+
+func TestConfiguredMissingCatalogFailsClosed(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing-fault-capabilities.yaml")
+	t.Setenv("FAULT_CAPABILITIES_PATH", missing)
+
+	_, err := loadFaults(t.TempDir())
+	if err == nil {
+		t.Fatal("configured missing catalog must return an error")
+	}
+	if !strings.Contains(err.Error(), missing) {
+		t.Fatalf("error should name configured path, got %v", err)
 	}
 }

@@ -675,24 +675,11 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 
 	workflow.Weightages = append(workflow.Weightages, newWeights...)
 
-	// Apply readiness normalization patch automatically
-	// RBAC is now handled at infra setup time via enable-chaos-infra.sh with admin identity
-	err = c.applyInstallApplicationReadinessPatch(&workflowManifest)
-	if err != nil {
-		logrus.Errorf("Failed to apply readiness patch: %v", err)
-		// Log but don't fail - readiness patch is optional
+	if err = c.applyPreCleanupWaitPatch(&workflowManifest); err != nil {
+		return fmt.Errorf("apply pre-cleanup wait patch: %w", err)
 	}
-
-	err = c.applyPreCleanupWaitPatch(&workflowManifest)
-	if err != nil {
-		logrus.Errorf("Failed to apply pre-cleanup wait patch: %v", err)
-		// Log but don't fail - wait patch is optional
-	}
-
-	err = c.applyUninstallAllPatch(&workflowManifest)
-	if err != nil {
-		logrus.Errorf("Failed to apply uninstall-all patch: %v", err)
-		// Log but don't fail - uninstall patch is optional
+	if err = ApplyGuaranteedCleanupPatch(&workflowManifest.Spec); err != nil {
+		return fmt.Errorf("apply guaranteed cleanup patch: %w", err)
 	}
 
 	// Enable Argo podGC so completed executor pods in litmus-exp are deleted automatically.
@@ -2759,10 +2746,8 @@ func ExtractInstallAgentNamespace(templates []v1alpha1.Template) string {
 		if t.Name != "install-agent" && !strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent") {
 			continue
 		}
-		for i, arg := range t.Container.Args {
-			if (arg == "--namespace" || arg == "-namespace") && i+1 < len(t.Container.Args) {
-				return t.Container.Args[i+1]
-			}
+		if namespace := installStepArg(t.Container.Args, "namespace"); namespace != "" {
+			return namespace
 		}
 	}
 	return ""

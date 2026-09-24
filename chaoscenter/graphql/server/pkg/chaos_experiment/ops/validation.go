@@ -11,6 +11,7 @@ import (
 	"github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultcatalog"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -27,9 +28,12 @@ const (
 		"Without it {{workflow.parameters.appNamespace}} cannot be resolved and Argo rejects the workflow spec"
 	errNoAgentFolder = "this experiment has an %s step but no resolvable -folder=. " +
 		"Without it {{workflow.parameters.agentFolder}} cannot be resolved and Argo rejects the workflow spec"
-	errIncompatibleFault = "fault %q cannot target application %q. It is compatible with: %s"
-	errIncompatibleAgent = "agent %q cannot be paired with application %q"
-	errAgentNotAppScoped = "agent %q is not application-targeted and cannot be used with application %q"
+	errIncompatibleFault      = "fault %q cannot target application %q. It is compatible with: %s"
+	errIncompatibleAgent      = "agent %q cannot be paired with application %q"
+	errAgentNotAppScoped      = "agent %q is not application-targeted and cannot be used with application %q"
+	errInvalidChaosArtifact   = "invalid chaos artifact %q: %w"
+	errInvalidFaultTarget     = "fault %q has incomplete spec.appinfo; appns, appkind, and applabel are required for application-targeted faults"
+	errFaultNamespaceMismatch = "fault %q targets namespace %q, but the selected application is installed in %q"
 )
 
 // appNamespaceRef is emitted unconditionally by applyInstallApplicationReadinessPatch,
@@ -80,17 +84,20 @@ func isInstallStepTemplate(t v1alpha1.Template, kind string) bool {
 	return name == legacyName || strings.Contains(strings.TrimSpace(t.Container.Image), imageMarker)
 }
 
-// chaosFaultNames returns the faults a workflow injects, read from the
-// ChaosEngine artifacts staged by the install-chaos-faults step. That is the
-// same source the builder counts, so the two cannot disagree about whether an
-// experiment "has faults".
-func chaosFaultNames(templates []v1alpha1.Template) []string {
-	var faults []string
+type chaosFaultTarget struct {
+	Name     string
+	AppNS    string
+	AppKind  string
+	AppLabel string
+	HasApp   bool
+}
+
+// chaosFaultTargets reads the ChaosEngine artifacts staged by the builder.
+// Malformed artifacts are rejected instead of disappearing from validation.
+func chaosFaultTargets(templates []v1alpha1.Template) ([]chaosFaultTarget, error) {
+	var targets []chaosFaultTarget
 	for _, t := range templates {
 		if t.Name != "install-chaos-faults" && t.Name != "install-chaos-experiments" {
-			continue
-		}
-		if t.Inputs.Artifacts == nil {
 			continue
 		}
 		for _, artifact := range t.Inputs.Artifacts {
@@ -103,13 +110,18 @@ func chaosFaultNames(templates []v1alpha1.Template) []string {
 					Name string `yaml:"name"`
 				} `yaml:"metadata"`
 				Spec struct {
+					AppInfo *struct {
+						AppNS    string `yaml:"appns"`
+						AppKind  string `yaml:"appkind"`
+						AppLabel string `yaml:"applabel"`
+					} `yaml:"appinfo"`
 					Experiments []struct {
 						Name string `yaml:"name"`
 					} `yaml:"experiments"`
 				} `yaml:"spec"`
 			}
 			if err := yaml.Unmarshal([]byte(artifact.Raw.Data), &engine); err != nil {
-				continue
+				return nil, fmt.Errorf(errInvalidChaosArtifact, artifact.Name, err)
 			}
 			if !strings.EqualFold(engine.Kind, "ChaosEngine") {
 				// install-chaos-faults also stages the ChaosExperiment CRs; the
@@ -117,13 +129,102 @@ func chaosFaultNames(templates []v1alpha1.Template) []string {
 				continue
 			}
 			for _, exp := range engine.Spec.Experiments {
-				if exp.Name != "" {
-					faults = append(faults, exp.Name)
+				name := strings.TrimSpace(exp.Name)
+				if name == "" || utils.IsTeardownExperiment(name) {
+					continue
 				}
+				target := chaosFaultTarget{Name: name}
+				if engine.Spec.AppInfo != nil {
+					target.HasApp = true
+					target.AppNS = strings.TrimSpace(engine.Spec.AppInfo.AppNS)
+					target.AppKind = strings.TrimSpace(engine.Spec.AppInfo.AppKind)
+					target.AppLabel = strings.TrimSpace(engine.Spec.AppInfo.AppLabel)
+				}
+				targets = append(targets, target)
 			}
 		}
 	}
-	return faults
+	return targets, nil
+}
+
+func chaosFaultNames(templates []v1alpha1.Template) ([]string, error) {
+	targets, err := chaosFaultTargets(templates)
+	if err != nil {
+		return nil, err
+	}
+	faults := make([]string, 0, len(targets))
+	for _, target := range targets {
+		faults = append(faults, target.Name)
+	}
+	return faults, nil
+}
+
+// ValidateExperimentStructure rejects workflow shapes that Argo or Litmus
+// cannot execute reliably. It is independent of database state, so both save
+// and run paths (including old stored revisions) use the same gate.
+func ValidateExperimentStructure(workflowSpec *v1alpha1.WorkflowSpec) error {
+	if workflowSpec == nil {
+		return nil
+	}
+
+	var appFolders, appNamespaces []string
+	for _, t := range workflowSpec.Templates {
+		if isInstallStepTemplate(t, "application") {
+			appFolders = append(appFolders, installStepArg(t.Container.Args, "folder"))
+			appNamespaces = append(appNamespaces, installStepArg(t.Container.Args, "namespace"))
+		}
+	}
+	if len(appFolders) > 1 {
+		return fmt.Errorf(errMultipleInstallApplications, len(appFolders), strings.Join(appFolders, ", "))
+	}
+
+	hasInstallAgent, hasUninstallAgent := false, false
+	for _, t := range workflowSpec.Templates {
+		hasInstallAgent = hasInstallAgent || isInstallStepTemplate(t, "agent")
+		hasUninstallAgent = hasUninstallAgent || strings.EqualFold(strings.TrimSpace(t.Name), "uninstall-agent")
+	}
+
+	needsApplication := hasInstallAgent || referencesAppNamespace(workflowSpec)
+	if len(appFolders) == 0 {
+		if !needsApplication {
+			_, err := chaosFaultTargets(workflowSpec.Templates)
+			return err
+		}
+		reason := "references " + appNamespaceRef
+		if hasInstallAgent {
+			reason = "installs an agent"
+		}
+		return fmt.Errorf(errNoInstallApplication, reason)
+	}
+
+	appNamespace := strings.TrimSpace(appNamespaces[0])
+	if appNamespace == "" {
+		return errors.New(errNoAppNamespace)
+	}
+	if (hasInstallAgent || hasUninstallAgent) && ExtractInstallAgentFolder(workflowSpec.Templates) == "" {
+		step := "install-agent"
+		if !hasInstallAgent {
+			step = "uninstall-agent"
+		}
+		return fmt.Errorf(errNoAgentFolder, step)
+	}
+
+	targets, err := chaosFaultTargets(workflowSpec.Templates)
+	if err != nil {
+		return err
+	}
+	for _, target := range targets {
+		if !target.HasApp {
+			continue
+		}
+		if target.AppNS == "" || target.AppKind == "" || target.AppLabel == "" {
+			return fmt.Errorf(errInvalidFaultTarget, target.Name)
+		}
+		if target.AppNS != appNamespace && target.AppNS != appNamespaceRef {
+			return fmt.Errorf(errFaultNamespaceMismatch, target.Name, target.AppNS, appNamespace)
+		}
+	}
+	return nil
 }
 
 // agentCompatibility returns an agent chart's declared application restriction.
@@ -173,6 +274,9 @@ func (c *chaosExperimentService) validateExperimentComposition(
 ) error {
 	if workflowSpec == nil {
 		return nil
+	}
+	if err := ValidateExperimentStructure(workflowSpec); err != nil {
+		return err
 	}
 	templates := workflowSpec.Templates
 
@@ -243,7 +347,11 @@ func (c *chaosExperimentService) validateExperimentComposition(
 		return nil // an application the registry has not heard of restricts nothing
 	}
 
-	for _, fault := range chaosFaultNames(templates) {
+	faults, err := chaosFaultNames(templates)
+	if err != nil {
+		return err
+	}
+	for _, fault := range faults {
 		if catalog.IsFaultCompatible(fault, app.Key) {
 			continue
 		}

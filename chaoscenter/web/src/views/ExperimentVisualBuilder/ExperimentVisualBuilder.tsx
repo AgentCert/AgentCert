@@ -188,18 +188,22 @@ export default function ExperimentVisualBuilderView({
     });
   };
 
-  const handleRemoveFault = (faultName: string): void => {
-    experimentHandler?.removeFaultsFromManifest(experimentKey, faultName).then(experiment => {
-      const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
-      setExperimentSteps(steps);
+  const handleRemoveFault = async (faultName: string): Promise<void> => {
+    if (!experimentHandler) return;
+    const experiment = await experimentHandler.removeFaultsFromManifest(experimentKey, faultName);
+    const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
+    setExperimentSteps(steps);
+    setHasFaults(experimentHandler.doesExperimentHaveFaults(experiment?.manifest));
+    refreshExperimentContext(experiment?.manifest);
+    setUnsavedChanges();
+  };
 
-      const hasFaults = experimentHandler.doesExperimentHaveFaults(experiment?.manifest);
-      if (!hasFaults) {
-        setHasFaults(hasFaults);
-      }
-      refreshExperimentContext(experiment?.manifest);
-      setUnsavedChanges();
-    });
+  const handleTuneFaultDiscard = async (): Promise<void> => {
+    if (tuneFaultDrawerOpen.operation === GetFaultTunablesOperation.InitialEnvs && selectedFaultData?.faultName) {
+      await handleRemoveFault(selectedFaultData.faultName);
+    }
+    setSelectedFaultData(undefined);
+    setTuneFaultDrawerOpen({ open: false, operation: GetFaultTunablesOperation.UpdatedEnvs });
   };
 
   React.useEffect(() => {
@@ -331,7 +335,9 @@ export default function ExperimentVisualBuilderView({
             iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
             onClick={() => hasApplication && setUninstallStepDrawer({ open: true, kind: 'application' })}
             className={hasApplication ? css.actionItem : classNames(css.actionItem, css.actionItemDisabled)}
-            tooltip={hasApplication ? getString('uninstallApplicationDescription') : getString('selectApplicationFirst')}
+            tooltip={
+              hasApplication ? getString('uninstallApplicationDescription') : getString('selectApplicationFirst')
+            }
             tooltipProps={{ position: Position.RIGHT }}
           >
             {getString('uninstallApplication')}
@@ -405,6 +411,7 @@ export default function ExperimentVisualBuilderView({
       {tuneFaultDrawerOpen.open && (
         <ExperimentCreationTuneFaultView
           isOpen={tuneFaultDrawerOpen.open}
+          onDiscard={handleTuneFaultDiscard}
           onClose={handleTuneFaultDrawerClose}
           initialFaultData={selectedFaultData}
           infraID={infraDetails?.infraID}

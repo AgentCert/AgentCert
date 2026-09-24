@@ -91,6 +91,18 @@ func TestComputeFaultWindows(t *testing.T) {
 			want: nil,
 		},
 		{
+			name: "ITBench teardown ChaosEngine is excluded",
+			nodes: map[string]types.Node{
+				"n1": {
+					Type:       "ChaosEngine",
+					StartedAt:  "2026-01-01T00:00:00Z",
+					FinishedAt: "2026-01-01T00:05:00Z",
+					ChaosExp:   &types.ChaosData{ExperimentName: "uninstall-agent"},
+				},
+			},
+			want: nil,
+		},
+		{
 			name: "missing FinishedAt is skipped even with a matched name",
 			nodes: map[string]types.Node{
 				"n1": {

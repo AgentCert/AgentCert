@@ -39,6 +39,7 @@ interface ExperimentCreationTuneFaultProps {
   isOpen: boolean;
   onClose: () => void;
   initialFaultData: FaultData | undefined;
+  onDiscard: () => Promise<void>;
   infraID: string | undefined;
   environmentID: string | undefined;
   faultTuneOperation: GetFaultTunablesOperation;
@@ -57,14 +58,13 @@ enum TuneFaultTab {
 function getIncompleteTargetAppFields(engineCR: ChaosEngine | undefined): string[] {
   const appinfo = engineCR?.spec?.appinfo;
   if (!appinfo) return [];
-  return (['appkind', 'appns', 'applabel'] as const).filter(
-    field => appinfo[field] !== undefined && !appinfo[field]
-  );
+  return (['appkind', 'appns', 'applabel'] as const).filter(field => appinfo[field] !== undefined && !appinfo[field]);
 }
 
 export default function ExperimentCreationTuneFaultView({
   isOpen,
   onClose,
+  onDiscard,
   initialFaultData,
   infraID,
   // environmentID,
@@ -109,8 +109,8 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
         text={getString('discard')}
         variation={ButtonVariation.SECONDARY}
         size={ButtonSize.MEDIUM}
-        onClick={() => {
-          onClose();
+        onClick={async () => {
+          await onDiscard();
         }}
       />
       <Button

@@ -102,16 +102,33 @@ type rawCatalog struct {
 // Loading
 // ---------------------------------------------------------------------------
 
+// CatalogPath returns the capability catalog file to read for a hub's faults/
+// directory.
+//
+// FAULT_CAPABILITIES_PATH overrides the hub copy. The hub's own copy lives
+// inside a directory the server git-clones at request time, and mounting a file
+// into it pre-creates that directory, which makes the clone fail -- so an
+// override needs a path outside the clone rather than a mount over it.
+func CatalogPath(faultsDir string) string {
+	if override := strings.TrimSpace(os.Getenv("FAULT_CAPABILITIES_PATH")); override != "" {
+		return override
+	}
+	return filepath.Join(faultsDir, CatalogFileName)
+}
+
 // loadFaults parses the capability catalog from a hub's faults/ directory.
 //
 // A missing catalog is not an error: a custom chaos hub need not ship one, and
 // every fault in it is then treated as generic. Only a malformed one fails.
 func loadFaults(faultsDir string) (map[string]rawFault, error) {
-	path := filepath.Join(faultsDir, CatalogFileName)
+	path := CatalogPath(faultsDir)
 	data, err := os.ReadFile(path) // #nosec G304 -- path is server-controlled hub content
 	if err != nil {
 		if os.IsNotExist(err) {
-			return map[string]rawFault{}, nil
+			if strings.TrimSpace(os.Getenv("FAULT_CAPABILITIES_PATH")) == "" {
+				return map[string]rawFault{}, nil
+			}
+			return nil, fmt.Errorf("configured fault capability catalog does not exist: %s", path)
 		}
 		return nil, fmt.Errorf("read fault capability catalog %s: %w", path, err)
 	}
@@ -353,7 +370,7 @@ func stampsEqual(a, b []fileStamp) bool {
 func (c *Cache) Get(faultsDir, appChartsDir string, loadApps func() ([]Application, error)) (*Catalog, error) {
 	key := faultsDir + "\x00" + appChartsDir
 	current := []fileStamp{
-		stampFile(filepath.Join(faultsDir, CatalogFileName)),
+		stampFile(CatalogPath(faultsDir)),
 		stampDir(appChartsDir),
 	}
 
