@@ -44,6 +44,8 @@ spec:
     metadata:
       labels:
         app: subscriber
+      annotations:
+        agentcert.io/infra-id: "#{INFRA_ID}"
     spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
       #{TOLERATIONS}

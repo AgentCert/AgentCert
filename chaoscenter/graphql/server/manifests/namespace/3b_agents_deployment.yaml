@@ -44,6 +44,8 @@ spec:
     metadata:
       labels:
         app: subscriber
+      annotations:
+        agentcert.io/infra-id: "#{INFRA_ID}"
     spec:
       #{TOLERATIONS}
       #{NODE_SELECTOR}
@@ -129,3 +131,4 @@ spec:
               memory: "500Mi"
               cpu: "225m"
               ephemeral-storage: "1Gi"
+ 
