@@ -2399,6 +2399,18 @@ func applyAgentInstallNamespaceOverride(templates []v1alpha1.Template) {
 	}
 }
 
+func normalizeAgentSidecarImagePullPolicy(raw string) string {
+	pullPolicy := corev1.PullPolicy(strings.TrimSpace(raw))
+	switch pullPolicy {
+	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+		return string(pullPolicy)
+	default:
+		// Local setup side-loads the exact image into every node. If the value is
+		// missing or malformed, avoid an external pull that can replace that image.
+		return string(corev1.PullIfNotPresent)
+	}
+}
+
 // InjectExperimentContextArgs appends --set flags to the install-agent template
 // so that Argo Workflow template variables (experiment_id, run_id, workflow_name)
 // are passed through to the configured agent Helm chart as ConfigMap values.
@@ -2528,6 +2540,12 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		sidecarImageRepo = sidecarImageFull[:idx]
 	}
 
+	sidecarImagePullPolicy := strings.TrimSpace(utils.Config.AgentSidecarImagePullPolicy)
+	if sidecarImagePullPolicy == "" {
+		sidecarImagePullPolicy = strings.TrimSpace(os.Getenv("AGENT_SIDECAR_IMAGE_PULL_POLICY"))
+	}
+	sidecarImagePullPolicy = normalizeAgentSidecarImagePullPolicy(sidecarImagePullPolicy)
+
 	// Server address for agent registration audit call inside install-agent.
 	serverAddr := strings.TrimSpace(os.Getenv("SERVER_ADDR"))
 	if serverAddr == "" {
@@ -2598,7 +2616,7 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		// Pin the exact sidecar image that was built and loaded into minikube.
 		"--set", fmt.Sprintf("sidecar.image.repository=%s", sidecarImageRepo),
 		"--set", fmt.Sprintf("sidecar.image.tag=%s", sidecarImageTag),
-		"--set", "sidecar.image.pullPolicy=Always",
+		"--set", fmt.Sprintf("sidecar.image.pullPolicy=%s", sidecarImagePullPolicy),
 	}
 
 	// Ground truth is emitted directly to Langfuse via EmitFaultSpansForTrace

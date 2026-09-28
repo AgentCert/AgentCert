@@ -35,6 +35,7 @@ type Configuration struct {
 	LitmusHelperImagesPullPolicy string `split_words:"true" default:""`
 	FlashAgentImage              string `split_words:"true" default:"agentcert/agentcert-flash-agent:latest"`
 	AgentSidecarImage            string `split_words:"true" default:"agentcert/agent-sidecar:latest"`
+	AgentSidecarImagePullPolicy  string `split_words:"true" default:"IfNotPresent"`
 	ChaosCenterUiEndpoint        string `split_words:"true" default:"https://localhost:8080"`
 	// ChaosCenterPublicEndpoint, when set, is the base URL a human (or a
 	// `kubectl`/`curl` running on their behalf) should use to reach this

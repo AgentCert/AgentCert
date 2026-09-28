@@ -1,6 +1,7 @@
 declare namespace ExperimentVisualBuilderModuleScssNamespace {
   export interface IExperimentVisualBuilderModuleScss {
     actionItem: string;
+    actionItemDisabled: string;
     activeText: string;
     divider: string;
     graphContainer: string;
