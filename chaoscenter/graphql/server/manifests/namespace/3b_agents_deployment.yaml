@@ -107,7 +107,7 @@ spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
       containers:
         - image: #{EVENT_TRACKER_IMAGE}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 2000
             allowPrivilegeEscalation: false

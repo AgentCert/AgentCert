@@ -40,7 +40,7 @@ spec:
             - chaos-operator
           args:
             - -leader-elect=true
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 2000
             allowPrivilegeEscalation: false
@@ -92,7 +92,7 @@ spec:
       #{NODE_SELECTOR}
       containers:
         - image: #{LITMUS_CHAOS_EXPORTER}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           name: chaos-exporter
           securityContext:
             runAsUser: 2000
