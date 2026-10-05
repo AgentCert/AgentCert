@@ -74,6 +74,15 @@ func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInpu
 		return nil, err
 	}
 
+	// One experiment certifies one agent, fixed by the parent doc's first
+	// insert. Two callers resolve the agent independently (the server's
+	// terminal-event auto-trigger and the UI), and run/aggregation docs are
+	// keyed by agentId, so a caller whose identity differs would split the
+	// experiment's runs across two ids and the gate would never see them all.
+	if err := s.adoptExperimentAgent(ctx, &in); err != nil {
+		return nil, err
+	}
+
 	// Guard: if the run already has a completed pipeline entry, re-submitting it
 	// (e.g., the auto-trigger re-fires on page reload for old runs that are in the
 	// DB history but were part of a prior certification batch) must not call
@@ -102,6 +111,10 @@ func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInpu
 		AggregationPolicy: AggregationPolicy{Mode: PolicyAllRunsCompleted},
 	}); err != nil {
 		return nil, fmt.Errorf("upsert experiment: %w", err)
+	}
+	// Re-read: a concurrent first call may have inserted the parent first.
+	if err := s.adoptExperimentAgent(ctx, &in); err != nil {
+		return nil, err
 	}
 
 	// If the experiment was already fully certified and a new (or replacement)
@@ -150,6 +163,23 @@ func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInpu
 		ExperimentRunWorkflowStatus: RunStatusBucketingTriggered,
 		Message:                     "certification pipeline started",
 	}, nil
+}
+
+// adoptExperimentAgent replaces the caller's agent identity with the one
+// stored on the experiment's certificate doc, when that doc exists.
+func (s *Service) adoptExperimentAgent(ctx context.Context, in *StartInput) error {
+	parent, err := s.op.GetExperiment(ctx, in.ProjectID, in.ExperimentID)
+	if err != nil {
+		return fmt.Errorf("load certificate experiment: %w", err)
+	}
+	if parent == nil || parent.AgentID == "" {
+		return nil
+	}
+	in.AgentID = parent.AgentID
+	if parent.AgentName != "" {
+		in.AgentName = parent.AgentName
+	}
+	return nil
 }
 
 // runPipeline executes bucketing -> poll -> gate -> aggregation -> poll.

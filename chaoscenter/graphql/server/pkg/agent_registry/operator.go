@@ -34,6 +34,11 @@ type Operator interface {
 
 	// GetAgentByNamespace retrieves the first active agent deployed in a given namespace.
 	GetAgentByNamespace(ctx context.Context, namespace string) (*Agent, error)
+
+	// GetAgentByNamespaceAndName retrieves the active agent with the given
+	// name deployed in the given namespace. Several agents can share one
+	// application namespace, so this is the lookup that identifies a specific one.
+	GetAgentByNamespaceAndName(ctx context.Context, namespace, name string) (*Agent, error)
 }
 
 // operatorImpl is the concrete implementation of the Operator interface.
@@ -97,6 +102,27 @@ func (o *operatorImpl) GetAgentByProjectAndName(ctx context.Context, projectID, 
 func (o *operatorImpl) GetAgentByNamespace(ctx context.Context, namespace string) (*Agent, error) {
 	filter := bson.M{
 		"namespace": namespace,
+		"status":    bson.M{"$ne": "DELETED"},
+	}
+
+	var agent Agent
+	err := o.collection.FindOne(ctx, filter).Decode(&agent)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrAgentNotFound
+		}
+		return nil, err
+	}
+
+	return &agent, nil
+}
+
+// GetAgentByNamespaceAndName retrieves the active agent with the given name in
+// the given namespace.
+func (o *operatorImpl) GetAgentByNamespaceAndName(ctx context.Context, namespace, name string) (*Agent, error) {
+	filter := bson.M{
+		"namespace": namespace,
+		"name":      name,
 		"status":    bson.M{"$ne": "DELETED"},
 	}
 

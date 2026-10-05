@@ -13,6 +13,11 @@ import (
 
 const uninstallAllTemplateName = "uninstall-all"
 
+// UninstallAllTemplateName is the onExit cleanup template's name, exported for
+// callers outside this package that must tell it apart from the install-agent
+// step whose image it shares.
+const UninstallAllTemplateName = uninstallAllTemplateName
+
 // ApplyGuaranteedCleanupPatch installs an Argo onExit handler. Unlike a final
 // normal step, onExit runs after success, failure, or cancellation.
 func ApplyGuaranteedCleanupPatch(spec *v1alpha1.WorkflowSpec) error {
@@ -83,21 +88,51 @@ func ApplyGuaranteedCleanupPatch(spec *v1alpha1.WorkflowSpec) error {
 		cleanupImage = "agentcert/agentcert-install-agent:latest"
 	}
 
+	// ChaosEngines live in the chaos (admin-mode) namespace, not the app's; the
+	// builder records it as a workflow parameter.
+	chaosNamespace := appNamespace
+	for _, p := range spec.Arguments.Parameters {
+		if p.Name == "adminModeNamespace" {
+			chaosNamespace = "{{workflow.parameters.adminModeNamespace}}"
+			break
+		}
+	}
+
+	cleanupPullPolicy := strings.TrimSpace(utils.Config.InstallAgentImagePullPolicy)
+	if cleanupPullPolicy == "" {
+		cleanupPullPolicy = strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE_PULL_POLICY"))
+	}
+
+	// helm's uninstall of an app chart that templates its own release namespace
+	// deletes that namespace, and the release record inside it, before helm has
+	// purged the record, so helm exits non-zero ("release: not found") for a
+	// release that is gone. A failure is therefore judged by whether the
+	// release still exists afterwards, not by helm's exit code.
 	cleanupScript := `set -u
 failures=0
+note() { echo "[uninstall-all] $*"; }
 run_cleanup() {
-  echo "[uninstall-all] $*"
-  "$@" || failures=$((failures + 1))
+  note "$*"
+  "$@" || { note "  -> failed (exit $?)"; failures=$((failures + 1)); }
 }
-run_cleanup kubectl delete chaosengines.litmuschaos.io -n "$APP_NAMESPACE" -l "workflow_run_id=$WORKFLOW_RUN_ID" --ignore-not-found
-run_cleanup kubectl delete chaosresults.litmuschaos.io -n "$APP_NAMESPACE" -l "workflow_run_id=$WORKFLOW_RUN_ID" --ignore-not-found
-run_cleanup helm uninstall "$AGENT_RELEASE" -n "$AGENT_NAMESPACE" --ignore-not-found --wait --timeout 5m
-run_cleanup helm uninstall "$APP_RELEASE" -n "$APP_NAMESPACE" --ignore-not-found --wait --timeout 5m
+uninstall_release() {
+  note "helm uninstall $1 -n $2"
+  helm uninstall "$1" -n "$2" --ignore-not-found --wait --timeout 5m && return 0
+  if helm status "$1" -n "$2" >/dev/null 2>&1; then
+    note "  -> release $1 is still installed in $2"
+    failures=$((failures + 1))
+  else
+    note "  -> release $1 is gone from $2"
+  fi
+}
+run_cleanup kubectl delete chaosengines.litmuschaos.io -n "$CHAOS_NAMESPACE" -l "workflow_run_id=$WORKFLOW_RUN_ID" --ignore-not-found
+uninstall_release "$AGENT_RELEASE" "$AGENT_NAMESPACE"
+uninstall_release "$APP_RELEASE" "$APP_NAMESPACE"
 if [ "$failures" -ne 0 ]; then
-  echo "[uninstall-all] cleanup completed with $failures failure(s)" >&2
+  note "cleanup completed with $failures failure(s)" >&2
   exit 1
 fi
-echo "[uninstall-all] cleanup completed"`
+note "cleanup completed"`
 
 	cleanupTemplate := v1alpha1.Template{
 		Name: uninstallAllTemplateName,
@@ -110,9 +145,17 @@ echo "[uninstall-all] cleanup completed"`
 				{Name: "APP_RELEASE", Value: appRelease},
 				{Name: "AGENT_NAMESPACE", Value: agentNamespace},
 				{Name: "AGENT_RELEASE", Value: agentRelease},
+				{Name: "CHAOS_NAMESPACE", Value: chaosNamespace},
 				{Name: "WORKFLOW_RUN_ID", Value: "{{workflow.uid}}"},
 			},
 		},
+	}
+	// Same image and pull policy as the install-agent step: with a :latest tag
+	// and no policy Kubernetes would default to Always and bypass the image
+	// setup.sh loaded into the cluster.
+	switch corev1.PullPolicy(cleanupPullPolicy) {
+	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+		cleanupTemplate.Container.ImagePullPolicy = corev1.PullPolicy(cleanupPullPolicy)
 	}
 
 	templateIndex := -1

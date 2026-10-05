@@ -59,6 +59,9 @@ type Fault struct {
 	WorkloadKinds       []string
 	RequiredServices    []string
 	KnownFailingTargets []string
+	// SingleNodeDanger marks a fault that acts on a node: on a single-node
+	// cluster it takes down every workload, the platform included.
+	SingleNodeDanger bool
 }
 
 // Catalog is an immutable, resolved view over both hubs.
@@ -90,6 +93,7 @@ type rawFault struct {
 	Classification     string                `yaml:"classification"`
 	TargetRequirements rawTargetRequirements `yaml:"targetRequirements"`
 	IncompatibleWith   []rawIncompatibility  `yaml:"incompatibleWith"`
+	SingleNodeDanger   bool                  `yaml:"singleNodeDanger"`
 }
 
 type rawCatalog struct {
@@ -191,6 +195,7 @@ func Build(apps []Application, faults map[string]rawFault) *Catalog {
 			WorkloadKinds:    append([]string(nil), raw.TargetRequirements.WorkloadKinds...),
 			RequiredServices: append([]string(nil), raw.TargetRequirements.RequiredServices...),
 			CompatibleApps:   deriveCompatibleApps(raw, appKeys, c.byAppKey),
+			SingleNodeDanger: raw.SingleNodeDanger,
 		}
 		for _, inc := range raw.IncompatibleWith {
 			fault.KnownFailingTargets = append(fault.KnownFailingTargets, inc.KnownFailingTargets...)

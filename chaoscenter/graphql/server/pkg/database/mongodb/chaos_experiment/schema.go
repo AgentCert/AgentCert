@@ -72,6 +72,10 @@ type MultiRunState struct {
 	// BatchDone latches once the batch reaches maxRuns, so a straggler
 	// completion arriving afterwards cannot start a fresh batch.
 	BatchDone bool `bson:"batch_done"`
+	// StartedAt (unix ms) is when a user started this batch. Runs created
+	// before it belong to an earlier batch and are ignored by the chain and
+	// the reconciler. Zero on batches started before this field existed.
+	StartedAt int64 `bson:"started_at,omitempty"`
 }
 
 // Probes details containing fault name and the probe name which it was mapped to

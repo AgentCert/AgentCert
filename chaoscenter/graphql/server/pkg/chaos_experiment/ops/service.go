@@ -445,16 +445,11 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	if c.agentRegistryOperator != nil {
 		agentIDStr := ""
 		if infra, err := c.chaosInfrastructureOperator.GetInfra(workflow.InfraID); err == nil && infra.InfraNamespace != nil {
-			// Extract the correct namespace from the install-agent template args.
-			agentNS := ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)
-			if agentNS == "" {
-				agentNS = *infra.InfraNamespace // fallback to infra namespace
-			}
-			if agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, agentNS); agentErr == nil && agent != nil {
+			if agent := ResolveWorkflowAgent(ctx, c.agentRegistryOperator, workflowManifest.Spec.Templates, *infra.InfraNamespace); agent != nil {
 				agentIDStr = agent.AgentID
-				logrus.WithField("agentId", agentIDStr).Info("resolved agentId from registry")
+				logrus.WithFields(logrus.Fields{"agentId": agentIDStr, "agent": agent.Name}).Info("resolved agentId from registry")
 			} else {
-				logrus.WithField("namespace", agentNS).Info("no agent record found; agentId will be empty (install-agent will self-register)")
+				logrus.WithField("namespace", ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)).Info("no agent record found; agentId will be empty (install-agent will self-register)")
 			}
 		}
 		// Inject the parameter, replacing any existing value to keep exactly one entry.
@@ -1782,7 +1777,9 @@ func applyInstallAgentTemplateOverridesFromMetadata(templates []v1alpha1.Templat
 		if t.Metadata.Annotations == nil {
 			t.Metadata.Annotations = make(map[string]string)
 		}
-		if _, exists := t.Metadata.Annotations["agentcert.io/install-type"]; !exists {
+		// The uninstall-all cleanup handler matches on image too; it gets the
+		// image/pull-policy override but must not be labelled an install step.
+		if _, exists := t.Metadata.Annotations["agentcert.io/install-type"]; !exists && t.Name != uninstallAllTemplateName {
 			t.Metadata.Annotations["agentcert.io/install-type"] = "agent"
 			changed = true
 		}
@@ -2343,9 +2340,7 @@ func applyAgentInstallNamespaceOverride(templates []v1alpha1.Template) {
 		if t.Container == nil {
 			continue
 		}
-		isInstallAgentTemplate := t.Name == "install-agent" ||
-			strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
-		if !isInstallAgentTemplate {
+		if !IsAgentInstallStep(*t) {
 			continue
 		}
 
@@ -2684,9 +2679,7 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 			continue
 		}
 
-		isInstallAgentTemplate := t.Name == "install-agent" ||
-			strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
-		if !isInstallAgentTemplate {
+		if !IsAgentInstallStep(*t) {
 			continue
 		}
 
@@ -2761,7 +2754,7 @@ func ExtractInstallAgentNamespace(templates []v1alpha1.Template) string {
 		if t.Container == nil {
 			continue
 		}
-		if t.Name != "install-agent" && !strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent") {
+		if !IsAgentInstallStep(t) {
 			continue
 		}
 		if namespace := installStepArg(t.Container.Args, "namespace"); namespace != "" {
@@ -2807,7 +2800,7 @@ func ExtractInstallAgentFolder(templates []v1alpha1.Template) string {
 		if t.Container == nil {
 			continue
 		}
-		if t.Name != "install-agent" && !strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent") {
+		if !IsAgentInstallStep(t) {
 			continue
 		}
 		for i, arg := range t.Container.Args {

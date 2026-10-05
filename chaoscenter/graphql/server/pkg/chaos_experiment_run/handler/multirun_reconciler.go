@@ -27,9 +27,9 @@ const (
 	// event and would hold its batch's in-flight gate shut forever.
 	queuedRunStallTimeout = 10 * time.Minute
 
-	// multiRunDispatchGrace is how long after the last run activity the
-	// reconciler leaves a batch alone. It has to exceed the chain's own
-	// inter-run delay so the reconciler never races the normal dispatch path.
+	// multiRunDispatchGrace is the minimum time after the last run activity
+	// the reconciler leaves a batch alone; multiRunGrace extends it past the
+	// experiment's own inter-run delay so it never races the chain.
 	multiRunDispatchGrace = 10 * time.Minute
 )
 
@@ -83,6 +83,10 @@ func (c *ChaosExperimentRunHandler) reconcileMultiRunBatches(ctx context.Context
 		{"is_removed", false},
 		{"planned_runs", bson.D{{"$gt", 1}}},
 		{"multi_run_state.batch_done", bson.D{{"$ne", true}}},
+		// Only batches started since batch tracking existed: without a start
+		// marker the reconciler cannot tell this batch's runs from every run
+		// the experiment ever had.
+		{"multi_run_state.started_at", bson.D{{"$gt", 0}}},
 	})
 	if err != nil {
 		logrus.WithError(err).Error("[Multi-Run] reconciler could not list multi-run experiments")
@@ -110,9 +114,17 @@ func (c *ChaosExperimentRunHandler) reconcileMultiRunBatch(ctx context.Context, 
 		return
 	}
 
+	if experiment.MultiRunState == nil || experiment.MultiRunState.StartedAt <= 0 {
+		return
+	}
+	batchStart := experiment.MultiRunState.StartedAt
+
+	// Only this batch's runs: earlier batches' runs must neither count toward
+	// it nor latch it done.
 	runs, err := c.chaosExperimentRunOperator.GetExperimentRuns(bson.D{
 		{"experiment_id", expID},
 		{"is_removed", false},
+		{"created_at", bson.D{{"$gte", batchStart}}},
 	})
 	if err != nil {
 		logrus.WithFields(logFields).WithError(err).Error("[Multi-Run] reconciler could not list runs")
@@ -164,32 +176,27 @@ func (c *ChaosExperimentRunHandler) reconcileMultiRunBatch(ctx context.Context, 
 		return
 	}
 
-	// Counters are recomputed from the runs that exist: the chain's $inc
-	// bookkeeping is exactly what a crashed dispatch leaves wrong, so trusting
-	// it here would keep the batch stuck at the dispatch ceiling.
-	batchDone := len(runs) >= maxRuns || len(terminalIDs) >= maxRuns
-	setState := bson.D{
-		{"multi_run_state.completed_run_ids", terminalIDs},
-		{"multi_run_state.launched", max(len(runs)-1, 0)},
-	}
-	if batchDone {
-		setState = append(setState, bson.E{Key: "multi_run_state.batch_done", Value: true})
-	}
-	if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx,
-		bson.D{{"experiment_id", expID}},
-		bson.D{{"$set", setState}},
-	); err != nil {
-		logrus.WithFields(logFields).WithError(err).Error("[Multi-Run] reconciler could not repair batch state")
-		return
-	}
-	if batchDone {
+	// Terminal runs are merged into the chain's de-dup set, never replacing
+	// it: a completion whose event was lost is counted, and nothing the chain
+	// already counted is dropped.
+	recordTerminal := bson.E{Key: "$addToSet", Value: bson.D{{"multi_run_state.completed_run_ids", bson.D{{"$each", terminalIDs}}}}}
+
+	if len(runs) >= maxRuns {
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx,
+			bson.D{{"experiment_id", expID}},
+			bson.D{recordTerminal, {"$set", bson.D{{"multi_run_state.batch_done", true}}}},
+		); err != nil {
+			logrus.WithFields(logFields).WithError(err).Error("[Multi-Run] reconciler could not latch batch completion")
+			return
+		}
 		logrus.WithFields(logFields).Infof("[Multi-Run] reconciler latched batch complete (%d/%d runs)", len(runs), maxRuns)
 		return
 	}
 
-	// Leave a freshly finished batch to the event-driven path, which dispatches
-	// the next run after its own delay.
-	if now-lastActive < multiRunDispatchGrace.Milliseconds() {
+	// Leave a quiescent batch to the event-driven path until it has had time
+	// to dispatch the next run after its own configured delay.
+	grace := multiRunGrace(manifest)
+	if now-lastActive < grace.Milliseconds() {
 		return
 	}
 
@@ -197,22 +204,33 @@ func (c *ChaosExperimentRunHandler) reconcileMultiRunBatch(ctx context.Context, 
 		"[Multi-Run] batch stalled at %d/%d runs with nothing in flight for %v; dispatching the next run",
 		len(runs), maxRuns, time.Duration(now-lastActive)*time.Millisecond)
 
+	if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx,
+		bson.D{{"experiment_id", expID}},
+		bson.D{recordTerminal},
+	); err != nil {
+		logrus.WithFields(logFields).WithError(err).Error("[Multi-Run] reconciler could not record the batch's terminal runs")
+		return
+	}
+
 	current, err := c.chaosExperimentOperator.GetExperiment(ctx, bson.D{{"experiment_id", expID}})
 	if err != nil {
 		logrus.WithFields(logFields).WithError(err).Error("[Multi-Run] reconciler could not re-read the experiment before dispatch")
 		return
 	}
-	if _, err := c.RunChaosWorkFlow(ctx, experiment.ProjectID, current, store.Store, ""); err != nil {
+	if current.MultiRunState != nil && current.MultiRunState.BatchDone {
+		return
+	}
+	if _, err := c.RunChaosWorkFlow(withMultiRunContinuation(ctx), experiment.ProjectID, current, store.Store, ""); err != nil {
 		logrus.WithFields(logFields).WithError(err).Error("[Multi-Run] reconciler could not dispatch the next run; retrying on the next sweep")
 		return
 	}
 
 	// After this dispatch the batch has len(runs)+1 runs, of which all but the
-	// first were chain-dispatched — keep `launched` in step so the event-driven
-	// ceiling still bounds the rest of the batch.
+	// first were batch-dispatched. $max keeps the chain's ceiling counter from
+	// ever moving backwards.
 	if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx,
 		bson.D{{"experiment_id", expID}},
-		bson.D{{"$set", bson.D{{"multi_run_state.launched", len(runs)}}}},
+		bson.D{{"$max", bson.D{{"multi_run_state.launched", len(runs)}}}},
 	); err != nil {
 		logrus.WithFields(logFields).WithError(err).Warn("[Multi-Run] reconciler dispatched a run but could not update the launched counter")
 	}

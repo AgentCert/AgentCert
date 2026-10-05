@@ -1554,5 +1554,18 @@ func (c *ChaosExperimentHandler) StopExperimentRuns(ctx context.Context, project
 		}
 	}
 
+	// Stopping a run of a sequential multi-run batch stops the batch: latch it
+	// done so the stopped run's terminal event does not dispatch the next run
+	// and the reconciler does not resume it. The next run the user starts
+	// opens a fresh batch.
+	if experiment.PlannedRuns > 1 || experiment.MultiRunState != nil {
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx,
+			bson.D{{"experiment_id", experimentID}},
+			bson.D{{"$set", bson.D{{"multi_run_state.batch_done", true}}}},
+		); err != nil {
+			logrus.WithError(err).WithField("experimentID", experimentID).Warn("[Multi-Run] runs stopped but the batch could not be latched done; the next run may still be dispatched")
+		}
+	}
+
 	return true, nil
 }

@@ -605,7 +605,9 @@ func normalizeInstallTemplates(templates []v1alpha1.Template) bool {
 	updated := false
 
 	for i := range templates {
-		if templates[i].Container == nil {
+		// The onExit cleanup handler shares the install-agent image and older
+		// revisions carry an install-type annotation on it; it is not an install step.
+		if templates[i].Container == nil || templates[i].Name == ops.UninstallAllTemplateName {
 			continue
 		}
 
@@ -2373,6 +2375,13 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 			if err == nil && len(runningRuns) > 0 {
 				return nil, errors.New("multi-run experiment already has a running instance. Please wait for it to complete before starting another run")
 			}
+			// A run the user starts (not one the batch dispatches for itself)
+			// opens a new batch; nothing is in flight at this point.
+			if !isMultiRunContinuation(ctx) {
+				if err := c.beginMultiRunBatch(ctx, workflow.ExperimentID, time.Now().UnixMilli()); err != nil {
+					return nil, fmt.Errorf("could not start a new multi-run batch: %w", err)
+				}
+			}
 		}
 	}
 
@@ -2386,11 +2395,11 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	traceAgentID := infra.InfraID
 	traceAgentName := infra.Name
 	traceAgentPlatform := infra.PlatformName
-	if c.agentRegistryOperator != nil && infra.InfraNamespace != nil {
-		agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, *infra.InfraNamespace)
-		if agentErr != nil {
-			logrus.WithError(agentErr).Warn("failed to lookup agent for observability trace identity")
-		} else if agent != nil {
+	// The agent lives in the application namespace its install step targets,
+	// never in the infra namespace, so resolve it from the manifest.
+	if c.agentRegistryOperator != nil && len(workflow.Revision) > 0 {
+		agent := ops.ResolveManifestAgent(ctx, c.agentRegistryOperator, workflow.Revision[len(workflow.Revision)-1].ExperimentManifest, "")
+		if agent != nil {
 			if strings.TrimSpace(agent.AgentID) != "" {
 				traceAgentID = agent.AgentID
 			}
@@ -2432,6 +2441,9 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
 	if err := ops.ValidateExperimentStructure(&workflowManifest.Spec); err != nil {
 		return nil, fmt.Errorf("workflow composition is not runnable: %w", err)
+	}
+	if err := c.preflightChaosTargets(ctx, projectID, &infra, workflowManifest.Spec.Templates); err != nil {
+		return nil, err
 	}
 
 	// Resolve the agent LLM model alias for this run, and make a run-scoped choice
@@ -2523,15 +2535,11 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	if c.agentRegistryOperator != nil {
 		agentIDStr := ""
 		if infra.InfraNamespace != nil {
-			agentNS := ops.ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)
-			if agentNS == "" {
-				agentNS = *infra.InfraNamespace
-			}
-			if agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, agentNS); agentErr == nil && agent != nil {
+			if agent := ops.ResolveWorkflowAgent(ctx, c.agentRegistryOperator, workflowManifest.Spec.Templates, *infra.InfraNamespace); agent != nil {
 				agentIDStr = agent.AgentID
-				logrus.WithField("agentId", agentIDStr).Info("resolved agentId from registry (re-run)")
+				logrus.WithFields(logrus.Fields{"agentId": agentIDStr, "agent": agent.Name}).Info("resolved agentId from registry (re-run)")
 			} else {
-				logrus.WithField("namespace", agentNS).Info("no agent record found for re-run; agentId will be empty")
+				logrus.WithField("namespace", ops.ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)).Info("no agent record found for re-run; agentId will be empty")
 			}
 		}
 		found := false
@@ -3528,32 +3536,14 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 		// certifier pipeline starts without requiring a UI/API caller.
 		if c.certificationService != nil {
 			projectID := ""
+			infraID := ""
 			agentID := ""
 			agentName := ""
 			if event.ExperimentRunID != "" {
 				if wfRun, dbErr := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{{"experiment_run_id", event.ExperimentRunID}}); dbErr == nil {
 					projectID = wfRun.ProjectID
-					agentID = wfRun.InfraID
+					infraID = wfRun.InfraID
 				}
-			}
-			if c.agentRegistryOperator != nil && executionData.Namespace != "" {
-				if a, e := c.agentRegistryOperator.GetAgentByNamespace(ctx, executionData.Namespace); e == nil && a != nil {
-					if agentID == "" {
-						agentID = a.AgentID
-					}
-					agentName = a.Name
-				}
-			}
-			// Fallback: look up agent by ID if namespace lookup didn't yield a name.
-			if agentName == "" && c.agentRegistryOperator != nil && agentID != "" {
-				if a, e := c.agentRegistryOperator.GetAgent(ctx, agentID); e == nil && a != nil {
-					agentName = a.Name
-				}
-			}
-			// Certifier rejects empty agent_name (422 string_too_short).
-			// Use the agentID as a last-resort label so the pipeline still runs.
-			if agentName == "" {
-				agentName = agentID
 			}
 			// Read the user-declared planned run count from the parent
 			// chaos-experiment document. Defaults to 1 when unset so the
@@ -3565,7 +3555,27 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					if exp.PlannedRuns > 0 {
 						plannedRuns = exp.PlannedRuns
 					}
+					// The agent under test is the one the experiment's install-agent
+					// step deploys. executionData.Namespace is the Argo workflow's own
+					// namespace (the infra namespace), where no agent is ever
+					// registered, which is why certificates used to be keyed by the
+					// chaos infra id instead of the agent.
+					if len(exp.Revision) > 0 {
+						if a := ops.ResolveManifestAgent(ctx, c.agentRegistryOperator, exp.Revision[len(exp.Revision)-1].ExperimentManifest, ""); a != nil {
+							agentID, agentName = a.AgentID, a.Name
+						}
+					}
 				}
+			}
+			// Experiments without a registered agent keep the previous identity
+			// (the infra id) so their certification still runs.
+			if agentID == "" {
+				agentID = infraID
+			}
+			// Certifier rejects empty agent_name (422 string_too_short).
+			// Use the agentID as a last-resort label so the pipeline still runs.
+			if agentName == "" {
+				agentName = agentID
 			}
 			certIn := certification.StartInput{
 				ProjectID:       projectID,
@@ -3881,6 +3891,16 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 	chainCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// A re-delivered terminal event of a run from an earlier batch must not be
+	// counted toward the current one, or the batch would finish short.
+	if experiment.MultiRunState != nil && experiment.MultiRunState.StartedAt > 0 {
+		if run, err := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{{"experiment_run_id", runID}}); err == nil &&
+			runPredatesBatch(experiment.MultiRunState, run.CreatedAt) {
+			logrus.WithFields(logFields).Infof("[Multi-Run] run %s belongs to an earlier batch; chain not advanced", runID)
+			return
+		}
+	}
+
 	// Guard 1: count this completion exactly once. MatchedCount==0 means the
 	// run was already counted, or the batch has already finished.
 	res, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(chainCtx,
@@ -3994,13 +4014,7 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 		}
 	}
 
-	delaySeconds := 120
-	if delayStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunDelay`).String(); delayStr != "" {
-		if parsed, err := strconv.Atoi(delayStr); err == nil && parsed > 0 {
-			delaySeconds = parsed
-		}
-	}
-	delayDuration := time.Duration(delaySeconds) * time.Second
+	delayDuration := multiRunDelay(manifest)
 	handler := c
 
 	logrus.WithFields(logFields).Infof("[Multi-Run] dispatching run %d/%d for %s in %v", nextRun, maxRuns, expID, delayDuration)
@@ -4037,7 +4051,7 @@ func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
 			}
 		}
 
-		newCtx := context.Background()
+		newCtx := withMultiRunContinuation(context.Background())
 		if authToken != "" {
 			newCtx = context.WithValue(newCtx, authorization.AuthKey, authToken)
 		}

@@ -1,6 +1,7 @@
 package faultcatalog
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -129,5 +130,34 @@ func TestConfiguredMissingCatalogFailsClosed(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), missing) {
 		t.Fatalf("error should name configured path, got %v", err)
+	}
+}
+
+// The catalog shares node-fault entries through YAML anchors; the flag must
+// survive the alias so every node fault is guarded, not just the first.
+func TestSingleNodeDangerSurvivesYAMLAliases(t *testing.T) {
+	dir := t.TempDir()
+	body := `spec:
+  faults:
+    node-drain: &nodedisrupt
+      classification: generic
+      singleNodeDanger: true
+    node-taint: *nodedisrupt
+    pod-delete:
+      classification: generic
+`
+	if err := os.WriteFile(filepath.Join(dir, CatalogFileName), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	faults, err := loadFaults(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := Build(testApps(), faults)
+	for name, want := range map[string]bool{"node-drain": true, "node-taint": true, "pod-delete": false} {
+		fault, ok := catalog.Lookup(name)
+		if !ok || fault.SingleNodeDanger != want {
+			t.Errorf("%s: SingleNodeDanger=%v (found=%v), want %v", name, fault.SingleNodeDanger, ok, want)
+		}
 	}
 }

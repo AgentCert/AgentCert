@@ -66,6 +66,12 @@ func isInstallStepTemplate(t v1alpha1.Template, kind string) bool {
 	if t.Container == nil {
 		return false
 	}
+	// The guaranteed-cleanup onExit handler runs the install-agent image (for its
+	// kubectl/helm) and older revisions carry an install-type=agent annotation
+	// stamped on it by image match, so it must be excluded before either check.
+	if t.Name == uninstallAllTemplateName {
+		return false
+	}
 	if installType, ok := t.Metadata.Annotations["agentcert.io/install-type"]; ok {
 		return installType == kind
 	}
@@ -82,6 +88,13 @@ func isInstallStepTemplate(t v1alpha1.Template, kind string) bool {
 		legacyName, imageMarker = "install-agent", "agentcert-install-agent"
 	}
 	return name == legacyName || strings.Contains(strings.TrimSpace(t.Container.Image), imageMarker)
+}
+
+// IsAgentInstallStep reports whether t is the step that installs the agent under
+// test. Every install-agent-specific patch and lookup must use this rather than
+// matching on the image, which the uninstall-all cleanup handler shares.
+func IsAgentInstallStep(t v1alpha1.Template) bool {
+	return isInstallStepTemplate(t, "agent")
 }
 
 type chaosFaultTarget struct {
@@ -145,6 +158,12 @@ func chaosFaultTargets(templates []v1alpha1.Template) ([]chaosFaultTarget, error
 		}
 	}
 	return targets, nil
+}
+
+// ChaosFaultNames returns the fault (ChaosExperiment) names of every
+// ChaosEngine embedded in the workflow's templates.
+func ChaosFaultNames(templates []v1alpha1.Template) ([]string, error) {
+	return chaosFaultNames(templates)
 }
 
 func chaosFaultNames(templates []v1alpha1.Template) ([]string, error) {

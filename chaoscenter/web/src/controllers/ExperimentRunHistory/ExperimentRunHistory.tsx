@@ -121,8 +121,8 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   const experimentType = experimentRunsWithExecutionData?.[0]?.experimentType;
   const experimentManifest = experimentRunsWithExecutionData?.[0]?.experimentManifest;
 
-  const agentID = experimentRunsWithExecutionData?.[0]?.infra?.infraID ?? '';
-  const agentName = experimentRunsWithExecutionData?.[0]?.infra?.name ?? agentID;
+  const infraID = experimentRunsWithExecutionData?.[0]?.infra?.infraID ?? '';
+  const infraName = experimentRunsWithExecutionData?.[0]?.infra?.name ?? infraID;
 
   const hasAnyRuns = (experimentRunsWithExecutionData?.length ?? 0) > 0;
 
@@ -139,7 +139,6 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
   });
 
   const certReady = certStatusData?.getCertificationStatus?.ready === true;
-  const certificateDownload = { enabled: certReady && !!agentID, agentID };
 
   // Manual re-trigger — shows success toast so user knows the action fired.
   const [generateCertificationMutation, { loading: retriggerLoading }] = generateCertification({
@@ -157,6 +156,25 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
     () => (experimentManifest ? JSON.parse(experimentManifest) : null),
     [experimentManifest]
   );
+
+  // The agent under test is the one the install-agent step deploys: the
+  // server resolves it and pins it on the certificate doc (cs.agentID). The
+  // manifest's agentId workflow parameter is the same registry id when the
+  // agent was registered at save time. The chaos infra is not the agent; its
+  // id is only a label for experiments that install no agent.
+  const manifestAgentID = React.useMemo((): string => {
+    const params: Array<{ name?: string; value?: string }> = parsedManifest?.spec?.arguments?.parameters ?? [];
+    return params.find(p => p?.name === 'agentId')?.value?.trim() ?? '';
+  }, [parsedManifest]);
+  const manifestAgentFolder = React.useMemo((): string => {
+    const params: Array<{ name?: string; value?: string }> = parsedManifest?.spec?.arguments?.parameters ?? [];
+    return params.find(p => p?.name === 'agentFolder')?.value?.trim() ?? '';
+  }, [parsedManifest]);
+  const pinnedAgentID = certStatusData?.getCertificationStatus?.agentID ?? '';
+  const agentID = pinnedAgentID || manifestAgentID || infraID;
+  const agentName =
+    certStatusData?.getCertificationStatus?.agentName || (manifestAgentID ? manifestAgentFolder || manifestAgentID : infraName);
+  const certificateDownload = { enabled: certReady && !!agentID, agentID };
 
   const isCronEnabled =
     experimentRunsWithExecutionData && experimentType === ExperimentType.CRON && cronEnabled(parsedManifest);
@@ -231,10 +249,12 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
     );
     if (newlyTerminal.length === 0) return;
 
-    const resolvedAgentID = cs?.agentID ?? agentID;
-    // cs.agentName is stored via $setOnInsert on first call; fall back to
-    // infra.name so the cert doc gets the display name, not the infraID.
-    const resolvedAgentName = cs?.agentName ?? agentName;
+    // The first caller fixes the certificate's agent identity. Without a
+    // server-pinned or manifest agent id, leave that to the server's own
+    // terminal-event trigger rather than pinning the infra id.
+    if (!cs?.agentID && !manifestAgentID) return;
+    const resolvedAgentID = cs?.agentID || agentID;
+    const resolvedAgentName = cs?.agentName || agentName;
     const expectedRuns = multiRunConfig?.maxRuns ?? totalExperimentRuns ?? newlyTerminal.length;
 
     newlyTerminal.forEach(run => {
@@ -253,15 +273,15 @@ export default function ExperimentRunHistoryController(): React.ReactElement {
       });
     });
   }, [experimentRunsWithExecutionData, hasAnyRuns, experimentID, scope.projectID, agentID, agentName,
-      certStatusData, multiRunConfig, totalExperimentRuns, TERMINAL_PHASES, autoTriggerMutation]);
+      manifestAgentID, certStatusData, multiRunConfig, totalExperimentRuns, TERMINAL_PHASES, autoTriggerMutation]);
 
   // Manual re-trigger: fires for all terminal runs with the updated expectedRuns,
   // and registers them in the ref so the auto-trigger effect doesn't double-fire.
   const handleRetrigger = React.useCallback(() => {
     const runs = experimentRunsWithExecutionData ?? [];
     const cs = certStatusData?.getCertificationStatus;
-    const resolvedAgentID = cs?.agentID ?? agentID;
-    const resolvedAgentName = cs?.agentName ?? agentName;
+    const resolvedAgentID = cs?.agentID || agentID;
+    const resolvedAgentName = cs?.agentName || agentName;
     const expectedRuns = multiRunConfig?.maxRuns ?? totalExperimentRuns ?? runs.length;
     const terminalRuns = runs.filter(r => TERMINAL_PHASES.has(r.phase));
 
