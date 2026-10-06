@@ -1,0 +1,139 @@
+// The drawer body scrolls; the footer with the actions always stays visible.
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--spacing-large) var(--spacing-xlarge);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xlarge);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-medium);
+}
+
+.sectionText {
+  flex: 1;
+  min-width: 0;
+}
+
+.step {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-1);
+  color: var(--primary-7);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.entries {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--spacing-medium);
+}
+
+.entry {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xsmall);
+  min-width: 0;
+  padding: var(--spacing-medium);
+  background: var(--white);
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    border-color: var(--primary-7);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-7);
+    outline-offset: 2px;
+  }
+
+  &.selected {
+    border-color: var(--primary-7);
+    background: var(--primary-1);
+    box-shadow: 0 0 0 1px var(--primary-7);
+  }
+}
+
+.entryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-small);
+}
+
+.check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary-7);
+  position: relative;
+
+  // A tick drawn with two borders.
+  &::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 3px;
+    width: 4px;
+    height: 7px;
+    border-right: 2px solid var(--white);
+    border-bottom: 2px solid var(--white);
+    transform: rotate(45deg);
+  }
+}
+
+.entryMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  margin-top: var(--spacing-xsmall);
+}
+
+.chip {
+  padding: 1px var(--spacing-small);
+  border-radius: 4px;
+  background: var(--grey-100);
+  color: var(--grey-700);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+
+.footer {
+  flex: none;
+  display: flex;
+  gap: var(--spacing-small);
+  padding: var(--spacing-medium) var(--spacing-xlarge);
+  border-top: 1px solid var(--grey-200);
+  background: var(--white);
+}

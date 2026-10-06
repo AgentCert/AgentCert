@@ -8,6 +8,7 @@ import {
   FaultTunableInputType,
   FaultTunables,
   KubernetesExperimentManifest,
+  Parameter,
   ProbeAttributes,
   Template,
   Workflow,
@@ -21,6 +22,14 @@ import type { PipelineGraphState } from '@components/PipelineDiagram/types';
 import { EnvVar } from 'models/k8s';
 import ExperimentFactory from './ExperimentFactory';
 import { ExperimentYamlService, GetFaultTunablesOperation, PreProcessChaosExperiment } from './ExperimentYamlService';
+import {
+  InstallStepChoice,
+  InstallStepSelection,
+  readInstallStepArg,
+  resolveWorkflowParameter,
+  writeInstallStepArg,
+  writeInstallStepSettings
+} from './installStepSettings';
 
 const isInstallFaultsStep = (name: string): boolean =>
   name === 'install-chaos-faults' || name === 'install-chaos-experiments';
@@ -34,11 +43,20 @@ const isInstallFaultsStep = (name: string): boolean =>
 const installStepTemplateName = (kind: 'application' | 'agent'): string =>
   kind === 'application' ? 'install-application' : 'install-agent';
 
-const parseInstallStepArgs = (args: string[] | undefined): { folder: string; namespace: string } | undefined => {
-  const folder = args?.find(arg => arg.startsWith('-folder='))?.slice('-folder='.length);
-  const namespace = args?.find(arg => arg.startsWith('-namespace='))?.slice('-namespace='.length);
+// With `parameters`, a ChaosHub template's {{workflow.parameters.X}} folder or
+// namespace is resolved to the value it stands for.
+const parseInstallStepArgs = (
+  args: string[] | undefined,
+  parameters?: Parameter[]
+): { folder: string; namespace: string } | undefined => {
+  const folder = readInstallStepArg(args ?? [], 'folder');
+  const namespace = readInstallStepArg(args ?? [], 'namespace');
   if (!folder) return undefined;
-  return { folder, namespace: namespace ?? '' };
+  if (!parameters) return { folder, namespace: namespace ?? '' };
+  return {
+    folder: resolveWorkflowParameter(folder, parameters),
+    namespace: resolveWorkflowParameter(namespace ?? '', parameters)
+  };
 };
 
 export class KubernetesYamlService extends ExperimentYamlService {
@@ -203,10 +221,14 @@ export class KubernetesYamlService extends ExperimentYamlService {
   // chart directory name, never a hand-typed guess. install-application
   // always runs first; install-agent runs right after it (a fault can't
   // target an app/agent that isn't installed yet).
+  //
+  // Re-applying the chart a step already installs updates it in place, so a
+  // ChaosHub template's own args (its timeout, its run-time --set values) are
+  // kept. Choosing a different chart starts that step afresh.
   async addInstallStepToManifest(
     key: ChaosObjectStoresPrimaryKeys['experiments'],
     kind: 'application' | 'agent',
-    entry: { folder: string; namespace: string }
+    choice: InstallStepChoice
   ): Promise<Experiment | undefined> {
     try {
       const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
@@ -221,10 +243,25 @@ export class KubernetesYamlService extends ExperimentYamlService {
       const templateName = kind === 'application' ? 'install-application' : 'install-agent';
       const image =
         kind === 'application' ? 'agentcert/agentcert-install-app:latest' : 'agentcert/agentcert-install-agent:latest';
-      const args = [`-folder=${entry.folder}`, `-namespace=${entry.namespace}`, '-create-namespace', '-wait'];
 
       const existingTemplate = templates.find(template => template.name === templateName);
-      if (existingTemplate) {
+      const existingContainer = existingTemplate?.container;
+      const current = parseInstallStepArgs(existingContainer?.args, spec?.arguments?.parameters ?? []);
+      const sameChart = existingContainer !== undefined && current?.folder === choice.folder;
+
+      let baseArgs = [`-folder=${choice.folder}`, `-namespace=${choice.namespace}`, '-create-namespace', '-wait'];
+      if (sameChart) {
+        // A namespace the user left alone may still be a template's parameter reference.
+        baseArgs =
+          current?.namespace === choice.namespace
+            ? existingContainer?.args ?? []
+            : writeInstallStepArg(existingContainer?.args ?? [], 'namespace', choice.namespace);
+      }
+      const args = writeInstallStepSettings(baseArgs, choice.settings.values, choice.settings.declaredKeys);
+
+      if (existingTemplate && existingContainer && sameChart) {
+        existingContainer.args = args;
+      } else if (existingTemplate) {
         existingTemplate.container = { name: '', image, args };
       } else {
         templates.push({ name: templateName, container: { name: '', image, args } });
@@ -274,7 +311,9 @@ export class KubernetesYamlService extends ExperimentYamlService {
     );
 
     const upsert = (name: string, value: string | undefined): void => {
-      if (value === undefined || value === '') return;
+      // A ChaosHub template's step may itself read the parameter
+      // (-folder={{workflow.parameters.agentFolder}}); never point it at itself.
+      if (value === undefined || value === '' || value.includes('{{')) return;
       if (!spec.arguments) spec.arguments = {};
       if (!spec.arguments.parameters) spec.arguments.parameters = [];
       const existing = spec.arguments.parameters.find(p => p.name === name);
@@ -294,8 +333,8 @@ export class KubernetesYamlService extends ExperimentYamlService {
   // (rather than tracking it in component state) keeps a YAML-editor round trip
   // and a page reload honest.
   getExperimentContext(manifest: KubernetesExperimentManifest | undefined): {
-    application?: { folder: string; namespace: string };
-    agent?: { folder: string; namespace: string };
+    application?: InstallStepSelection;
+    agent?: InstallStepSelection;
     hasFaults: boolean;
   } {
     return {
@@ -312,10 +351,13 @@ export class KubernetesYamlService extends ExperimentYamlService {
   getInstallStepSelection(
     manifest: KubernetesExperimentManifest | undefined,
     kind: 'application' | 'agent'
-  ): { folder: string; namespace: string } | undefined {
-    const [templates] = this.getTemplatesAndSteps(manifest);
+  ): InstallStepSelection | undefined {
+    const [templates, , spec] = this.getTemplatesAndSteps(manifest);
     const template = templates?.find(t => t.name === installStepTemplateName(kind));
-    return parseInstallStepArgs(template?.container?.args);
+    const args = template?.container?.args ?? [];
+    const parameters = spec?.arguments?.parameters ?? [];
+    const selection = parseInstallStepArgs(args, parameters);
+    return selection && { ...selection, source: { args, parameters } };
   }
 
   // Enumerates every AppHub/AgentHub target an install-application /
@@ -334,7 +376,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
     manifest: KubernetesExperimentManifest | undefined,
     kind: 'application' | 'agent'
   ): Array<{ folder: string; namespace: string }> {
-    const [templates] = this.getTemplatesAndSteps(manifest);
+    const [templates, , spec] = this.getTemplatesAndSteps(manifest);
     if (!templates) return [];
 
     const legacyName = installStepTemplateName(kind);
@@ -353,10 +395,10 @@ export class KubernetesYamlService extends ExperimentYamlService {
           (template.name === legacyName || (template.container.image ?? '').includes(imageMarker)));
       if (!isInstallStep) return;
 
-      const parsed = parseInstallStepArgs(template.container.args);
+      const parsed = parseInstallStepArgs(template.container.args, spec?.arguments?.parameters ?? []);
       if (!parsed) return;
 
-      const dedupeKey = `${parsed.folder} ${parsed.namespace}`;
+      const dedupeKey = `${parsed.folder}\u0000${parsed.namespace}`;
       if (seen.has(dedupeKey)) return;
       seen.add(dedupeKey);
       targets.push(parsed);

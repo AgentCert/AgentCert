@@ -6,8 +6,6 @@ import {
   Container,
   Layout,
   Page,
-  Select,
-  SelectOption,
   Tab,
   TabNavigation,
   Tabs,
@@ -28,7 +26,6 @@ import type {
   SaveChaosExperimentResponse,
   SaveChaosExperimentRequest
 } from '@api/core';
-import { listAgentModelOptions } from '@api/core';
 import { useUpdateSearchParams, useSearchParams, useRouteWithBaseUrl } from '@hooks';
 import type { ExperimentMetadata } from '@db';
 import { KubernetesExperimentManifest, StudioErrorState, StudioMode, StudioTabs } from '@models';
@@ -37,6 +34,7 @@ import { getHash, getScope } from '@utils';
 import StudioOverviewView from '@views/StudioOverview';
 import { ParentComponentErrorWrapper } from '@errors';
 import experimentYamlService from 'services/experiment';
+import type { KubernetesYamlService } from '@services/experiment/KubernetesYamlService';
 import { InfrastructureType } from '@api/entities';
 import StudioScheduleView from '@views/StudioSchedule';
 import LitmusBreadCrumbs from '@components/LitmusBreadCrumbs';
@@ -83,21 +81,7 @@ export default function ChaosStudioView({
   const setViewFilter = (view: VisualYamlSelectedView): void => updateSearchParams({ view });
   const [error, setError] = React.useState<StudioErrorState>({ OVERVIEW: undefined, BUILDER: undefined });
   const [hasFaults, setHasFaults] = React.useState<boolean>(false);
-  const [selectedModelAlias, setSelectedModelAlias] = React.useState<string>('');
   const studioOverviewRef = React.useRef<FormikProps<ExperimentMetadata>>();
-  const { data: agentModelData, loading: agentModelsLoading } = listAgentModelOptions();
-  const agentModelOptions = React.useMemo<SelectOption[]>(
-    () =>
-      agentModelData?.listAgentModelOptions.map(model => ({
-        label: model.isDefault ? `${model.label} - default` : model.label,
-        value: model.alias
-      })) ?? [],
-    [agentModelData]
-  );
-  const selectedModelOption = React.useMemo(
-    () => agentModelOptions.find(option => option.value === selectedModelAlias) ?? agentModelOptions[0],
-    [agentModelOptions, selectedModelAlias]
-  );
   const experimentHashKeyForClone = getHash();
   const { showWarning } = useToaster();
   const {
@@ -109,13 +93,6 @@ export default function ChaosStudioView({
   const setSafeToNavigate = (safe: boolean): void => {
     updateSearchParams({ unsavedChanges: (!safe).toString() });
   };
-
-  React.useEffect(() => {
-    if (agentModelOptions.length > 0 && !selectedModelAlias) {
-      const defaultOption = agentModelData?.listAgentModelOptions.find(model => model.isDefault);
-      setSelectedModelAlias(defaultOption?.alias ?? String(agentModelOptions[0].value));
-    }
-  }, [agentModelData, agentModelOptions, selectedModelAlias]);
 
   React.useEffect(() => {
     if (!selectedTabId) {
@@ -232,12 +209,13 @@ export default function ChaosStudioView({
   };
 
   const runExperimentHandler = (): void => {
-    // Backend handles multi-run logic automatically based on experiment annotations
+    // Backend handles multi-run logic automatically based on experiment annotations.
+    // The agent's model is part of its settings (the install-agent step), so a
+    // run sends no model override.
     runChaosExperimentMutation({
       variables: {
         projectID: scope.projectID,
-        experimentID: experimentKey,
-        modelAlias: selectedModelAlias || undefined
+        experimentID: experimentKey
       },
       onCompleted: response => {
         showSuccess(getString('reRunSuccessful'));
@@ -379,18 +357,6 @@ export default function ChaosStudioView({
           )}
           {/* <!-- studio action buttons--> */}
           <div className={css.savePublishContainer}>
-            {agentModelOptions.length > 0 && (
-              <div className={css.modelSelector}>
-                <Text className={css.modelSelectorLabel}>Agent model</Text>
-                <Select
-                  className={css.modelSelect}
-                  disabled={agentModelsLoading}
-                  items={agentModelOptions}
-                  value={selectedModelOption}
-                  onChange={(option: SelectOption) => setSelectedModelAlias(String(option.value))}
-                />
-              </div>
-            )}
             <StudioActionButtons
               disabled={error.OVERVIEW || error.BUILDER || !hasFaults}
               loading={loading.saveChaosExperiment || loading.runChaosExperiment}

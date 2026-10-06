@@ -95,6 +95,7 @@ type ComplexityRoot struct {
 		AgentID                func(childComplexity int) int
 		Capabilities           func(childComplexity int) int
 		CompatibleApplications func(childComplexity int) int
+		Configurations         func(childComplexity int) int
 		ContextInjection       func(childComplexity int) int
 		DeploymentStatus       func(childComplexity int) int
 		Description            func(childComplexity int) int
@@ -165,6 +166,7 @@ type ComplexityRoot struct {
 	}
 
 	AppHubEntry struct {
+		Configurations  func(childComplexity int) int
 		Description     func(childComplexity int) int
 		DisplayName     func(childComplexity int) int
 		HelmReleaseName func(childComplexity int) int
@@ -299,6 +301,22 @@ type ComplexityRoot struct {
 		Criteria func(childComplexity int) int
 		Type     func(childComplexity int) int
 		Value    func(childComplexity int) int
+	}
+
+	ConfigField struct {
+		Advanced     func(childComplexity int) int
+		DefaultValue func(childComplexity int) int
+		Description  func(childComplexity int) int
+		Group        func(childComplexity int) int
+		Key          func(childComplexity int) int
+		Label        func(childComplexity int) int
+		Max          func(childComplexity int) int
+		Min          func(childComplexity int) int
+		Options      func(childComplexity int) int
+		Pattern      func(childComplexity int) int
+		Required     func(childComplexity int) int
+		Type         func(childComplexity int) int
+		ValueKind    func(childComplexity int) int
 	}
 
 	ConfirmInfraRegistrationResponse struct {
@@ -1468,6 +1486,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.AgentHubEntry.CompatibleApplications(childComplexity), true
 
+	case "AgentHubEntry.configurations":
+		if e.complexity.AgentHubEntry.Configurations == nil {
+			break
+		}
+
+		return e.complexity.AgentHubEntry.Configurations(childComplexity), true
+
 	case "AgentHubEntry.contextInjection":
 		if e.complexity.AgentHubEntry.ContextInjection == nil {
 			break
@@ -1789,6 +1814,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AppHubCategory.DisplayName(childComplexity), true
+
+	case "AppHubEntry.configurations":
+		if e.complexity.AppHubEntry.Configurations == nil {
+			break
+		}
+
+		return e.complexity.AppHubEntry.Configurations(childComplexity), true
 
 	case "AppHubEntry.description":
 		if e.complexity.AppHubEntry.Description == nil {
@@ -2517,6 +2549,97 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Comparator.Value(childComplexity), true
+
+	case "ConfigField.advanced":
+		if e.complexity.ConfigField.Advanced == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Advanced(childComplexity), true
+
+	case "ConfigField.defaultValue":
+		if e.complexity.ConfigField.DefaultValue == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.DefaultValue(childComplexity), true
+
+	case "ConfigField.description":
+		if e.complexity.ConfigField.Description == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Description(childComplexity), true
+
+	case "ConfigField.group":
+		if e.complexity.ConfigField.Group == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Group(childComplexity), true
+
+	case "ConfigField.key":
+		if e.complexity.ConfigField.Key == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Key(childComplexity), true
+
+	case "ConfigField.label":
+		if e.complexity.ConfigField.Label == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Label(childComplexity), true
+
+	case "ConfigField.max":
+		if e.complexity.ConfigField.Max == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Max(childComplexity), true
+
+	case "ConfigField.min":
+		if e.complexity.ConfigField.Min == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Min(childComplexity), true
+
+	case "ConfigField.options":
+		if e.complexity.ConfigField.Options == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Options(childComplexity), true
+
+	case "ConfigField.pattern":
+		if e.complexity.ConfigField.Pattern == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Pattern(childComplexity), true
+
+	case "ConfigField.required":
+		if e.complexity.ConfigField.Required == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Required(childComplexity), true
+
+	case "ConfigField.type":
+		if e.complexity.ConfigField.Type == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.Type(childComplexity), true
+
+	case "ConfigField.valueKind":
+		if e.complexity.ConfigField.ValueKind == nil {
+			break
+		}
+
+		return e.complexity.ConfigField.ValueKind(childComplexity), true
 
 	case "ConfirmInfraRegistrationResponse.infraID":
 		if e.complexity.ConfirmInfraRegistrationResponse.InfraID == nil {
@@ -10858,6 +10981,61 @@ extend type Mutation {
 # Extends the ChaosHub pattern for agent and application catalogues
 
 # ──────────────────────────────────────────────────
+# Chart configuration (shared by AgentHub and AppsHub)
+# ──────────────────────────────────────────────────
+
+"""How the experiment builder renders a chart setting."""
+enum ConfigFieldType {
+  STRING
+  TEXT
+  INTEGER
+  NUMBER
+  BOOLEAN
+  SELECT
+  """An LLM model alias picked from listAgentModelOptions"""
+  MODEL
+}
+
+"""
+The JSON type a setting's value is written as. It is the type of the chart's
+own default, so a setting stored as "60" (an env var) stays a string.
+"""
+enum ConfigValueKind {
+  STRING
+  INTEGER
+  NUMBER
+  BOOLEAN
+}
+
+"""
+A setting a chart offers to the experiment builder, declared in the
+` + "`" + `configurations` + "`" + ` block of the chart's values.yaml. The builder sends the chosen
+values to the install step as -values-json, and the server validates them
+against these declarations on every save and run.
+"""
+type ConfigField {
+  """Helm values path, e.g. agent.config.SCAN_INTERVAL"""
+  key: String!
+  label: String!
+  description: String
+  type: ConfigFieldType!
+  valueKind: ConfigValueKind!
+  """The chart's default value, as text"""
+  defaultValue: String!
+  required: Boolean!
+  min: Float
+  max: Float
+  """Regular expression a STRING or TEXT value must match"""
+  pattern: String
+  """Allowed values of a SELECT setting"""
+  options: [String!]
+  """Heading the setting is shown under"""
+  group: String
+  """Shown only when the user expands the advanced settings"""
+  advanced: Boolean!
+}
+
+# ──────────────────────────────────────────────────
 # AgentHub Types
 # ──────────────────────────────────────────────────
 
@@ -10902,6 +11080,8 @@ type AgentHubEntry {
   installImage: String
   """Helm --set mappings for experiment context injection"""
   contextInjection: [ContextInjectionMapping!]
+  """Settings the agent's chart lets the user change in the experiment builder"""
+  configurations: [ConfigField!]!
   """Whether this agent is currently deployed in the cluster"""
   isDeployed: Boolean!
   """Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)"""
@@ -10987,6 +11167,8 @@ type AppHubEntry {
   namespace: String!
   """Microservices that comprise this application"""
   microservices: [Microservice!]!
+  """Settings the application's chart lets the user change in the experiment builder"""
+  configurations: [ConfigField!]!
   """Whether this application is currently deployed in the cluster"""
   isDeployed: Boolean!
   """Number of microservices running vs total (e.g., "11/13")"""
@@ -16071,6 +16253,8 @@ func (ec *executionContext) fieldContext_AgentHubCategory_agents(_ context.Conte
 				return ec.fieldContext_AgentHubEntry_installImage(ctx, field)
 			case "contextInjection":
 				return ec.fieldContext_AgentHubEntry_contextInjection(ctx, field)
+			case "configurations":
+				return ec.fieldContext_AgentHubEntry_configurations(ctx, field)
 			case "isDeployed":
 				return ec.fieldContext_AgentHubEntry_isDeployed(ctx, field)
 			case "deploymentStatus":
@@ -16473,6 +16657,78 @@ func (ec *executionContext) fieldContext_AgentHubEntry_contextInjection(_ contex
 				return ec.fieldContext_ContextInjectionMapping_source(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ContextInjectionMapping", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentHubEntry_configurations(ctx context.Context, field graphql.CollectedField, obj *model.AgentHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentHubEntry_configurations(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Configurations, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.ConfigField)
+	fc.Result = res
+	return ec.marshalNConfigField2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigFieldᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentHubEntry_configurations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ConfigField_key(ctx, field)
+			case "label":
+				return ec.fieldContext_ConfigField_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ConfigField_description(ctx, field)
+			case "type":
+				return ec.fieldContext_ConfigField_type(ctx, field)
+			case "valueKind":
+				return ec.fieldContext_ConfigField_valueKind(ctx, field)
+			case "defaultValue":
+				return ec.fieldContext_ConfigField_defaultValue(ctx, field)
+			case "required":
+				return ec.fieldContext_ConfigField_required(ctx, field)
+			case "min":
+				return ec.fieldContext_ConfigField_min(ctx, field)
+			case "max":
+				return ec.fieldContext_ConfigField_max(ctx, field)
+			case "pattern":
+				return ec.fieldContext_ConfigField_pattern(ctx, field)
+			case "options":
+				return ec.fieldContext_ConfigField_options(ctx, field)
+			case "group":
+				return ec.fieldContext_ConfigField_group(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ConfigField_advanced(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ConfigField", field.Name)
 		},
 	}
 	return fc, nil
@@ -18274,6 +18530,8 @@ func (ec *executionContext) fieldContext_AppHubCategory_applications(_ context.C
 				return ec.fieldContext_AppHubEntry_namespace(ctx, field)
 			case "microservices":
 				return ec.fieldContext_AppHubEntry_microservices(ctx, field)
+			case "configurations":
+				return ec.fieldContext_AppHubEntry_configurations(ctx, field)
 			case "isDeployed":
 				return ec.fieldContext_AppHubEntry_isDeployed(ctx, field)
 			case "runningServices":
@@ -18558,6 +18816,78 @@ func (ec *executionContext) fieldContext_AppHubEntry_microservices(_ context.Con
 				return ec.fieldContext_Microservice_desiredReplicas(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Microservice", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AppHubEntry_configurations(ctx context.Context, field graphql.CollectedField, obj *model.AppHubEntry) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AppHubEntry_configurations(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Configurations, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.ConfigField)
+	fc.Result = res
+	return ec.marshalNConfigField2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigFieldᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AppHubEntry_configurations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AppHubEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ConfigField_key(ctx, field)
+			case "label":
+				return ec.fieldContext_ConfigField_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ConfigField_description(ctx, field)
+			case "type":
+				return ec.fieldContext_ConfigField_type(ctx, field)
+			case "valueKind":
+				return ec.fieldContext_ConfigField_valueKind(ctx, field)
+			case "defaultValue":
+				return ec.fieldContext_ConfigField_defaultValue(ctx, field)
+			case "required":
+				return ec.fieldContext_ConfigField_required(ctx, field)
+			case "min":
+				return ec.fieldContext_ConfigField_min(ctx, field)
+			case "max":
+				return ec.fieldContext_ConfigField_max(ctx, field)
+			case "pattern":
+				return ec.fieldContext_ConfigField_pattern(ctx, field)
+			case "options":
+				return ec.fieldContext_ConfigField_options(ctx, field)
+			case "group":
+				return ec.fieldContext_ConfigField_group(ctx, field)
+			case "advanced":
+				return ec.fieldContext_ConfigField_advanced(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ConfigField", field.Name)
 		},
 	}
 	return fc, nil
@@ -22872,6 +23202,560 @@ func (ec *executionContext) fieldContext_Comparator_criteria(_ context.Context, 
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_key(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_key(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Key, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_label(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_label(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Label, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_description(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_type(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_type(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Type, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.ConfigFieldType)
+	fc.Result = res
+	return ec.marshalNConfigFieldType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigFieldType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ConfigFieldType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_valueKind(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_valueKind(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ValueKind, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.ConfigValueKind)
+	fc.Result = res
+	return ec.marshalNConfigValueKind2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigValueKind(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_valueKind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ConfigValueKind does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_defaultValue(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_defaultValue(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DefaultValue, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_defaultValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_required(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_required(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Required, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_required(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_min(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_min(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Min, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*float64)
+	fc.Result = res
+	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_min(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_max(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_max(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Max, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*float64)
+	fc.Result = res
+	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_max(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_pattern(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_pattern(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Pattern, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_pattern(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_options(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_options(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Options, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_options(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_group(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_group(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Group, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_group(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ConfigField_advanced(ctx context.Context, field graphql.CollectedField, obj *model.ConfigField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ConfigField_advanced(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Advanced, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ConfigField_advanced(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ConfigField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -57895,6 +58779,11 @@ func (ec *executionContext) _AgentHubEntry(ctx context.Context, sel ast.Selectio
 			out.Values[i] = ec._AgentHubEntry_installImage(ctx, field, obj)
 		case "contextInjection":
 			out.Values[i] = ec._AgentHubEntry_contextInjection(ctx, field, obj)
+		case "configurations":
+			out.Values[i] = ec._AgentHubEntry_configurations(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "isDeployed":
 			out.Values[i] = ec._AgentHubEntry_isDeployed(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -58367,6 +59256,11 @@ func (ec *executionContext) _AppHubEntry(ctx context.Context, sel ast.SelectionS
 			}
 		case "microservices":
 			out.Values[i] = ec._AppHubEntry_microservices(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "configurations":
+			out.Values[i] = ec._AppHubEntry_configurations(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -59125,6 +60019,87 @@ func (ec *executionContext) _Comparator(ctx context.Context, sel ast.SelectionSe
 			}
 		case "criteria":
 			out.Values[i] = ec._Comparator_criteria(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var configFieldImplementors = []string{"ConfigField"}
+
+func (ec *executionContext) _ConfigField(ctx context.Context, sel ast.SelectionSet, obj *model.ConfigField) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, configFieldImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ConfigField")
+		case "key":
+			out.Values[i] = ec._ConfigField_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._ConfigField_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._ConfigField_description(ctx, field, obj)
+		case "type":
+			out.Values[i] = ec._ConfigField_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "valueKind":
+			out.Values[i] = ec._ConfigField_valueKind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "defaultValue":
+			out.Values[i] = ec._ConfigField_defaultValue(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "required":
+			out.Values[i] = ec._ConfigField_required(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "min":
+			out.Values[i] = ec._ConfigField_min(ctx, field, obj)
+		case "max":
+			out.Values[i] = ec._ConfigField_max(ctx, field, obj)
+		case "pattern":
+			out.Values[i] = ec._ConfigField_pattern(ctx, field, obj)
+		case "options":
+			out.Values[i] = ec._ConfigField_options(ctx, field, obj)
+		case "group":
+			out.Values[i] = ec._ConfigField_group(ctx, field, obj)
+		case "advanced":
+			out.Values[i] = ec._ConfigField_advanced(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -66334,6 +67309,80 @@ func (ec *executionContext) marshalNComparator2ᚖgithubᚗcomᚋlitmuschaosᚋl
 func (ec *executionContext) unmarshalNComparatorInput2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐComparatorInput(ctx context.Context, v interface{}) (*model.ComparatorInput, error) {
 	res, err := ec.unmarshalInputComparatorInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNConfigField2ᚕᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigFieldᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ConfigField) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNConfigField2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigField(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNConfigField2ᚖgithubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigField(ctx context.Context, sel ast.SelectionSet, v *model.ConfigField) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ConfigField(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNConfigFieldType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigFieldType(ctx context.Context, v interface{}) (model.ConfigFieldType, error) {
+	var res model.ConfigFieldType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNConfigFieldType2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigFieldType(ctx context.Context, sel ast.SelectionSet, v model.ConfigFieldType) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNConfigValueKind2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigValueKind(ctx context.Context, v interface{}) (model.ConfigValueKind, error) {
+	var res model.ConfigValueKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNConfigValueKind2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfigValueKind(ctx context.Context, sel ast.SelectionSet, v model.ConfigValueKind) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNConfirmInfraRegistrationResponse2githubᚗcomᚋlitmuschaosᚋlitmusᚋchaoscenterᚋgraphqlᚋserverᚋgraphᚋmodelᚐConfirmInfraRegistrationResponse(ctx context.Context, sel ast.SelectionSet, v model.ConfirmInfraRegistrationResponse) graphql.Marshaler {

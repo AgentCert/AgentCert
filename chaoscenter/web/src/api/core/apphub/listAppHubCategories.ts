@@ -1,5 +1,5 @@
 import { gql, useQuery } from '@apollo/client';
-import type { AppHubCategory } from '@api/entities';
+import { AppHubCategory, CONFIG_FIELD_SELECTION } from '@api/entities';
 import type { GqlAPIQueryRequest, GqlAPIQueryResponse } from '@api/types';
 
 export interface ListAppHubCategoriesRequest {
@@ -32,6 +32,9 @@ export function listAppHubCategories({
             isDeployed
             runningServices
             helmReleaseName
+            configurations {
+              ${CONFIG_FIELD_SELECTION}
+            }
             microservices {
               name
               description

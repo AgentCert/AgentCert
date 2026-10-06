@@ -43,17 +43,20 @@ const appNamespaceRef = "{{workflow.parameters.appNamespace}}"
 // installStepArg reads a flag from a template's container args, accepting both
 // the combined (-flag=value) and split (-flag value) forms.
 func installStepArg(args []string, flag string) string {
-	for i, arg := range args {
+	var value string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		for _, prefix := range []string{"-" + flag + "=", "--" + flag + "="} {
 			if strings.HasPrefix(arg, prefix) {
-				return strings.TrimPrefix(arg, prefix)
+				value = strings.TrimPrefix(arg, prefix)
 			}
 		}
 		if (arg == "-"+flag || arg == "--"+flag) && i+1 < len(args) {
-			return args[i+1]
+			i++
+			value = args[i]
 		}
 	}
-	return ""
+	return value
 }
 
 // isInstallStepTemplate identifies an install step by annotation, name, or image.
@@ -184,6 +187,9 @@ func chaosFaultNames(templates []v1alpha1.Template) ([]string, error) {
 func ValidateExperimentStructure(workflowSpec *v1alpha1.WorkflowSpec) error {
 	if workflowSpec == nil {
 		return nil
+	}
+	if err := validateInstallStepValues(workflowSpec); err != nil {
+		return err
 	}
 
 	var appFolders, appNamespaces []string

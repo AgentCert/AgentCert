@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chartconfig"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -91,7 +92,9 @@ func GetAgentChartsData(chartsPath string) ([]*model.AgentHubCategory, error) {
 				Description:  agent.Description,
 				Version:      agent.Version,
 				Capabilities: agent.Capabilities,
-				IsDeployed:   false, // Will be enriched later
+				// The chart folder is the agent's name (install-agent -folder=).
+				Configurations: chartconfig.LoadModel(filepath.Join(chartsPath, agent.Name)),
+				IsDeployed:     false, // Will be enriched later
 			}
 			if entry.Capabilities == nil {
 				entry.Capabilities = []string{}

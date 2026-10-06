@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chartconfig"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -98,7 +99,9 @@ func GetAppChartsData(chartsPath string) ([]*model.AppHubCategory, error) {
 				Version:       app.Version,
 				Namespace:     app.Namespace,
 				Microservices: microservices,
-				IsDeployed:    false, // Will be enriched later
+				// The chart folder is the application's name (install-app -folder=).
+				Configurations: chartconfig.LoadModel(filepath.Join(chartsPath, app.Name)),
+				IsDeployed:     false, // Will be enriched later
 			}
 			category.Applications = append(category.Applications, entry)
 		}

@@ -42,7 +42,7 @@ export function runChaosExperiment(
 }
 
 export function listAgentModelOptions(): GqlAPIQueryResponse<ListAgentModelOptionsResponse, Record<string, never>> {
-  const { data, loading, ...rest } = useQuery<ListAgentModelOptionsResponse>(
+  const { data, loading, ...rest } = useQuery<ListAgentModelOptionsResponse, Record<string, never>>(
     gql`
       query listAgentModelOptions {
         listAgentModelOptions {

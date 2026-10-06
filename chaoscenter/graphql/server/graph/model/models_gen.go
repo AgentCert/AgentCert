@@ -153,6 +153,8 @@ type AgentHubEntry struct {
 	InstallImage *string `json:"installImage,omitempty"`
 	// Helm --set mappings for experiment context injection
 	ContextInjection []*ContextInjectionMapping `json:"contextInjection,omitempty"`
+	// Settings the agent's chart lets the user change in the experiment builder
+	Configurations []*ConfigField `json:"configurations"`
 	// Whether this agent is currently deployed in the cluster
 	IsDeployed bool `json:"isDeployed"`
 	// Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)
@@ -274,6 +276,8 @@ type AppHubEntry struct {
 	Namespace string `json:"namespace"`
 	// Microservices that comprise this application
 	Microservices []*Microservice `json:"microservices"`
+	// Settings the application's chart lets the user change in the experiment builder
+	Configurations []*ConfigField `json:"configurations"`
 	// Whether this application is currently deployed in the cluster
 	IsDeployed bool `json:"isDeployed"`
 	// Number of microservices running vs total (e.g., "11/13")
@@ -644,6 +648,32 @@ type ComparatorInput struct {
 	Value string `json:"value"`
 	// Operator of the Comparator
 	Criteria string `json:"criteria"`
+}
+
+// A setting a chart offers to the experiment builder, declared in the
+// `configurations` block of the chart's values.yaml. The builder sends the chosen
+// values to the install step as -values-json, and the server validates them
+// against these declarations on every save and run.
+type ConfigField struct {
+	// Helm values path, e.g. agent.config.SCAN_INTERVAL
+	Key         string          `json:"key"`
+	Label       string          `json:"label"`
+	Description *string         `json:"description,omitempty"`
+	Type        ConfigFieldType `json:"type"`
+	ValueKind   ConfigValueKind `json:"valueKind"`
+	// The chart's default value, as text
+	DefaultValue string   `json:"defaultValue"`
+	Required     bool     `json:"required"`
+	Min          *float64 `json:"min,omitempty"`
+	Max          *float64 `json:"max,omitempty"`
+	// Regular expression a STRING or TEXT value must match
+	Pattern *string `json:"pattern,omitempty"`
+	// Allowed values of a SELECT setting
+	Options []string `json:"options,omitempty"`
+	// Heading the setting is shown under
+	Group *string `json:"group,omitempty"`
+	// Shown only when the user expands the advanced settings
+	Advanced bool `json:"advanced"`
 }
 
 type ConfirmInfraRegistrationResponse struct {
@@ -3059,6 +3089,106 @@ func (e *AuthType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e AuthType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// How the experiment builder renders a chart setting.
+type ConfigFieldType string
+
+const (
+	ConfigFieldTypeString  ConfigFieldType = "STRING"
+	ConfigFieldTypeText    ConfigFieldType = "TEXT"
+	ConfigFieldTypeInteger ConfigFieldType = "INTEGER"
+	ConfigFieldTypeNumber  ConfigFieldType = "NUMBER"
+	ConfigFieldTypeBoolean ConfigFieldType = "BOOLEAN"
+	ConfigFieldTypeSelect  ConfigFieldType = "SELECT"
+	// An LLM model alias picked from listAgentModelOptions
+	ConfigFieldTypeModel ConfigFieldType = "MODEL"
+)
+
+var AllConfigFieldType = []ConfigFieldType{
+	ConfigFieldTypeString,
+	ConfigFieldTypeText,
+	ConfigFieldTypeInteger,
+	ConfigFieldTypeNumber,
+	ConfigFieldTypeBoolean,
+	ConfigFieldTypeSelect,
+	ConfigFieldTypeModel,
+}
+
+func (e ConfigFieldType) IsValid() bool {
+	switch e {
+	case ConfigFieldTypeString, ConfigFieldTypeText, ConfigFieldTypeInteger, ConfigFieldTypeNumber, ConfigFieldTypeBoolean, ConfigFieldTypeSelect, ConfigFieldTypeModel:
+		return true
+	}
+	return false
+}
+
+func (e ConfigFieldType) String() string {
+	return string(e)
+}
+
+func (e *ConfigFieldType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ConfigFieldType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ConfigFieldType", str)
+	}
+	return nil
+}
+
+func (e ConfigFieldType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// The JSON type a setting's value is written as. It is the type of the chart's
+// own default, so a setting stored as "60" (an env var) stays a string.
+type ConfigValueKind string
+
+const (
+	ConfigValueKindString  ConfigValueKind = "STRING"
+	ConfigValueKindInteger ConfigValueKind = "INTEGER"
+	ConfigValueKindNumber  ConfigValueKind = "NUMBER"
+	ConfigValueKindBoolean ConfigValueKind = "BOOLEAN"
+)
+
+var AllConfigValueKind = []ConfigValueKind{
+	ConfigValueKindString,
+	ConfigValueKindInteger,
+	ConfigValueKindNumber,
+	ConfigValueKindBoolean,
+}
+
+func (e ConfigValueKind) IsValid() bool {
+	switch e {
+	case ConfigValueKindString, ConfigValueKindInteger, ConfigValueKindNumber, ConfigValueKindBoolean:
+		return true
+	}
+	return false
+}
+
+func (e ConfigValueKind) String() string {
+	return string(e)
+}
+
+func (e *ConfigValueKind) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ConfigValueKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ConfigValueKind", str)
+	}
+	return nil
+}
+
+func (e ConfigValueKind) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

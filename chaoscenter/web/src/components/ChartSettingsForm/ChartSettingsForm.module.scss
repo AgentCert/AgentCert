@@ -1,0 +1,122 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+// One card per group heading.
+.group {
+  background: var(--white);
+  border: 1px solid var(--grey-200);
+  border-radius: 8px;
+  padding: var(--spacing-medium) var(--spacing-large) var(--spacing-xsmall);
+}
+
+.groupTitle {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--spacing-medium) !important;
+}
+
+// Short inputs sit two (or more) to a row; long text takes the full row.
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  column-gap: var(--spacing-large);
+}
+
+.setting {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  :global(.bp3-form-group) {
+    margin-bottom: var(--spacing-xsmall) !important;
+  }
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.settingHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-small);
+  min-height: 22px;
+  margin-bottom: var(--spacing-xsmall);
+}
+
+.required {
+  color: var(--red-600);
+  margin-left: 2px;
+}
+
+.reset {
+  padding: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+
+.help {
+  margin-bottom: var(--spacing-medium) !important;
+}
+
+.textArea textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-medium);
+  border: 1px dashed var(--grey-300);
+  border-radius: 8px;
+  padding: var(--spacing-small) var(--spacing-medium);
+}
+
+.advancedToggle {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-xsmall) 0;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-7);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--grey-600);
+  border-bottom: 1.5px solid var(--grey-600);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+
+  &.expanded {
+    transform: rotate(45deg);
+  }
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-medium);
+  border: 1px dashed var(--grey-300);
+  border-radius: 8px;
+}

@@ -2,6 +2,61 @@
 # Extends the ChaosHub pattern for agent and application catalogues
 
 # ──────────────────────────────────────────────────
+# Chart configuration (shared by AgentHub and AppsHub)
+# ──────────────────────────────────────────────────
+
+"""How the experiment builder renders a chart setting."""
+enum ConfigFieldType {
+  STRING
+  TEXT
+  INTEGER
+  NUMBER
+  BOOLEAN
+  SELECT
+  """An LLM model alias picked from listAgentModelOptions"""
+  MODEL
+}
+
+"""
+The JSON type a setting's value is written as. It is the type of the chart's
+own default, so a setting stored as "60" (an env var) stays a string.
+"""
+enum ConfigValueKind {
+  STRING
+  INTEGER
+  NUMBER
+  BOOLEAN
+}
+
+"""
+A setting a chart offers to the experiment builder, declared in the
+`configurations` block of the chart's values.yaml. The builder sends the chosen
+values to the install step as -values-json, and the server validates them
+against these declarations on every save and run.
+"""
+type ConfigField {
+  """Helm values path, e.g. agent.config.SCAN_INTERVAL"""
+  key: String!
+  label: String!
+  description: String
+  type: ConfigFieldType!
+  valueKind: ConfigValueKind!
+  """The chart's default value, as text"""
+  defaultValue: String!
+  required: Boolean!
+  min: Float
+  max: Float
+  """Regular expression a STRING or TEXT value must match"""
+  pattern: String
+  """Allowed values of a SELECT setting"""
+  options: [String!]
+  """Heading the setting is shown under"""
+  group: String
+  """Shown only when the user expands the advanced settings"""
+  advanced: Boolean!
+}
+
+# ──────────────────────────────────────────────────
 # AgentHub Types
 # ──────────────────────────────────────────────────
 
@@ -46,6 +101,8 @@ type AgentHubEntry {
   installImage: String
   """Helm --set mappings for experiment context injection"""
   contextInjection: [ContextInjectionMapping!]
+  """Settings the agent's chart lets the user change in the experiment builder"""
+  configurations: [ConfigField!]!
   """Whether this agent is currently deployed in the cluster"""
   isDeployed: Boolean!
   """Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)"""
@@ -131,6 +188,8 @@ type AppHubEntry {
   namespace: String!
   """Microservices that comprise this application"""
   microservices: [Microservice!]!
+  """Settings the application's chart lets the user change in the experiment builder"""
+  configurations: [ConfigField!]!
   """Whether this application is currently deployed in the cluster"""
   isDeployed: Boolean!
   """Number of microservices running vs total (e.g., "11/13")"""

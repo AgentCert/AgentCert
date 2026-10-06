@@ -48,6 +48,7 @@ export interface StringsMap {
   'advanced': unknown
   'advancedOptions': unknown
   'advancedOptionsDescription': unknown
+  'advancedSettingsCount': PrimitiveObject<'count'>
   'agentCapabilities': unknown
   'agentDeployed': unknown
   'agentHub': unknown
@@ -59,6 +60,7 @@ export interface StringsMap {
   'allExecutions': unknown
   'allFaultsExecuted': unknown
   'allRuns': unknown
+  'allowedRange': PrimitiveObject<'range'>
   'alreadyExists': PrimitiveObject<'value'>
   'alreadyExistsID': PrimitiveObject<'value'>
   'apiTokens': unknown
@@ -95,6 +97,7 @@ export interface StringsMap {
   'cannotReRun': unknown
   'capabilities': unknown
   'changePassword': unknown
+  'changeSelection': unknown
   'chaos': unknown
   'chaosComponentInstallation': unknown
   'chaosController': unknown
@@ -132,6 +135,7 @@ export interface StringsMap {
   'chaosStudio': unknown
   'chaoshubDisconnectedWillSync': unknown
   'chaoshubs': unknown
+  'chartSettingsDescription': unknown
   'checkConnection': unknown
   'checkLogs': unknown
   'checkStatus': unknown
@@ -447,6 +451,9 @@ export interface StringsMap {
   'installAgentDescription': unknown
   'installApplication': unknown
   'installApplicationDescription': unknown
+  'installStepChooseAgent': unknown
+  'installStepChooseApplication': unknown
+  'installStepNamespaceHelp': unknown
   'installYaml': unknown
   'interval': unknown
   'intervalOptional': unknown
@@ -590,6 +597,7 @@ export interface StringsMap {
   'noChaosHubSelected': unknown
   'noChaosInfrastructure': unknown
   'noChaosInfrastructureFound': unknown
+  'noChartSettings': unknown
   'noClustersFound': unknown
   'noData.message': unknown
   'noData.title': unknown
@@ -705,6 +713,7 @@ export interface StringsMap {
   'pendingTime': unknown
   'phase': unknown
   'platform': unknown
+  'platformDefaultModel': unknown
   'pleaseComplete': unknown
   'pleaseSelectLeastOneExperiment': unknown
   'pleaseSpecifyYAMLValues': unknown
@@ -837,8 +846,11 @@ export interface StringsMap {
   'required': unknown
   'rerun': unknown
   'resend': unknown
+  'resetAllToDefaults': unknown
   'resetFilters': unknown
   'resetPassword': unknown
+  'resetSetting': unknown
+  'resetToDefaultValue': PrimitiveObject<'value'>
   'resilienceOverview': unknown
   'resilienceProbes': unknown
   'resilienceRate': unknown
@@ -938,7 +950,17 @@ export interface StringsMap {
   'serviceHealthScore': unknown
   'setFaultWeights': unknown
   'setSchedule': unknown
+  'settingMustBeANumber': unknown
+  'settingMustBeAWholeNumber': unknown
+  'settingMustBeAtLeast': PrimitiveObject<'value'>
+  'settingMustBeAtMost': PrimitiveObject<'value'>
+  'settingMustMatch': PrimitiveObject<'pattern'>
+  'settingMustNotContainBraces': unknown
   'settings': unknown
+  'settingsAllDefaults': PrimitiveObject<'total'>
+  'settingsChangedFromDefaults': PrimitiveObject<'count' | 'total'>
+  'settingsCount': PrimitiveObject<'count'>
+  'settingsGeneral': unknown
   'setup': unknown
   'setupChaosInfrastructures': unknown
   'setupProbe': unknown

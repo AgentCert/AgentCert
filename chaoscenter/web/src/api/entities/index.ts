@@ -10,3 +10,4 @@ export * from './imageRegistry';
 export * from './agentHub';
 export * from './appHub';
 export * from './faultCatalog';
+export * from './chartConfig';

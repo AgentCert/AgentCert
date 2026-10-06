@@ -1,4 +1,5 @@
 import type { Microservice } from './agentHub';
+import type { ConfigField } from './chartConfig';
 
 export interface AppHubEntry {
   name: string;
@@ -7,6 +8,8 @@ export interface AppHubEntry {
   version: string;
   namespace?: string;
   microservices: Microservice[];
+  // Settings the application's chart lets the user change in the experiment builder.
+  configurations: ConfigField[];
   isDeployed: boolean;
   runningServices?: string;
   helmReleaseName?: string;

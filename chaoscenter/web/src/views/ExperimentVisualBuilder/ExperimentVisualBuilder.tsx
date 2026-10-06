@@ -23,6 +23,7 @@ import ExperimentCreationTuneFaultView from '@views/ExperimentCreationFaultConfi
 import { useUpdateSearchParams, useSearchParams, useFaultCatalog } from '@hooks';
 import experimentYamlService from 'services/experiment';
 import { GetFaultTunablesOperation } from '@services/experiment/ExperimentYamlService';
+import type { InstallStepChoice, InstallStepSelection } from '@services/experiment/installStepSettings';
 import type { ServiceIdentifiers } from '@db';
 import type { InfrastructureType } from '@api/entities';
 import css from './ExperimentVisualBuilder.module.scss';
@@ -63,7 +64,7 @@ export default function ExperimentVisualBuilderView({
   const [installStepDrawer, setInstallStepDrawer] = React.useState<{
     open: boolean;
     kind: 'application' | 'agent';
-    initialSelection?: { folder: string; namespace: string };
+    initialSelection?: InstallStepSelection;
   }>({
     open: false,
     kind: 'application'
@@ -85,8 +86,8 @@ export default function ExperimentVisualBuilderView({
   // manifest rather than tracked separately so the YAML editor and a page reload
   // can't desync it from what will actually be submitted.
   const [experimentContext, setExperimentContext] = React.useState<{
-    application?: { folder: string; namespace: string };
-    agent?: { folder: string; namespace: string };
+    application?: InstallStepSelection;
+    agent?: InstallStepSelection;
   }>({});
   const faultCatalog = useFaultCatalog();
 
@@ -137,8 +138,8 @@ export default function ExperimentVisualBuilderView({
     setTuneFaultDrawerOpen({ open: true, operation: GetFaultTunablesOperation.InitialEnvs });
   };
 
-  const handleInstallStepSelection = (entry: { folder: string; namespace: string }): void => {
-    experimentHandler?.addInstallStepToManifest(experimentKey, installStepDrawer.kind, entry).then(experiment => {
+  const handleInstallStepSelection = (choice: InstallStepChoice): void => {
+    experimentHandler?.addInstallStepToManifest(experimentKey, installStepDrawer.kind, choice).then(experiment => {
       const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
       setExperimentSteps(steps);
       refreshExperimentContext(experiment?.manifest);

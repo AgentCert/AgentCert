@@ -19,6 +19,7 @@ import (
 	agentRegistry "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chartconfig"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultcatalog"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 
@@ -434,7 +435,16 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
 	applyAgentInstallNamespaceOverride(workflowManifest.Spec.Templates)
+	EnsureInstallStepParameters(&workflowManifest.Spec)
 	InjectExperimentContextArgs(workflowManifest.Spec.Templates, "")
+
+	// The experiment's settings form owns the agent's model, so saving it
+	// retires a model picked for an earlier run. Otherwise a run started
+	// without a pick (the experiment list's Run button, a re-run cycle) would
+	// keep using that old pick instead of the model the user just saved.
+	if agentStepHasSettings(workflowManifest.Spec.Templates) {
+		delete(workflowManifest.Annotations, RunModelAliasAnnotation)
+	}
 
 	// Inject agentId as a workflow-level parameter so that install-agent
 	// can forward it via --set agentId={{workflow.parameters.agentId}}.
@@ -468,74 +478,6 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 			})
 		}
 		logrus.WithField("agentId", agentIDStr).Info("injected agentId workflow parameter")
-	}
-
-	// Ensure appNamespace is present as a workflow-level parameter. Several patches
-	// applied below (applyInstallApplicationReadinessPatch, applyUninstallAllPatch,
-	// injectExperimentContextArgs) unconditionally emit {{workflow.parameters.appNamespace}}
-	// into generated scripts/args, but nothing ever *wrote* that parameter for a
-	// hand-built experiment -- predefined ChaosHub templates (e.g.
-	// chaos-charts/experiments/sock-shop/experiment.yaml) hardcode it, but a manifest
-	// assembled from a blank canvas never gets it from anywhere. An unresolved
-	// {{workflow.parameters.*}} reference fails Argo's spec validation before a single
-	// step runs, and the whole run is then silently reported as if it had completed
-	// (see subscriber's updateWorkflowStatus/resolveWorkflowStatus). This mirrors the
-	// agentId safety net above, plus a matching fix on the frontend
-	// (KubernetesYamlService.addInstallStepToManifest) that seeds it at the point the
-	// target app is actually chosen; this backend fallback covers any manifest that
-	// reaches here without having gone through that path (older saved experiments,
-	// direct API/CLI submissions, custom experiments).
-	{
-		found := false
-		for _, p := range workflowManifest.Spec.Arguments.Parameters {
-			if p.Name == "appNamespace" {
-				found = true
-				break
-			}
-		}
-		if !found {
-			if appNS := ExtractInstallApplicationNamespace(workflowManifest.Spec.Templates); appNS != "" {
-				workflowManifest.Spec.Arguments.Parameters = append(workflowManifest.Spec.Arguments.Parameters, v1alpha1.Parameter{
-					Name:  "appNamespace",
-					Value: v1alpha1.AnyStringPtr(appNS),
-				})
-				logrus.WithField("appNamespace", appNS).Info("injected appNamespace workflow parameter (fallback)")
-			} else {
-				logrus.Warn("appNamespace workflow parameter missing and no install-application namespace found to fall back to; " +
-					"any template referencing {{workflow.parameters.appNamespace}} will fail Argo spec validation")
-			}
-		}
-	}
-
-	// Same gap, same fix, for agentFolder: applyUninstallAllPatch (below) emits
-	// {{workflow.parameters.agentFolder}} into the generated uninstall-all script
-	// whenever an install-agent step is present, but nothing ever wrote that
-	// parameter for a hand-built (blank canvas) experiment. An unresolved
-	// {{workflow.parameters.*}} reference fails Argo's spec validation before a
-	// single step runs -- the whole run is then silently reported as if it had
-	// completed, with zero fault injection and zero agent LLM traces, since Argo
-	// never even schedules the first pod (see subscriber's
-	// updateWorkflowStatus/resolveWorkflowStatus).
-	{
-		found := false
-		for _, p := range workflowManifest.Spec.Arguments.Parameters {
-			if p.Name == "agentFolder" {
-				found = true
-				break
-			}
-		}
-		if !found {
-			if agentFolder := ExtractInstallAgentFolder(workflowManifest.Spec.Templates); agentFolder != "" {
-				workflowManifest.Spec.Arguments.Parameters = append(workflowManifest.Spec.Arguments.Parameters, v1alpha1.Parameter{
-					Name:  "agentFolder",
-					Value: v1alpha1.AnyStringPtr(agentFolder),
-				})
-				logrus.WithField("agentFolder", agentFolder).Info("injected agentFolder workflow parameter (fallback)")
-			} else {
-				logrus.Warn("agentFolder workflow parameter missing and no install-agent folder found to fall back to; " +
-					"any template referencing {{workflow.parameters.agentFolder}} will fail Argo spec validation")
-			}
-		}
 	}
 
 	if workflowManifest.Labels == nil {
@@ -896,7 +838,14 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	applyAgentInstallNamespaceOverride(cronExperimentManifest.Spec.WorkflowSpec.Templates)
-	InjectExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates, "")
+	EnsureInstallStepParameters(&cronExperimentManifest.Spec.WorkflowSpec)
+	InjectCronExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates, "")
+	if agentStepHasSettings(cronExperimentManifest.Spec.WorkflowSpec.Templates) {
+		delete(cronExperimentManifest.Annotations, RunModelAliasAnnotation)
+		if cronExperimentManifest.Spec.WorkflowMetadata != nil {
+			delete(cronExperimentManifest.Spec.WorkflowMetadata.Annotations, RunModelAliasAnnotation)
+		}
+	}
 
 	if strings.TrimSpace(cronExperimentManifest.Spec.Schedule) == "" {
 		return errors.New("failed to process cron workflow, cron syntax not provided in manifest")
@@ -2416,6 +2365,7 @@ func normalizeAgentSidecarImagePullPolicy(raw string) string {
 //
 //	Helm --set -> ConfigMap -> env var -> agent runtime reads os.environ["EXPERIMENT_ID"]
 func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverride string) {
+	applyInstallStepSettings(templates)
 	// Extract fault names from every ChaosEngine embedded in the workflow and
 	// load their ground truth definitions from the chaos hub filesystem.
 	// This is generic: any fault or category added to any hub is found automatically.
@@ -2474,10 +2424,12 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		chaosNamespace = "litmus-exp"
 	}
 
-	// FLASH_AGENT_MODEL is what scripts/setup.sh actually prompts for and writes
-	// into .env / the ace-env secret (see setup.sh's OLLAMA/Azure/Gemini model
-	// selection flow). MODEL_ALIAS is kept as a back-compat override for anyone
-	// setting it directly on the graphql-server deployment.
+	// The platform default model. FLASH_AGENT_MODEL is what scripts/setup.sh
+	// actually prompts for and writes into .env / the ace-env secret (see
+	// setup.sh's OLLAMA/Azure/Gemini model selection flow). MODEL_ALIAS is kept
+	// as a back-compat override for anyone setting it directly on the
+	// graphql-server deployment. The run-time pick and the experiment's own
+	// setting take precedence, per step (resolveAgentModelAlias).
 	modelAlias := strings.TrimSpace(os.Getenv("FLASH_AGENT_MODEL"))
 	if modelAlias == "" {
 		modelAlias = strings.TrimSpace(os.Getenv("MODEL_ALIAS"))
@@ -2485,9 +2437,6 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 	if modelAlias == "" {
 		// Fallback: derive from AZURE_OPENAI_DEPLOYMENT so any provider works
 		modelAlias = strings.TrimSpace(os.Getenv("AZURE_OPENAI_DEPLOYMENT"))
-	}
-	if override := strings.TrimSpace(modelAliasOverride); override != "" {
-		modelAlias = override
 	}
 
 	// Flash-agent mitigation knobs (see flash-agent/MITIGATION_PLAN.md). Without
@@ -2587,7 +2536,6 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		"--set", fmt.Sprintf("agent.config.OPENAI_API_KEY=%s", openAIKey),
 		"--set", fmt.Sprintf("agent.secret.LITELLM_MASTER_KEY=%s", masterKey),
 		"--set", fmt.Sprintf("agent.config.OPENAI_BASE_URL=%s", openAIBaseURL),
-		"--set", fmt.Sprintf("agent.config.MODEL_ALIAS=%s", modelAlias),
 		"--set", fmt.Sprintf("agent.config.MCP_URLS=%s", mcpURLs),
 		"--set", fmt.Sprintf("agent.config.CHAOS_NAMESPACE=%s", chaosNamespace),
 		"--set", "agent.config.TARGET_NAMESPACE={{workflow.parameters.appNamespace}}",
@@ -2623,54 +2571,16 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 	}
 
 	// isStaleSetArg returns true for --set values from previous runs that should
-	// be stripped and re-injected with fresh values.
+	// be stripped and re-injected with fresh values. The key list is shared with
+	// chart settings validation, which refuses to offer these keys to users.
 	isStaleSetArg := func(arg string) bool {
-		return strings.HasPrefix(arg, "config.openaiApiKey=") ||
-			strings.HasPrefix(arg, "config.openaiBaseUrl=") ||
-			strings.HasPrefix(arg, "agentId=") ||
-			strings.HasPrefix(arg, "agent.config.MCP_INCLUDE_CHAOS_TOOLS=") ||
-			strings.HasPrefix(arg, "agent.config.NOTIFY_ID=") ||
-			strings.HasPrefix(arg, "agent.config.EXPERIMENT_ID=") ||
-			strings.HasPrefix(arg, "agent.config.EXPERIMENT_RUN_ID=") ||
-			strings.HasPrefix(arg, "agent.config.WORKFLOW_NAME=") ||
-			strings.HasPrefix(arg, "agent.config.WORKFLOW_UID=") ||
-			strings.HasPrefix(arg, "agent.config.OPENAI_API_KEY=") ||
-			strings.HasPrefix(arg, "agent.secret.LITELLM_MASTER_KEY=") ||
-			strings.HasPrefix(arg, "agent.config.OPENAI_BASE_URL=") ||
-			strings.HasPrefix(arg, "agent.config.LANGFUSE_HOST=") ||
-			strings.HasPrefix(arg, "agent.secret.LANGFUSE_PUBLIC_KEY=") ||
-			strings.HasPrefix(arg, "agent.secret.LANGFUSE_SECRET_KEY=") ||
-			strings.HasPrefix(arg, "agent.config.MCP_URLS=") ||
-			strings.HasPrefix(arg, "agent.config.K8S_MCP_URL=") ||
-			strings.HasPrefix(arg, "agent.config.PROM_MCP_URL=") ||
-			strings.HasPrefix(arg, "agent.config.CHAOS_NAMESPACE=") ||
-			strings.HasPrefix(arg, "agent.config.K8S_NAMESPACE=") ||
-			strings.HasPrefix(arg, "agent.config.TARGET_APP_NAME=") ||
-			strings.HasPrefix(arg, "agent.config.TARGET_NAMESPACE=") ||
-			strings.HasPrefix(arg, "agent.config.AGENT_MAX_RUNTIME_SECONDS=") ||
-			strings.HasPrefix(arg, "agent.config.AGENT_IDLE_AFTER_MAX_RUNTIME=") ||
-			strings.HasPrefix(arg, "agent.config.MODEL_ALIAS=") ||
-			strings.HasPrefix(arg, "agent.config.AGENT_MODE=") ||
-			strings.HasPrefix(arg, "agent.config.AGENT_SCOPE_NAMESPACE=") ||
-			strings.HasPrefix(arg, "agent.config.MITIGATION_ALLOW_DISCOVERED_SCOPE=") ||
-			strings.HasPrefix(arg, "agent.config.MITIGATION_REVIEW_ITERS=") ||
-			strings.HasPrefix(arg, "agent.config.MITIGATION_AUDIT_PATH=") ||
-			strings.HasPrefix(arg, "agent.config.AGENT_MEMORY_PATH=") ||
-			strings.HasPrefix(arg, "agent.config.MEMORY_TTL_DAYS=") ||
-			strings.HasPrefix(arg, "agent.config.REVIEWER_MODEL_ALIAS=") ||
-			// GROUND_TRUTH_JSON is no longer injected into agent ConfigMap — strip any stale value from old runs
-			strings.HasPrefix(arg, "agent.config.GROUND_TRUTH_JSON=") ||
-			strings.HasPrefix(arg, "sidecar.enabled=") ||
-			strings.HasPrefix(arg, "sidecar.injectionMode=") ||
-			strings.HasPrefix(arg, "sidecar.upstream=") ||
-			strings.HasPrefix(arg, "sidecar.image.repository=") ||
-			strings.HasPrefix(arg, "sidecar.image.tag=") ||
-			strings.HasPrefix(arg, "sidecar.image.pullPolicy=")
+		key, _, hasValue := strings.Cut(arg, "=")
+		return hasValue && chartconfig.IsPlatformOwned(key)
 	}
 	// isStaleFlag returns true for named binary flags (not --set values) that
 	// carry a subsequent value and should be replaced by fresh injection.
 	isStaleFlag := func(arg string) bool {
-		return arg == "--server-addr" || arg == "--project-id"
+		return arg == "--server-addr" || arg == "--project-id" || arg == "-server-addr" || arg == "-project-id"
 	}
 
 	for i := range templates {
@@ -2689,16 +2599,15 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 				arg := t.Container.Args[idx]
 
 				// Strip stale --set key=value (combined form)
-				if strings.HasPrefix(arg, "--set=") || strings.HasPrefix(arg, "--set-string=") {
-					valueArg := strings.TrimPrefix(arg, "--set=")
-					valueArg = strings.TrimPrefix(valueArg, "--set-string=")
+				flag, valueArg, combined := strings.Cut(arg, "=")
+				if combined && (flag == "-set" || flag == "--set" || flag == "--set-string" || flag == "--set-json") {
 					if isStaleSetArg(valueArg) {
 						continue
 					}
 				}
 
 				// Strip stale --set key value (split form)
-				if (arg == "--set" || arg == "--set-string") && idx+1 < len(t.Container.Args) {
+				if (arg == "-set" || arg == "--set" || arg == "--set-string" || arg == "--set-json") && idx+1 < len(t.Container.Args) {
 					nextArg := t.Container.Args[idx+1]
 					if isStaleSetArg(nextArg) {
 						idx++
@@ -2707,6 +2616,9 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 				}
 
 				// Strip stale binary flags that carry the next arg as their value
+				if combined && isStaleFlag(flag) {
+					continue
+				}
 				if isStaleFlag(arg) && idx+1 < len(t.Container.Args) {
 					idx++
 					continue
@@ -2718,6 +2630,9 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		}
 
 		t.Container.Args = append(t.Container.Args, experimentSetArgs...)
+		// Per step, because the experiment's own model setting lives on the step.
+		stepModelAlias := resolveAgentModelAlias(modelAliasOverride, *t, modelAlias)
+		t.Container.Args = append(t.Container.Args, "--set", fmt.Sprintf("%s=%s", chartconfig.ModelAliasKey, stepModelAlias))
 
 		// If applyAgentInstallNamespaceOverride redirected this install-agent
 		// step to AGENT_INSTALL_NAMESPACE, pin the original target namespace as
@@ -2737,9 +2652,10 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"template": t.Name,
-			"args":     experimentSetArgs,
-			"source":   "hardcoded-fallback",
+			"template":   t.Name,
+			"argCount":   len(experimentSetArgs),
+			"modelAlias": stepModelAlias,
+			"source":     "hardcoded-fallback",
 		}).Info("[Experiment Context] Injected --set args for experiment context (fallback)")
 	}
 }

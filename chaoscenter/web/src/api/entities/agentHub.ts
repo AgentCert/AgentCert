@@ -1,3 +1,5 @@
+import type { ConfigField } from './chartConfig';
+
 export interface AgentHubEntry {
   name: string;
   displayName: string;
@@ -9,6 +11,8 @@ export interface AgentHubEntry {
   // ones onboarded after it; `[]` means it is deliberately not
   // application-targeted and is never offered for one.
   compatibleApplications?: string[] | null;
+  // Settings the agent's chart lets the user change in the experiment builder.
+  configurations: ConfigField[];
   isDeployed: boolean;
   deploymentStatus: string;
   agentID?: string;

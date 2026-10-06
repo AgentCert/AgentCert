@@ -10,6 +10,7 @@ import {
 import type { ExperimentManifest, FaultData, FaultTunables, ProbeAttributes } from '@models';
 import { ExecutionData, Weightages, Node, ExperimentType, ProbeObj } from '@api/entities';
 import type { PipelineGraphState } from '@components/PipelineDiagram/types';
+import type { InstallStepChoice, InstallStepSelection } from './installStepSettings';
 
 export interface PreProcessChaosExperiment<T> {
   manifest: T;
@@ -170,17 +171,17 @@ export abstract class ExperimentYamlService extends ChaosIDB {
   abstract addInstallStepToManifest(
     key: ChaosObjectStoresPrimaryKeys['experiments'],
     kind: 'application' | 'agent',
-    entry: { folder: string; namespace: string }
+    choice: InstallStepChoice
   ): Promise<Experiment | undefined>;
 
   abstract getInstallStepSelection(
     manifest: ExperimentManifest | undefined,
     kind: 'application' | 'agent'
-  ): { folder: string; namespace: string } | undefined;
+  ): InstallStepSelection | undefined;
 
   abstract getExperimentContext(manifest: ExperimentManifest | undefined): {
-    application?: { folder: string; namespace: string };
-    agent?: { folder: string; namespace: string };
+    application?: InstallStepSelection;
+    agent?: InstallStepSelection;
     hasFaults: boolean;
   };
 
