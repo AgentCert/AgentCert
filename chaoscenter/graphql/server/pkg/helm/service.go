@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/imageref"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -75,10 +76,18 @@ func (h *HelmService) InstallChart(ctx context.Context, chartPath string, reques
 		args = append(args, "--kubeconfig", h.kubeconfig)
 	}
 
+	// User-uploaded charts are never side-loaded, so their images always
+	// follow IMAGE_REGISTRY: this binary post-renders them (pkg/imageref).
+	postRenderArgs, postRenderEnv := imageref.HelmPostRenderer("", "")
+	args = append(args, postRenderArgs...)
+
 	log.Infof("Executing helm command: helm %s", strings.Join(args, " "))
 
 	// Execute helm install command
 	cmd := exec.CommandContext(ctx, "helm", args...)
+	if postRenderEnv != nil {
+		cmd.Env = append(os.Environ(), postRenderEnv...)
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -131,10 +140,18 @@ func (h *HelmService) UpgradeChart(ctx context.Context, chartPath string, reques
 		args = append(args, "--kubeconfig", h.kubeconfig)
 	}
 
+	// User-uploaded charts are never side-loaded, so their images always
+	// follow IMAGE_REGISTRY: this binary post-renders them (pkg/imageref).
+	postRenderArgs, postRenderEnv := imageref.HelmPostRenderer("", "")
+	args = append(args, postRenderArgs...)
+
 	log.Infof("Executing helm command: helm %s", strings.Join(args, " "))
 
 	// Execute helm upgrade command
 	cmd := exec.CommandContext(ctx, "helm", args...)
+	if postRenderEnv != nil {
+		cmd.Env = append(os.Environ(), postRenderEnv...)
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {

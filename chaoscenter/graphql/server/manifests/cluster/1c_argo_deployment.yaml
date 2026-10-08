@@ -39,6 +39,7 @@ spec:
       labels:
         app: workflow-controller
     spec:
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:

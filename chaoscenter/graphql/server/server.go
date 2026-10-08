@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -40,6 +41,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/config"
 	authgrpc "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/grpc"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/handlers"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/imageref"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/projects"
 	pb "github.com/litmuschaos/litmus/chaoscenter/graphql/server/protos"
@@ -47,6 +49,19 @@ import (
 )
 
 func init() {
+	// Helm post-renderer mode (pkg/agent_registry runs `helm --post-renderer`
+	// with this binary): rewrite image references on stdin and exit before any
+	// server initialisation.
+	if os.Getenv(imageref.PostRenderEnv) == "1" {
+		in, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "post-render: reading manifests:", err)
+			os.Exit(1)
+		}
+		fmt.Print(imageref.PostRender(string(in)))
+		os.Exit(0)
+	}
+
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetReportCaller(true)
 	log.Printf("go version: %s", runtime.Version())

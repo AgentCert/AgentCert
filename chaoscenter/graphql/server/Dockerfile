@@ -1,5 +1,10 @@
 # BUILD STAGE
-FROM golang:1.24 AS builder
+# Base images: upstream names by default (plain `docker build` works anywhere).
+# scripts/build-and-push.sh, setup.sh and prepare-images.sh pass the copy from
+# IMAGE_REGISTRY / the frozen agentcert/ Docker Hub copies (scripts/lib/registry.sh).
+ARG GOLANG_IMAGE=golang:1.24
+ARG UBI_MINIMAL_IMAGE=registry.access.redhat.com/ubi9/ubi-minimal:9.6
+FROM ${GOLANG_IMAGE} AS builder
 
 LABEL maintainer="LitmusChaos"
 
@@ -27,7 +32,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /output/server
 
 # DEPLOY STAGE
 # Use Red Hat UBI minimal image as base
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.6
+FROM ${UBI_MINIMAL_IMAGE}
 
 LABEL maintainer="LitmusChaos"
 

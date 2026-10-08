@@ -48,6 +48,7 @@ spec:
         agentcert.io/infra-id: "#{INFRA_ID}"
     spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -102,6 +103,7 @@ spec:
       labels:
         app: event-tracker
     spec:
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}

@@ -434,6 +434,7 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
+	ApplyRegistryImageOverrides(&workflowManifest.Spec)
 	applyAgentInstallNamespaceOverride(workflowManifest.Spec.Templates)
 	EnsureInstallStepParameters(&workflowManifest.Spec)
 	InjectExperimentContextArgs(workflowManifest.Spec.Templates, "")
@@ -685,7 +686,7 @@ func (c *chaosExperimentService) applyRBACPatch(wf *v1alpha1.Workflow) error {
 		rbacTpl := v1alpha1.Template{
 			Name: rbacStepName,
 			Container: &corev1.Container{
-				Image:   "litmuschaos/k8s:latest",
+				Image:   WorkflowImage("litmuschaos/k8s:latest"),
 				Command: []string{"sh", "-c"},
 				Args: []string{`set -eu
 
@@ -837,6 +838,7 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 	ApplyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ApplyRegistryImageOverrides(&cronExperimentManifest.Spec.WorkflowSpec)
 	applyAgentInstallNamespaceOverride(cronExperimentManifest.Spec.WorkflowSpec.Templates)
 	EnsureInstallStepParameters(&cronExperimentManifest.Spec.WorkflowSpec)
 	InjectCronExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates, "")
@@ -1321,7 +1323,7 @@ func (c *chaosExperimentService) applyInstallApplicationReadinessPatch(wf *v1alp
 	readinessTpl := v1alpha1.Template{
 		Name: readinessStepName,
 		Container: &corev1.Container{
-			Image:   "litmuschaos/k8s:latest",
+			Image:   WorkflowImage("litmuschaos/k8s:latest"),
 			Command: []string{"sh", "-c"},
 			Args: []string{
 				`set -eu
@@ -1472,7 +1474,7 @@ func (c *chaosExperimentService) applyPreCleanupWaitPatch(wf *v1alpha1.Workflow)
 	waitTpl := v1alpha1.Template{
 		Name: waitTemplateName,
 		Container: &corev1.Container{
-			Image:   "busybox:1.36",
+			Image:   WorkflowImage("busybox:1.36"),
 			Command: []string{"sh", "-c"},
 			Args:    []string{fmt.Sprintf("echo '[pre-cleanup-wait] sleeping for %d seconds'; sleep %d; echo '[pre-cleanup-wait] done'", waitSec, waitSec)},
 		},
@@ -1821,6 +1823,12 @@ func ApplyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 
 		if t.Container.ImagePullPolicy != corev1.PullPolicy(targetPullPolicy) {
 			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
+			changed = true
+		}
+
+		// App chart images (sock-shop, bookinfo, otel-demo) follow the
+		// workflow runtime source: rewritten by install-app's post-renderer.
+		if setContainerEnv(t.Container, installerImageEnv("LITMUS_IMAGES_SOURCE", "registry")) {
 			changed = true
 		}
 	}
@@ -2477,12 +2485,7 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 	if sidecarImageFull == "" {
 		sidecarImageFull = "agentcert/agent-sidecar:latest"
 	}
-	sidecarImageTag := "latest"
-	sidecarImageRepo := sidecarImageFull
-	if idx := strings.LastIndex(sidecarImageFull, ":"); idx > 0 {
-		sidecarImageTag = sidecarImageFull[idx+1:]
-		sidecarImageRepo = sidecarImageFull[:idx]
-	}
+	sidecarImageRegistry, sidecarImageRepo, sidecarImageTag := splitChartImage(sidecarImageFull)
 
 	sidecarImagePullPolicy := strings.TrimSpace(utils.Config.AgentSidecarImagePullPolicy)
 	if sidecarImagePullPolicy == "" {
@@ -2557,6 +2560,10 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		// Let the sidecar forward to the real LiteLLM proxy (base URL without /v1)
 		"--set", fmt.Sprintf("sidecar.upstream=%s", sidecarUpstream),
 		// Pin the exact sidecar image that was built and loaded into minikube.
+		// The agent charts render "<registry>/<repository>:<tag>", so a
+		// registry host in AGENT_SIDECAR_IMAGE must go into sidecar.image.registry
+		// (otherwise the chart default docker.io/ ends up in front of it).
+		"--set", fmt.Sprintf("sidecar.image.registry=%s", sidecarImageRegistry),
 		"--set", fmt.Sprintf("sidecar.image.repository=%s", sidecarImageRepo),
 		"--set", fmt.Sprintf("sidecar.image.tag=%s", sidecarImageTag),
 		"--set", fmt.Sprintf("sidecar.image.pullPolicy=%s", sidecarImagePullPolicy),
@@ -2633,6 +2640,10 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		// Per step, because the experiment's own model setting lives on the step.
 		stepModelAlias := resolveAgentModelAlias(modelAliasOverride, *t, modelAlias)
 		t.Container.Args = append(t.Container.Args, "--set", fmt.Sprintf("%s=%s", chartconfig.ModelAliasKey, stepModelAlias))
+
+		// Agent + sidecar images follow SRE_AGENTS_IMAGE_SOURCE: rewritten by
+		// install-agent's post-renderer when pulled from the registry.
+		setContainerEnv(t.Container, installerImageEnv("SRE_AGENTS_IMAGE_SOURCE", "local"))
 
 		// If applyAgentInstallNamespaceOverride redirected this install-agent
 		// step to AGENT_INSTALL_NAMESPACE, pin the original target namespace as

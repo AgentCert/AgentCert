@@ -13,6 +13,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
 	store "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/data-store"
 	dbChaosInfra "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/imageref"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -308,6 +309,13 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 		newContent = strings.Replace(newContent, "#{KUBERNETES_MCP_SERVER_IMAGE}", utils.Config.KubernetesMcpServerImage, -1)
 		newContent = strings.Replace(newContent, "#{PROMETHEUS_MCP_SERVER_IMAGE}", utils.Config.PrometheusMcpServerImage, -1)
 		newContent = strings.Replace(newContent, "#{PROMETHEUS_MCP_URL}", utils.Config.PrometheusMcpUrl, -1)
+		// Private registry: every infra pod names the pull secret explicitly, so
+		// it can pull even before registry-secret-sync patches its ServiceAccount.
+		// Unreplaced, the placeholder stays a YAML comment (public images).
+		if secret := imageref.PullSecretName(); secret != "" {
+			newContent = strings.Replace(newContent, "#{IMAGE_PULL_SECRETS}",
+				"imagePullSecrets:\n      - name: "+secret, -1)
+		}
 
 		newContent = strings.Replace(newContent, "#{START_TIME}", "\""+infra.StartTime+"\"", -1)
 		if infra.IsInfraConfirmed {

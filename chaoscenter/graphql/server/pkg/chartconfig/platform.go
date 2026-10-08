@@ -53,6 +53,7 @@ var platformOwnedKeys = map[string]bool{
 	"sidecar.enabled":                                true,
 	"sidecar.injectionMode":                          true,
 	"sidecar.upstream":                               true,
+	"sidecar.image.registry":                         true,
 	"sidecar.image.repository":                       true,
 	"sidecar.image.tag":                              true,
 	"sidecar.image.pullPolicy":                       true,

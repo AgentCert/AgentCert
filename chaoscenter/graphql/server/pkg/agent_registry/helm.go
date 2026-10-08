@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/imageref"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 )
 
@@ -269,8 +270,18 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		}
 	}
 
+	// Private registry / frozen copies: when agent images are pulled from the
+	// registry (SRE_AGENTS_IMAGE_SOURCE=registry), this server binary acts as a
+	// Helm post-renderer that resolves every image and adds the pull secret
+	// (pkg/imageref). Side-loaded local images keep their public names.
+	postRenderArgs, postRenderEnv := imageref.HelmPostRenderer("SRE_AGENTS_IMAGE_SOURCE", "local")
+	args = append(args, postRenderArgs...)
+
 	log.Printf("[Helm Deploy] Executing: %s %s", helmBin, strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, helmBin, args...)
+	if postRenderEnv != nil {
+		cmd.Env = append(os.Environ(), postRenderEnv...)
+	}
 	output, err := cmd.CombinedOutput()
 	log.Printf("[Helm Deploy] Output: %s", string(output))
 	if err != nil {

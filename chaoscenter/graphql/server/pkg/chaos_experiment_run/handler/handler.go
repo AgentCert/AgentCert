@@ -741,7 +741,7 @@ func applyPreCleanupWaitPatchToWorkflowSpec(spec *v1alpha1.WorkflowSpec) {
 	waitTpl := v1alpha1.Template{
 		Name: waitTemplateName,
 		Container: &corev1.Container{
-			Image:   "busybox:1.36",
+			Image:   ops.WorkflowImage("busybox:1.36"),
 			Command: []string{"sh", "-c"},
 			Args:    []string{fmt.Sprintf("echo '[pre-cleanup-wait] sleeping for %d seconds'; sleep %d; echo '[pre-cleanup-wait] done'", waitSec, waitSec)},
 		},
@@ -2449,6 +2449,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	ops.ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
+	ops.ApplyRegistryImageOverrides(&workflowManifest.Spec)
 	if err := ops.ValidateExperimentStructure(&workflowManifest.Spec); err != nil {
 		return nil, fmt.Errorf("workflow composition is not runnable: %w", err)
 	}
@@ -2917,6 +2918,7 @@ func (c *ChaosExperimentRunHandler) runCronExperiment(ctx context.Context, proje
 	effectiveModelAlias := c.resolveRunModelAlias(ctx, &workflow, modelAliasOverride)
 	ops.InjectCronExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates, effectiveModelAlias)
 	ops.ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ops.ApplyRegistryImageOverrides(&cronExperimentManifest.Spec.WorkflowSpec)
 	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
 	ensureAgentFolderParam(&cronExperimentManifest.Spec.WorkflowSpec)
 	if err := ops.ApplyGuaranteedCleanupPatch(&cronExperimentManifest.Spec.WorkflowSpec); err != nil {
