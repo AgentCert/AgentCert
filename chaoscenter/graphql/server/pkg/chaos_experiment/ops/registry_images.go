@@ -148,6 +148,7 @@ func installerImageEnv(sourceKey, def string) []corev1.EnvVar {
 	return []corev1.EnvVar{
 		{Name: "ACE_IMAGE_REGISTRY", Value: r.Registry},
 		{Name: "ACE_IMAGE_MIRROR_NAMESPACE", Value: r.MirrorNamespace},
+		{Name: "ACE_IMAGE_TAG", Value: r.AceTag},
 		{Name: "ACE_IMAGE_PULL_SECRET", Value: imageref.PullSecretName()},
 	}
 }

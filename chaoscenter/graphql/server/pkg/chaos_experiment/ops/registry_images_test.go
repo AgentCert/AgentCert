@@ -94,7 +94,9 @@ func TestApplyRegistryImageOverridesPrivateRegistry(t *testing.T) {
 	if !strings.Contains(raw, testRegistry+"/agentcert/itbench-experiment:dev") {
 		t.Errorf("itbench-experiment (registry source) not resolved in fault definitions")
 	}
-	if strings.Contains(raw, testRegistry+"/quay.io/it-bench/hello-bench-invalid") ||
+	if strings.Contains(raw, testRegistry+"/agentcert/quay.io/it-bench/hello-bench-invalid") ||
+		strings.Contains(raw, testRegistry+"/agentcert/arm64v8/busybox") ||
+		strings.Contains(raw, testRegistry+"/quay.io/it-bench/hello-bench-invalid") ||
 		strings.Contains(raw, testRegistry+"/arm64v8/busybox") {
 		t.Errorf("intentionally broken INVALID_*IMAGE was rewritten")
 	}
@@ -146,7 +148,7 @@ func TestApplyRegistryImageOverridesOpenSource(t *testing.T) {
 
 func TestWorkflowImage(t *testing.T) {
 	setSources(t, testRegistry, "registry", "local")
-	if got := WorkflowImage("litmuschaos/k8s:latest"); got != testRegistry+"/litmuschaos/k8s:latest" {
+	if got := WorkflowImage("litmuschaos/k8s:latest"); got != testRegistry+"/agentcert/litmuschaos/k8s:latest" {
 		t.Errorf("WorkflowImage = %q", got)
 	}
 	setSources(t, testRegistry, "local", "local")

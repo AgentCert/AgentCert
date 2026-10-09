@@ -9,9 +9,13 @@
 // checks that they all agree. Every image is written in the repo by its
 // upstream public name:
 //
-//	IMAGE_REGISTRY set    -> <IMAGE_REGISTRY>/<public name>
+//	IMAGE_REGISTRY set    -> <IMAGE_REGISTRY>/<IMAGE_MIRROR_NAMESPACE>/<public name>
 //	                         (the public name keeps its own host, e.g.
-//	                          <reg>/quay.io/containers/x:v1)
+//	                          <reg>/agentcert/quay.io/containers/x:v1; ACE's own
+//	                          agentcert/x images do not repeat the namespace:
+//	                          <reg>/agentcert/certifier. IMAGE_MIRROR_NAMESPACE=none,
+//	                          or a registry that already ends in the namespace,
+//	                          puts images directly under IMAGE_REGISTRY)
 //	IMAGE_REGISTRY empty  -> <IMAGE_MIRROR_NAMESPACE>/<flat name> on Docker Hub
 //	                         (default namespace "agentcert"; the flat name drops
 //	                          the registry host and turns "/" into "-":
@@ -20,6 +24,10 @@
 //	                         generated from deploy/images.txt); any other image keeps
 //	                         its public name. IMAGE_MIRROR_NAMESPACE=none keeps every
 //	                         public name.
+//
+// ACE_IMAGE_TAG (e.g. RELEASE-3), when set, replaces the tag of every image ACE
+// builds itself (aceImages, generated from the deploy/images.txt "build" rows),
+// so deployments pull one fixed release instead of a moving :latest.
 //
 // Resolution is idempotent: an already-resolved reference resolves to itself.
 package imageref
@@ -40,6 +48,9 @@ type Resolver struct {
 	Registry string
 	// MirrorNamespace is IMAGE_MIRROR_NAMESPACE ("none" disables the frozen copies).
 	MirrorNamespace string
+	// AceTag is ACE_IMAGE_TAG: the tag for every ACE-built image ("" keeps each
+	// reference's own tag).
+	AceTag string
 }
 
 // New returns a Resolver for the given IMAGE_REGISTRY / IMAGE_MIRROR_NAMESPACE values.
@@ -51,15 +62,21 @@ func New(registry, mirrorNamespace string) Resolver {
 	return Resolver{Registry: NormalizeRegistry(registry), MirrorNamespace: ns}
 }
 
-// FromEnv builds a Resolver from IMAGE_REGISTRY and IMAGE_MIRROR_NAMESPACE.
+// WithAceTag returns a copy of r that tags ACE-built images with tag.
+func (r Resolver) WithAceTag(tag string) Resolver {
+	r.AceTag = strings.TrimSpace(tag)
+	return r
+}
+
+// FromEnv builds a Resolver from IMAGE_REGISTRY, IMAGE_MIRROR_NAMESPACE and ACE_IMAGE_TAG.
 func FromEnv() Resolver {
-	return New(os.Getenv("IMAGE_REGISTRY"), os.Getenv("IMAGE_MIRROR_NAMESPACE"))
+	return New(os.Getenv("IMAGE_REGISTRY"), os.Getenv("IMAGE_MIRROR_NAMESPACE")).WithAceTag(os.Getenv("ACE_IMAGE_TAG"))
 }
 
 // Active reports whether resolving changes anything at all (false only for
-// IMAGE_REGISTRY empty + IMAGE_MIRROR_NAMESPACE=none).
+// IMAGE_REGISTRY empty + IMAGE_MIRROR_NAMESPACE=none + no ACE_IMAGE_TAG).
 func (r Resolver) Active() bool {
-	return r.Registry != "" || r.MirrorNamespace != "none"
+	return r.Registry != "" || r.MirrorNamespace != "none" || r.AceTag != ""
 }
 
 // NormalizeRegistry strips a scheme, the Artifactory UI path segment and any
@@ -114,6 +131,60 @@ func FlatRef(ref, namespace string) string {
 	return namespace + "/" + strings.ReplaceAll(name, "/", "-") + ":" + tag
 }
 
+// Base is the registry path images live under: <Registry>/<MirrorNamespace>,
+// or Registry itself when the namespace is "none" or Registry already ends in
+// it ("" when no registry is set).
+func (r Resolver) Base() string {
+	if r.Registry == "" || r.MirrorNamespace == "none" || strings.HasSuffix("/"+r.Registry, "/"+r.MirrorNamespace) {
+		return r.Registry
+	}
+	return r.Registry + "/" + r.MirrorNamespace
+}
+
+// JoinRegistry puts a canonical reference under registry. When the public name
+// starts with the registry's last path segment, that segment is not repeated
+// (registry ".../docker-local/agentcert" + "agentcert/certifier:x" ->
+// ".../docker-local/agentcert/certifier:x").
+func JoinRegistry(registry, canonicalRef string) string {
+	if i := strings.LastIndex(registry, "/"); i >= 0 {
+		if seg := registry[i+1:]; strings.HasPrefix(canonicalRef, seg+"/") {
+			return registry + "/" + canonicalRef[len(seg)+1:]
+		}
+	}
+	return registry + "/" + canonicalRef
+}
+
+// splitTag splits a canonical reference into name and tag ("" for digests).
+func splitTag(ref string) (name, tag string) {
+	if strings.Contains(ref, "@") {
+		return ref, ""
+	}
+	i := strings.LastIndex(ref, ":")
+	if i < strings.LastIndex(ref, "/") {
+		return ref, ""
+	}
+	return ref[:i], ref[i+1:]
+}
+
+// IsAceImage reports whether a canonical reference names an image ACE builds
+// itself (deploy/images.txt "build" rows), whatever its tag.
+func IsAceImage(canonicalRef string) bool {
+	name, _ := splitTag(canonicalRef)
+	return aceImages[name]
+}
+
+// retag applies ACE_IMAGE_TAG to ACE-built images.
+func (r Resolver) retag(c string) string {
+	if r.AceTag == "" || !IsAceImage(c) {
+		return c
+	}
+	name, tag := splitTag(c)
+	if tag == "" {
+		return c // pinned by digest
+	}
+	return name + ":" + r.AceTag
+}
+
 // Resolve returns where ref is pulled from under this configuration.
 func (r Resolver) Resolve(ref string) string {
 	ref = strings.TrimSpace(ref)
@@ -124,9 +195,9 @@ func (r Resolver) Resolve(ref string) string {
 		if strings.HasPrefix(ref, r.Registry+"/") {
 			return ref
 		}
-		return r.Registry + "/" + Canonical(ref)
+		return JoinRegistry(r.Base(), r.retag(Canonical(ref)))
 	}
-	c := Canonical(ref)
+	c := r.retag(Canonical(ref))
 	if r.MirrorNamespace != "none" && IsMirrored(c) {
 		return FlatRef(c, r.MirrorNamespace)
 	}
@@ -261,9 +332,9 @@ const PostRenderEnv = "ACE_HELM_POST_RENDER"
 
 // PostRender is a Helm post-renderer: it rewrites every image in the rendered
 // manifests and adds the pull secret to every pod. Configured by
-// ACE_IMAGE_REGISTRY, ACE_IMAGE_MIRROR_NAMESPACE and ACE_IMAGE_PULL_SECRET.
+// ACE_IMAGE_REGISTRY, ACE_IMAGE_MIRROR_NAMESPACE, ACE_IMAGE_TAG and ACE_IMAGE_PULL_SECRET.
 func PostRender(manifests string) string {
-	r := New(os.Getenv("ACE_IMAGE_REGISTRY"), os.Getenv("ACE_IMAGE_MIRROR_NAMESPACE"))
+	r := New(os.Getenv("ACE_IMAGE_REGISTRY"), os.Getenv("ACE_IMAGE_MIRROR_NAMESPACE")).WithAceTag(os.Getenv("ACE_IMAGE_TAG"))
 	out := r.RewriteText(manifests, nil)
 	return AddPullSecretText(out, strings.TrimSpace(os.Getenv("ACE_IMAGE_PULL_SECRET")))
 }
@@ -278,6 +349,7 @@ func PostRenderEnvVars(r Resolver, pullSecret string) []string {
 		PostRenderEnv + "=1",
 		"ACE_IMAGE_REGISTRY=" + r.Registry,
 		"ACE_IMAGE_MIRROR_NAMESPACE=" + r.MirrorNamespace,
+		"ACE_IMAGE_TAG=" + r.AceTag,
 		"ACE_IMAGE_PULL_SECRET=" + pullSecret,
 	}
 }

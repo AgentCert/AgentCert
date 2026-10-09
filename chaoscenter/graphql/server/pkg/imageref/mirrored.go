@@ -105,3 +105,28 @@ var mirroredImages = func() map[string]bool {
 	}
 	return m
 }()
+
+// aceImages are the images ACE builds itself (deploy/images.txt "build"
+// rows, names without tag); ACE_IMAGE_TAG replaces their tag.
+var aceImages = func() map[string]bool {
+	m := map[string]bool{}
+	for _, name := range []string{
+		"agentcert/ace-hub-bundle",
+		"agentcert/agentcert-auth",
+		"agentcert/agentcert-flash-agent",
+		"agentcert/agentcert-graphql",
+		"agentcert/agentcert-install-agent",
+		"agentcert/agentcert-install-app",
+		"agentcert/agentcert-web",
+		"agentcert/agent-sidecar",
+		"agentcert/certifier",
+		"agentcert/cluster-init",
+		"agentcert/itbench-experiment",
+		"agentcert/litmusportal-subscriber",
+		"agentcert/sre-agent-comprehensive",
+		"agentcert/sre-agent-crewai",
+	} {
+		m[name] = true
+	}
+	return m
+}()

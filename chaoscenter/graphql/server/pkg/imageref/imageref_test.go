@@ -27,13 +27,15 @@ func TestResolve(t *testing.T) {
 		{"", "agentcert", "nginx:1.25", "nginx:1.25"},
 		{"", "agentcert", "registry.example.com/team/app:v2", "registry.example.com/team/app:v2"},
 		{"", "agentcert", "devth/alpine-bench", "devth/alpine-bench:latest"}, // optional row, not mirrored
-		{jfrog, "agentcert", "nginx:1.25", jfrog + "/nginx:1.25"},            // private registry: always prefixed
+		{jfrog, "agentcert", "nginx:1.25", jfrog + "/agentcert/nginx:1.25"},  // private registry: always under the namespace folder
 		{"", "", "mongo:5", "agentcert/mongo:5"},                             // empty namespace = default
-		{jfrog, "agentcert", "mongo:5", jfrog + "/mongo:5"},
-		{jfrog, "agentcert", "quay.io/containers/x:v1", jfrog + "/quay.io/containers/x:v1"},
-		{jfrog, "agentcert", "cgr.dev/chainguard/minio", jfrog + "/cgr.dev/chainguard/minio:latest"},
+		{jfrog, "agentcert", "mongo:5", jfrog + "/agentcert/mongo:5"},
+		{jfrog, "none", "mongo:5", jfrog + "/mongo:5"}, // namespace none: flat layout
+		{jfrog, "agentcert", "agentcert/certifier:latest", jfrog + "/agentcert/certifier:latest"},
+		{jfrog, "agentcert", "quay.io/containers/x:v1", jfrog + "/agentcert/quay.io/containers/x:v1"},
+		{jfrog, "agentcert", "cgr.dev/chainguard/minio", jfrog + "/agentcert/cgr.dev/chainguard/minio:latest"},
 		{jfrog, "agentcert", jfrog + "/mongo:5", jfrog + "/mongo:5"}, // idempotent
-		{"https://infyartifactory.jfrog.io/ui/native/docker-local/", "", "mongo:5", jfrog + "/mongo:5"},
+		{"https://infyartifactory.jfrog.io/ui/native/docker-local/", "", "mongo:5", jfrog + "/agentcert/mongo:5"},
 		{jfrog, "", "{{workflow.parameters.image}}", "{{workflow.parameters.image}}"},
 		{jfrog, "", "", ""},
 	}
@@ -59,6 +61,43 @@ func TestResolve(t *testing.T) {
 		if twice := r.Resolve(once); twice != once {
 			t.Errorf("not idempotent: %q -> %q -> %q", in, once, twice)
 		}
+	}
+}
+
+// Registry ending in /agentcert (Infosys JFrog layout) and ACE_IMAGE_TAG.
+func TestAgentcertPathAndReleaseTag(t *testing.T) {
+	reg := jfrog + "/agentcert"
+	cases := []struct {
+		registry, tag, in, want string
+	}{
+		{reg, "", "agentcert/certifier:latest", reg + "/certifier:latest"}, // segment not repeated
+		{reg, "", "mongo:5", reg + "/mongo:5"},
+		{reg, "", "quay.io/containers/x:v1", reg + "/quay.io/containers/x:v1"},
+		{reg, "", reg + "/certifier:latest", reg + "/certifier:latest"}, // idempotent
+		{jfrog, "", "agentcert/certifier:latest", jfrog + "/agentcert/certifier:latest"},
+		{reg, "RELEASE-7", "agentcert/agentcert-graphql:latest", reg + "/agentcert-graphql:RELEASE-7"},
+		{reg, "RELEASE-7", "agentcert/litmusportal-subscriber:3.0.0", reg + "/litmusportal-subscriber:RELEASE-7"},
+		{reg, "RELEASE-7", "agentcert/certifier", reg + "/certifier:RELEASE-7"},
+		{reg, "RELEASE-7", "mongo:5", reg + "/mongo:5"},                                     // third-party keeps its tag
+		{reg, "RELEASE-7", "agentcert/certifier@sha256:abc", reg + "/certifier@sha256:abc"}, // digest untouched
+		{"", "RELEASE-7", "agentcert/certifier:latest", "agentcert/certifier:RELEASE-7"},
+		{"", "RELEASE-7", "python:3.11-slim", "agentcert/python:3.11-slim"},
+		{"", "RELEASE-7", "agentcert/certifier:RELEASE-7", "agentcert/certifier:RELEASE-7"},
+	}
+	for _, c := range cases {
+		if got := New(c.registry, "").WithAceTag(c.tag).Resolve(c.in); got != c.want {
+			t.Errorf("Resolve(%q) registry=%q tag=%q = %q, want %q", c.in, c.registry, c.tag, got, c.want)
+		}
+	}
+	if !New("", "none").WithAceTag("RELEASE-7").Active() {
+		t.Errorf("a release tag alone must make the resolver active")
+	}
+	t.Setenv("ACE_IMAGE_REGISTRY", reg)
+	t.Setenv("ACE_IMAGE_MIRROR_NAMESPACE", "")
+	t.Setenv("ACE_IMAGE_TAG", "RELEASE-7")
+	t.Setenv("ACE_IMAGE_PULL_SECRET", "")
+	if got := PostRender("image: agentcert/agentcert-flash-agent:latest\n"); got != "image: "+reg+"/agentcert-flash-agent:RELEASE-7\n" {
+		t.Errorf("post-render with ACE_IMAGE_TAG = %q", got)
 	}
 }
 
@@ -96,10 +135,10 @@ func TestRewriteText(t *testing.T) {
 	r := New(jfrog, "")
 	got := r.RewriteText(faultText, func(ref string) bool { return strings.HasPrefix(ref, "agentcert/") })
 	for _, want := range []string{
-		`image: "` + jfrog + `/litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest"`,
-		`value: "` + jfrog + `/litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest"`,
-		`value: ` + jfrog + `/gaiadocker/iproute2:latest`,
-		`value: ` + jfrog + `/busybox:1.36`,
+		`image: "` + jfrog + `/agentcert/litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest"`,
+		`value: "` + jfrog + `/agentcert/litmuschaos.docker.scarf.sh/litmuschaos/go-runner:latest"`,
+		`value: ` + jfrog + `/agentcert/gaiadocker/iproute2:latest`,
+		`value: ` + jfrog + `/agentcert/busybox:1.36`,
 		`value: 'quay.io/it-bench/hello-bench-invalid:1.0.0'`, // intentionally broken: untouched
 		`value: arm64v8/busybox:1.36.1-musl`,                  // intentionally broken: untouched
 		`value: "60"`,                                         // not an image setting
@@ -153,9 +192,9 @@ func TestPostRender(t *testing.T) {
 	t.Setenv("ACE_IMAGE_PULL_SECRET", "registry-pull")
 	got := PostRender(podText)
 	for _, want := range []string{
-		"image: " + jfrog + "/busybox:latest",
-		`image: "` + jfrog + `/ghcr.io/open-telemetry/demo:2.2.0-cart"`,
-		"image: " + jfrog + "/mongo:latest",
+		"image: " + jfrog + "/agentcert/busybox:latest",
+		`image: "` + jfrog + `/agentcert/ghcr.io/open-telemetry/demo:2.2.0-cart"`,
+		"image: " + jfrog + "/agentcert/mongo:latest",
 		"      imagePullSecrets:\n      - name: registry-pull\n      containers:",
 	} {
 		if !strings.Contains(got, want) {
@@ -184,7 +223,7 @@ func TestPullSecretName(t *testing.T) {
 
 // TestParityFixture checks the Go rule against expectations produced by
 // scripts/lib/registry.sh (scripts/tests/test-registry-tooling.sh --online
-// writes the fixture: "<registry>\t<namespace>\t<ref>\t<want>" per line).
+// writes the fixture: "<registry>\t<namespace>\t<ace tag>\t<ref>\t<want>" per line).
 func TestParityFixture(t *testing.T) {
 	path := os.Getenv("IMAGEREF_PARITY_FIXTURE")
 	if path == "" {
@@ -200,11 +239,11 @@ func TestParityFixture(t *testing.T) {
 			continue
 		}
 		f := strings.Split(line, "\t") // the registry field may be empty: no trimming
-		if len(f) != 4 {
+		if len(f) != 5 {
 			t.Fatalf("bad fixture line %q", line)
 		}
-		if got := New(f[0], f[1]).Resolve(f[2]); got != f[3] {
-			t.Errorf("registry=%q ns=%q %q: Go %q, bash %q", f[0], f[1], f[2], got, f[3])
+		if got := New(f[0], f[1]).WithAceTag(f[2]).Resolve(f[3]); got != f[4] {
+			t.Errorf("registry=%q ns=%q tag=%q %q: Go %q, bash %q", f[0], f[1], f[2], f[3], got, f[4])
 		}
 		n++
 	}
