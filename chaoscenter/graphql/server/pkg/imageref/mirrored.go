@@ -17,6 +17,7 @@ var mirroredImages = func() map[string]bool {
 		"cgr.dev/chainguard/minio:latest",
 		"clickhouse/clickhouse-server:26.8",
 		"curlimages/curl:8.10.1",
+		"devth/alpine-bench:latest",
 		"gaiadocker/iproute2:latest",
 		"gcr.io/distroless/static-debian12:nonroot",
 		"ghcr.io/open-feature/flagd:v0.12.9",
