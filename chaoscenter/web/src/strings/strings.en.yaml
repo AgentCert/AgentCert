@@ -43,11 +43,16 @@ addViewSummaryNotes: Add/View Summary Notes
 addtoHubLoading: Adding to ChaosHub, please wait...
 advanced: Advanced (Optional)
 advancedOptions: Advanced Options
+advancedOptionsDescription: >-
+  Set scheduling constraints for the experiment's infrastructure, such as
+  Node Selector and Toleration.
+advancedSettingsCount: 'Advanced settings ({{count}})'
 all: All
 allChaosEnabled: All Chaos Enabled Infrastructures
 allExecutions: All Executions
 allFaultsExecuted: All your faults executed without any issue
 allRuns: All Runs
+allowedRange: 'Allowed: {{range}}'
 alreadyExists: '{{value}} already exists'
 alreadyExistsID: Entered id '{{value}}' already exists
 apiTokens: API Tokens
@@ -58,6 +63,15 @@ appLabelName: app_label
 appNameSpace: App Namespace
 apply: Apply
 applyChanges: Apply Changes
+applyManifestOnHostFallbackPrompt: >-
+  If that machine can't reach this server directly, the manifest was also
+  downloaded to this browser — copy it over manually instead.
+applyManifestOnHostPrompt: >-
+  This fetches and applies the manifest directly, so nothing needs to be
+  downloaded in your browser and copied over separately.
+applyManifestOnHostTitle: >-
+  Recommended: run this on the machine that has kubectl access to your
+  cluster
 at: At
 atAGlance: At a Glance
 attempt: Attempt
@@ -81,6 +95,7 @@ cancel: Cancel
 cannotPushToDefault: Cannot push experiment to default ChaosHub
 cannotReRun: Cannot re-run an already running experiment
 changePassword: Change Password
+changeSelection: Change
 chaos: Chaos
 chaosComponentInstallation: Chaos Components Installation
 chaosController: Chaos Controller
@@ -121,6 +136,7 @@ chaosResults: Chaos Results
 chaosStudio: Chaos Studio
 chaoshubDisconnectedWillSync: ChaosHub is disconnected, will attempt to sync
 chaoshubs: ChaosHubs
+chartSettingsDescription: Applied when this step installs the chart. A setting you leave unchanged keeps the chart's default.
 agentOnboarding: Agents
 agentHub: Agent Hub
 agentHubDescription: Browse and manage available agents from the Agent Hub catalog
@@ -208,6 +224,7 @@ command: Command
 comparator: Comparator
 comparisonCriteria: Comparison Criteria
 completed: Completed
+configuration: Configuration
 configure: Configure
 configureChaosInfrastructure: Configure Chaos Infrastructure
 configureDetails: Configure Details
@@ -270,6 +287,7 @@ cronSelectOption: Cron (Recurring run)
 cronText: >-
   The experiment will run periodically according to the cron provided below. You
   can stop the schedule anytime you want.
+currentlySelected: Currently selected
 currentRun: Current Run
 currentUTCTime: Current UTC Time
 customImageRegistry: Custom Image Registry
@@ -455,6 +473,9 @@ faults: Faults
 faultsContained: Faults Contained
 faultsHaveProbeFailures: Faults have Probe Failures
 faultsLibrary: Faults Library
+faultsMissingTargetApplication: >-
+  No target application configured, so it won't inject against anything:
+  {{faultNames}}
 featureRestriction:
   experimentsPerMonthLevelUp: >-
     You have used {{ count }} / {{ experimentsLimit }} free experiment runs this
@@ -475,6 +496,7 @@ fieldMaxLength: Length should be {{length}} characters maximum.
 fieldMinLength: Length should be {{length}} characters minimum.
 fieldSelector: Field Selector
 fixAllErrors: Fix all the errors indicated in the YAML Editor to resolve the issue.
+folder: Folder
 generateSSH: Generate New SSH Key
 genericResourceNotFoundError: >-
   {{resource}} [{{resourceID}}] under Project [{{projectID}}] does not exist or
@@ -540,6 +562,17 @@ infrastructures: Infrastructures
 initialDelay: Initial Delay
 initialDelaySeconds: Initial Delay Seconds
 insecureSkipVerify: Insecure skip verify
+installAgent: Install Agent
+installAgentDescription: >-
+  Pick an agent from the AgentHub. The folder name is taken directly from the
+  chart, so there's no need to guess or type it by hand.
+installApplication: Install Application
+installApplicationDescription: >-
+  Pick an application from the AppHub. The folder name is taken directly from
+  the chart, so there's no need to guess or type it by hand.
+installStepChooseAgent: Agent under test
+installStepChooseApplication: Target application
+installStepNamespaceHelp: The step installs the chart into this namespace.
 installYaml: Install Chaos Infrastructure using YML
 interval: Interval
 intervalOptional: Interval (Optional)
@@ -703,8 +736,10 @@ nextSelectChaosExperiments: Next -> Select Chaos Experiments
 noAnalysis: No Analysis
 noApiTokensFound: No API Tokens found
 noChaosHubSelected: No ChaosHubs selected
+noEntriesFound: No entries found
 noChaosInfrastructure: There are no Kubernetes Chaos Infrastructures in this Environment
 noChaosInfrastructureFound: No Kuberenetes chaos infrastructure found!
+noChartSettings: This chart has no settings to configure.
 noClustersFound: Sorry, we can’t find any available clusters
 noData:
   message: Oops, something went wrong on our end. Please contact Admin.
@@ -714,7 +749,7 @@ noDataToDisplay: No data to display
 noDescriptionProvided: No description provided
 noEnvironmentFound: No Environments found
 noEnvironmentFoundNewMessage: >-
-  An environment represents where you are installing your chaos infrastructure 
+  An environment represents where you are installing your chaos infrastructure
   and acts as an additional level of abstraction for the same.
 noEnvironmentFoundMessage: >-
   No Environments found in this project, click on 'New Environment' to add
@@ -830,6 +865,7 @@ pendingTime: >-
   be connected.
 phase: Phase
 platform: Platform
+platformDefaultModel: Platform default
 pleaseComplete: Please complete all the steps
 pleaseSelectLeastOneExperiment: Please select at least one experiment
 pleaseSpecifyYAMLValues: Please specify the values in the YAML script
@@ -992,8 +1028,11 @@ repository: Repository
 required: Required
 rerun: Rerun
 resend: Resend
+resetAllToDefaults: Reset all to defaults
 resetFilters: Reset Filters
 resetPassword: Reset Password
+resetSetting: Reset
+resetToDefaultValue: 'Back to the chart default: {{{value}}}'
 resilienceOverview: Resilience Overview
 resilienceProbes: Resilience Probes
 resilienceRate: Resilience Rate
@@ -1067,9 +1106,15 @@ seeAllChaosInfrastructures: See All Infrastructures
 seeAllEnvironments: See All Environments
 seeAllFaults: See All Faults
 selectAProbe: Select a Probe
+selectAgentFirst: >-
+  Add an agent before adding faults. Only agents compatible with the selected
+  target application are listed.
 selectAppKind: Select App Kind
 selectAppLabel: Select App Label
 selectAppNamespace: Select App Namespace
+selectApplicationFirst: >-
+  Add a target application first. The agent and the faults are chosen against
+  it, and the workflow cannot run without it.
 selectChaosExperiment: Select Chaos Experiment
 selectChaosInfrastructure: Select a Chaos Infrastructure
 selectChaosInfrastructureFormLabel: Select a Chaos Infrastructure to run this experiment
@@ -1095,7 +1140,18 @@ serviceAccountName: Service Account Name
 serviceHealthScore: Service Health Score
 setFaultWeights: Set fault weights
 setSchedule: Set Schedule
+settingMustBeANumber: Must be a number
+settingMustBeAWholeNumber: Must be a whole number
+settingMustBeAtLeast: 'Must be at least {{value}}'
+settingMustBeAtMost: 'Must be at most {{value}}'
+settingMustMatch: 'Must match {{{pattern}}}'
+settingMustNotContainBraces: Must not contain two opening braces in a row
 settings: Settings
+settingsAllDefaults: 'All {{total}} settings use the chart defaults'
+settingsChangedFromDefaults: '{{count}} of {{total}} changed from the chart defaults'
+settingsCount: 'Settings: {{count}}'
+settingsGeneral: General
+setup: Setup
 setupChaosInfrastructures: >-
   Enabling Chaos on infrastructure helps to inject chaos by studying your
   infrastructure and discover services
@@ -1207,6 +1263,24 @@ type: Type
 typeOfData: Type of data
 unableToGetProbes: Unable to get probe information
 unhealthy: Unhealthy
+uninstallAgent: Uninstall Agent
+uninstallAgentDescription: >-
+  Add a teardown step that removes a previously installed agent's Helm release.
+  Pick one of the agents this experiment installs so the release name and
+  namespace are filled in for you.
+uninstallApplication: Uninstall Application
+uninstallApplicationDescription: >-
+  Add a teardown step that tears down a previously installed application's
+  namespace. Pick one of the applications this experiment installs so the
+  release name and namespace are filled in for you.
+uninstallNoInstalledTargets: >-
+  This experiment has no install step yet. Add an Install Application / Install
+  Agent step first, or type the release name and namespace to remove.
+uninstallStepFaultNotInHub: >-
+  Could not find the "{{fault}}" fault in the default ChaosHub. Sync the hub and
+  try again.
+uninstallStepHubUnavailable: Could not load the default ChaosHub. Try again.
+uninstallTargetFolder: Release / folder name
 update: Update
 updatePassword: Update Password
 updatedAt: Updated at
@@ -1254,6 +1328,7 @@ viewManifest: View YAML Manifest
 viewProbeDetails: View Probe Details
 viewProbeProperties: View Probe Properties
 viewRun: View Run
+viewTraceInLangfuse: View Trace in Langfuse
 viewer: Viewer
 warning: Warning
 weekly: Weekly

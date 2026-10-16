@@ -1,0 +1,3 @@
+import ExperimentCreationSelectInstallStepController from './ExperimentCreationSelectInstallStep';
+
+export default ExperimentCreationSelectInstallStepController;

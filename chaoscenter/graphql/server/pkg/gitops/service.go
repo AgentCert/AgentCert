@@ -21,11 +21,11 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/grpc"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"go.mongodb.org/mongo-driver/bson"
-	grpc2 "google.golang.org/grpc"
 )
 
 const (
@@ -89,7 +89,7 @@ func (g *gitOpsService) GitOpsNotificationHandler(ctx context.Context, infra cha
 	if strings.ToLower(resKind) == "cronexperiment" { // no op
 		return "Request Acknowledged for experimentID: " + experimentID, nil
 	}
-	experiments[0].Revision[len(experiments[0].Revision)-1].ExperimentManifest, err = sjson.Set(experiments[0].Revision[len(experiments[0].Revision)-1].ExperimentManifest, "metadata.name", experiments[0].Name+"-"+strconv.FormatInt(time.Now().UnixMilli(), 10))
+	experiments[0].Revision[len(experiments[0].Revision)-1].ExperimentManifest, err = sjson.Set(experiments[0].Revision[len(experiments[0].Revision)-1].ExperimentManifest, "metadata.name", utils.SuffixedK8sName(experiments[0].Name, strconv.FormatInt(time.Now().UnixMilli(), 10)))
 	if err != nil {
 		log.Error("Failed to updated experiment name :", err)
 		return "", errors.New("Failed to updated experiment name " + err.Error())
@@ -112,16 +112,9 @@ func (g *gitOpsService) EnableGitOpsHandler(ctx context.Context, projectID strin
 	gitLock.Lock(config.RepoURL, &config.Branch)
 	defer gitLock.Unlock(config.RepoURL, &config.Branch)
 
-	var conn *grpc2.ClientConn
-	client, conn := grpc.GetAuthGRPCSvcClient(conn)
-	defer func(conn *grpc2.ClientConn) {
-		err := conn.Close()
-		if err != nil {
-			log.Error("Failed to close connection : ", err)
-		}
-	}(conn)
+	client := grpc.GetAuthGRPCSvcClient()
 
-	_, err := grpc.GetProjectById(client, projectID)
+	_, err := grpc.GetProjectById(ctx, client, projectID)
 	if err != nil {
 		return false, errors.New("Failed to setup GitOps : " + err.Error())
 	}

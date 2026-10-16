@@ -134,7 +134,7 @@ per-service `.env.example` files.
 | `INSTALL_AGENT_IMAGE` | `agentcert/agentcert-install-agent:latest` | Synced by `agent-charts/install-agent/build-install-agent.sh` |
 | `INSTALL_APP_IMAGE` | `agentcert/agentcert-install-app:latest` | Synced by `app-charts/install-app/build-install-app.sh` |
 | `KUBERNETES_MCP_SERVER_IMAGE` | `agentcert/kubernetes-mcp-server:latest` | Image used in stage-4 MCP manifest |
-| `PROMETHEUS_MCP_SERVER_IMAGE` | `agentcert/prometheus-mcp-server:latest` | Image used in stage-4 MCP manifest |
+| `PROMETHEUS_MCP_SERVER_IMAGE` | `ghcr.io/pab1it0/prometheus-mcp-server:latest` | Image used in stage-4 MCP manifest |
 
 ### Default hubs (cloned into ChaosHub / AgentHub / AppHub on first run)
 

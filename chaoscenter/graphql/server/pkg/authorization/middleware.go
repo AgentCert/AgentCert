@@ -37,7 +37,11 @@ func Middleware(handler http.Handler, mongoClient *mongo.Client) gin.HandlerFunc
 
 		ctx := context.WithValue(c.Request.Context(), AuthKey, jwt)
 		ctx1 := context.WithValue(ctx, "request-header", c.Request.Header)
-		c.Request = c.Request.WithContext(ctx1)
+		// Host (unlike Referer) is always present, even for non-browser callers
+		// (curl, kubectl, scripted onboarding) — resolvers use it as a fallback
+		// when building the infra manifest's SERVER_ADDR.
+		ctx2 := context.WithValue(ctx1, "request-host", c.Request.Host)
+		c.Request = c.Request.WithContext(ctx2)
 		handler.ServeHTTP(c.Writer, c.Request)
 	}
 }

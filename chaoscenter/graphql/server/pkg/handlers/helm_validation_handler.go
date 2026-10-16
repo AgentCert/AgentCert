@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/imageref"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -243,10 +244,16 @@ func checkKubernetesConnection() error {
 func deployHelmChart(chartPath, releaseName, namespace string) (string, error) {
 	// Don't use --wait since we'll check pod status ourselves
 	// This allows faster deployment and custom health checking
-	cmd := exec.Command("helm", "install", releaseName, chartPath,
+	args := []string{"install", releaseName, chartPath,
 		"--namespace", namespace,
 		"--create-namespace",
-	)
+	}
+	// Uploaded charts' images follow IMAGE_REGISTRY (pkg/imageref post-renderer).
+	postRenderArgs, postRenderEnv := imageref.HelmPostRenderer("", "")
+	cmd := exec.Command("helm", append(args, postRenderArgs...)...)
+	if postRenderEnv != nil {
+		cmd.Env = append(os.Environ(), postRenderEnv...)
+	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }

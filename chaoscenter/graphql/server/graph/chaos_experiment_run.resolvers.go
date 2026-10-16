@@ -7,6 +7,8 @@ package graph
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
@@ -21,10 +23,11 @@ func (r *mutationResolver) ChaosExperimentRun(ctx context.Context, request model
 }
 
 // RunChaosExperiment is the resolver for the runChaosExperiment field.
-func (r *mutationResolver) RunChaosExperiment(ctx context.Context, experimentID string, projectID string) (*model.RunChaosExperimentResponse, error) {
+func (r *mutationResolver) RunChaosExperiment(ctx context.Context, experimentID string, projectID string, modelAlias *string) (*model.RunChaosExperimentResponse, error) {
 	logFields := logrus.Fields{
 		"projectId":         projectID,
 		"chaosExperimentId": experimentID,
+		"modelAlias":        strings.TrimSpace(valueOrEmpty(modelAlias)),
 	}
 
 	logrus.WithFields(logFields).Info("request received to run chaos experiment")
@@ -47,7 +50,7 @@ func (r *mutationResolver) RunChaosExperiment(ctx context.Context, experimentID 
 
 	var uiResponse *model.RunChaosExperimentResponse
 
-	uiResponse, err = r.chaosExperimentRunHandler.RunChaosWorkFlow(ctx, projectID, experiment, data_store.Store)
+	uiResponse, err = r.chaosExperimentRunHandler.RunChaosWorkFlow(ctx, projectID, experiment, data_store.Store, strings.TrimSpace(valueOrEmpty(modelAlias)))
 	if err != nil {
 		logrus.WithFields(logFields).Error(err)
 		return nil, err
@@ -79,6 +82,59 @@ func (r *mutationResolver) StopExperimentRuns(ctx context.Context, projectID str
 		return false, err
 	}
 	return uiResponse, nil
+}
+
+// ListAgentModelOptions is the resolver for the listAgentModelOptions field.
+func (r *queryResolver) ListAgentModelOptions(ctx context.Context) ([]*model.AgentModelOption, error) {
+	defaultAlias := resolveDefaultAgentModelAlias()
+	seen := map[string]bool{}
+	models := make([]*model.AgentModelOption, 0, 6)
+
+	addModel := func(alias, label, provider string) {
+		alias = strings.TrimSpace(alias)
+		if alias == "" || seen[alias] {
+			return
+		}
+		seen[alias] = true
+		models = append(models, &model.AgentModelOption{
+			Alias:     alias,
+			Label:     label,
+			Provider:  provider,
+			IsDefault: alias == defaultAlias,
+		})
+	}
+
+	if ollamaModel := strings.TrimSpace(os.Getenv("OLLAMA_MODEL")); ollamaModel != "" {
+		ollamaAlias := strings.ReplaceAll(ollamaModel, ":", "-")
+		addModel(ollamaAlias, ollamaAlias+" (Ollama)", "Ollama")
+	}
+
+	if strings.TrimSpace(os.Getenv("AZURE_OPENAI_KEY")) != "" || strings.TrimSpace(os.Getenv("AZURE_OPENAI_API_KEY")) != "" {
+		azureAlias := strings.TrimSpace(os.Getenv("AZURE_OPENAI_DEPLOYMENT"))
+		if azureAlias == "" {
+			azureAlias = strings.TrimSpace(os.Getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"))
+		}
+		if azureAlias == "" {
+			azureAlias = "gpt-4o"
+		}
+		addModel(azureAlias, azureAlias+" (Azure OpenAI)", "Azure OpenAI")
+	}
+
+	if strings.TrimSpace(os.Getenv("GEMINI_API_KEY")) != "" {
+		addModel("gemini-3-flash", "gemini-3-flash (Gemini)", "Gemini")
+		addModel("gemini-2.5-flash", "gemini-2.5-flash (Gemini)", "Gemini")
+		addModel("gemini-2.5-flash-lite", "gemini-2.5-flash-lite (Gemini)", "Gemini")
+	}
+
+	if strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")) != "" {
+		addModel("auto-free", "auto-free (OpenRouter)", "OpenRouter")
+	}
+
+	if len(models) == 0 && defaultAlias != "" {
+		addModel(defaultAlias, defaultAlias+" (configured default)", "Configured")
+	}
+
+	return models, nil
 }
 
 // GetExperimentRun is the resolver for the getExperimentRun field.
@@ -145,4 +201,25 @@ func (r *queryResolver) GetExperimentRunStats(ctx context.Context, projectID str
 		return nil, err
 	}
 	return uiResponse, err
+}
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//     it when you're done.
+//   - You have helper methods in this file. Move them out to keep these resolver files clean.
+func resolveDefaultAgentModelAlias() string {
+	for _, key := range []string{"FLASH_AGENT_MODEL", "MODEL_ALIAS", "AZURE_OPENAI_DEPLOYMENT"} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

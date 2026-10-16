@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/imageref"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -75,15 +76,18 @@ func (h *HelmService) InstallChart(ctx context.Context, chartPath string, reques
 		args = append(args, "--kubeconfig", h.kubeconfig)
 	}
 
-	// Inject global image registry from environment
-	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
-		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
-	}
+	// User-uploaded charts are never side-loaded, so their images always
+	// follow IMAGE_REGISTRY: this binary post-renders them (pkg/imageref).
+	postRenderArgs, postRenderEnv := imageref.HelmPostRenderer("", "")
+	args = append(args, postRenderArgs...)
 
 	log.Infof("Executing helm command: helm %s", strings.Join(args, " "))
 
 	// Execute helm install command
 	cmd := exec.CommandContext(ctx, "helm", args...)
+	if postRenderEnv != nil {
+		cmd.Env = append(os.Environ(), postRenderEnv...)
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -136,15 +140,18 @@ func (h *HelmService) UpgradeChart(ctx context.Context, chartPath string, reques
 		args = append(args, "--kubeconfig", h.kubeconfig)
 	}
 
-	// Inject global image registry from environment
-	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
-		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
-	}
+	// User-uploaded charts are never side-loaded, so their images always
+	// follow IMAGE_REGISTRY: this binary post-renders them (pkg/imageref).
+	postRenderArgs, postRenderEnv := imageref.HelmPostRenderer("", "")
+	args = append(args, postRenderArgs...)
 
 	log.Infof("Executing helm command: helm %s", strings.Join(args, " "))
 
 	// Execute helm upgrade command
 	cmd := exec.CommandContext(ctx, "helm", args...)
+	if postRenderEnv != nil {
+		cmd.Env = append(os.Environ(), postRenderEnv...)
+	}
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -375,7 +382,7 @@ func (h *HelmService) StartPortForward(namespace, serviceName string, servicePor
 
 	// Start the port-forward process in the background
 	cmd := exec.Command("kubectl", args...)
-
+	
 	// Capture output for debugging
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

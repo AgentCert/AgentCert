@@ -482,7 +482,11 @@ func (c *chaosHubService) GetChaosFault(ctx context.Context, request model.Exper
 	}
 	var basePath string
 	if chaosHub.IsDefault {
-		basePath = "/tmp/default/" + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
+		if handler.IsCustomHubMode() {
+			basePath = utils.Config.DefaultChaosHubPath + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
+		} else {
+			basePath = DefaultPath + "default/" + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
+		}
 	} else {
 		basePath = DefaultPath + projectID + "/" + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
 	}
@@ -744,7 +748,11 @@ func (c *chaosHubService) ListPredefinedExperiments(ctx context.Context, hubID s
 
 	var basePath string
 	if hub.IsDefault {
-		basePath = DefaultPath + "default/" + hub.Name + "/"
+		if handler.IsCustomHubMode() {
+			basePath = utils.Config.DefaultChaosHubPath + hub.Name + "/"
+		} else {
+			basePath = DefaultPath + "default/" + hub.Name + "/"
+		}
 	} else {
 		basePath = DefaultPath + projectID + "/" + hub.Name + "/"
 	}
@@ -1014,6 +1022,10 @@ func (c *chaosHubService) listDefaultHubs() *model.ChaosHub {
 }
 
 func (c *chaosHubService) SyncDefaultChaosHubs() {
+	if handler.IsCustomHubMode() {
+		log.WithField("path", utils.Config.DefaultChaosHubPath).Info("chaos hub source mode is custom; skipping default git sync")
+		return
+	}
 	log.Infof("syncing default chaos hub directories")
 	for {
 		defaultHub := c.listDefaultHubs()

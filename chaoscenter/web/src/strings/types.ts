@@ -47,6 +47,8 @@ export interface StringsMap {
   'addtoHubLoading': unknown
   'advanced': unknown
   'advancedOptions': unknown
+  'advancedOptionsDescription': unknown
+  'advancedSettingsCount': PrimitiveObject<'count'>
   'agentCapabilities': unknown
   'agentDeployed': unknown
   'agentHub': unknown
@@ -58,6 +60,7 @@ export interface StringsMap {
   'allExecutions': unknown
   'allFaultsExecuted': unknown
   'allRuns': unknown
+  'allowedRange': PrimitiveObject<'range'>
   'alreadyExists': PrimitiveObject<'value'>
   'alreadyExistsID': PrimitiveObject<'value'>
   'apiTokens': unknown
@@ -70,6 +73,9 @@ export interface StringsMap {
   'appNotDeployed': unknown
   'apply': unknown
   'applyChanges': unknown
+  'applyManifestOnHostFallbackPrompt': unknown
+  'applyManifestOnHostPrompt': unknown
+  'applyManifestOnHostTitle': unknown
   'appsHub': unknown
   'appsHubDescription': unknown
   'appsOnboarding': unknown
@@ -91,6 +97,7 @@ export interface StringsMap {
   'cannotReRun': unknown
   'capabilities': unknown
   'changePassword': unknown
+  'changeSelection': unknown
   'chaos': unknown
   'chaosComponentInstallation': unknown
   'chaosController': unknown
@@ -128,6 +135,7 @@ export interface StringsMap {
   'chaosStudio': unknown
   'chaoshubDisconnectedWillSync': unknown
   'chaoshubs': unknown
+  'chartSettingsDescription': unknown
   'checkConnection': unknown
   'checkLogs': unknown
   'checkStatus': unknown
@@ -154,6 +162,7 @@ export interface StringsMap {
   'comparator': unknown
   'comparisonCriteria': unknown
   'completed': unknown
+  'configuration': unknown
   'configure': unknown
   'configureChaosInfrastructure': unknown
   'configureDetails': unknown
@@ -204,6 +213,7 @@ export interface StringsMap {
   'cronText': unknown
   'currentRun': unknown
   'currentUTCTime': unknown
+  'currentlySelected': unknown
   'customImageRegistry': unknown
   'customLabel': unknown
   'customRepo': unknown
@@ -376,6 +386,7 @@ export interface StringsMap {
   'faultsContained': unknown
   'faultsHaveProbeFailures': unknown
   'faultsLibrary': unknown
+  'faultsMissingTargetApplication': PrimitiveObject<'faultNames'>
   'featureRestriction.experimentsPerMonthLevelUp': PrimitiveObject<'count' | 'experimentsLimit'>
   'featureRestriction.initialDeploymentsWarningActive': PrimitiveObject<'warningLimit'>
   'featureRestriction.resourceLevelUpFree': PrimitiveObject<'resourceLimit' | 'resourceName'>
@@ -385,6 +396,7 @@ export interface StringsMap {
   'fieldMinLength': PrimitiveObject<'length'>
   'fieldSelector': unknown
   'fixAllErrors': unknown
+  'folder': unknown
   'generateSSH': unknown
   'genericResourceNotFoundError': PrimitiveObject<'resource' | 'resourceID' | 'projectID'>
   'gitConnection': unknown
@@ -435,6 +447,13 @@ export interface StringsMap {
   'initialDelay': unknown
   'initialDelaySeconds': unknown
   'insecureSkipVerify': unknown
+  'installAgent': unknown
+  'installAgentDescription': unknown
+  'installApplication': unknown
+  'installApplicationDescription': unknown
+  'installStepChooseAgent': unknown
+  'installStepChooseApplication': unknown
+  'installStepNamespaceHelp': unknown
   'installYaml': unknown
   'interval': unknown
   'intervalOptional': unknown
@@ -525,6 +544,11 @@ export interface StringsMap {
   'mostRecentDirection': unknown
   'multiRunAllCompleted': unknown
   'multiRunCompleted': unknown
+  'multiRunDelayHint': unknown
+  'multiRunDelayHours': unknown
+  'multiRunDelayLabel': unknown
+  'multiRunDelayMinutes': unknown
+  'multiRunDelaySeconds': unknown
   'multiRunMaxRunsLabel': unknown
   'multiRunMaxRunsPlaceholder': unknown
   'multiRunProgress': unknown
@@ -573,12 +597,14 @@ export interface StringsMap {
   'noChaosHubSelected': unknown
   'noChaosInfrastructure': unknown
   'noChaosInfrastructureFound': unknown
+  'noChartSettings': unknown
   'noClustersFound': unknown
   'noData.message': unknown
   'noData.title': unknown
   'noDataCV': unknown
   'noDataToDisplay': unknown
   'noDescriptionProvided': unknown
+  'noEntriesFound': unknown
   'noEnvironmentFound': unknown
   'noEnvironmentFoundMessage': unknown
   'noEnvironmentFoundNewMessage': unknown
@@ -687,6 +713,7 @@ export interface StringsMap {
   'pendingTime': unknown
   'phase': unknown
   'platform': unknown
+  'platformDefaultModel': unknown
   'pleaseComplete': unknown
   'pleaseSelectLeastOneExperiment': unknown
   'pleaseSpecifyYAMLValues': unknown
@@ -819,8 +846,11 @@ export interface StringsMap {
   'required': unknown
   'rerun': unknown
   'resend': unknown
+  'resetAllToDefaults': unknown
   'resetFilters': unknown
   'resetPassword': unknown
+  'resetSetting': unknown
+  'resetToDefaultValue': PrimitiveObject<'value'>
   'resilienceOverview': unknown
   'resilienceProbes': unknown
   'resilienceRate': unknown
@@ -890,9 +920,11 @@ export interface StringsMap {
   'seeAllEnvironments': unknown
   'seeAllFaults': unknown
   'selectAProbe': unknown
+  'selectAgentFirst': unknown
   'selectAppKind': unknown
   'selectAppLabel': unknown
   'selectAppNamespace': unknown
+  'selectApplicationFirst': unknown
   'selectChaosExperiment': unknown
   'selectChaosInfrastructure': unknown
   'selectChaosInfrastructureFormLabel': unknown
@@ -918,7 +950,18 @@ export interface StringsMap {
   'serviceHealthScore': unknown
   'setFaultWeights': unknown
   'setSchedule': unknown
+  'settingMustBeANumber': unknown
+  'settingMustBeAWholeNumber': unknown
+  'settingMustBeAtLeast': PrimitiveObject<'value'>
+  'settingMustBeAtMost': PrimitiveObject<'value'>
+  'settingMustMatch': PrimitiveObject<'pattern'>
+  'settingMustNotContainBraces': unknown
   'settings': unknown
+  'settingsAllDefaults': PrimitiveObject<'total'>
+  'settingsChangedFromDefaults': PrimitiveObject<'count' | 'total'>
+  'settingsCount': PrimitiveObject<'count'>
+  'settingsGeneral': unknown
+  'setup': unknown
   'setupChaosInfrastructures': unknown
   'setupProbe': unknown
   'setupProbeBtn': unknown
@@ -1020,6 +1063,14 @@ export interface StringsMap {
   'typeOfData': unknown
   'unableToGetProbes': unknown
   'unhealthy': unknown
+  'uninstallAgent': unknown
+  'uninstallAgentDescription': unknown
+  'uninstallApplication': unknown
+  'uninstallApplicationDescription': unknown
+  'uninstallNoInstalledTargets': unknown
+  'uninstallStepFaultNotInHub': PrimitiveObject<'fault'>
+  'uninstallStepHubUnavailable': unknown
+  'uninstallTargetFolder': unknown
   'update': unknown
   'updatePassword': unknown
   'updatedAt': unknown
@@ -1068,6 +1119,7 @@ export interface StringsMap {
   'viewProbeDetails': unknown
   'viewProbeProperties': unknown
   'viewRun': unknown
+  'viewTraceInLangfuse': unknown
   'viewer': unknown
   'warning': unknown
   'weekly': unknown

@@ -1,14 +1,19 @@
 package chaos_infrastructure
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/ghodss/yaml"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
 	store "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/data-store"
 	dbChaosInfra "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/imageref"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -27,6 +32,32 @@ func GetEndpoint(host string) (string, error) {
 
 	// Priority 2: Fall back to Kubernetes service DNS (cluster mode)
 	return host + "/query", nil
+}
+
+// GetManifestDownloadURL builds the human/kubectl-facing `kubectl apply -f
+// <url>` link for a registered infra's manifest. Unlike GetEndpoint (which
+// resolves the in-cluster callback address subscriber pods use), this must
+// resolve to an address reachable from wherever the operator's shell
+// actually has cluster access — which is frequently NOT the same as the
+// browser's own address bar (SSH tunnels, VS Code port-forwarding, and
+// similar setups routinely present the ChaosCenter UI to the browser on a
+// different local port than the one actually reachable from a shell on the
+// deployment host). host is the best-effort Referer/Host-derived fallback
+// computed by the caller from the current request.
+//
+// base (whether from CHAOS_CENTER_PUBLIC_ENDPOINT or the host fallback) is
+// the web UI's own front door — nginx there proxies /api/ to this graphql
+// server's raw router (which itself registers the manifest route at
+// /file/:key, no /api prefix — see server.go) and has no route for a bare
+// /file/ path. So the /api segment must be added here; every supported
+// deployment (Helm/KinD, flat k8s, docker compose) uses the identical
+// nginx /api/ -> graphql proxy convention.
+func GetManifestDownloadURL(host, token string) string {
+	base := utils.Config.ChaosCenterPublicEndpoint
+	if base == "" {
+		base = host
+	}
+	return strings.TrimSuffix(base, "/") + "/api/file/" + token + ".yaml"
 }
 
 func GetK8sInfraYaml(host string, infra dbChaosInfra.ChaosInfra) ([]byte, error) {
@@ -53,6 +84,56 @@ func GetK8sInfraYaml(host string, infra dbChaosInfra.ChaosInfra) ([]byte, error)
 	}
 
 	return respData, nil
+}
+
+func buildTargetNamespaceRBAC(infraNamespace, serviceAccountName string, targetNamespaces []string) string {
+	seen := make(map[string]bool)
+	var builder strings.Builder
+
+	for _, namespace := range targetNamespaces {
+		namespace = strings.TrimSpace(namespace)
+		if namespace == "" || namespace == infraNamespace || seen[namespace] {
+			continue
+		}
+		seen[namespace] = true
+
+		builder.WriteString("---\n")
+		builder.WriteString("apiVersion: v1\n")
+		builder.WriteString("kind: Namespace\n")
+		builder.WriteString("metadata:\n")
+		builder.WriteString("  name: ")
+		builder.WriteString(namespace)
+		builder.WriteString("\n")
+		builder.WriteString("  labels:\n")
+		builder.WriteString("    agentcert.io/target-namespace: \"true\"\n")
+		builder.WriteString("---\n")
+		builder.WriteString("apiVersion: rbac.authorization.k8s.io/v1\n")
+		builder.WriteString("kind: RoleBinding\n")
+		builder.WriteString("metadata:\n")
+		builder.WriteString("  name: litmus-admin-target-namespace-role-binding\n")
+		builder.WriteString("  namespace: ")
+		builder.WriteString(namespace)
+		builder.WriteString("\n")
+		builder.WriteString("  labels:\n")
+		builder.WriteString("    name: litmus-admin-target-namespace-role-binding\n")
+		builder.WriteString("    agentcert.io/infra-namespace: ")
+		builder.WriteString(infraNamespace)
+		builder.WriteString("\n")
+		builder.WriteString("roleRef:\n")
+		builder.WriteString("  apiGroup: rbac.authorization.k8s.io\n")
+		builder.WriteString("  kind: ClusterRole\n")
+		builder.WriteString("  name: litmus-admin-target-namespace-role\n")
+		builder.WriteString("subjects:\n")
+		builder.WriteString("  - kind: ServiceAccount\n")
+		builder.WriteString("    name: ")
+		builder.WriteString(serviceAccountName)
+		builder.WriteString("\n")
+		builder.WriteString("    namespace: ")
+		builder.WriteString(infraNamespace)
+		builder.WriteString("\n")
+	}
+
+	return strings.TrimSuffix(builder.String(), "\n")
 }
 
 // ManifestParser parses manifests yaml and generates dynamic manifest with specified keys
@@ -92,8 +173,37 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 
 	var (
 		namespaceConfig   = "---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: " + InfraNamespace + "\n"
-		serviceAccountStr = "---\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: " + ServiceAccountName + "\n  namespace: " + InfraNamespace + "\nimagePullSecrets:\n  - name: " + utils.Config.ImagePullSecretName + "\n"
+		serviceAccountStr = "---\napiVersion: v1\nkind: ServiceAccount\nmetadata:\n  name: " + ServiceAccountName + "\n  namespace: " + InfraNamespace + "\n"
 	)
+
+	// Namespace discovery for the cluster-scope infra's RBAC (infra-cluster-role
+	// in manifests/cluster/3a_agents_rbac.yaml) is intentionally get-by-name
+	// only, never list/watch — Kubernetes RBAC can't scope list/watch to a
+	// resourceNames subset, so granting list would let the infra's service
+	// account enumerate every namespace on the cluster. The allowed names are
+	// this infra's own namespace plus every application currently known to
+	// ACE's app-charts catalog — read live from apphub, never hardcoded, so
+	// adding/removing an app chart changes this on the next manifest fetch
+	// with no source edit here.
+	targetNamespaces := []string{InfraNamespace}
+	targetAppNamespaces := make([]string, 0)
+	if appNamespaces, err := apphub.GetKnownApplicationNamespaces(); err != nil {
+		log.WithError(err).Warn("failed to read known application namespaces from app-charts catalog; " +
+			"generated infra RBAC will only be able to see its own namespace until this is retried")
+	} else {
+		for _, ns := range appNamespaces {
+			if ns != InfraNamespace {
+				targetNamespaces = append(targetNamespaces, ns)
+				targetAppNamespaces = append(targetAppNamespaces, ns)
+			}
+		}
+	}
+	targetNamespacesEnv := strings.Join(targetNamespaces, ",")
+	targetNamespaceRBAC := buildTargetNamespaceRBAC(InfraNamespace, ServiceAccountName, targetAppNamespaces)
+	targetNamespacesResourceNamesJSON, err := json.Marshal(targetNamespaces)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal target namespace resourceNames: %w", err)
+	}
 
 	// Checking if the agent namespace does not exist and its scope of installation is not namespaced
 	if !*infra.InfraNsExists && infra.InfraScope != "namespace" {
@@ -121,6 +231,14 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 	if err != nil {
 		return nil, fmt.Errorf("failed to read the file %v", err)
 	}
+	// Readdirnames does not guarantee any order (filesystem/inode-dependent),
+	// but the manifests/{cluster,namespace} filenames use a "1a,1b,2a,2b,..."
+	// prefix specifically so RBAC (ServiceAccounts/Roles/*Bindings) lands
+	// before the Deployments that reference them once concatenated below.
+	// Without sorting, that ordering is left to chance -- observed in
+	// practice as ReplicaSet "FailedCreate: serviceaccount ... not found"
+	// races immediately after applying the generated manifest.
+	sort.Strings(list)
 
 	var nodeSelector string
 	if infra.NodeSelector != nil {
@@ -175,6 +293,9 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 		newContent = strings.Replace(newContent, "#{INFRA_NAMESPACE}", InfraNamespace, -1)
 		newContent = strings.Replace(newContent, "#{INFRA_SERVICE_ACCOUNT}", ServiceAccountName, -1)
 		newContent = strings.Replace(newContent, "#{INFRA_SCOPE}", infra.InfraScope, -1)
+		newContent = strings.Replace(newContent, "#{TARGET_APP_NAMESPACES}", targetNamespacesEnv, -1)
+		newContent = strings.Replace(newContent, "#{TARGET_APP_NAMESPACE_RBAC}", targetNamespaceRBAC, -1)
+		newContent = strings.Replace(newContent, "#{TARGET_NAMESPACE_RESOURCE_NAMES}", string(targetNamespacesResourceNamesJSON), -1)
 		newContent = strings.Replace(newContent, "#{ARGO_WORKFLOW_CONTROLLER}", utils.Config.ArgoWorkflowControllerImage, -1)
 		newContent = strings.Replace(newContent, "#{LITMUS_CHAOS_OPERATOR}", utils.Config.LitmusChaosOperatorImage, -1)
 		newContent = strings.Replace(newContent, "#{ARGO_WORKFLOW_EXECUTOR}", utils.Config.ArgoWorkflowExecutorImage, -1)
@@ -188,7 +309,13 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 		newContent = strings.Replace(newContent, "#{KUBERNETES_MCP_SERVER_IMAGE}", utils.Config.KubernetesMcpServerImage, -1)
 		newContent = strings.Replace(newContent, "#{PROMETHEUS_MCP_SERVER_IMAGE}", utils.Config.PrometheusMcpServerImage, -1)
 		newContent = strings.Replace(newContent, "#{PROMETHEUS_MCP_URL}", utils.Config.PrometheusMcpUrl, -1)
-		newContent = strings.Replace(newContent, "#{IMAGE_PULL_SECRET_NAME}", utils.Config.ImagePullSecretName, -1)
+		// Private registry: every infra pod names the pull secret explicitly, so
+		// it can pull even before registry-secret-sync patches its ServiceAccount.
+		// Unreplaced, the placeholder stays a YAML comment (public images).
+		if secret := imageref.PullSecretName(); secret != "" {
+			newContent = strings.Replace(newContent, "#{IMAGE_PULL_SECRETS}",
+				"imagePullSecrets:\n      - name: "+secret, -1)
+		}
 
 		newContent = strings.Replace(newContent, "#{START_TIME}", "\""+infra.StartTime+"\"", -1)
 		if infra.IsInfraConfirmed {
@@ -206,6 +333,10 @@ func ManifestParser(infra dbChaosInfra.ChaosInfra, rootPath string, config *Subs
 	return []byte(strings.Join(generatedYAML, "\n")), nil
 }
 
+// subscriberDispatchTimeout bounds how long a dispatch waits for the target
+// infra's subscription channel to free up before it is reported as undelivered.
+const subscriberDispatchTimeout = 15 * time.Second
+
 // SendRequestToSubscriber sends events from the graphQL server to the subscribers listening for the requests
 func SendRequestToSubscriber(subscriberRequest SubscriberRequests, r store.StateData) {
 	newAction := &model.InfraActionResponse{
@@ -220,10 +351,21 @@ func SendRequestToSubscriber(subscriberRequest SubscriberRequests, r store.State
 	}
 
 	r.Mutex.Lock()
-	if observer, ok := r.ConnectedInfra[subscriberRequest.InfraID]; ok {
-		observer <- newAction
-	}
+	observer, ok := r.ConnectedInfra[subscriberRequest.InfraID]
 	r.Mutex.Unlock()
+	if !ok {
+		log.Errorf("no subscriber connected for infra %s; dropping %q request", subscriberRequest.InfraID, subscriberRequest.RequestType)
+		return
+	}
+
+	// The per-infra channel holds a single message. Sending while holding the
+	// store mutex would block every other infra's traffic behind one slow
+	// subscriber, so the send happens outside the lock and cannot wait forever.
+	select {
+	case observer <- newAction:
+	case <-time.After(subscriberDispatchTimeout):
+		log.Errorf("timed out dispatching %q request to the subscriber for infra %s; the request was not delivered", subscriberRequest.RequestType, subscriberRequest.InfraID)
+	}
 }
 
 // SendExperimentToSubscriber sends the workflow to the subscriber to be handled

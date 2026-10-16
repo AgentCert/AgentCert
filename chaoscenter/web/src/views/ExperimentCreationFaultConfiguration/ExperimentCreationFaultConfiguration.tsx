@@ -21,7 +21,7 @@ import { DrawerTypes } from '@components/Drawer/Drawer';
 import Drawer from '@components/Drawer';
 import { useStrings } from '@strings';
 import TargetApplicationTabController from '@controllers/TargetApplicationTab';
-import type { FaultData } from '@models';
+import type { ChaosEngine, FaultData } from '@models';
 import { useSearchParams } from '@hooks';
 import { InfrastructureType } from '@api/entities';
 import experimentYamlService from '@services/experiment';
@@ -39,6 +39,7 @@ interface ExperimentCreationTuneFaultProps {
   isOpen: boolean;
   onClose: () => void;
   initialFaultData: FaultData | undefined;
+  onDiscard: () => Promise<void>;
   infraID: string | undefined;
   environmentID: string | undefined;
   faultTuneOperation: GetFaultTunablesOperation;
@@ -52,9 +53,18 @@ enum TuneFaultTab {
   SelectProbes = 'selectProbes'
 }
 
+// Only fields present on this fault's appinfo schema are required -- mirrors the
+// `!== undefined` checks TargetApplication.tsx uses to decide which dropdowns to render.
+function getIncompleteTargetAppFields(engineCR: ChaosEngine | undefined): string[] {
+  const appinfo = engineCR?.spec?.appinfo;
+  if (!appinfo) return [];
+  return (['appkind', 'appns', 'applabel'] as const).filter(field => appinfo[field] !== undefined && !appinfo[field]);
+}
+
 export default function ExperimentCreationTuneFaultView({
   isOpen,
   onClose,
+  onDiscard,
   initialFaultData,
   infraID,
   // environmentID,
@@ -80,6 +90,13 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
   const [faultWeight, setFaultWeight] = React.useState<number>(faultData?.weight ?? 10);
   const [isAddProbeSelected, setIsAddProbeSelected] = React.useState<boolean>(false);
 
+  const showTargetApplicationTab =
+    infraID && faultData?.engineCR?.spec?.appinfo && infrastructureType === InfrastructureType.KUBERNETES;
+
+  const [selectedTabId, setSelectedTabId] = React.useState<TuneFaultTab>(
+    showTargetApplicationTab ? TuneFaultTab.TargetApplication : TuneFaultTab.TuneFault
+  );
+
   const {
     isOpen: isOpenTuneConfirmDialog,
     open: openTuneConfirmDialog,
@@ -92,8 +109,8 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
         text={getString('discard')}
         variation={ButtonVariation.SECONDARY}
         size={ButtonSize.MEDIUM}
-        onClick={() => {
-          onClose();
+        onClick={async () => {
+          await onDiscard();
         }}
       />
       <Button
@@ -126,7 +143,7 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
 
   const confirmationDialog = <ConfirmationDialog isOpen={isOpenTuneConfirmDialog} {...confirmationDialogProps} />;
 
-  const applyChanges = (): void => {
+  const applyChanges = async (): Promise<void> => {
     // Submit the env tuning form
     tuneExperimentRef.current?.handleSubmit();
     // Check for errors in env tuning form
@@ -134,10 +151,21 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
       showError(getString('errorApplyChanges'));
       return;
     }
-    // If there are no errors update experiment in IDB
+    // Block Apply if this fault's Target Application fields are required but left blank --
+    // otherwise the incomplete config is only caught later by the disconnected DAG-level
+    // "No target application configured" banner, with no link back to which field to fix.
+    if (showTargetApplicationTab && getIncompleteTargetAppFields(faultData?.engineCR).length > 0) {
+      showError(getString('isRequired', { field: getString('targetApplication') }));
+      setSelectedTabId(TuneFaultTab.TargetApplication);
+      return;
+    }
+    // If there are no errors update experiment in IDB. Await both writes
+    // before closing -- the parent's onClose re-reads the manifest to
+    // refresh the canvas (node warning badges, missing-target banner), and
+    // that read must not race the IndexedDB write it depends on.
     if (faultData) {
-      experimentHandler?.updateExperimentManifestWithFaultData(experimentKey, faultData);
-      experimentHandler?.updateFaultWeight(experimentKey, faultData.faultName, faultWeight);
+      await experimentHandler?.updateExperimentManifestWithFaultData(experimentKey, faultData);
+      await experimentHandler?.updateFaultWeight(experimentKey, faultData.faultName, faultWeight);
     }
     onClose();
   };
@@ -167,13 +195,17 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
     </Layout.Horizontal>
   );
 
-  const showTargetApplicationTab =
-    infraID && faultData?.engineCR?.spec?.appinfo && infrastructureType === InfrastructureType.KUBERNETES;
+  const isTargetApplicationIncomplete = getIncompleteTargetAppFields(faultData?.engineCR).length > 0;
 
   const tabList = [
     {
       id: TuneFaultTab.TargetApplication,
-      title: getString('targetApplication'),
+      title: (
+        <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
+          <Text>{getString('targetApplication')}</Text>
+          {isTargetApplicationIncomplete && <Icon name="warning-sign" intent="danger" size={12} />}
+        </Layout.Horizontal>
+      ),
       hidden: !showTargetApplicationTab,
 
       panel: (
@@ -181,6 +213,7 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
           engineCR={faultData?.engineCR}
           infrastructureID={infraID}
           setFaultData={setFaultData}
+          faultName={faultData?.faultName}
         />
       )
     },
@@ -218,7 +251,8 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
           <div className={css.tabs}>
             <Tabs
               id={'tuneFaultTabs'}
-              defaultSelectedTabId={showTargetApplicationTab ? TuneFaultTab.TargetApplication : TuneFaultTab.TuneFault}
+              selectedTabId={selectedTabId}
+              onChange={newTabId => setSelectedTabId(newTabId as TuneFaultTab)}
               renderAllTabPanels
               tabList={tabList}
             />

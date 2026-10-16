@@ -62,7 +62,7 @@ func (r *mutationResolver) CreateChaosExperiment(ctx context.Context, request mo
 			return uiResponse, nil
 		}
 
-		_, err = r.chaosExperimentRunHandler.RunChaosWorkFlow(ctx, projectID, experiment, data_store.Store)
+		_, err = r.chaosExperimentRunHandler.RunChaosWorkFlow(ctx, projectID, experiment, data_store.Store, "")
 		if err != nil {
 			logrus.WithFields(logFields).Error(err)
 			return nil, err

@@ -46,6 +46,14 @@ func (e *APIError) Error() string {
 
 type TraceSource struct {
 	Type string `json:"type"`
+	// TraceID, when set, is the canonical notify_id/workflow-run trace key --
+	// the same value agent-sidecar stamps as Langfuse's own trace_id on every
+	// LLM call it forwards. The certifier resolves the trace by direct ID
+	// lookup when this is present, bypassing its experiment_id/experiment_run_id
+	// metadata-filter search entirely. That search can never match traces from
+	// agent-sidecar-instrumented agents, which deliberately omit those two
+	// metadata keys to preserve blind-observer integrity (see agent-sidecar/proxy.py).
+	TraceID string `json:"trace_id,omitempty"`
 }
 
 type StorageConfig struct {
@@ -54,12 +62,30 @@ type StorageConfig struct {
 	MetricsDir    string `json:"metrics_dir,omitempty"`
 }
 
+// FaultWindow marks the wall-clock window during which a single fault was
+// injected during this run's Argo Workflow execution. It lets the certifier
+// split a trace into per-fault buckets by timestamp when the trace itself
+// carries no `fault: *` OTel spans of its own -- the case for blind-observer
+// agents like flash-agent, which are deliberately never told which fault is
+// running (see agent-sidecar/proxy.py). Field names and JSON tags mirror
+// certifier/main/models/bucket_requests.py's FaultWindow Pydantic model
+// exactly.
+type FaultWindow struct {
+	FaultName string `json:"fault_name"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+}
+
 type BucketingRequest struct {
 	AgentID       string        `json:"agent_id"`
 	ExperimentID  string        `json:"experiment_id"`
 	RunID         string        `json:"run_id"`
 	TraceSource   TraceSource   `json:"trace_source"`
 	StorageConfig StorageConfig `json:"storage_config"`
+	// FaultWindows is optional and empty by default -- fully backward
+	// compatible with single-fault and non-Argo-orchestrated runs, and with
+	// any certifier build that predates the fault_windows field.
+	FaultWindows []FaultWindow `json:"fault_windows,omitempty"`
 }
 
 type BucketingAcceptedResponse struct {

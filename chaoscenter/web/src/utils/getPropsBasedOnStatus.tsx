@@ -97,6 +97,12 @@ export function getPropsBasedOnExperimentRunStatus(status: Status): StatusProps 
         color: Color.ORANGE_500,
         bgColor: `var(--orange-100)`
       };
+    case ExperimentRunStatus.COMPLETED_NOT_GRADED:
+      return {
+        iconName: 'info-messaging',
+        color: Color.GREY_700,
+        bgColor: `var(--grey-200)`
+      };
     case ExperimentRunStatus.ERROR:
       return {
         iconName: 'circle-cross',

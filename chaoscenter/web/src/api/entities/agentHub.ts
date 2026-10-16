@@ -1,9 +1,18 @@
+import type { ConfigField } from './chartConfig';
+
 export interface AgentHubEntry {
   name: string;
   displayName: string;
   description: string;
   version: string;
   capabilities: string[];
+  // Applications this agent may be paired with. `null`/undefined means the
+  // agent declared no restriction and works with every application, including
+  // ones onboarded after it; `[]` means it is deliberately not
+  // application-targeted and is never offered for one.
+  compatibleApplications?: string[] | null;
+  // Settings the agent's chart lets the user change in the experiment builder.
+  configurations: ConfigField[];
   isDeployed: boolean;
   deploymentStatus: string;
   agentID?: string;

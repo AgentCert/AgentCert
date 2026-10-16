@@ -12,6 +12,7 @@ import (
 
 	"subscriber/pkg/types"
 
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -19,48 +20,76 @@ import (
 )
 
 var (
-	InfraNamespace = os.Getenv("INFRA_NAMESPACE")
-	InfraScope     = os.Getenv("INFRA_SCOPE")
+	InfraNamespace      = os.Getenv("INFRA_NAMESPACE")
+	TargetAppNamespaces = os.Getenv("TARGET_APP_NAMESPACES")
 )
 
-// GetKubernetesNamespaces is used to get the list of Kubernetes Namespaces
+// candidateNamespaces returns the deduplicated list of namespace names this
+// infra is allowed to resolve: its own namespace plus whatever
+// TARGET_APP_NAMESPACES lists. Kept in lockstep with the `get`+resourceNames
+// rule ManifestParser renders into infra-cluster-role (3a_agents_rbac.yaml)
+// from the same app-charts catalog — see GetKubernetesNamespaces below for
+// why this can't just be a cluster-wide List().
+func candidateNamespaces() []string {
+	seen := map[string]bool{InfraNamespace: true}
+	names := []string{InfraNamespace}
+	for _, raw := range strings.Split(TargetAppNamespaces, ",") {
+		name := strings.TrimSpace(raw)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	return names
+}
+
+// GetKubernetesNamespaces is used to get the list of Kubernetes Namespaces.
+//
+// This deliberately does NOT branch on InfraScope the way it historically
+// did (namespace scope => only ever report InfraNamespace itself). ACE
+// connects one infra per orchestration namespace (e.g. "itbench") but that
+// infra still needs to inject chaos into separate target-application
+// namespaces (sock-shop, book-info, otel-demo, ...) it doesn't own — so the
+// UI's namespace picker needs visibility into those too, regardless of how
+// this infra's engine/workflow watching is scoped elsewhere (see InfraScope
+// usage in pkg/events for that unrelated concern).
+//
+// This service account is intentionally NOT granted list/watch on
+// namespaces: Kubernetes RBAC can't scope those verbs to a resourceNames
+// subset, so a List() here would require cluster-wide visibility into every
+// namespace on the cluster, including ones unrelated to chaos experiments.
+// Instead it holds `get` on a known allowlist (see infra-cluster-role /
+// infra-role in the manifests) — resolve each candidate individually and
+// skip whichever don't exist yet (not-yet-onboarded apps) or aren't
+// reachable under this infra's RBAC (a genuinely namespace-scoped infra that
+// was never granted the cluster-scope get either).
 func (k8s *k8sSubscriber) GetKubernetesNamespaces(request types.KubeNamespaceRequest) ([]*types.KubeNamespace, error) {
 
 	var namespaceData []*types.KubeNamespace
 
-	if strings.ToLower(InfraScope) == "namespace" {
-		// In case of namespace scope, only one namespace is available
-		KubeNamespace := &types.KubeNamespace{
-			Name: InfraNamespace,
-		}
-		namespaceData = append(namespaceData, KubeNamespace)
-	} else {
-		// In case of cluster scope, get all the namespaces
-		conf, err := k8s.GetKubeConfig()
-		if err != nil {
-			return nil, err
-		}
-		clientset, err := kubernetes.NewForConfig(conf)
-		if err != nil {
-			return nil, err
-		}
+	conf, err := k8s.GetKubeConfig()
+	if err != nil {
+		return nil, err
+	}
+	clientset, err := kubernetes.NewForConfig(conf)
+	if err != nil {
+		return nil, err
+	}
 
-		namespace, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+	for _, name := range candidateNamespaces() {
+		ns, err := clientset.CoreV1().Namespaces().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
-			return nil, err
-		}
-		if len(namespace.Items) > 0 {
-			for _, namespace := range namespace.Items {
-
-				KubeNamespace := &types.KubeNamespace{
-					Name: namespace.GetName(),
-				}
-
-				namespaceData = append(namespaceData, KubeNamespace)
+			if k8s_errors.IsNotFound(err) || k8s_errors.IsForbidden(err) {
+				continue
 			}
-		} else {
-			return nil, errors.New("No namespace available")
+			return nil, err
 		}
+		namespaceData = append(namespaceData, &types.KubeNamespace{Name: ns.GetName()})
+	}
+
+	if len(namespaceData) == 0 {
+		return nil, errors.New("No namespace available")
 	}
 	//TODO Maybe add marshal/unmarshal here
 	return namespaceData, nil

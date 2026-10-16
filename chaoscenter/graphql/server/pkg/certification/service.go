@@ -46,17 +46,58 @@ type StartInput struct {
 	ExperimentID    string
 	ExperimentRunID string
 	ExpectedRuns    int
+	// NotifyID is the canonical Langfuse trace key (ChaosCenter's notify_id,
+	// preferred over ExperimentRunID when known -- see traceID derivation in
+	// chaos_experiment_run/handler.go). Threaded through to the certifier's
+	// trace_source.trace_id so it can resolve the trace by direct ID lookup
+	// instead of an experiment_id/experiment_run_id metadata-filter search.
+	// May be empty for manually-triggered certification (the certifier falls
+	// back to the metadata-filter search in that case).
+	NotifyID string
+	// FaultWindows carries the per-fault injection time windows computed from
+	// the terminated run's Argo Workflow nodes (see
+	// chaos_experiment_run/handler.computeFaultWindows), so the certifier can
+	// split a trace lacking `fault: *` spans into per-fault buckets by
+	// timestamp. Empty for single-fault or non-Argo-orchestrated runs -- the
+	// certifier falls back to its original single-bucket behavior in that case.
+	FaultWindows []FaultWindow
 }
 
 type StartOutput struct {
-	Status                       string
-	ExperimentRunWorkflowStatus  string
-	Message                      string
+	Status                      string
+	ExperimentRunWorkflowStatus string
+	Message                     string
 }
 
 func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInput) (*StartOutput, error) {
 	if err := validateStartInput(in); err != nil {
 		return nil, err
+	}
+
+	// One experiment certifies one agent, fixed by the parent doc's first
+	// insert. Two callers resolve the agent independently (the server's
+	// terminal-event auto-trigger and the UI), and run/aggregation docs are
+	// keyed by agentId, so a caller whose identity differs would split the
+	// experiment's runs across two ids and the gate would never see them all.
+	if err := s.adoptExperimentAgent(ctx, &in); err != nil {
+		return nil, err
+	}
+
+	// Guard: if the run already has a completed pipeline entry, re-submitting it
+	// (e.g., the auto-trigger re-fires on page reload for old runs that are in the
+	// DB history but were part of a prior certification batch) must not call
+	// ResetStatusIfCertified — that would erase an already-finalized certificate.
+	// Return early so the caller sees a clear "already done" signal.
+	existingRun, err := s.op.GetRunWorkflow(ctx, in.ProjectID, in.AgentID, in.ExperimentID, in.ExperimentRunID)
+	if err != nil {
+		return nil, fmt.Errorf("check existing run workflow: %w", err)
+	}
+	if existingRun != nil && existingRun.Status == RunStatusBucketingCompleted {
+		return &StartOutput{
+			Status:                      "ALREADY_COMPLETED",
+			ExperimentRunWorkflowStatus: RunStatusBucketingCompleted,
+			Message:                     "run already bucketed; skipping re-dispatch to protect finalized certificate",
+		}, nil
 	}
 
 	// Parent summary: created on first sight; expectedRuns ratchets up via $max
@@ -70,6 +111,10 @@ func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInpu
 		AggregationPolicy: AggregationPolicy{Mode: PolicyAllRunsCompleted},
 	}); err != nil {
 		return nil, fmt.Errorf("upsert experiment: %w", err)
+	}
+	// Re-read: a concurrent first call may have inserted the parent first.
+	if err := s.adoptExperimentAgent(ctx, &in); err != nil {
+		return nil, err
 	}
 
 	// If the experiment was already fully certified and a new (or replacement)
@@ -118,6 +163,23 @@ func (s *Service) StartCertificationGeneration(ctx context.Context, in StartInpu
 		ExperimentRunWorkflowStatus: RunStatusBucketingTriggered,
 		Message:                     "certification pipeline started",
 	}, nil
+}
+
+// adoptExperimentAgent replaces the caller's agent identity with the one
+// stored on the experiment's certificate doc, when that doc exists.
+func (s *Service) adoptExperimentAgent(ctx context.Context, in *StartInput) error {
+	parent, err := s.op.GetExperiment(ctx, in.ProjectID, in.ExperimentID)
+	if err != nil {
+		return fmt.Errorf("load certificate experiment: %w", err)
+	}
+	if parent == nil || parent.AgentID == "" {
+		return nil
+	}
+	in.AgentID = parent.AgentID
+	if parent.AgentName != "" {
+		in.AgentName = parent.AgentName
+	}
+	return nil
 }
 
 // runPipeline executes bucketing -> poll -> gate -> aggregation -> poll.
@@ -185,8 +247,9 @@ func (s *Service) triggerBucketing(ctx context.Context, in StartInput) error {
 		AgentID:       in.AgentID,
 		ExperimentID:  in.ExperimentID,
 		RunID:         in.ExperimentRunID,
-		TraceSource:   TraceSource{Type: "langfuse"},
+		TraceSource:   TraceSource{Type: "langfuse", TraceID: in.NotifyID},
 		StorageConfig: StorageConfig{Type: "local"},
+		FaultWindows:  in.FaultWindows,
 	})
 	if err != nil {
 		// 409 with a parsed task_id is treated as "already active".
@@ -367,6 +430,7 @@ func (s *Service) startAggregation(ctx context.Context, in StartInput, runIDs []
 			{Key: "status", Value: AggStatusFailed},
 			{Key: "error", Value: WorkflowError{Code: "AGGREGATION_TRIGGER_FAILED", Reason: err.Error(), LastFailedAt: &now}},
 		})
+		_ = s.op.UpdateExperimentStatus(ctx, in.ProjectID, in.ExperimentID, ExperimentStatusAggregationFailed)
 		return version, false, err
 	}
 
@@ -420,6 +484,7 @@ func (s *Service) pollAggregation(ctx context.Context, in StartInput, version in
 					code = status.Error.ErrorCode
 				}
 			}
+			_ = s.op.UpdateExperimentStatus(ctx, in.ProjectID, in.ExperimentID, ExperimentStatusAggregationFailed)
 			return s.op.UpdateAggregationWorkflow(ctx, in.ProjectID, in.AgentID, in.ExperimentID, version, bson.D{
 				{Key: "status", Value: AggStatusFailed},
 				{Key: "aggregation.lastPolledAt", Value: now},

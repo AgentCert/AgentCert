@@ -28,10 +28,11 @@ export default function ExperimentRunDetailsController(): React.ReactElement {
   const specificRunData = listExperimentRunData?.getExperimentRun;
 
   React.useEffect(() => {
+    if (!specificRunData) return;
     if (
-      specificRunData?.phase === ExperimentRunStatus.RUNNING ||
-      specificRunData?.phase === ExperimentRunStatus.QUEUED ||
-      specificRunData?.phase === ExperimentRunStatus.NA
+      specificRunData.phase === ExperimentRunStatus.RUNNING ||
+      specificRunData.phase === ExperimentRunStatus.QUEUED ||
+      specificRunData.phase === ExperimentRunStatus.NA
     ) {
       startPolling(3000);
     } else {

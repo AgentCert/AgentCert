@@ -54,18 +54,31 @@ type Service interface {
 	KubeObj(request model.KubeObjectData, r store.StateData) (string, error)
 	UpdateInfra(query bson.D, update bson.D) error
 	GetDBInfra(infraID string) (dbChaosInfra.ChaosInfra, error)
+	StartFinalizerWatcher(ctx context.Context)
+	StopFinalizerWatcher()
 }
 
 type infraService struct {
-	infraOperator *dbChaosInfra.Operator
-	envOperator   *dbEnvironments.Operator
+	infraOperator         *dbChaosInfra.Operator
+	envOperator           *dbEnvironments.Operator
+	finalizerController   *FinalizerController
 }
 
 // NewChaosInfrastructureService returns a new instance of Service
 func NewChaosInfrastructureService(infraOperator *dbChaosInfra.Operator, envOperator *dbEnvironments.Operator) Service {
+	// Initialize finalizer controller for safe namespace cleanup
+	var finalizerController *FinalizerController
+	fc, err := NewFinalizerController()
+	if err != nil {
+		logrus.Warnf("Finalizer controller initialization failed: %v. Infrastructure namespace cleanup will require manual intervention.", err)
+	} else {
+		finalizerController = fc
+	}
+
 	return &infraService{
-		infraOperator: infraOperator,
-		envOperator:   envOperator,
+		infraOperator:       infraOperator,
+		envOperator:         envOperator,
+		finalizerController: finalizerController,
 	}
 }
 
@@ -90,7 +103,7 @@ func (in *infraService) RegisterInfra(c context.Context, projectID string, input
 		return nil, errors.New("Invalid EnvironmentID")
 	}
 
-	if (*input.InfraNsExists && input.InfraNamespace == nil) || (*input.InfraNsExists && *input.InfraNamespace == "") {
+	if input.InfraNsExists != nil && *input.InfraNsExists && (input.InfraNamespace == nil || *input.InfraNamespace == "") {
 		return nil, errors.New("InfraNamespace parameter is required if InfraNsExists is true")
 	}
 
@@ -135,12 +148,17 @@ func (in *infraService) RegisterInfra(c context.Context, projectID string, input
 		input.Tags = []string{}
 	}
 
+	var infraDescription string
+	if input.Description != nil {
+		infraDescription = *input.Description
+	}
+
 	// TODO add mongo transaction
 	newInfra := dbChaosInfra.ChaosInfra{
 		InfraID: infraID,
 		ResourceDetails: mongodb.ResourceDetails{
 			Name:        input.Name,
-			Description: *input.Description,
+			Description: infraDescription,
 			Tags:        input.Tags,
 		},
 		ProjectID: projectID,
@@ -190,31 +208,36 @@ func (in *infraService) RegisterInfra(c context.Context, projectID string, input
 		return nil, err
 	}
 
-	reqHeader, ok := c.Value("request-header").(http.Header)
-	if !ok {
-		return nil, fmt.Errorf("unable to parse request header")
+	// Prefer the browser Referer when present (it reflects the page the user is
+	// actually on), but don't hard-fail without it: GetK8sInfraYaml/GetEndpoint
+	// already prefer the configured CHAOS_CENTER_UI_ENDPOINT over this host hint,
+	// and callers other than the ChaosCenter web UI (scripts, direct API calls)
+	// never send a Referer at all.
+	host := ""
+	if reqHeader, ok := c.Value("request-header").(http.Header); ok {
+		if referrer := reqHeader.Get("Referer"); referrer != "" {
+			if referrerURL, err := url.Parse(referrer); err == nil && referrerURL.Host != "" {
+				host = fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host)
+			}
+		}
+	}
+	if host == "" {
+		if requestHost, ok := c.Value("request-host").(string); ok && requestHost != "" {
+			host = fmt.Sprintf("http://%s", requestHost)
+		}
 	}
 
-	referrer := reqHeader.Get("Referer")
-	if referrer == "" {
-		return nil, fmt.Errorf("unable to parse referer header")
-	}
-
-	referrerURL, err := url.Parse(referrer)
-	if err != nil {
-		return nil, err
-	}
-
-	manifestYaml, err := GetK8sInfraYaml(fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host), newInfra)
+	manifestYaml, err := GetK8sInfraYaml(host, newInfra)
 	if err != nil {
 		return nil, err
 	}
 
 	return &model.RegisterInfraResponse{
-		InfraID:  newInfra.InfraID,
-		Token:    token,
-		Name:     newInfra.Name,
-		Manifest: string(manifestYaml),
+		InfraID:             newInfra.InfraID,
+		Token:               token,
+		Name:                newInfra.Name,
+		Manifest:            string(manifestYaml),
+		ManifestDownloadURL: GetManifestDownloadURL(host, token),
 	}, nil
 }
 
@@ -297,6 +320,27 @@ func (in *infraService) DeleteInfra(ctx context.Context, projectID string, infra
 			Namespace:   *infra.InfraNamespace,
 			Username:    &username,
 		}, r)
+	}
+
+	// ACE Fix: Initiate Kubernetes namespace deletion with finalizer-based cleanup
+	// The finalizer controller will:
+	// 1. Add a cleanup finalizer to prevent immediate deletion
+	// 2. Delete completed jobs and error pods to free resources
+	// 3. Remove the finalizer to allow namespace deletion
+	// If the controller is not available, operators must manually clean up.
+	if infra.InfraNamespace != nil && *infra.InfraNamespace != "" {
+		if in.finalizerController != nil {
+			if err := in.finalizerController.DeleteInfrastructureNamespace(ctx, *infra.InfraNamespace); err != nil {
+				logrus.Warnf("Failed to initiate finalizer-based cleanup for namespace %s: %v. "+
+					"Manual cleanup may be required: kubectl delete namespace %s",
+					*infra.InfraNamespace, err, *infra.InfraNamespace)
+			}
+		} else {
+			logrus.Warnf("Finalizer controller unavailable for infrastructure %s (namespace: %s). "+
+				"Kubernetes namespace still exists with orphaned resources. "+
+				"Manual cleanup required: kubectl delete namespace %s",
+				infra.InfraID, *infra.InfraNamespace, *infra.InfraNamespace)
+		}
 	}
 
 	return "infra deleted successfully", nil
@@ -583,6 +627,21 @@ func (in *infraService) ListInfras(projectID string, request *model.ListInfraReq
 		}
 
 	}
+
+	// Sort newest-first so a freshly registered infrastructure lands on the
+	// first page of the paginated result. The aggregation has no inherent
+	// order otherwise (Mongo natural order), which meant a new infra could be
+	// appended past the page-1 limit and stay invisible until the client
+	// happened to page to it. Sorting on created_at (not updated_at) keeps the
+	// list order stable — heartbeat/confirmation writes bump updated_at and
+	// would otherwise reshuffle rows on every poll. Placed before the $lookup
+	// stages so the sort operates on the smaller pre-join documents.
+	sortStage := bson.D{
+		{"$sort", bson.D{
+			{"created_at", -1},
+		}},
+	}
+	pipeline = append(pipeline, sortStage)
 
 	fetchRunDetailsStage := bson.D{
 		{"$lookup", bson.D{
@@ -1158,4 +1217,23 @@ func (c *infraService) UpdateInfra(query bson.D, update bson.D) error {
 // GetDBInfra returns cluster details for a given clusterID
 func (c *infraService) GetDBInfra(infraID string) (dbChaosInfra.ChaosInfra, error) {
 	return c.infraOperator.GetInfra(infraID)
+}
+
+// StartFinalizerWatcher starts the background finalizer controller that manages
+// infrastructure namespace cleanup. This should be called once at application startup.
+func (in *infraService) StartFinalizerWatcher(ctx context.Context) {
+	if in.finalizerController != nil {
+		in.finalizerController.StartWatcher(ctx)
+		logrus.Info("Infrastructure finalizer watcher started")
+	} else {
+		logrus.Warn("Finalizer controller not available, finalizer-based namespace cleanup will not work. Manual cleanup will be required.")
+	}
+}
+
+// StopFinalizerWatcher gracefully stops the finalizer controller watcher
+func (in *infraService) StopFinalizerWatcher() {
+	if in.finalizerController != nil {
+		in.finalizerController.Stop()
+		logrus.Info("Infrastructure finalizer watcher stopped")
+	}
 }

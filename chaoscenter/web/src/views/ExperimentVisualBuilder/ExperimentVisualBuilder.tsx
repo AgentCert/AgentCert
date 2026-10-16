@@ -1,5 +1,8 @@
 import React from 'react';
 import { Layout, Switch, Text, VisualYamlSelectedView } from '@harnessio/uicore';
+import { Position } from '@blueprintjs/core';
+import { Icon } from '@harnessio/icons';
+import { Color } from '@harnessio/design-system';
 import classNames from 'classnames';
 import { useParams } from 'react-router-dom';
 import { DiagramFactory } from '@components/PipelineDiagram/DiagramFactory';
@@ -13,11 +16,14 @@ import { useStrings } from '@strings';
 import ExperimentBuilderTemplateSelectionView from '@views/ExperimentBuilderTemplateSelection';
 import type { FaultData, ExperimentManifest, StudioTabs, InfraDetails } from '@models';
 import ExperimentCreationSelectFaultController from '@controllers/ExperimentCreationSelectFault';
+import ExperimentCreationSelectInstallStepController from '@controllers/ExperimentCreationSelectInstallStep';
+import ExperimentCreationSelectUninstallStepController from '@controllers/ExperimentCreationSelectUninstallStep';
 import ExperimentAdvancedTuningOptionsView from '@views/ExperimentAdvancedTuningOptions';
 import ExperimentCreationTuneFaultView from '@views/ExperimentCreationFaultConfiguration';
-import { useUpdateSearchParams, useSearchParams } from '@hooks';
+import { useUpdateSearchParams, useSearchParams, useFaultCatalog } from '@hooks';
 import experimentYamlService from 'services/experiment';
 import { GetFaultTunablesOperation } from '@services/experiment/ExperimentYamlService';
+import type { InstallStepChoice, InstallStepSelection } from '@services/experiment/installStepSettings';
 import type { ServiceIdentifiers } from '@db';
 import type { InfrastructureType } from '@api/entities';
 import css from './ExperimentVisualBuilder.module.scss';
@@ -55,15 +61,60 @@ export default function ExperimentVisualBuilderView({
     operation: GetFaultTunablesOperation.InitialEnvs
   });
   const [isSelectTemplateDrawerOpen, setIsSelectTemplateDrawerOpen] = React.useState<boolean>(false);
+  const [installStepDrawer, setInstallStepDrawer] = React.useState<{
+    open: boolean;
+    kind: 'application' | 'agent';
+    initialSelection?: InstallStepSelection;
+  }>({
+    open: false,
+    kind: 'application'
+  });
+  const [uninstallStepDrawer, setUninstallStepDrawer] = React.useState<{
+    open: boolean;
+    kind: 'application' | 'agent';
+  }>({
+    open: false,
+    kind: 'application'
+  });
   const [selectedFaultData, setSelectedFaultData] = React.useState<FaultData>();
   const [serviceIdentifiers, setServiceIdentifiers] = React.useState<ServiceIdentifiers | undefined>();
   const [parallelNodeIdentifier, setParallelNodeIdentifier] = React.useState<string>('');
   const [prevNodeIdentifier, setPrevNodeIdentifier] = React.useState<string>('');
   const [isEditMode, setIsEditMode] = React.useState<boolean>(true);
   const [infraDetails, setInfraDetails] = React.useState<InfraDetails | undefined>();
+  // Which application and agent this experiment installs. Read back from the
+  // manifest rather than tracked separately so the YAML editor and a page reload
+  // can't desync it from what will actually be submitted.
+  const [experimentContext, setExperimentContext] = React.useState<{
+    application?: InstallStepSelection;
+    agent?: InstallStepSelection;
+  }>({});
+  const faultCatalog = useFaultCatalog();
+
+  const targetApplication = faultCatalog.resolveApplication(
+    experimentContext.application?.folder,
+    experimentContext.application?.namespace
+  );
+  // install-application is the root of the dependency chain: the agent is
+  // installed into the app's namespace and every fault targets one of its
+  // workloads, and the backend's own patches reference
+  // {{workflow.parameters.appNamespace}} unconditionally. Without it the
+  // generated Workflow is rejected by Argo before any step runs, so the rest of
+  // the palette stays disabled until it is chosen.
+  const hasApplication = experimentContext.application !== undefined;
+  const hasAgent = experimentContext.agent !== undefined;
+  const canAddFaults = hasApplication && hasAgent;
 
   const infrastructureType = searchParams.get('infrastructureType') as InfrastructureType | undefined;
   const experimentHandler = experimentYamlService.getInfrastructureTypeHandler(infrastructureType);
+
+  const refreshExperimentContext = React.useCallback(
+    (manifest: ExperimentManifest | undefined): void => {
+      const context = experimentHandler?.getExperimentContext(manifest);
+      setExperimentContext({ application: context?.application, agent: context?.agent });
+    },
+    [experimentHandler]
+  );
 
   const handleFaultSelection = (faultData: FaultData): void => {
     experimentHandler
@@ -74,6 +125,7 @@ export default function ExperimentVisualBuilderView({
 
         const hasFaults = experimentHandler.doesExperimentHaveFaults(experiment?.manifest);
         setHasFaults(hasFaults);
+        refreshExperimentContext(experiment?.manifest);
         setUnsavedChanges();
       });
     setSelectedFaultData(faultData);
@@ -86,26 +138,73 @@ export default function ExperimentVisualBuilderView({
     setTuneFaultDrawerOpen({ open: true, operation: GetFaultTunablesOperation.InitialEnvs });
   };
 
+  const handleInstallStepSelection = (choice: InstallStepChoice): void => {
+    experimentHandler?.addInstallStepToManifest(experimentKey, installStepDrawer.kind, choice).then(experiment => {
+      const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
+      setExperimentSteps(steps);
+      refreshExperimentContext(experiment?.manifest);
+      setUnsavedChanges();
+    });
+    setInstallStepDrawer({ open: false, kind: installStepDrawer.kind });
+  };
+
+  // uninstall-agent / uninstall-application are ChaosHub faults (teardown
+  // steps), not install-step templates -- so unlike handleInstallStepSelection
+  // they go through addFaultsToManifest like any other fault. The controller
+  // has already fetched the fault/engine CRs and stamped the chosen release
+  // into the engine's FOLDER / NAMESPACE env.
+  const handleUninstallStepSelection = (faultData: FaultData): void => {
+    experimentHandler?.addFaultsToManifest(experimentKey, faultData, '', '').then(experiment => {
+      const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
+      setExperimentSteps(steps);
+      setHasFaults(experimentHandler.doesExperimentHaveFaults(experiment?.manifest));
+      setUnsavedChanges();
+    });
+    setUninstallStepDrawer({ open: false, kind: uninstallStepDrawer.kind });
+  };
+
   const handleSelectTemplateDrawerClose = (manifest: ExperimentManifest, yamlUploaded?: boolean): void => {
     setIsSelectTemplateDrawerOpen(false);
     const steps = experimentHandler?.getFaultsFromExperimentManifest(manifest, isEditMode) ?? [];
     setExperimentSteps(steps);
     const hasFaults = experimentHandler?.doesExperimentHaveFaults(manifest) ?? false;
     setHasFaults(hasFaults);
+    refreshExperimentContext(manifest);
     if (yamlUploaded) setViewFilter(VisualYamlSelectedView.YAML);
   };
 
-  const handleRemoveFault = (faultName: string): void => {
-    experimentHandler?.removeFaultsFromManifest(experimentKey, faultName).then(experiment => {
+  // The Tune Fault drawer (Target Application / Tune Fault / Probes tabs)
+  // writes fault edits straight to IndexedDB itself (see
+  // ExperimentCreationFaultConfiguration's applyChanges) rather than going
+  // through a handler here, unlike add/remove-fault and install-step above --
+  // so nothing previously refreshed `experimentSteps` after an edit. That
+  // left the canvas (node warning badges, missing-target banner) showing
+  // stale isInComplete state until the next unrelated refresh, e.g. a page
+  // reload, even though the underlying manifest was already correct.
+  const handleTuneFaultDrawerClose = (): void => {
+    setTuneFaultDrawerOpen({ open: false, operation: GetFaultTunablesOperation.UpdatedEnvs });
+    experimentHandler?.getExperiment(experimentKey).then(experiment => {
       const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
       setExperimentSteps(steps);
-
-      const hasFaults = experimentHandler.doesExperimentHaveFaults(experiment?.manifest);
-      if (!hasFaults) {
-        setHasFaults(hasFaults);
-      }
-      setUnsavedChanges();
     });
+  };
+
+  const handleRemoveFault = async (faultName: string): Promise<void> => {
+    if (!experimentHandler) return;
+    const experiment = await experimentHandler.removeFaultsFromManifest(experimentKey, faultName);
+    const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
+    setExperimentSteps(steps);
+    setHasFaults(experimentHandler.doesExperimentHaveFaults(experiment?.manifest));
+    refreshExperimentContext(experiment?.manifest);
+    setUnsavedChanges();
+  };
+
+  const handleTuneFaultDiscard = async (): Promise<void> => {
+    if (tuneFaultDrawerOpen.operation === GetFaultTunablesOperation.InitialEnvs && selectedFaultData?.faultName) {
+      await handleRemoveFault(selectedFaultData.faultName);
+    }
+    setSelectedFaultData(undefined);
+    setTuneFaultDrawerOpen({ open: false, operation: GetFaultTunablesOperation.UpdatedEnvs });
   };
 
   React.useEffect(() => {
@@ -120,8 +219,9 @@ export default function ExperimentVisualBuilderView({
       }
       const steps = experimentHandler.getFaultsFromExperimentManifest(experiment?.manifest, isEditMode);
       setExperimentSteps(steps);
+      refreshExperimentContext(experiment?.manifest);
     });
-  }, [isEditMode, experimentKey, experimentHandler]);
+  }, [isEditMode, experimentKey, experimentHandler, refreshExperimentContext]);
 
   // Initiate DiagramFactory
   const diagram = new DiagramFactory('graph');
@@ -138,6 +238,24 @@ export default function ExperimentVisualBuilderView({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [DiagramEvent.ClickNode]: (event: any) => {
       setSelectedNodeID(event.data.id);
+
+      // install-agent/install-application nodes carry no ChaosEngine/fault
+      // data -- the Tune Fault drawer has nothing to show for them (see
+      // KubernetesYamlService.getFaultData). Re-open the same drawer used to
+      // pick the install step in the first place, pre-filled with the
+      // current selection, so clicking the node is how you find out (and
+      // change) which agent/app it installs.
+      if (event.data.id === 'install-agent' || event.data.id === 'install-application') {
+        const kind = event.data.id === 'install-agent' ? 'agent' : 'application';
+        experimentHandler?.getExperiment(experimentKey).then(experiment => {
+          const initialSelection = experimentHandler.getInstallStepSelection(experiment?.manifest, kind);
+          if (isEditMode) {
+            setInstallStepDrawer({ open: true, kind, initialSelection });
+          }
+        });
+        return;
+      }
+
       experimentHandler?.getExperiment(experimentKey).then(experiment => {
         const faultData = experimentHandler.getFaultData(experiment?.manifest, event.data.id);
         setSelectedFaultData(faultData);
@@ -149,11 +267,13 @@ export default function ExperimentVisualBuilderView({
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [DiagramEvent.AddLinkClicked]: (event: any) => {
+      if (!canAddFaults) return;
       if (event.data.prevNodeIdentifier !== undefined) setPrevNodeIdentifier(event.data.prevNodeIdentifier);
       setIsSelectFaultDrawerOpen(true);
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [DiagramEvent.AddParallelNode]: (event: any) => {
+      if (!canAddFaults) return;
       setParallelNodeIdentifier(event.data.identifier);
       setIsSelectFaultDrawerOpen(true);
     },
@@ -164,9 +284,20 @@ export default function ExperimentVisualBuilderView({
   };
   diagram.registerListeners(eventListeners);
 
+  // Fault nodes whose ChaosEngine has no appns/applabel configured -- see
+  // KubernetesYamlService.getFaultsFromExperimentManifest, which computes
+  // isInComplete per node. Surfaced as a single list here (rather than only
+  // the per-node warning badge) so a multi-fault experiment doesn't require
+  // clicking through every node to discover which ones won't inject
+  // against anything.
+  const faultsMissingTarget = experimentSteps
+    .flatMap(step => [step, ...(step.children ?? [])])
+    .filter(step => step.data?.isInComplete)
+    .map(step => step.name);
+
   return (
     <div className={css.graphContainer}>
-      <Layout.Horizontal className={css.options} flex>
+      <Layout.Vertical className={css.options} spacing="small">
         <Switch
           checked={!isEditMode}
           label={getString('preview')}
@@ -174,15 +305,71 @@ export default function ExperimentVisualBuilderView({
           className={isEditMode ? classNames(css.preview, css.greyText) : classNames(css.preview, css.activeText)}
         />
 
+        <div className={css.divider} />
+
+        <Text className={css.groupLabel}>{getString('setup')}</Text>
+        <Layout.Vertical spacing="xsmall">
+          <Text
+            icon="chaos-scenario-builder"
+            iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+            onClick={() => setInstallStepDrawer({ open: true, kind: 'application' })}
+            className={css.actionItem}
+            tooltip={getString('installApplicationDescription')}
+            tooltipProps={{ position: Position.RIGHT }}
+          >
+            {getString('installApplication')}
+          </Text>
+
+          <Text
+            icon="chaos-scenario-builder"
+            iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+            onClick={() => hasApplication && setInstallStepDrawer({ open: true, kind: 'agent' })}
+            className={hasApplication ? css.actionItem : classNames(css.actionItem, css.actionItemDisabled)}
+            tooltip={hasApplication ? getString('installAgentDescription') : getString('selectApplicationFirst')}
+            tooltipProps={{ position: Position.RIGHT }}
+          >
+            {getString('installAgent')}
+          </Text>
+
+          <Text
+            icon="chaos-scenario-builder"
+            iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+            onClick={() => hasApplication && setUninstallStepDrawer({ open: true, kind: 'application' })}
+            className={hasApplication ? css.actionItem : classNames(css.actionItem, css.actionItemDisabled)}
+            tooltip={
+              hasApplication ? getString('uninstallApplicationDescription') : getString('selectApplicationFirst')
+            }
+            tooltipProps={{ position: Position.RIGHT }}
+          >
+            {getString('uninstallApplication')}
+          </Text>
+
+          <Text
+            icon="chaos-scenario-builder"
+            iconProps={{ name: 'chaos-scenario-builder', size: 16 }}
+            onClick={() => hasAgent && setUninstallStepDrawer({ open: true, kind: 'agent' })}
+            className={hasAgent ? css.actionItem : classNames(css.actionItem, css.actionItemDisabled)}
+            tooltip={hasAgent ? getString('uninstallAgentDescription') : getString('selectAgentFirst')}
+            tooltipProps={{ position: Position.RIGHT }}
+          >
+            {getString('uninstallAgent')}
+          </Text>
+        </Layout.Vertical>
+
+        <div className={css.divider} />
+
+        <Text className={css.groupLabel}>{getString('configuration')}</Text>
         <Text
           icon="ci-build-pipeline"
           iconProps={{ name: 'ci-build-pipeline', size: 16 }}
           onClick={() => setIsAdvancedExperimentTuningDrawerOpen(true)}
-          className={css.advanced}
+          className={css.actionItem}
+          tooltip={getString('advancedOptionsDescription')}
+          tooltipProps={{ position: Position.RIGHT }}
         >
           {getString('advancedOptions')}
         </Text>
-      </Layout.Horizontal>
+      </Layout.Vertical>
       {isAdvancedExperimentTuningDrawerOpen && (
         <ExperimentAdvancedTuningOptionsView
           isOpen={isAdvancedExperimentTuningDrawerOpen}
@@ -199,20 +386,56 @@ export default function ExperimentVisualBuilderView({
       {isSelectFaultDrawerOpen && (
         <ExperimentCreationSelectFaultController
           isOpen={isSelectFaultDrawerOpen}
+          targetApplicationKey={targetApplication?.key}
           onSelect={handleFaultSelection}
           onClose={() => setIsSelectFaultDrawerOpen(false)}
+        />
+      )}
+      {installStepDrawer.open && (
+        <ExperimentCreationSelectInstallStepController
+          isOpen={installStepDrawer.open}
+          kind={installStepDrawer.kind}
+          targetApplicationKey={targetApplication?.key}
+          initialSelection={installStepDrawer.initialSelection}
+          onSelect={handleInstallStepSelection}
+          onClose={() => setInstallStepDrawer({ open: false, kind: installStepDrawer.kind })}
+        />
+      )}
+      {uninstallStepDrawer.open && (
+        <ExperimentCreationSelectUninstallStepController
+          isOpen={uninstallStepDrawer.open}
+          kind={uninstallStepDrawer.kind}
+          onSelect={handleUninstallStepSelection}
+          onClose={() => setUninstallStepDrawer({ open: false, kind: uninstallStepDrawer.kind })}
         />
       )}
       {tuneFaultDrawerOpen.open && (
         <ExperimentCreationTuneFaultView
           isOpen={tuneFaultDrawerOpen.open}
-          onClose={() => setTuneFaultDrawerOpen({ open: false, operation: GetFaultTunablesOperation.UpdatedEnvs })}
+          onDiscard={handleTuneFaultDiscard}
+          onClose={handleTuneFaultDrawerClose}
           initialFaultData={selectedFaultData}
           infraID={infraDetails?.infraID}
           environmentID={infraDetails?.environmentID}
           faultTuneOperation={tuneFaultDrawerOpen.operation}
           initialServiceIdentifiers={serviceIdentifiers}
         />
+      )}
+      {!canAddFaults && isEditMode && (
+        <Layout.Horizontal className={css.missingTargetBanner} spacing="small" flex={{ alignItems: 'center' }}>
+          <Icon name="info" size={14} color="primary7" />
+          <Text font={{ size: 'small' }} color={Color.PRIMARY_7}>
+            {hasApplication ? getString('selectAgentFirst') : getString('selectApplicationFirst')}
+          </Text>
+        </Layout.Horizontal>
+      )}
+      {faultsMissingTarget.length > 0 && (
+        <Layout.Horizontal className={css.missingTargetBanner} spacing="small" flex={{ alignItems: 'center' }}>
+          <Icon name="warning-sign" size={14} color="orange500" />
+          <Text font={{ size: 'small' }} color={Color.ORANGE_900}>
+            {getString('faultsMissingTargetApplication', { faultNames: faultsMissingTarget.join(', ') })}
+          </Text>
+        </Layout.Horizontal>
       )}
       <ChaosDiagram
         data={experimentSteps}

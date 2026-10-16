@@ -10,7 +10,8 @@ export enum DrawerTypes {
   AdvacedOptions = 'AdvacedOptions',
   AddProbe = 'AddProbe',
   ViewManifest = 'ViewManifest',
-  SelectMode = 'SelectMode'
+  SelectMode = 'SelectMode',
+  InstallStep = 'InstallStep'
 }
 
 export const DrawerSizes: Record<DrawerTypes, React.CSSProperties['width']> = {
@@ -19,7 +20,9 @@ export const DrawerSizes: Record<DrawerTypes, React.CSSProperties['width']> = {
   [DrawerTypes.AddProbe]: 760,
   [DrawerTypes.SelectMode]: 760,
   [DrawerTypes.AdvacedOptions]: 580,
-  [DrawerTypes.ViewManifest]: 580
+  [DrawerTypes.ViewManifest]: 580,
+  // Wide enough for the install step's settings to sit two to a row.
+  [DrawerTypes.InstallStep]: 880
 };
 
 export const DrawerSizesWithHelpPanel: Record<DrawerTypes, React.CSSProperties['width']> = {
@@ -28,7 +31,8 @@ export const DrawerSizesWithHelpPanel: Record<DrawerTypes, React.CSSProperties['
   [DrawerTypes.AddProbe]: 760 + 400,
   [DrawerTypes.SelectMode]: 760 + 400,
   [DrawerTypes.AdvacedOptions]: 580 + 400,
-  [DrawerTypes.ViewManifest]: 580 + 400
+  [DrawerTypes.ViewManifest]: 580 + 400,
+  [DrawerTypes.InstallStep]: 880 + 400
 };
 
 export interface DrawerProps {

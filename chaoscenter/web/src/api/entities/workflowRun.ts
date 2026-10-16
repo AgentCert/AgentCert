@@ -59,6 +59,7 @@ export interface ExperimentRun extends Audit {
   projectID: string;
   experimentRunID: string;
   experimentID: string;
+  notifyID?: string;
   weightages: Array<Weightages>;
   infra: Infra;
   experimentName: string;

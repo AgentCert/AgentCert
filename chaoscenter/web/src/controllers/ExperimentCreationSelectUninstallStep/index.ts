@@ -1,0 +1,3 @@
+import ExperimentCreationSelectUninstallStepController from './ExperimentCreationSelectUninstallStep';
+
+export default ExperimentCreationSelectUninstallStepController;

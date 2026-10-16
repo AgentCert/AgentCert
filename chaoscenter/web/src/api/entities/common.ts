@@ -87,6 +87,13 @@ export enum ExperimentRunStatus {
    */
   COMPLETED_WITH_ERROR = 'Completed_With_Error',
   COMPLETED_WITH_PROBE_FAILURE = 'Completed_With_Probe_Failure',
+  /**
+   * Every fault in the run reported verdict N/A, so nothing graded the agent.
+   * Distinct from COMPLETED (which would read as a pass beside the 0% score an
+   * empty denominator produces) and from COMPLETED_WITH_PROBE_FAILURE (which
+   * would blame the agent for a gap in our own measurement).
+   */
+  COMPLETED_NOT_GRADED = 'Completed_Not_Graded',
   ERROR = 'Error',
   RUNNING = 'Running',
   STOPPED = 'Stopped',

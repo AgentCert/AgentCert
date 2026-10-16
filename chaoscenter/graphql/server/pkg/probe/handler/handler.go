@@ -786,11 +786,10 @@ func (p *probeService) GenerateExperimentManifestWithProbes(manifest string, pro
 						annotation = meta.Annotations
 					}
 
-					for _, key := range annotation {
+					for annKey, key := range annotation {
 						var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-						if strings.HasPrefix(key, "[{\"name\"") {
-							err := json.Unmarshal([]byte(key), &manifestAnnotation)
-							if err != nil {
+						if annKey == "probeRef" && !utils.IsEmptyProbeRef(key) {
+							if err := json.Unmarshal([]byte(key), &manifestAnnotation); err != nil {
 								return argoTypes.Workflow{}, fmt.Errorf("failed to unmarshal experiment annotation object, error: %s", err.Error())
 							}
 							for _, annotationKey := range manifestAnnotation {
@@ -990,11 +989,10 @@ func (p *probeService) GenerateCronExperimentManifestWithProbes(manifest string,
 						annotation = meta.Annotations
 					}
 
-					for _, key := range annotation {
+					for annKey, key := range annotation {
 						var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-						err := json.Unmarshal([]byte(key), &manifestAnnotation)
-						if err != nil {
-							return argoTypes.CronWorkflow{}, fmt.Errorf("failed to unmarshal experiment annotation object, error: %s", err.Error())
+						if err := utils.UnmarshalProbeRef(annKey, key, &manifestAnnotation); err != nil {
+							return argoTypes.CronWorkflow{}, err
 						}
 						for _, annotationKey := range manifestAnnotation {
 							probe, err := p.probeOperator.GetProbeByName(ctx, annotationKey.Name, projectID)

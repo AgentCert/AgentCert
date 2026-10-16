@@ -249,6 +249,15 @@ type RegisterInfraResponse {
   Infra Manifest
   """
   manifest: String!
+  """
+  Fully-qualified URL for `kubectl apply -f <url>` / curl, pointing at the
+  `/file/<token>.yaml` download route. Computed server-side (preferring
+  CHAOS_CENTER_PUBLIC_ENDPOINT when configured) rather than left for the
+  frontend to derive from the browser's own address bar, so it stays
+  correct regardless of what host:port the browser was reached through
+  (SSH tunnel, VS Code port-forward, etc.).
+  """
+  manifestDownloadURL: String!
 }
 
 """

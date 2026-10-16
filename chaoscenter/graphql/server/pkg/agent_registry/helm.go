@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/imageref"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 )
 
@@ -57,6 +58,16 @@ func SanitizeReleaseName(name string) string {
 	return name
 }
 
+// HelmEnvVar is a single environment variable to inject into the agent's Helm
+// chart.  When Sensitive is true the value is stored in a Kubernetes Secret
+// (--set-string secrets.<Name>=<Value>); otherwise in a ConfigMap
+// (--set configMap.<Name>=<Value>).
+type HelmEnvVar struct {
+	Name      string
+	Value     string
+	Sensitive bool
+}
+
 // HelmDeployRequest captures parameters required for Helm deployment.
 type HelmDeployRequest struct {
 	ReleaseName string
@@ -75,12 +86,9 @@ type HelmDeployRequest struct {
 	Kubeconfig      *string
 	AgentID         string
 	ImageTag        *string
-	// Azure OpenAI Environment Variables
-	AzureOpenAIKey                 *string
-	AzureOpenAIEndpoint            *string
-	AzureOpenAIDeployment          *string
-	AzureOpenAIAPIVersion          *string
-	AzureOpenAIEmbeddingDeployment *string
+	// Generic environment variables injected into the agent's Helm chart.
+	// Sensitive entries go into a Kubernetes Secret; others into a ConfigMap.
+	HelmEnvVars []HelmEnvVar
 }
 
 // DeployWithHelm installs or upgrades an agent Helm chart.
@@ -118,7 +126,7 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		if err != nil {
 			return "", fmt.Errorf("failed to create temp chart file: %w", err)
 		}
-
+		
 		if _, err := tmpFile.Write(decoded); err != nil {
 			tmpFile.Close()
 			os.Remove(tmpFile.Name())
@@ -146,15 +154,12 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 			applyCmd.Stdin = strings.NewReader(string(nsOutput))
 			applyCmd.Run()
 		}
-		// Immediately seed jfrog-registry into the namespace so Helm-managed pods
-		// can pull images without waiting up to 60s for the jfrog-secret-sync Deployment.
-		syncJFrogSecret(ctx, req.Namespace)
 	}
 
 	// Create ConfigMap and Secret for environment variables in the target namespace
 	// First, clean up any orphaned resources from previous failed deployments
 	cleanupOrphanedResources(ctx, req.Namespace, req.ReleaseName)
-
+	
 	// COMMENTED OUT: Don't create ConfigMap/Secret manually - let Helm manage them
 	// This was creating resources without Helm ownership labels, causing conflicts
 	// The Helm chart will create its own ConfigMap/Secret with proper labels
@@ -179,8 +184,8 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		"--create-namespace",
 		"--wait",
 		"--timeout", timeout,
-		"--atomic",          // Rollback on failure, prevents orphaned resources
-		"--cleanup-on-fail", // Clean up resources if install fails
+		"--atomic",           // Rollback on failure, prevents orphaned resources
+		"--cleanup-on-fail",  // Clean up resources if install fails
 	}
 
 	if req.ChartVersion != nil && strings.TrimSpace(*req.ChartVersion) != "" {
@@ -239,13 +244,6 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		args = append(args, "--set", fmt.Sprintf("image.tag=%s", *req.ImageTag))
 	}
 
-	// Forward IMAGE_REGISTRY from the server's environment so all agent images
-	// are pulled from the configured registry (e.g. Artifactory) without
-	// requiring per-request changes.
-	if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
-		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
-	}
-
 	// Tie agent.name to the (sanitized) release name so cluster-scoped
 	// resources (ClusterRole, ClusterRoleBinding) get unique names per
 	// install.  Without this, installing a second agent collides on the
@@ -260,31 +258,30 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 		args = append(args, "--set", fmt.Sprintf("agent.config.K8S_NAMESPACE=%s", req.TargetNamespace))
 	}
 
-	// Pass Azure OpenAI values using ONLY the AI_Ops pattern (secrets.* and configMap.*)
-	// This matches how the Helm chart expects to receive these values
-	if req.AzureOpenAIKey != nil && strings.TrimSpace(*req.AzureOpenAIKey) != "" {
-		args = append(args, "--set-string", fmt.Sprintf("secrets.azureOpenaiKey=%s", *req.AzureOpenAIKey))
-	}
-	if req.AzureOpenAIEndpoint != nil && strings.TrimSpace(*req.AzureOpenAIEndpoint) != "" {
-		args = append(args, "--set", fmt.Sprintf("configMap.AZURE_OPENAI_ENDPOINT=%s", *req.AzureOpenAIEndpoint))
-	}
-	if req.AzureOpenAIDeployment != nil && strings.TrimSpace(*req.AzureOpenAIDeployment) != "" {
-		args = append(args, "--set", fmt.Sprintf("configMap.AZURE_OPENAI_DEPLOYMENT=%s", *req.AzureOpenAIDeployment))
-	}
-	if req.AzureOpenAIAPIVersion != nil && strings.TrimSpace(*req.AzureOpenAIAPIVersion) != "" {
-		args = append(args, "--set", fmt.Sprintf("configMap.AZURE_OPENAI_API_VERSION=%s", *req.AzureOpenAIAPIVersion))
-	}
-	if req.AzureOpenAIEmbeddingDeployment != nil && strings.TrimSpace(*req.AzureOpenAIEmbeddingDeployment) != "" {
-		args = append(args, "--set", fmt.Sprintf("configMap.AZURE_OPENAI_EMBEDDING_DEPLOYMENT=%s", *req.AzureOpenAIEmbeddingDeployment))
+	// Inject generic env vars: sensitive ones go into secrets.*, others into configMap.*
+	for _, ev := range req.HelmEnvVars {
+		if strings.TrimSpace(ev.Value) == "" {
+			continue
+		}
+		if ev.Sensitive {
+			args = append(args, "--set-string", fmt.Sprintf("secrets.%s=%s", ev.Name, ev.Value))
+		} else {
+			args = append(args, "--set", fmt.Sprintf("configMap.%s=%s", ev.Name, ev.Value))
+		}
 	}
 
-	// Inject global image registry from environment
-	if imageRegistry := os.Getenv("IMAGE_REGISTRY"); imageRegistry != "" {
-		args = append(args, "--set", fmt.Sprintf("global.imageRegistry=%s", imageRegistry))
-	}
+	// Private registry / frozen copies: when agent images are pulled from the
+	// registry (SRE_AGENTS_IMAGE_SOURCE=registry), this server binary acts as a
+	// Helm post-renderer that resolves every image and adds the pull secret
+	// (pkg/imageref). Side-loaded local images keep their public names.
+	postRenderArgs, postRenderEnv := imageref.HelmPostRenderer("SRE_AGENTS_IMAGE_SOURCE", "local")
+	args = append(args, postRenderArgs...)
 
 	log.Printf("[Helm Deploy] Executing: %s %s", helmBin, strings.Join(args, " "))
 	cmd := exec.CommandContext(ctx, helmBin, args...)
+	if postRenderEnv != nil {
+		cmd.Env = append(os.Environ(), postRenderEnv...)
+	}
 	output, err := cmd.CombinedOutput()
 	log.Printf("[Helm Deploy] Output: %s", string(output))
 	if err != nil {
@@ -294,28 +291,32 @@ func DeployWithHelm(ctx context.Context, req *HelmDeployRequest) (string, error)
 	return string(output), nil
 }
 
-// patchAzureCredentials updates the chart-generated ConfigMap and Secret with Azure OpenAI values
-func patchAzureCredentials(ctx context.Context, req *HelmDeployRequest) error {
+// patchEnvVars updates the chart-generated ConfigMap and Secret with the
+// generic HelmEnvVars from the deploy request.  Non-sensitive vars go into
+// the ConfigMap; sensitive ones into the Secret.
+func patchEnvVars(ctx context.Context, req *HelmDeployRequest) error {
 	if req == nil || strings.TrimSpace(req.Namespace) == "" || strings.TrimSpace(req.ReleaseName) == "" {
-		return fmt.Errorf("invalid request for patching credentials")
+		return fmt.Errorf("invalid request for patching env vars")
+	}
+	if len(req.HelmEnvVars) == 0 {
+		return nil
 	}
 
 	name := req.ReleaseName
 	namespace := req.Namespace
 
-	// Patch ConfigMap
 	configPatches := []string{}
-	if req.AzureOpenAIEndpoint != nil && strings.TrimSpace(*req.AzureOpenAIEndpoint) != "" {
-		configPatches = append(configPatches, fmt.Sprintf(`AZURE_OPENAI_ENDPOINT=%q`, *req.AzureOpenAIEndpoint))
-	}
-	if req.AzureOpenAIDeployment != nil && strings.TrimSpace(*req.AzureOpenAIDeployment) != "" {
-		configPatches = append(configPatches, fmt.Sprintf(`AZURE_OPENAI_DEPLOYMENT=%q`, *req.AzureOpenAIDeployment))
-	}
-	if req.AzureOpenAIAPIVersion != nil && strings.TrimSpace(*req.AzureOpenAIAPIVersion) != "" {
-		configPatches = append(configPatches, fmt.Sprintf(`AZURE_OPENAI_API_VERSION=%q`, *req.AzureOpenAIAPIVersion))
-	}
-	if req.AzureOpenAIEmbeddingDeployment != nil && strings.TrimSpace(*req.AzureOpenAIEmbeddingDeployment) != "" {
-		configPatches = append(configPatches, fmt.Sprintf(`AZURE_OPENAI_EMBEDDING_DEPLOYMENT=%q`, *req.AzureOpenAIEmbeddingDeployment))
+	secretPatches := []string{}
+
+	for _, ev := range req.HelmEnvVars {
+		if strings.TrimSpace(ev.Value) == "" {
+			continue
+		}
+		if ev.Sensitive {
+			secretPatches = append(secretPatches, fmt.Sprintf(`%q:%q`, ev.Name, ev.Value))
+		} else {
+			configPatches = append(configPatches, fmt.Sprintf(`%q:%q`, ev.Name, ev.Value))
+		}
 	}
 
 	if len(configPatches) > 0 {
@@ -325,18 +326,17 @@ func patchAzureCredentials(ctx context.Context, req *HelmDeployRequest) error {
 			log.Printf("[Helm Deploy] ConfigMap patch output: %s", string(output))
 			return fmt.Errorf("failed to patch ConfigMap: %w", err)
 		}
-		log.Printf("[Helm Deploy] Patched ConfigMap %s with Azure credentials", name)
+		log.Printf("[Helm Deploy] Patched ConfigMap %s with %d env var(s)", name, len(configPatches))
 	}
 
-	// Patch Secret
-	if req.AzureOpenAIKey != nil && strings.TrimSpace(*req.AzureOpenAIKey) != "" {
-		patchStr := fmt.Sprintf(`{"stringData":{"AZURE_OPENAI_KEY":%q}}`, *req.AzureOpenAIKey)
+	if len(secretPatches) > 0 {
+		patchStr := fmt.Sprintf(`{"stringData":{%s}}`, strings.Join(secretPatches, ","))
 		patchCmd := exec.CommandContext(ctx, "kubectl", "patch", "secret", "-n", namespace, name, "--type", "merge", "-p", patchStr)
 		if output, err := patchCmd.CombinedOutput(); err != nil {
 			log.Printf("[Helm Deploy] Secret patch output: %s", string(output))
 			return fmt.Errorf("failed to patch Secret: %w", err)
 		}
-		log.Printf("[Helm Deploy] Patched Secret %s with AZURE_OPENAI_KEY", name)
+		log.Printf("[Helm Deploy] Patched Secret %s with %d sensitive env var(s)", name, len(secretPatches))
 	}
 
 	return nil
@@ -381,41 +381,23 @@ func restartDeployment(ctx context.Context, req *HelmDeployRequest) error {
 	return nil
 }
 
-// ensureAzureEnvOnDeployment patches the deployment to include Azure OpenAI env vars
-// sourced from the agent-config ConfigMap and agent-secrets Secret.
-// This is a safety net for charts that don't wire these env vars into the pod spec.
-func ensureAzureEnvOnDeployment(ctx context.Context, req *HelmDeployRequest) error {
-	// Only patch if any Azure OpenAI values are provided
-	if req == nil {
+// ensureEnvVarsOnDeployment patches the Deployment's pod spec to source env
+// vars from the chart-generated ConfigMap and Secret.  This is a safety net
+// for Helm charts that don't wire env vars into the pod spec automatically.
+func ensureEnvVarsOnDeployment(ctx context.Context, req *HelmDeployRequest) error {
+	if req == nil || len(req.HelmEnvVars) == 0 {
 		return nil
 	}
-
-	needsKey := req.AzureOpenAIKey != nil && strings.TrimSpace(*req.AzureOpenAIKey) != ""
-	needsEndpoint := req.AzureOpenAIEndpoint != nil && strings.TrimSpace(*req.AzureOpenAIEndpoint) != ""
-	needsDeployment := req.AzureOpenAIDeployment != nil && strings.TrimSpace(*req.AzureOpenAIDeployment) != ""
-	needsAPIVersion := req.AzureOpenAIAPIVersion != nil && strings.TrimSpace(*req.AzureOpenAIAPIVersion) != ""
-	needsEmbedding := req.AzureOpenAIEmbeddingDeployment != nil && strings.TrimSpace(*req.AzureOpenAIEmbeddingDeployment) != ""
-
-	if !needsKey && !needsEndpoint && !needsDeployment && !needsAPIVersion && !needsEmbedding {
-		return nil
-	}
-
 	if strings.TrimSpace(req.Namespace) == "" || strings.TrimSpace(req.ReleaseName) == "" {
 		return fmt.Errorf("namespace and release name are required for patching")
 	}
 
 	// Find deployment name by release label
 	getDeployCmd := exec.CommandContext(
-		ctx,
-		"kubectl",
-		"get",
-		"deploy",
-		"-n",
-		req.Namespace,
-		"-l",
-		fmt.Sprintf("app.kubernetes.io/instance=%s", req.ReleaseName),
-		"-o",
-		"jsonpath={.items[0].metadata.name}",
+		ctx, "kubectl", "get", "deploy",
+		"-n", req.Namespace,
+		"-l", fmt.Sprintf("app.kubernetes.io/instance=%s", req.ReleaseName),
+		"-o", "jsonpath={.items[0].metadata.name}",
 	)
 	deployNameBytes, err := getDeployCmd.Output()
 	if err != nil {
@@ -428,15 +410,9 @@ func ensureAzureEnvOnDeployment(ctx context.Context, req *HelmDeployRequest) err
 
 	// Get first container name
 	getContainerCmd := exec.CommandContext(
-		ctx,
-		"kubectl",
-		"get",
-		"deploy",
-		"-n",
-		req.Namespace,
-		deployName,
-		"-o",
-		"jsonpath={.spec.template.spec.containers[0].name}",
+		ctx, "kubectl", "get", "deploy",
+		"-n", req.Namespace, deployName,
+		"-o", "jsonpath={.spec.template.spec.containers[0].name}",
 	)
 	containerNameBytes, err := getContainerCmd.Output()
 	if err != nil {
@@ -447,52 +423,46 @@ func ensureAzureEnvOnDeployment(ctx context.Context, req *HelmDeployRequest) err
 		return fmt.Errorf("no container found for deployment %s", deployName)
 	}
 
-	// Use release name for config/secret to match chart-generated names
 	configName := req.ReleaseName
 	secretName := req.ReleaseName
 
-	// Build env patch entries
 	envEntries := []string{}
-	if needsKey {
-		envEntries = append(envEntries, fmt.Sprintf(`{"name":"AZURE_OPENAI_KEY","valueFrom":{"secretKeyRef":{"name":"%s","key":"AZURE_OPENAI_KEY"}}}`, secretName))
+	for _, ev := range req.HelmEnvVars {
+		if strings.TrimSpace(ev.Value) == "" {
+			continue
+		}
+		if ev.Sensitive {
+			envEntries = append(envEntries, fmt.Sprintf(
+				`{"name":%q,"valueFrom":{"secretKeyRef":{"name":%q,"key":%q}}}`,
+				ev.Name, secretName, ev.Name,
+			))
+		} else {
+			envEntries = append(envEntries, fmt.Sprintf(
+				`{"name":%q,"valueFrom":{"configMapKeyRef":{"name":%q,"key":%q}}}`,
+				ev.Name, configName, ev.Name,
+			))
+		}
 	}
-	if needsEndpoint {
-		envEntries = append(envEntries, fmt.Sprintf(`{"name":"AZURE_OPENAI_ENDPOINT","valueFrom":{"configMapKeyRef":{"name":"%s","key":"AZURE_OPENAI_ENDPOINT"}}}`, configName))
-	}
-	if needsDeployment {
-		envEntries = append(envEntries, fmt.Sprintf(`{"name":"AZURE_OPENAI_DEPLOYMENT","valueFrom":{"configMapKeyRef":{"name":"%s","key":"AZURE_OPENAI_DEPLOYMENT"}}}`, configName))
-	}
-	if needsAPIVersion {
-		envEntries = append(envEntries, fmt.Sprintf(`{"name":"AZURE_OPENAI_API_VERSION","valueFrom":{"configMapKeyRef":{"name":"%s","key":"AZURE_OPENAI_API_VERSION"}}}`, configName))
-	}
-	if needsEmbedding {
-		envEntries = append(envEntries, fmt.Sprintf(`{"name":"AZURE_OPENAI_EMBEDDING_DEPLOYMENT","valueFrom":{"configMapKeyRef":{"name":"%s","key":"AZURE_OPENAI_EMBEDDING_DEPLOYMENT"}}}`, configName))
+	if len(envEntries) == 0 {
+		return nil
 	}
 
 	patch := fmt.Sprintf(
-		`{"spec":{"template":{"spec":{"containers":[{"name":"%s","env":[%s]}]}}}}`,
+		`{"spec":{"template":{"spec":{"containers":[{"name":%q,"env":[%s]}]}}}}`,
 		containerName,
 		strings.Join(envEntries, ","),
 	)
 
 	patchCmd := exec.CommandContext(
-		ctx,
-		"kubectl",
-		"patch",
-		"deploy",
-		"-n",
-		req.Namespace,
-		deployName,
-		"--type",
-		"strategic",
-		"-p",
-		patch,
+		ctx, "kubectl", "patch", "deploy",
+		"-n", req.Namespace, deployName,
+		"--type", "strategic", "-p", patch,
 	)
 	if patchOutput, patchErr := patchCmd.CombinedOutput(); patchErr != nil {
 		return fmt.Errorf("failed to patch deployment: %w (output: %s)", patchErr, string(patchOutput))
 	}
 
-	log.Printf("[Helm Deploy] Patched deployment %s with Azure OpenAI env vars", deployName)
+	log.Printf("[Helm Deploy] Patched deployment %s with %d env var(s)", deployName, len(envEntries))
 	return nil
 }
 
@@ -594,38 +564,6 @@ func cleanupOrphanedResources(ctx context.Context, namespace, releaseName string
 		log.Printf("[Cleanup] Failed to delete orphaned configmap: %v (output: %s)", err, string(output))
 	} else if len(output) > 0 {
 		log.Printf("[Cleanup] Deleted orphaned configmap: %s", string(output))
-	}
-}
-
-// syncJFrogSecret copies the jfrog-registry imagePullSecret from kube-system
-// into the target namespace and patches its default SA additively.
-// Called immediately after namespace creation so pods never wait for the
-// jfrog-secret-sync Deployment's next watch event.
-func syncJFrogSecret(ctx context.Context, namespace string) {
-	if strings.TrimSpace(namespace) == "" {
-		return
-	}
-	script := fmt.Sprintf(`
-		CONFIG=$(kubectl get secret jfrog-registry -n kube-system \
-			-o jsonpath='{.data.\.dockerconfigjson}' 2>/dev/null) || exit 0
-		[ -z "$CONFIG" ] && exit 0
-		TMP=$(mktemp)
-		echo "$CONFIG" | base64 -d > "$TMP" 2>/dev/null || { rm -f "$TMP"; exit 0; }
-		kubectl create secret generic jfrog-registry \
-			--namespace '%s' \
-			--type=kubernetes.io/dockerconfigjson \
-			"--from-file=.dockerconfigjson=$TMP" \
-			--dry-run=client -o yaml 2>/dev/null | kubectl apply -f - 2>/dev/null || true
-		rm -f "$TMP"
-		kubectl patch serviceaccount default -n '%s' --type=json \
-			-p '[{"op":"add","path":"/imagePullSecrets/-","value":{"name":"jfrog-registry"}}]' \
-			2>/dev/null || \
-		kubectl patch serviceaccount default -n '%s' --type=merge \
-			-p '{"imagePullSecrets":[{"name":"jfrog-registry"}]}' 2>/dev/null || true
-	`, namespace, namespace, namespace)
-	cmd := exec.CommandContext(ctx, "bash", "-c", script)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("[Helm Deploy] Warning: jfrog secret sync to %s: %v (%s)", namespace, err, string(output))
 	}
 }
 

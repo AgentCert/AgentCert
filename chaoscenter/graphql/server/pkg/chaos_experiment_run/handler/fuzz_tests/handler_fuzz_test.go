@@ -198,7 +198,7 @@ func FuzzRunChaosWorkFlow(f *testing.F) {
 		singleResult := mongo.NewSingleResultFromDocument(findResult[0], nil, nil)
 		mockServices.MongodbOperator.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(singleResult, nil).Once()
 
-		res, err := mockServices.ChaosExperimentRunHandler.RunChaosWorkFlow(context.Background(), targetStruct.ProjectID, targetStruct.Workflow, nil)
+		res, err := mockServices.ChaosExperimentRunHandler.RunChaosWorkFlow(context.Background(), targetStruct.ProjectID, targetStruct.Workflow, nil, "")
 		if strings.Contains(err.Error(), "inactive infra") {
 			t.Log("Handled expected error due to inactive infrastructure: ", err)
 			return

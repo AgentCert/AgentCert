@@ -1,5 +1,10 @@
 # BUILD STAGE
-FROM golang:1.24 AS builder
+# Base images: upstream names by default (plain `docker build` works anywhere).
+# scripts/build-and-push.sh, setup.sh and prepare-images.sh pass the copy from
+# IMAGE_REGISTRY / the frozen agentcert/ Docker Hub copies (scripts/lib/registry.sh).
+ARG GOLANG_IMAGE=golang:1.24
+ARG UBI_MINIMAL_IMAGE=registry.access.redhat.com/ubi9/ubi-minimal:9.6
+FROM ${GOLANG_IMAGE} AS builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH
@@ -12,27 +17,15 @@ ENV GOOS=${TARGETOS} \
 
 RUN go env
 
-RUN CGO_ENABLED=0 go build -o /output/server -v ./api/
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /output/server ./api/
 
 # PACKAGING STAGE
 # Use RedHat UBI minimal image as base
-FROM registry.access.redhat.com/ubi9/ubi-minimal:9.6
+FROM ${UBI_MINIMAL_IMAGE}
 
 LABEL maintainer="LitmusChaos"
 
-# Langfuse Configuration (passed via --build-arg)
-ARG LANGFUSE_HOST=""
-ARG LANGFUSE_PUBLIC_KEY=""
-ARG LANGFUSE_SECRET_KEY=""
-ARG LANGFUSE_ORG_ID=""
-ARG LANGFUSE_PROJECT_ID=""
-
 ENV APP_DIR="/litmus"
-ENV LANGFUSE_HOST=${LANGFUSE_HOST}
-ENV LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-ENV LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-ENV LANGFUSE_ORG_ID=${LANGFUSE_ORG_ID}
-ENV LANGFUSE_PROJECT_ID=${LANGFUSE_PROJECT_ID}
 
 # Ensure base packages (including libxslt) are patched
 RUN microdnf -y update && microdnf clean all

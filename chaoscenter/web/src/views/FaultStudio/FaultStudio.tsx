@@ -6,6 +6,7 @@ import { Icon } from '@harnessio/icons';
 import React, { useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { getDetailedTime, getScope, killEvent } from '@utils';
+import config from '@config';
 import { useStrings } from '@strings';
 import DefaultLayoutTemplate from '@components/DefaultLayout';
 import type { FaultStudio, FaultSelection } from '@api/entities';
@@ -27,12 +28,16 @@ interface FaultStudioViewProps {
 
 interface FaultCardProps {
   fault: FaultSelection;
+  sourceHubName: string;
   onRemove: (faultName: string) => void;
   onToggle: (faultName: string, enabled: boolean) => void;
   isToggling?: boolean;
 }
 
-function FaultCard({ fault, onRemove, onToggle, isToggling }: FaultCardProps): React.ReactElement {
+function FaultCard({ fault, sourceHubName, onRemove, onToggle, isToggling }: FaultCardProps): React.ReactElement {
+  const [iconError, setIconError] = useState(false);
+  const iconUrl = `${config.restEndpoints?.chaosManagerUri}/icon/default/${sourceHubName}/${fault.faultCategory}/${fault.faultName}.png`;
+
   const handleToggleClick = (e: React.MouseEvent): void => {
     e.stopPropagation();
     onToggle(fault.faultName, !fault.enabled);
@@ -42,9 +47,23 @@ function FaultCard({ fault, onRemove, onToggle, isToggling }: FaultCardProps): R
     <Card className={css.faultCard}>
       <Layout.Vertical spacing="small">
         <Layout.Horizontal flex={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800}>
-            {fault.displayName || fault.faultName}
-          </Text>
+          <Layout.Horizontal spacing="small" flex={{ alignItems: 'center' }}>
+            {iconError ? (
+              <Icon name="nav-settings" size={20} />
+            ) : (
+              <img
+                src={iconUrl}
+                alt={fault.faultName}
+                width={20}
+                height={20}
+                onError={() => setIconError(true)}
+                style={{ objectFit: 'contain', flexShrink: 0 }}
+              />
+            )}
+            <Text font={{ variation: FontVariation.BODY }} color={Color.GREY_800}>
+              {fault.displayName || fault.faultName}
+            </Text>
+          </Layout.Horizontal>
           <Layout.Horizontal spacing="xsmall" flex={{ alignItems: 'center' }}>
             <div onClick={handleToggleClick} style={{ cursor: 'pointer' }}>
               <Switch
@@ -287,9 +306,10 @@ export default function FaultStudioView({
                         <Layout.Vertical spacing="medium">
                           <Layout.Horizontal spacing="medium" className={css.faultsContainer}>
                             {faultStudio.selectedFaults.map((fault: FaultSelection, index: number) => (
-                              <FaultCard 
-                                key={`${fault.faultName}-${index}`} 
-                                fault={fault} 
+                              <FaultCard
+                                key={`${fault.faultName}-${index}`}
+                                fault={fault}
+                                sourceHubName={faultStudio.sourceHubName}
                                 onRemove={handleRemoveFault}
                                 onToggle={handleToggleFault}
                                 isToggling={togglingFault === fault.faultName}

@@ -62,13 +62,11 @@ describe('phaseToUI', () => {
   test('NA -> N/A', () => {
     expect(phaseToUI('NA')).toBe('N/A');
   });
-  test('completed-with-probe-failure maps to COMPLETED', () => {
-    expect(phaseToUI(ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE)).toBe(
-      ExperimentRunStatus.COMPLETED.toUpperCase()
-    );
+  test('completed-with-probe-failure maps to FAILED', () => {
+    expect(phaseToUI(ExperimentRunStatus.COMPLETED_WITH_PROBE_FAILURE)).toBe('FAILED');
   });
-  test('completed-with-error maps to COMPLETED', () => {
-    expect(phaseToUI(ExperimentRunStatus.COMPLETED_WITH_ERROR)).toBe(ExperimentRunStatus.COMPLETED.toUpperCase());
+  test('completed-with-error maps to FAILED', () => {
+    expect(phaseToUI(ExperimentRunStatus.COMPLETED_WITH_ERROR)).toBe('FAILED');
   });
   test('other phases uppercased with underscores replaced', () => {
     expect(phaseToUI('some_phase')).toBe('SOME PHASE');

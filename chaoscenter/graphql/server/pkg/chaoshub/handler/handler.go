@@ -24,11 +24,21 @@ import (
 
 const DefaultPath = "/tmp/"
 
+// IsCustomHubMode returns true when HUB_SOURCE_MODE=custom is set, indicating
+// the default hub content is served from a local bind-mount rather than a git clone.
+func IsCustomHubMode() bool {
+	return strings.EqualFold(strings.TrimSpace(utils.Config.HubSourceMode), "custom")
+}
+
 // GetChartsPath is used to construct path for given chart.
 func GetChartsPath(chartsInput model.CloningInput, projectID string, isDefault bool) string {
 	var repoPath string
 	if isDefault {
-		repoPath = DefaultPath + "default/" + chartsInput.Name + "/faults/"
+		if IsCustomHubMode() {
+			repoPath = utils.Config.DefaultChaosHubPath + chartsInput.Name + "/faults/"
+		} else {
+			repoPath = DefaultPath + "default/" + chartsInput.Name + "/faults/"
+		}
 	} else {
 		repoPath = DefaultPath + projectID + "/" + chartsInput.Name + "/faults/"
 	}
@@ -300,7 +310,14 @@ func SyncRemoteRepo(hubData model.CloningInput, projectID string) error {
 func ValidateLocalRepository(hub chaos_hub.ChaosHub) (bool, error) {
 	var repoPath string
 	if hub.IsDefault {
-		// Default hub clones from git, use dynamic path
+		if IsCustomHubMode() {
+			// Custom mode: hub content is a local bind-mount, not a git clone — just check existence.
+			repoPath = utils.Config.DefaultChaosHubPath + hub.Name
+			if _, err := os.Stat(repoPath); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
 		repoPath = DefaultPath + "default/" + hub.Name
 	} else {
 		repoPath = DefaultPath + hub.ProjectID + "/" + hub.Name

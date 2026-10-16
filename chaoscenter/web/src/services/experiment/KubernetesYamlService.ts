@@ -8,6 +8,7 @@ import {
   FaultTunableInputType,
   FaultTunables,
   KubernetesExperimentManifest,
+  Parameter,
   ProbeAttributes,
   Template,
   Workflow,
@@ -21,6 +22,42 @@ import type { PipelineGraphState } from '@components/PipelineDiagram/types';
 import { EnvVar } from 'models/k8s';
 import ExperimentFactory from './ExperimentFactory';
 import { ExperimentYamlService, GetFaultTunablesOperation, PreProcessChaosExperiment } from './ExperimentYamlService';
+import {
+  InstallStepChoice,
+  InstallStepSelection,
+  readInstallStepArg,
+  resolveWorkflowParameter,
+  writeInstallStepArg,
+  writeInstallStepSettings
+} from './installStepSettings';
+
+const isInstallFaultsStep = (name: string): boolean =>
+  name === 'install-chaos-faults' || name === 'install-chaos-experiments';
+
+// install-agent/install-application steps use a fixed template name (see
+// addInstallStepToManifest), so unlike faults the step's own name can't be
+// used to tell which AgentHub/AppHub entry was chosen -- that's only ever
+// encoded in the container's `-folder=`/`-namespace=` args. These two
+// helpers are the single place that both reads it back out (for the canvas
+// label and for pre-filling the select-install-step drawer on re-open).
+const installStepTemplateName = (kind: 'application' | 'agent'): string =>
+  kind === 'application' ? 'install-application' : 'install-agent';
+
+// With `parameters`, a ChaosHub template's {{workflow.parameters.X}} folder or
+// namespace is resolved to the value it stands for.
+const parseInstallStepArgs = (
+  args: string[] | undefined,
+  parameters?: Parameter[]
+): { folder: string; namespace: string } | undefined => {
+  const folder = readInstallStepArg(args ?? [], 'folder');
+  const namespace = readInstallStepArg(args ?? [], 'namespace');
+  if (!folder) return undefined;
+  if (!parameters) return { folder, namespace: namespace ?? '' };
+  return {
+    folder: resolveWorkflowParameter(folder, parameters),
+    namespace: resolveWorkflowParameter(namespace ?? '', parameters)
+  };
+};
 
 export class KubernetesYamlService extends ExperimentYamlService {
   async addFaultsToManifest(
@@ -60,7 +97,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       }
 
       // Get install-chaos-faults template artifacts
-      const installTemplateArtifacts = templates?.filter(template => template.name === 'install-chaos-faults')[0].inputs
+      const installTemplateArtifacts = templates?.filter(template => isInstallFaultsStep(template.name))?.[0]?.inputs
         ?.artifacts;
 
       if (faultCR?.spec?.definition) {
@@ -155,7 +192,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       }
 
       // Get install-chaos-faults template artifacts
-      const installTemplateArtifacts = templates?.filter(template => template.name === 'install-chaos-faults')[0].inputs
+      const installTemplateArtifacts = templates?.filter(template => isInstallFaultsStep(template.name))?.[0]?.inputs
         ?.artifacts;
 
       // Remove faults from install-chaos-faults template
@@ -179,6 +216,197 @@ export class KubernetesYamlService extends ExperimentYamlService {
     }
   }
 
+  // Adds (or updates) an install-application / install-agent step, sourced
+  // from a real AppHub/AgentHub entry — so `-folder=` is always the actual
+  // chart directory name, never a hand-typed guess. install-application
+  // always runs first; install-agent runs right after it (a fault can't
+  // target an app/agent that isn't installed yet).
+  //
+  // Re-applying the chart a step already installs updates it in place, so a
+  // ChaosHub template's own args (its timeout, its run-time --set values) are
+  // kept. Choosing a different chart starts that step afresh.
+  async addInstallStepToManifest(
+    key: ChaosObjectStoresPrimaryKeys['experiments'],
+    kind: 'application' | 'agent',
+    choice: InstallStepChoice
+  ): Promise<Experiment | undefined> {
+    try {
+      const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
+      const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
+      const experiment = await store.get(key);
+      if (!experiment) return;
+
+      experiment.unsavedChanges = true;
+      const [templates, steps, spec] = this.getTemplatesAndSteps(experiment?.manifest as KubernetesExperimentManifest);
+      if (!templates || !steps) return experiment;
+
+      const templateName = kind === 'application' ? 'install-application' : 'install-agent';
+      const image =
+        kind === 'application' ? 'agentcert/agentcert-install-app:latest' : 'agentcert/agentcert-install-agent:latest';
+
+      const existingTemplate = templates.find(template => template.name === templateName);
+      const existingContainer = existingTemplate?.container;
+      const current = parseInstallStepArgs(existingContainer?.args, spec?.arguments?.parameters ?? []);
+      const sameChart = existingContainer !== undefined && current?.folder === choice.folder;
+
+      let baseArgs = [`-folder=${choice.folder}`, `-namespace=${choice.namespace}`, '-create-namespace', '-wait'];
+      if (sameChart) {
+        // A namespace the user left alone may still be a template's parameter reference.
+        baseArgs =
+          current?.namespace === choice.namespace
+            ? existingContainer?.args ?? []
+            : writeInstallStepArg(existingContainer?.args ?? [], 'namespace', choice.namespace);
+      }
+      const args = writeInstallStepSettings(baseArgs, choice.settings.values, choice.settings.declaredKeys);
+
+      if (existingTemplate && existingContainer && sameChart) {
+        existingContainer.args = args;
+      } else if (existingTemplate) {
+        existingTemplate.container = { name: '', image, args };
+      } else {
+        templates.push({ name: templateName, container: { name: '', image, args } });
+
+        let insertIndex = 0;
+        if (kind === 'agent') {
+          const appIndex = steps.findIndex(step => step.some(s => s.template === 'install-application'));
+          insertIndex = appIndex >= 0 ? appIndex + 1 : 0;
+        }
+        steps.splice(insertIndex, 0, [{ name: templateName, template: templateName }]);
+      }
+
+      this.seedInstallStepParameters(spec, templates);
+
+      await store.put({ ...experiment }, key);
+      await tx.done;
+
+      return experiment;
+    } catch (_) {
+      this.handleIDBFailure();
+    }
+  }
+
+  // The backend's own patches unconditionally reference
+  // {{workflow.parameters.appNamespace}} (install-application readiness wait,
+  // uninstall-all, agent MCP URLs) and {{workflow.parameters.agentFolder}}
+  // (uninstall-all), but nothing ever wrote either into spec.arguments.parameters
+  // for a hand-built (blank canvas) experiment the way predefined ChaosHub
+  // templates hardcode them. A missing one only produced a server-side warning,
+  // and the generated Workflow then failed Argo's spec validation before a single
+  // step ran (see OPEN_WEIGHT_CERTIFICATION_HANDOFF.md, experiment eb0a2ee3-...).
+  //
+  // Both are therefore re-derived from the install steps on every install-step
+  // edit, in one place, rather than only when the application step happens to be
+  // the one being added.
+  private seedInstallStepParameters(
+    spec: WorkflowSpec | undefined,
+    templates: Template[] | undefined
+  ): void {
+    if (!spec || !templates) return;
+
+    const appArgs = parseInstallStepArgs(
+      templates.find(template => template.name === 'install-application')?.container?.args
+    );
+    const agentArgs = parseInstallStepArgs(
+      templates.find(template => template.name === 'install-agent')?.container?.args
+    );
+
+    const upsert = (name: string, value: string | undefined): void => {
+      // A ChaosHub template's step may itself read the parameter
+      // (-folder={{workflow.parameters.agentFolder}}); never point it at itself.
+      if (value === undefined || value === '' || value.includes('{{')) return;
+      if (!spec.arguments) spec.arguments = {};
+      if (!spec.arguments.parameters) spec.arguments.parameters = [];
+      const existing = spec.arguments.parameters.find(p => p.name === name);
+      if (existing) {
+        existing.value = value;
+      } else {
+        spec.arguments.parameters.push({ name, value });
+      }
+    };
+
+    upsert('appNamespace', appArgs?.namespace);
+    upsert('agentFolder', agentArgs?.folder);
+  }
+
+  // The builder's gating state: which application and agent this experiment
+  // installs, and whether it has any faults yet. Reading it from the manifest
+  // (rather than tracking it in component state) keeps a YAML-editor round trip
+  // and a page reload honest.
+  getExperimentContext(manifest: KubernetesExperimentManifest | undefined): {
+    application?: InstallStepSelection;
+    agent?: InstallStepSelection;
+    hasFaults: boolean;
+  } {
+    return {
+      application: this.getInstallStepSelection(manifest, 'application'),
+      agent: this.getInstallStepSelection(manifest, 'agent'),
+      hasFaults: this.doesExperimentHaveFaults(manifest)
+    };
+  }
+
+  // Reads back the AgentHub/AppHub entry currently installed by an
+  // install-agent/install-application step, so the select-install-step
+  // drawer can be re-opened pre-filled (and so the user has somewhere to
+  // actually see the selection) when they click that step on the canvas.
+  getInstallStepSelection(
+    manifest: KubernetesExperimentManifest | undefined,
+    kind: 'application' | 'agent'
+  ): InstallStepSelection | undefined {
+    const [templates, , spec] = this.getTemplatesAndSteps(manifest);
+    const template = templates?.find(t => t.name === installStepTemplateName(kind));
+    const args = template?.container?.args ?? [];
+    const parameters = spec?.arguments?.parameters ?? [];
+    const selection = parseInstallStepArgs(args, parameters);
+    return selection && { ...selection, source: { args, parameters } };
+  }
+
+  // Enumerates every AppHub/AgentHub target an install-application /
+  // install-agent step currently installs in this experiment, so the
+  // uninstall-step picker can offer them directly instead of making the user
+  // re-type the release/folder + namespace into the fault's FOLDER/NAMESPACE
+  // env. Matches by the agentcert.io/install-type annotation first (the
+  // forward-looking marker the Go backend's normalizeInstallTemplates already
+  // reads), falling back to the legacy fixed template name / install-image
+  // marker for manifests that predate the annotation. Returns an array and
+  // de-dupes on folder+namespace: today the visual builder writes at most one
+  // install step per kind, but Phase B (see innovation.md §"Multiple
+  // install/uninstall steps") lifts that and this method is already ready for
+  // it.
+  getInstalledTargets(
+    manifest: KubernetesExperimentManifest | undefined,
+    kind: 'application' | 'agent'
+  ): Array<{ folder: string; namespace: string }> {
+    const [templates, , spec] = this.getTemplatesAndSteps(manifest);
+    if (!templates) return [];
+
+    const legacyName = installStepTemplateName(kind);
+    const imageMarker = kind === 'application' ? 'agentcert-install-app' : 'agentcert-install-agent';
+
+    const seen = new Set<string>();
+    const targets: Array<{ folder: string; namespace: string }> = [];
+
+    templates.forEach(template => {
+      if (!template.container) return;
+
+      const installType = template.metadata?.annotations?.['agentcert.io/install-type'];
+      const isInstallStep =
+        installType === kind ||
+        (installType === undefined &&
+          (template.name === legacyName || (template.container.image ?? '').includes(imageMarker)));
+      if (!isInstallStep) return;
+
+      const parsed = parseInstallStepArgs(template.container.args, spec?.arguments?.parameters ?? []);
+      if (!parsed) return;
+
+      const dedupeKey = `${parsed.folder}\u0000${parsed.namespace}`;
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+      targets.push(parsed);
+    });
+
+    return targets;
+  }
+
   async updateExperimentManifestWithFaultData(
     key: ChaosObjectStoresPrimaryKeys['experiments'],
     { faultName, faultCR, engineCR, probes }: FaultData
@@ -195,7 +423,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       let index = 0;
       let expWeight = '10';
       templates?.map((template, i) => {
-        if (template.name === 'install-chaos-faults') {
+        if (isInstallFaultsStep(template.name)) {
           template.inputs?.artifacts?.map(artifact => {
             if (artifact.name === faultName) {
               if (faultCR?.spec?.definition) {
@@ -521,7 +749,11 @@ export class KubernetesYamlService extends ExperimentYamlService {
    * @param maxRuns - Maximum number of sequential runs (1-100)
    * @param delaySeconds - Delay between runs in seconds (default: 120 = 2 minutes)
    */
-  async setMultiRunConfig(key: ChaosObjectStoresPrimaryKeys['experiments'], maxRuns: number, delaySeconds: number = 120): Promise<void> {
+  async setMultiRunConfig(
+    key: ChaosObjectStoresPrimaryKeys['experiments'],
+    maxRuns: number,
+    delaySeconds = 120
+  ): Promise<void> {
     try {
       const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readwrite');
       const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
@@ -529,7 +761,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
       if (!experiment) return;
 
       experiment.unsavedChanges = true;
-      
+
       // Store multi-run config in experiment metadata
       const manifest = experiment?.manifest as Workflow;
       if (!manifest) return;
@@ -555,7 +787,9 @@ export class KubernetesYamlService extends ExperimentYamlService {
    * @param key - The experiment key
    * @returns Object containing maxRuns and currentRun, or null if not configured
    */
-  async getMultiRunConfig(key: ChaosObjectStoresPrimaryKeys['experiments']): Promise<{ maxRuns: number; currentRun: number } | null> {
+  async getMultiRunConfig(
+    key: ChaosObjectStoresPrimaryKeys['experiments']
+  ): Promise<{ maxRuns: number; currentRun: number } | null> {
     try {
       const tx = (await this.db).transaction(ChaosObjectStoreNameMap.EXPERIMENTS, 'readonly');
       const store = tx.objectStore(ChaosObjectStoreNameMap.EXPERIMENTS);
@@ -738,6 +972,12 @@ export class KubernetesYamlService extends ExperimentYamlService {
           workflow_run_id: '{{ workflow.uid }}'
         };
       }
+
+      if (!manifest.metadata.annotations) {
+        manifest.metadata.annotations = { probeRef: '[]' };
+      } else if (manifest.metadata.annotations.probeRef === undefined) {
+        manifest.metadata.annotations.probeRef = '[]';
+      }
     }
     return [manifest];
   }
@@ -834,7 +1074,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
     const [templates] = this.getTemplatesAndSteps(manifest);
 
     // Get install-chaos-faults template artifacts
-    const installTemplateArtifacts = templates?.filter(template => template.name === 'install-chaos-faults')[0].inputs
+    const installTemplateArtifacts = templates?.filter(template => isInstallFaultsStep(template.name))?.[0]?.inputs
       ?.artifacts;
 
     // Check if experiment has faults
@@ -849,26 +1089,65 @@ export class KubernetesYamlService extends ExperimentYamlService {
 
     if (!manifest) return graphData;
 
-    const [, steps] = this.getTemplatesAndSteps(manifest);
+    const [templates, steps] = this.getTemplatesAndSteps(manifest);
+
+    // A fault node has no target configured when its ChaosEngine declares
+    // spec.appinfo but appns/applabel are still blank -- see
+    // ExperimentCreationFaultConfiguration's Target Application tab, which is
+    // an optional step nothing forces the user through. Mirrors the same
+    // raw-artifact parse getFaultData() uses to read a fault's ChaosEngine.
+    const hasNoTarget = (faultName: string): boolean => {
+      const template = templates?.find(t => t.name === faultName);
+      const raw = template?.inputs?.artifacts?.[0]?.raw?.data;
+      if (!raw) return false;
+      const appinfo = (parse(raw) as ChaosEngine).spec?.appinfo;
+      if (!appinfo) return false;
+      return (['appkind', 'appns', 'applabel'] as const).some(field => appinfo[field] !== undefined && !appinfo[field]);
+    };
+
+    // install-agent/install-application nodes otherwise render with just the
+    // fixed template name ("install-agent") on the canvas, with no
+    // indication of which AgentHub/AppHub entry was actually selected.
+    // uninstall-agent/uninstall-application nodes are hub faults whose
+    // template name carries a getHash suffix ("uninstall-agent-a1b"); show
+    // the target release they remove (their engine's FOLDER env) the same way.
+    const displayName = (templateName: string): string => {
+      if (templateName === 'install-agent' || templateName === 'install-application') {
+        const template = templates?.find(t => t.name === templateName);
+        const selection = parseInstallStepArgs(template?.container?.args);
+        return selection ? `${templateName}: ${selection.folder}` : templateName;
+      }
+
+      if (templateName.startsWith('uninstall-agent') || templateName.startsWith('uninstall-application')) {
+        const base = templateName.startsWith('uninstall-agent') ? 'uninstall-agent' : 'uninstall-application';
+        const raw = templates?.find(t => t.name === templateName)?.inputs?.artifacts?.[0]?.raw?.data;
+        if (!raw) return base;
+        const env = (parse(raw) as ChaosEngine).spec?.experiments?.[0]?.spec?.components?.env;
+        const folder = env?.find(e => e.name === 'FOLDER')?.value;
+        return folder ? `${base}: ${folder}` : base;
+      }
+
+      return templateName;
+    };
 
     steps?.map(step => {
       if (step.length === 0) return;
 
-      if (isEditMode && (step[0].template === 'install-chaos-faults' || step[0].template === 'cleanup-chaos-resources'))
+      if (isEditMode && (isInstallFaultsStep(step[0].template ?? '') || step[0].template === 'cleanup-chaos-resources'))
         return;
 
       graphData.push({
         id: step[0]?.template ?? '',
-        name: step[0]?.name ?? '',
+        name: displayName(step[0]?.name ?? ''),
         type: 'ChaosNode',
         identifier: step[0]?.template ?? '',
-        data: {},
+        data: { isInComplete: hasNoTarget(step[0]?.template ?? '') },
         children: step.slice(1).map(subStep => ({
           id: subStep.template ?? '',
-          name: subStep.name ?? '',
+          name: displayName(subStep.name ?? ''),
           type: 'ChaosNode',
           identifier: subStep.template ?? '',
-          data: {}
+          data: { isInComplete: hasNoTarget(subStep.template ?? '') }
         }))
       });
     });
@@ -906,7 +1185,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
     const [templates] = this.getTemplatesAndSteps(manifest);
 
     // Get install-chaos-faults template artifacts
-    const installTemplateArtifacts = templates?.filter(template => template.name === 'install-chaos-faults')[0].inputs
+    const installTemplateArtifacts = templates?.filter(template => isInstallFaultsStep(template.name))?.[0]?.inputs
       ?.artifacts;
 
     // Get experiment from install-chaos-faults template

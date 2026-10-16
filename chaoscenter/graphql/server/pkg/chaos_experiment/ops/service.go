@@ -19,6 +19,8 @@ import (
 	agentRegistry "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chartconfig"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultcatalog"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
@@ -61,16 +63,18 @@ type chaosExperimentService struct {
 	chaosExperimentRunOperator  *dbChaosExperimentRun.Operator
 	probeService                probe.Service
 	agentRegistryOperator       agentRegistry.Operator
+	faultCatalogService         faultcatalog.Service
 }
 
 // NewChaosExperimentService returns a new instance of the chaos workflow service
-func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator) Service {
+func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator, faultCatalogService faultcatalog.Service) Service {
 	return &chaosExperimentService{
 		chaosExperimentOperator:     chaosWorkflowOperator,
 		chaosInfrastructureOperator: clusterOperator,
 		chaosExperimentRunOperator:  chaosExperimentRunOperator,
 		probeService:                probeService,
 		agentRegistryOperator:       agentRegOp,
+		faultCatalogService:         faultCatalogService,
 	}
 }
 
@@ -421,10 +425,27 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 		return errors.New("failed to unmarshal workflow manifest")
 	}
 
-	applyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
-	applyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
+	// Before any patch runs, because the patches themselves assume a well-formed
+	// composition (see validateExperimentComposition).
+	if err := c.validateExperimentComposition(ctx, projectID, &workflowManifest.Spec); err != nil {
+		return err
+	}
+
+	ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
+	ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
+	ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
+	ApplyRegistryImageOverrides(&workflowManifest.Spec)
 	applyAgentInstallNamespaceOverride(workflowManifest.Spec.Templates)
-	injectExperimentContextArgs(workflowManifest.Spec.Templates)
+	EnsureInstallStepParameters(&workflowManifest.Spec)
+	InjectExperimentContextArgs(workflowManifest.Spec.Templates, "")
+
+	// The experiment's settings form owns the agent's model, so saving it
+	// retires a model picked for an earlier run. Otherwise a run started
+	// without a pick (the experiment list's Run button, a re-run cycle) would
+	// keep using that old pick instead of the model the user just saved.
+	if agentStepHasSettings(workflowManifest.Spec.Templates) {
+		delete(workflowManifest.Annotations, RunModelAliasAnnotation)
+	}
 
 	// Inject agentId as a workflow-level parameter so that install-agent
 	// can forward it via --set agentId={{workflow.parameters.agentId}}.
@@ -435,16 +456,11 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 	if c.agentRegistryOperator != nil {
 		agentIDStr := ""
 		if infra, err := c.chaosInfrastructureOperator.GetInfra(workflow.InfraID); err == nil && infra.InfraNamespace != nil {
-			// Extract the correct namespace from the install-agent template args.
-			agentNS := ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)
-			if agentNS == "" {
-				agentNS = *infra.InfraNamespace // fallback to infra namespace
-			}
-			if agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, agentNS); agentErr == nil && agent != nil {
+			if agent := ResolveWorkflowAgent(ctx, c.agentRegistryOperator, workflowManifest.Spec.Templates, *infra.InfraNamespace); agent != nil {
 				agentIDStr = agent.AgentID
-				logrus.WithField("agentId", agentIDStr).Info("resolved agentId from registry")
+				logrus.WithFields(logrus.Fields{"agentId": agentIDStr, "agent": agent.Name}).Info("resolved agentId from registry")
 			} else {
-				logrus.WithField("namespace", agentNS).Info("no agent record found; agentId will be empty (install-agent will self-register)")
+				logrus.WithField("namespace", ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)).Info("no agent record found; agentId will be empty (install-agent will self-register)")
 			}
 		}
 		// Inject the parameter, replacing any existing value to keep exactly one entry.
@@ -521,6 +537,16 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 						return errors.New("no experiments specified in chaosengine - " + meta.Name)
 					}
 
+					// ITBench teardown steps (uninstall-agent / uninstall-application) are
+					// authored as ChaosExperiments so Chaos Studio can add them, but they
+					// are harness plumbing, not graded faults -- keep them out of
+					// Weightages (the resiliency-score denominator) and strip any weight
+					// label a client may have stamped on them. See HANDOFF §102.
+					if utils.IsTeardownExperiment(exprname) || utils.IsTeardownExperiment(meta.Spec.Experiments[0].Name) {
+						delete(workflowManifest.Spec.Templates[i].Metadata.Labels, "weight")
+						continue
+					}
+
 					// Check if probeRef annotation is present in chaosengine, if not then create new probes
 					if _, ok := meta.GetObjectMeta().GetAnnotations()["probeRef"]; !ok {
 						// Check if probes are specified in chaosengine
@@ -587,24 +613,11 @@ func (c *chaosExperimentService) processExperimentManifest(ctx context.Context, 
 
 	workflow.Weightages = append(workflow.Weightages, newWeights...)
 
-	// Apply readiness normalization patch automatically
-	// RBAC is now handled at infra setup time via enable-chaos-infra.sh with admin identity
-	err = c.applyInstallApplicationReadinessPatch(&workflowManifest)
-	if err != nil {
-		logrus.Errorf("Failed to apply readiness patch: %v", err)
-		// Log but don't fail - readiness patch is optional
+	if err = c.applyPreCleanupWaitPatch(&workflowManifest); err != nil {
+		return fmt.Errorf("apply pre-cleanup wait patch: %w", err)
 	}
-
-	err = c.applyPreCleanupWaitPatch(&workflowManifest)
-	if err != nil {
-		logrus.Errorf("Failed to apply pre-cleanup wait patch: %v", err)
-		// Log but don't fail - wait patch is optional
-	}
-
-	err = c.applyUninstallAllPatch(&workflowManifest)
-	if err != nil {
-		logrus.Errorf("Failed to apply uninstall-all patch: %v", err)
-		// Log but don't fail - uninstall patch is optional
+	if err = ApplyGuaranteedCleanupPatch(&workflowManifest.Spec); err != nil {
+		return fmt.Errorf("apply guaranteed cleanup patch: %w", err)
 	}
 
 	// Enable Argo podGC so completed executor pods in litmus-exp are deleted automatically.
@@ -673,7 +686,7 @@ func (c *chaosExperimentService) applyRBACPatch(wf *v1alpha1.Workflow) error {
 		rbacTpl := v1alpha1.Template{
 			Name: rbacStepName,
 			Container: &corev1.Container{
-				Image:   "litmuschaos/k8s:latest",
+				Image:   WorkflowImage("litmuschaos/k8s:latest"),
 				Command: []string{"sh", "-c"},
 				Args: []string{`set -eu
 
@@ -818,10 +831,23 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 		return errors.New("failed to unmarshal workflow manifest")
 	}
 
-	applyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
-	applyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	if err := c.validateExperimentComposition(ctx, projectID, &cronExperimentManifest.Spec.WorkflowSpec); err != nil {
+		return err
+	}
+
+	ApplyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ApplyRegistryImageOverrides(&cronExperimentManifest.Spec.WorkflowSpec)
 	applyAgentInstallNamespaceOverride(cronExperimentManifest.Spec.WorkflowSpec.Templates)
-	injectExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	EnsureInstallStepParameters(&cronExperimentManifest.Spec.WorkflowSpec)
+	InjectCronExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates, "")
+	if agentStepHasSettings(cronExperimentManifest.Spec.WorkflowSpec.Templates) {
+		delete(cronExperimentManifest.Annotations, RunModelAliasAnnotation)
+		if cronExperimentManifest.Spec.WorkflowMetadata != nil {
+			delete(cronExperimentManifest.Spec.WorkflowMetadata.Annotations, RunModelAliasAnnotation)
+		}
+	}
 
 	if strings.TrimSpace(cronExperimentManifest.Spec.Schedule) == "" {
 		return errors.New("failed to process cron workflow, cron syntax not provided in manifest")
@@ -901,6 +927,14 @@ func (c *chaosExperimentService) processCronExperimentManifest(ctx context.Conte
 					} else {
 						return errors.New("no experiments specified in chaosengine - " + meta.Name)
 					}
+
+					// ITBench teardown steps are harness plumbing, not graded faults --
+					// keep them out of Weightages. See HANDOFF §102.
+					if utils.IsTeardownExperiment(exprname) || utils.IsTeardownExperiment(meta.Spec.Experiments[0].Name) {
+						delete(cronExperimentManifest.Spec.WorkflowSpec.Templates[i].Metadata.Labels, "weight")
+						continue
+					}
+
 					// Check if probeRef annotation is present in chaosengine, if not then create new probes
 					if _, ok := meta.GetObjectMeta().GetAnnotations()["probeRef"]; !ok {
 						// Check if probes are specified in chaosengine
@@ -1182,35 +1216,38 @@ func (c *chaosExperimentService) UpdateRuntimeCronWorkflowConfiguration(cronWork
 					return cronWorkflowManifest, faults, errors.New("failed to unmarshal chaosengine")
 				}
 				if strings.ToLower(meta.Kind) == "chaosengine" {
+					// ITBench teardown steps are harness plumbing, not graded faults -- see HANDOFF §102.
+					if utils.IsTeardownExperiment(meta.GenerateName) ||
+						(len(meta.Spec.Experiments) > 0 && utils.IsTeardownExperiment(meta.Spec.Experiments[0].Name)) {
+						continue
+					}
 					faults = append(faults, meta.GenerateName)
 					if meta.Annotations != nil {
 						annotation = meta.Annotations
 					}
 
-					var annotationArray []string
-					for _, key := range annotation {
-
-						var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-						err := json.Unmarshal([]byte(key), &manifestAnnotation)
-						if err != nil {
-							return cronWorkflowManifest, faults, errors.New("failed to unmarshal experiment annotation object")
-						}
-						for _, annotationKey := range manifestAnnotation {
-							annotationArray = append(annotationArray, annotationKey.Name)
-						}
+					// Validate the probeRef annotation (if any) up front; the parsed
+					// names are not otherwise consumed here.
+					if _, perr := probeUtils.ParseProbeRefNames(annotation); perr != nil {
+						return cronWorkflowManifest, faults, perr
 					}
 
 					meta.Annotations = annotation
+					// step_pod_name carries the full Argo pod name ({{pod.name}}), which
+					// routinely exceeds Kubernetes's 63-byte label *value* limit (workflow
+					// name + node-name hash easily runs past it) and would make the
+					// ChaosEngine create call fail outright. Annotation values have no such
+					// length limit, and nothing selects on step_pod_name via label selector
+					// (only workflow_run_id is used that way), so it belongs there instead.
+					meta.Annotations["step_pod_name"] = "{{pod.name}}"
 
 					if meta.Labels == nil {
 						meta.Labels = map[string]string{
 							"infra_id":        experiment.InfraID,
-							"step_pod_name":   "{{pod.name}}",
 							"workflow_run_id": "{{workflow.uid}}",
 						}
 					} else {
 						meta.Labels["infra_id"] = experiment.InfraID
-						meta.Labels["step_pod_name"] = "{{pod.name}}"
 						meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
 					}
 
@@ -1286,7 +1323,7 @@ func (c *chaosExperimentService) applyInstallApplicationReadinessPatch(wf *v1alp
 	readinessTpl := v1alpha1.Template{
 		Name: readinessStepName,
 		Container: &corev1.Container{
-			Image:   "litmuschaos/k8s:latest",
+			Image:   WorkflowImage("litmuschaos/k8s:latest"),
 			Command: []string{"sh", "-c"},
 			Args: []string{
 				`set -eu
@@ -1437,7 +1474,7 @@ func (c *chaosExperimentService) applyPreCleanupWaitPatch(wf *v1alpha1.Workflow)
 	waitTpl := v1alpha1.Template{
 		Name: waitTemplateName,
 		Container: &corev1.Container{
-			Image:   "busybox:1.36",
+			Image:   WorkflowImage("busybox:1.36"),
 			Command: []string{"sh", "-c"},
 			Args:    []string{fmt.Sprintf("echo '[pre-cleanup-wait] sleeping for %d seconds'; sleep %d; echo '[pre-cleanup-wait] done'", waitSec, waitSec)},
 		},
@@ -1597,14 +1634,14 @@ echo "[uninstall-all] Done"`, agentInstallNs)
 	return nil
 }
 
-// applyInstallAgentTemplateOverrides enforces a configurable install-agent image
+// ApplyInstallAgentTemplateOverrides enforces a configurable install-agent image
 // and pull policy for all template-based workflow manifests.
 //
 // Phase 1 (metadata-driven with fallback):
 //   - Try reading agent metadata from chartserviceversion.yaml
 //   - If metadata exists -> match templates by installTemplateName / installImage
 //   - If metadata missing (CSV not synced, parse error) -> fall back to hardcoded matching
-func applyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
+func ApplyInstallAgentTemplateOverrides(templates []v1alpha1.Template) {
 	targetImage := strings.TrimSpace(utils.Config.InstallAgentImage)
 	if targetImage == "" {
 		targetImage = strings.TrimSpace(os.Getenv("INSTALL_AGENT_IMAGE"))
@@ -1691,7 +1728,9 @@ func applyInstallAgentTemplateOverridesFromMetadata(templates []v1alpha1.Templat
 		if t.Metadata.Annotations == nil {
 			t.Metadata.Annotations = make(map[string]string)
 		}
-		if _, exists := t.Metadata.Annotations["agentcert.io/install-type"]; !exists {
+		// The uninstall-all cleanup handler matches on image too; it gets the
+		// image/pull-policy override but must not be labelled an install step.
+		if _, exists := t.Metadata.Annotations["agentcert.io/install-type"]; !exists && t.Name != uninstallAllTemplateName {
 			t.Metadata.Annotations["agentcert.io/install-type"] = "agent"
 			changed = true
 		}
@@ -1743,16 +1782,17 @@ func applyInstallAgentTemplateOverridesFallback(templates []v1alpha1.Template, e
 	}
 }
 
-// applyInstallApplicationTemplateOverrides sets a safe imagePullPolicy on any
-// install-application template. The image itself is intentionally NOT overridden
-// here because install-application is app-specific: different experiments may use
-// different installer images (sock-shop, boutique, etc.). Only the pull policy is
-// normalised so that locally-loaded minikube images are used instead of always
-// pulling from a remote registry.
-//
-// If INSTALL_APPLICATION_IMAGE_PULL_POLICY is set in the environment it is used;
-// otherwise IfNotPresent is applied as a safe default.
-func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
+// applyInstallApplicationTemplateOverrides overrides the image and imagePullPolicy
+// on any install-application template. When INSTALL_APPLICATION_IMAGE is set in
+// the environment, it replaces whatever image the stored workflow template carries
+// (necessary when the local registry image differs from the Docker Hub image name).
+// INSTALL_APPLICATION_IMAGE_PULL_POLICY controls the pull policy; defaults to Always.
+func ApplyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
+	targetImage := strings.TrimSpace(utils.Config.InstallApplicationImage)
+	if targetImage == "" {
+		targetImage = strings.TrimSpace(os.Getenv("INSTALL_APPLICATION_IMAGE"))
+	}
+
 	targetPullPolicy := strings.TrimSpace(utils.Config.InstallApplicationImagePullPolicy)
 	if targetPullPolicy == "" {
 		targetPullPolicy = string(corev1.PullAlways)
@@ -1763,11 +1803,6 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 	default:
 		targetPullPolicy = string(corev1.PullAlways)
 	}
-
-	// MCP server enable flags are no longer force-disabled here. The sock-shop
-	// chart's values.yaml owns that decision so MCPs can be deployed alongside
-	// the app for namespace-scoped RBAC. The previous override pinned them to
-	// false because MCPs lived cluster-wide in the litmus ns.
 
 	changed := false
 	for i := range templates {
@@ -1781,34 +1816,146 @@ func applyInstallApplicationTemplateOverrides(templates []v1alpha1.Template) {
 			continue
 		}
 
+		if targetImage != "" && t.Container.Image != targetImage {
+			t.Container.Image = targetImage
+			changed = true
+		}
+
 		if t.Container.ImagePullPolicy != corev1.PullPolicy(targetPullPolicy) {
 			t.Container.ImagePullPolicy = corev1.PullPolicy(targetPullPolicy)
 			changed = true
 		}
 
-		// Inject --set=global.imageRegistry=<IMAGE_REGISTRY> so sock-shop
-		// images are pulled from JFrog instead of Docker Hub.
-		if imageRegistry := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); imageRegistry != "" {
-			registryArg := fmt.Sprintf("--set=global.imageRegistry=%s", imageRegistry)
-			alreadySet := false
-			for _, arg := range t.Container.Args {
-				if strings.Contains(arg, "global.imageRegistry=") {
-					alreadySet = true
-					break
-				}
-			}
-			if !alreadySet {
-				t.Container.Args = append(t.Container.Args, registryArg)
-				changed = true
-			}
+		// App chart images (sock-shop, bookinfo, otel-demo) follow the
+		// workflow runtime source: rewritten by install-app's post-renderer.
+		if setContainerEnv(t.Container, installerImageEnv("LITMUS_IMAGES_SOURCE", "registry")) {
+			changed = true
 		}
 	}
 
 	if changed {
 		logrus.WithFields(logrus.Fields{
+			"image":       targetImage,
 			"pull_policy": targetPullPolicy,
-		}).Info("[Install App Patch] Applied install-application imagePullPolicy override")
+		}).Info("[Install App Patch] Applied install-application image/pullPolicy override")
 	}
+}
+
+// ApplyLitmusHelperImageOverrides rewrites litmuschaos helper image refs and
+// imagePullPolicy in all workflow templates at submission time.
+//
+// This mirrors the pattern of applyInstallAgentTemplateOverrides and
+// ApplyInstallApplicationTemplateOverrides: experiment manifests are stored
+// verbatim in MongoDB and may reference any registry (Docker Hub, Scarf proxy,
+// JFrog Artifactory). At run time the deployment may target a different registry
+// without editing every stored manifest.
+//
+// Exported so that RunChaosWorkFlow / RunCronExperiment in the
+// chaos_experiment_run handler package can also apply it at run time — ensuring
+// that manifests saved before the env var was set still get normalised.
+//
+// Controlled by two env / Configuration fields:
+//
+//	LITMUS_HELPER_IMAGES_REGISTRY_PREFIX — registry prefix to apply, e.g.
+//	    "infyartifactory.jfrog.io/docker-local/" for JFrog, "" for Docker Hub.
+//	LITMUS_HELPER_IMAGES_PULL_POLICY — imagePullPolicy to set, e.g.
+//	    "IfNotPresent" for pre-loaded KinD images, "Always" for live registry pulls.
+//
+// If both env vars are empty/unset the function is a no-op (images left as-is).
+func ApplyLitmusHelperImageOverrides(templates []v1alpha1.Template) {
+	prefix := strings.TrimSpace(utils.Config.LitmusHelperImagesRegistryPrefix)
+	if prefix == "" {
+		prefix = strings.TrimSpace(os.Getenv("LITMUS_HELPER_IMAGES_REGISTRY_PREFIX"))
+	}
+
+	pullPolicyStr := strings.TrimSpace(utils.Config.LitmusHelperImagesPullPolicy)
+	if pullPolicyStr == "" {
+		pullPolicyStr = strings.TrimSpace(os.Getenv("LITMUS_HELPER_IMAGES_PULL_POLICY"))
+	}
+
+	// Nothing configured — leave images completely untouched.
+	if prefix == "" && pullPolicyStr == "" {
+		return
+	}
+
+	var pullPolicy corev1.PullPolicy
+	if pullPolicyStr != "" {
+		switch corev1.PullPolicy(pullPolicyStr) {
+		case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+			pullPolicy = corev1.PullPolicy(pullPolicyStr)
+		default:
+			pullPolicy = corev1.PullAlways
+		}
+	}
+
+	changed := false
+	for i := range templates {
+		t := &templates[i]
+		if t.Container == nil {
+			continue
+		}
+		if !isLitmusHelperImage(t.Container.Image) {
+			continue
+		}
+
+		if prefix != "" {
+			newImage := rewriteLitmusImageRegistry(t.Container.Image, prefix)
+			if t.Container.Image != newImage {
+				t.Container.Image = newImage
+				changed = true
+			}
+		}
+
+		if pullPolicyStr != "" && t.Container.ImagePullPolicy != pullPolicy {
+			t.Container.ImagePullPolicy = pullPolicy
+			changed = true
+		}
+	}
+
+	if changed {
+		logrus.WithFields(logrus.Fields{
+			"registry_prefix": prefix,
+			"pull_policy":     pullPolicyStr,
+		}).Info("[Litmus Helper Patch] Applied litmus helper image overrides")
+	}
+}
+
+// isLitmusHelperImage reports whether img is a litmus workflow helper image
+// (as opposed to ACE-owned images or LitmusChaos operator/runner images that
+// are already handled by dedicated config fields).
+func isLitmusHelperImage(img string) bool {
+	fragments := []string{
+		"litmuschaos/k8s",
+		"litmuschaos/litmus-app-deployer",
+		"litmuschaos/litmus-checker",
+		"litmuschaos/go-runner",
+		"alexeiled/stress-ng",
+		"gaiadocker/iproute2",
+	}
+	for _, f := range fragments {
+		if strings.Contains(img, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// rewriteLitmusImageRegistry strips any existing registry prefix from img and
+// prepends prefix. The "base" repo/name is identified as the last two slash-
+// separated components (e.g. "litmuschaos/k8s:latest"), which works for both
+// plain Docker Hub names and images stored under JFrog or Scarf proxy paths.
+func rewriteLitmusImageRegistry(img, prefix string) string {
+	parts := strings.Split(img, "/")
+	var base string
+	if len(parts) >= 3 {
+		// First component contains a '.' → it is a registry host; strip it
+		// (and any intermediate path components like "docker-local").
+		// Keep only the final two components: repo/name:tag.
+		base = strings.Join(parts[len(parts)-2:], "/")
+	} else {
+		base = img
+	}
+	return strings.TrimSuffix(prefix, "/") + "/" + base
 }
 
 // chaosEngineManifest is a minimal struct used to extract fault names + per-fault
@@ -2150,9 +2297,7 @@ func applyAgentInstallNamespaceOverride(templates []v1alpha1.Template) {
 		if t.Container == nil {
 			continue
 		}
-		isInstallAgentTemplate := t.Name == "install-agent" ||
-			strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
-		if !isInstallAgentTemplate {
+		if !IsAgentInstallStep(*t) {
 			continue
 		}
 
@@ -2206,7 +2351,19 @@ func applyAgentInstallNamespaceOverride(templates []v1alpha1.Template) {
 	}
 }
 
-// injectExperimentContextArgs appends --set flags to the install-agent template
+func normalizeAgentSidecarImagePullPolicy(raw string) string {
+	pullPolicy := corev1.PullPolicy(strings.TrimSpace(raw))
+	switch pullPolicy {
+	case corev1.PullAlways, corev1.PullIfNotPresent, corev1.PullNever:
+		return string(pullPolicy)
+	default:
+		// Local setup side-loads the exact image into every node. If the value is
+		// missing or malformed, avoid an external pull that can replace that image.
+		return string(corev1.PullIfNotPresent)
+	}
+}
+
+// InjectExperimentContextArgs appends --set flags to the install-agent template
 // so that Argo Workflow template variables (experiment_id, run_id, workflow_name)
 // are passed through to the configured agent Helm chart as ConfigMap values.
 //
@@ -2215,7 +2372,8 @@ func applyAgentInstallNamespaceOverride(templates []v1alpha1.Template) {
 // These --set values override the empty defaults in values.yaml, flowing through:
 //
 //	Helm --set -> ConfigMap -> env var -> agent runtime reads os.environ["EXPERIMENT_ID"]
-func injectExperimentContextArgs(templates []v1alpha1.Template) {
+func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverride string) {
+	applyInstallStepSettings(templates)
 	// Extract fault names from every ChaosEngine embedded in the workflow and
 	// load their ground truth definitions from the chaos hub filesystem.
 	// This is generic: any fault or category added to any hub is found automatically.
@@ -2234,26 +2392,32 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 
 	openAIBaseURL := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
 	if openAIBaseURL == "" {
-		openAIBaseURL = "http://litellm-proxy.litellm.svc.cluster.local:4000/v1"
+		openAIBaseURL = "http://litellm.ace.svc.cluster.local:14000/v1"
 	}
 
 	// Derive sidecar upstream: strip /v1 path suffix so the sidecar can forward raw
 	// HTTP requests to the base URL (self.path already contains /v1/chat/completions).
 	sidecarUpstream := strings.TrimRight(strings.TrimSuffix(openAIBaseURL, "/v1"), "/")
 	if sidecarUpstream == "" {
-		sidecarUpstream = "http://litellm-proxy.litellm.svc.cluster.local:4000"
+		sidecarUpstream = "http://litellm.ace.svc.cluster.local:14000"
 	}
 
+	// Default to the target app's own namespace rather than a literal app name
+	// (e.g. "sock-shop"): every app-chart (sock-shop, book-info, otel-demo) deploys
+	// both MCP servers alongside the app itself, so {{workflow.parameters.appNamespace}}
+	// — the same Argo template variable used for readiness/uninstall steps above —
+	// always resolves to wherever this run's app actually landed. Explicit
+	// K8S_MCP_URL/PROM_MCP_URL env vars still take precedence for non-standard setups.
 	k8sMCPURL := strings.TrimSpace(os.Getenv("K8S_MCP_URL"))
 	if k8sMCPURL == "" {
-		k8sMCPURL = "http://kubernetes-mcp-server.litmus.svc.cluster.local:8081/mcp"
+		k8sMCPURL = "http://kubernetes-mcp-server.{{workflow.parameters.appNamespace}}.svc.cluster.local:8081/mcp"
 	}
 
 	promMCPURL := strings.TrimSpace(os.Getenv("PROM_MCP_URL"))
 	if promMCPURL == "" {
-		// Match the sock-shop chart Service: port 8083 (targetPort 9090).
+		// Port 8083 (targetPort 9090) matches every current app-chart's Service;
 		// 9090 is container-side only — unreachable via cluster DNS.
-		promMCPURL = "http://prometheus-mcp-server.sock-shop.svc.cluster.local:8083/mcp"
+		promMCPURL = "http://prometheus-mcp-server.{{workflow.parameters.appNamespace}}.svc.cluster.local:8083/mcp"
 	}
 
 	// Build comma-separated MCP_URLS list for flash-agent
@@ -2268,7 +2432,16 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		chaosNamespace = "litmus-exp"
 	}
 
-	modelAlias := strings.TrimSpace(os.Getenv("MODEL_ALIAS"))
+	// The platform default model. FLASH_AGENT_MODEL is what scripts/setup.sh
+	// actually prompts for and writes into .env / the ace-env secret (see
+	// setup.sh's OLLAMA/Azure/Gemini model selection flow). MODEL_ALIAS is kept
+	// as a back-compat override for anyone setting it directly on the
+	// graphql-server deployment. The run-time pick and the experiment's own
+	// setting take precedence, per step (resolveAgentModelAlias).
+	modelAlias := strings.TrimSpace(os.Getenv("FLASH_AGENT_MODEL"))
+	if modelAlias == "" {
+		modelAlias = strings.TrimSpace(os.Getenv("MODEL_ALIAS"))
+	}
 	if modelAlias == "" {
 		// Fallback: derive from AZURE_OPENAI_DEPLOYMENT so any provider works
 		modelAlias = strings.TrimSpace(os.Getenv("AZURE_OPENAI_DEPLOYMENT"))
@@ -2288,6 +2461,20 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 	agentMemoryPath := strings.TrimSpace(os.Getenv("AGENT_MEMORY_PATH"))
 	memoryTTLDays := strings.TrimSpace(os.Getenv("MEMORY_TTL_DAYS"))
 	reviewerModelAlias := strings.TrimSpace(os.Getenv("REVIEWER_MODEL_ALIAS"))
+	langfuseHost := strings.TrimSpace(os.Getenv("LANGFUSE_HOST"))
+	if langfuseHost == "" {
+		langfuseHost = "http://langfuse-web.ace.svc.cluster.local:3000"
+	}
+	langfusePublicKey := strings.TrimSpace(os.Getenv("LANGFUSE_PUBLIC_KEY"))
+	langfuseSecretKey := strings.TrimSpace(os.Getenv("LANGFUSE_SECRET_KEY"))
+	agentMaxRuntimeSeconds := strings.TrimSpace(os.Getenv("SRE_AGENT_MAX_RUNTIME_SECONDS"))
+	if agentMaxRuntimeSeconds == "" {
+		agentMaxRuntimeSeconds = "780"
+	}
+	agentIdleAfterMaxRuntime := strings.TrimSpace(os.Getenv("SRE_AGENT_IDLE_AFTER_MAX_RUNTIME"))
+	if agentIdleAfterMaxRuntime == "" {
+		agentIdleAfterMaxRuntime = "true"
+	}
 
 	// Sidecar image — split registry/repo:tag so each part is set independently.
 	// AGENT_SIDECAR_IMAGE env var format: "registry/repository:tag" or "repository:tag".
@@ -2298,12 +2485,13 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 	if sidecarImageFull == "" {
 		sidecarImageFull = "agentcert/agent-sidecar:latest"
 	}
-	sidecarImageTag := "latest"
-	sidecarImageRepo := sidecarImageFull
-	if idx := strings.LastIndex(sidecarImageFull, ":"); idx > 0 {
-		sidecarImageTag = sidecarImageFull[idx+1:]
-		sidecarImageRepo = sidecarImageFull[:idx]
+	sidecarImageRegistry, sidecarImageRepo, sidecarImageTag := splitChartImage(sidecarImageFull)
+
+	sidecarImagePullPolicy := strings.TrimSpace(utils.Config.AgentSidecarImagePullPolicy)
+	if sidecarImagePullPolicy == "" {
+		sidecarImagePullPolicy = strings.TrimSpace(os.Getenv("AGENT_SIDECAR_IMAGE_PULL_POLICY"))
 	}
+	sidecarImagePullPolicy = normalizeAgentSidecarImagePullPolicy(sidecarImagePullPolicy)
 
 	// Server address for agent registration audit call inside install-agent.
 	serverAddr := strings.TrimSpace(os.Getenv("SERVER_ADDR"))
@@ -2331,6 +2519,7 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", "agent.config.NOTIFY_ID={{workflow.labels.notify_id}}",
 		"--set", "agent.config.EXPERIMENT_ID={{workflow.labels.workflow_id}}",
 		"--set", "agent.config.EXPERIMENT_RUN_ID={{workflow.uid}}",
+		"--set", "agent.config.WORKFLOW_UID={{workflow.uid}}",
 		// WORKFLOW_NAME is the operator-typed experiment name (workflow.Labels
 		// ["experiment_name"], set in createChaosWorkflow). It flows into the
 		// agent-metadata ConfigMap so the agent-sidecar can mount it at
@@ -2350,9 +2539,14 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", fmt.Sprintf("agent.config.OPENAI_API_KEY=%s", openAIKey),
 		"--set", fmt.Sprintf("agent.secret.LITELLM_MASTER_KEY=%s", masterKey),
 		"--set", fmt.Sprintf("agent.config.OPENAI_BASE_URL=%s", openAIBaseURL),
-		"--set", fmt.Sprintf("agent.config.MODEL_ALIAS=%s", modelAlias),
 		"--set", fmt.Sprintf("agent.config.MCP_URLS=%s", mcpURLs),
 		"--set", fmt.Sprintf("agent.config.CHAOS_NAMESPACE=%s", chaosNamespace),
+		"--set", "agent.config.TARGET_NAMESPACE={{workflow.parameters.appNamespace}}",
+		"--set", fmt.Sprintf("agent.config.LANGFUSE_HOST=%s", langfuseHost),
+		"--set", fmt.Sprintf("agent.secret.LANGFUSE_PUBLIC_KEY=%s", langfusePublicKey),
+		"--set", fmt.Sprintf("agent.secret.LANGFUSE_SECRET_KEY=%s", langfuseSecretKey),
+		"--set", fmt.Sprintf("agent.config.AGENT_MAX_RUNTIME_SECONDS=%s", agentMaxRuntimeSeconds),
+		"--set", fmt.Sprintf("agent.config.AGENT_IDLE_AFTER_MAX_RUNTIME=%s", agentIdleAfterMaxRuntime),
 		"--set", fmt.Sprintf("agent.config.AGENT_MODE=%s", agentMode),
 		"--set", fmt.Sprintf("agent.config.AGENT_SCOPE_NAMESPACE=%s", agentScopeNamespace),
 		"--set", fmt.Sprintf("agent.config.MITIGATION_ALLOW_DISCOVERED_SCOPE=%s", mitigationAllowDiscoveredScope),
@@ -2365,11 +2559,14 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		"--set", "sidecar.injectionMode=openai-metadata",
 		// Let the sidecar forward to the real LiteLLM proxy (base URL without /v1)
 		"--set", fmt.Sprintf("sidecar.upstream=%s", sidecarUpstream),
-		// Pin the exact sidecar image — registry is already in the repo path so override to empty.
-		"--set", "sidecar.image.registry=",
+		// Pin the exact sidecar image that was built and loaded into minikube.
+		// The agent charts render "<registry>/<repository>:<tag>", so a
+		// registry host in AGENT_SIDECAR_IMAGE must go into sidecar.image.registry
+		// (otherwise the chart default docker.io/ ends up in front of it).
+		"--set", fmt.Sprintf("sidecar.image.registry=%s", sidecarImageRegistry),
 		"--set", fmt.Sprintf("sidecar.image.repository=%s", sidecarImageRepo),
 		"--set", fmt.Sprintf("sidecar.image.tag=%s", sidecarImageTag),
-		"--set", "sidecar.image.pullPolicy=Always",
+		"--set", fmt.Sprintf("sidecar.image.pullPolicy=%s", sidecarImagePullPolicy),
 	}
 
 	// Ground truth is emitted directly to Langfuse via EmitFaultSpansForTrace
@@ -2381,47 +2578,16 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 	}
 
 	// isStaleSetArg returns true for --set values from previous runs that should
-	// be stripped and re-injected with fresh values.
+	// be stripped and re-injected with fresh values. The key list is shared with
+	// chart settings validation, which refuses to offer these keys to users.
 	isStaleSetArg := func(arg string) bool {
-		return strings.HasPrefix(arg, "config.openaiApiKey=") ||
-			strings.HasPrefix(arg, "config.openaiBaseUrl=") ||
-			strings.HasPrefix(arg, "agentId=") ||
-			strings.HasPrefix(arg, "agent.config.MCP_INCLUDE_CHAOS_TOOLS=") ||
-			strings.HasPrefix(arg, "agent.config.NOTIFY_ID=") ||
-			strings.HasPrefix(arg, "agent.config.EXPERIMENT_ID=") ||
-			strings.HasPrefix(arg, "agent.config.EXPERIMENT_RUN_ID=") ||
-			strings.HasPrefix(arg, "agent.config.WORKFLOW_NAME=") ||
-			strings.HasPrefix(arg, "agent.config.OPENAI_API_KEY=") ||
-			strings.HasPrefix(arg, "agent.secret.LITELLM_MASTER_KEY=") ||
-			strings.HasPrefix(arg, "agent.config.OPENAI_BASE_URL=") ||
-			strings.HasPrefix(arg, "agent.config.MCP_URLS=") ||
-			strings.HasPrefix(arg, "agent.config.K8S_MCP_URL=") ||
-			strings.HasPrefix(arg, "agent.config.PROM_MCP_URL=") ||
-			strings.HasPrefix(arg, "agent.config.CHAOS_NAMESPACE=") ||
-			strings.HasPrefix(arg, "agent.config.K8S_NAMESPACE=") ||
-			strings.HasPrefix(arg, "agent.config.TARGET_APP_NAME=") ||
-			strings.HasPrefix(arg, "agent.config.MODEL_ALIAS=") ||
-			strings.HasPrefix(arg, "agent.config.AGENT_MODE=") ||
-			strings.HasPrefix(arg, "agent.config.AGENT_SCOPE_NAMESPACE=") ||
-			strings.HasPrefix(arg, "agent.config.MITIGATION_ALLOW_DISCOVERED_SCOPE=") ||
-			strings.HasPrefix(arg, "agent.config.MITIGATION_REVIEW_ITERS=") ||
-			strings.HasPrefix(arg, "agent.config.MITIGATION_AUDIT_PATH=") ||
-			strings.HasPrefix(arg, "agent.config.AGENT_MEMORY_PATH=") ||
-			strings.HasPrefix(arg, "agent.config.MEMORY_TTL_DAYS=") ||
-			strings.HasPrefix(arg, "agent.config.REVIEWER_MODEL_ALIAS=") ||
-			// GROUND_TRUTH_JSON is no longer injected into agent ConfigMap — strip any stale value from old runs
-			strings.HasPrefix(arg, "agent.config.GROUND_TRUTH_JSON=") ||
-			strings.HasPrefix(arg, "sidecar.enabled=") ||
-			strings.HasPrefix(arg, "sidecar.injectionMode=") ||
-			strings.HasPrefix(arg, "sidecar.upstream=") ||
-			strings.HasPrefix(arg, "sidecar.image.repository=") ||
-			strings.HasPrefix(arg, "sidecar.image.tag=") ||
-			strings.HasPrefix(arg, "sidecar.image.pullPolicy=")
+		key, _, hasValue := strings.Cut(arg, "=")
+		return hasValue && chartconfig.IsPlatformOwned(key)
 	}
 	// isStaleFlag returns true for named binary flags (not --set values) that
 	// carry a subsequent value and should be replaced by fresh injection.
 	isStaleFlag := func(arg string) bool {
-		return arg == "--server-addr" || arg == "--project-id"
+		return arg == "--server-addr" || arg == "--project-id" || arg == "-server-addr" || arg == "-project-id"
 	}
 
 	for i := range templates {
@@ -2430,9 +2596,7 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 			continue
 		}
 
-		isInstallAgentTemplate := t.Name == "install-agent" ||
-			strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent")
-		if !isInstallAgentTemplate {
+		if !IsAgentInstallStep(*t) {
 			continue
 		}
 
@@ -2442,16 +2606,15 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 				arg := t.Container.Args[idx]
 
 				// Strip stale --set key=value (combined form)
-				if strings.HasPrefix(arg, "--set=") || strings.HasPrefix(arg, "--set-string=") {
-					valueArg := strings.TrimPrefix(arg, "--set=")
-					valueArg = strings.TrimPrefix(valueArg, "--set-string=")
+				flag, valueArg, combined := strings.Cut(arg, "=")
+				if combined && (flag == "-set" || flag == "--set" || flag == "--set-string" || flag == "--set-json") {
 					if isStaleSetArg(valueArg) {
 						continue
 					}
 				}
 
 				// Strip stale --set key value (split form)
-				if (arg == "--set" || arg == "--set-string") && idx+1 < len(t.Container.Args) {
+				if (arg == "-set" || arg == "--set" || arg == "--set-string" || arg == "--set-json") && idx+1 < len(t.Container.Args) {
 					nextArg := t.Container.Args[idx+1]
 					if isStaleSetArg(nextArg) {
 						idx++
@@ -2460,6 +2623,9 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 				}
 
 				// Strip stale binary flags that carry the next arg as their value
+				if combined && isStaleFlag(flag) {
+					continue
+				}
 				if isStaleFlag(arg) && idx+1 < len(t.Container.Args) {
 					idx++
 					continue
@@ -2471,6 +2637,13 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		}
 
 		t.Container.Args = append(t.Container.Args, experimentSetArgs...)
+		// Per step, because the experiment's own model setting lives on the step.
+		stepModelAlias := resolveAgentModelAlias(modelAliasOverride, *t, modelAlias)
+		t.Container.Args = append(t.Container.Args, "--set", fmt.Sprintf("%s=%s", chartconfig.ModelAliasKey, stepModelAlias))
+
+		// Agent + sidecar images follow SRE_AGENTS_IMAGE_SOURCE: rewritten by
+		// install-agent's post-renderer when pulled from the registry.
+		setContainerEnv(t.Container, installerImageEnv("SRE_AGENTS_IMAGE_SOURCE", "local"))
 
 		// If applyAgentInstallNamespaceOverride redirected this install-agent
 		// step to AGENT_INSTALL_NAMESPACE, pin the original target namespace as
@@ -2490,9 +2663,10 @@ func injectExperimentContextArgs(templates []v1alpha1.Template) {
 		}
 
 		logrus.WithFields(logrus.Fields{
-			"template": t.Name,
-			"args":     experimentSetArgs,
-			"source":   "hardcoded-fallback",
+			"template":   t.Name,
+			"argCount":   len(experimentSetArgs),
+			"modelAlias": stepModelAlias,
+			"source":     "hardcoded-fallback",
 		}).Info("[Experiment Context] Injected --set args for experiment context (fallback)")
 	}
 }
@@ -2507,11 +2681,63 @@ func ExtractInstallAgentNamespace(templates []v1alpha1.Template) string {
 		if t.Container == nil {
 			continue
 		}
-		if t.Name != "install-agent" && !strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-agent") {
+		if !IsAgentInstallStep(t) {
+			continue
+		}
+		if namespace := installStepArg(t.Container.Args, "namespace"); namespace != "" {
+			return namespace
+		}
+	}
+	return ""
+}
+
+// ExtractInstallApplicationNamespace scans the install-application template's
+// container args for the namespace flag and returns its value. Handles both
+// combined (-namespace=<x>) and split (-namespace <x>) forms -- the frontend
+// (KubernetesYamlService.addInstallStepToManifest) writes the combined form.
+func ExtractInstallApplicationNamespace(templates []v1alpha1.Template) string {
+	for _, t := range templates {
+		if t.Container == nil {
+			continue
+		}
+		if t.Name != "install-application" && !strings.Contains(strings.TrimSpace(t.Container.Image), "agentcert-install-app") {
 			continue
 		}
 		for i, arg := range t.Container.Args {
-			if (arg == "--namespace" || arg == "-namespace") && i+1 < len(t.Container.Args) {
+			if strings.HasPrefix(arg, "-namespace=") {
+				return strings.TrimPrefix(arg, "-namespace=")
+			}
+			if strings.HasPrefix(arg, "--namespace=") {
+				return strings.TrimPrefix(arg, "--namespace=")
+			}
+			if (arg == "-namespace" || arg == "--namespace") && i+1 < len(t.Container.Args) {
+				return t.Container.Args[i+1]
+			}
+		}
+	}
+	return ""
+}
+
+// ExtractInstallAgentFolder scans the install-agent template's container args
+// for the -folder (or --folder) flag and returns its value -- the AgentHub
+// chart/release name (e.g. "sre-agent-comprehensive"), used as the helm
+// release name applyUninstallAllPatch(ToWorkflowSpec) needs to uninstall it.
+func ExtractInstallAgentFolder(templates []v1alpha1.Template) string {
+	for _, t := range templates {
+		if t.Container == nil {
+			continue
+		}
+		if !IsAgentInstallStep(t) {
+			continue
+		}
+		for i, arg := range t.Container.Args {
+			if strings.HasPrefix(arg, "-folder=") {
+				return strings.TrimPrefix(arg, "-folder=")
+			}
+			if strings.HasPrefix(arg, "--folder=") {
+				return strings.TrimPrefix(arg, "--folder=")
+			}
+			if (arg == "-folder" || arg == "--folder") && i+1 < len(t.Container.Args) {
 				return t.Container.Args[i+1]
 			}
 		}

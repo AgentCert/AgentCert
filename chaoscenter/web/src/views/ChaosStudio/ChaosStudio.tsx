@@ -34,6 +34,7 @@ import { getHash, getScope } from '@utils';
 import StudioOverviewView from '@views/StudioOverview';
 import { ParentComponentErrorWrapper } from '@errors';
 import experimentYamlService from 'services/experiment';
+import type { KubernetesYamlService } from '@services/experiment/KubernetesYamlService';
 import { InfrastructureType } from '@api/entities';
 import StudioScheduleView from '@views/StudioSchedule';
 import LitmusBreadCrumbs from '@components/LitmusBreadCrumbs';
@@ -208,7 +209,9 @@ export default function ChaosStudioView({
   };
 
   const runExperimentHandler = (): void => {
-    // Backend handles multi-run logic automatically based on experiment annotations
+    // Backend handles multi-run logic automatically based on experiment annotations.
+    // The agent's model is part of its settings (the install-agent step), so a
+    // run sends no model override.
     runChaosExperimentMutation({
       variables: {
         projectID: scope.projectID,

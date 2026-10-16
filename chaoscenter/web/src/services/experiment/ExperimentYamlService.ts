@@ -10,6 +10,7 @@ import {
 import type { ExperimentManifest, FaultData, FaultTunables, ProbeAttributes } from '@models';
 import { ExecutionData, Weightages, Node, ExperimentType, ProbeObj } from '@api/entities';
 import type { PipelineGraphState } from '@components/PipelineDiagram/types';
+import type { InstallStepChoice, InstallStepSelection } from './installStepSettings';
 
 export interface PreProcessChaosExperiment<T> {
   manifest: T;
@@ -136,13 +137,13 @@ export abstract class ExperimentYamlService extends ChaosIDB {
 
   getExperimentScheduleType(manifest: ExperimentManifest | undefined): ExperimentType | undefined {
     if (!manifest) return;
-    
+
     // Check for multi-run annotations first
     const annotations = (manifest as { metadata?: { annotations?: Record<string, string> } })?.metadata?.annotations;
     if (annotations?.['litmuschaos.io/multiRunEnabled'] === 'true') {
       return ExperimentType.MULTI_RUN;
     }
-    
+
     switch (manifest.kind) {
       case 'Workflow':
         return ExperimentType.NON_CRON;
@@ -166,6 +167,23 @@ export abstract class ExperimentYamlService extends ChaosIDB {
     key: ChaosObjectStoresPrimaryKeys['experiments'],
     faultName: string
   ): Promise<Experiment | undefined>;
+
+  abstract addInstallStepToManifest(
+    key: ChaosObjectStoresPrimaryKeys['experiments'],
+    kind: 'application' | 'agent',
+    choice: InstallStepChoice
+  ): Promise<Experiment | undefined>;
+
+  abstract getInstallStepSelection(
+    manifest: ExperimentManifest | undefined,
+    kind: 'application' | 'agent'
+  ): InstallStepSelection | undefined;
+
+  abstract getExperimentContext(manifest: ExperimentManifest | undefined): {
+    application?: InstallStepSelection;
+    agent?: InstallStepSelection;
+    hasFaults: boolean;
+  };
 
   abstract extractChaosFaultsWithWeights(manifest: ExperimentManifest | undefined): Array<Weightages>;
 

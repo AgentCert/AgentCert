@@ -2,8 +2,6 @@ package projects
 
 import (
 	"context"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,7 +13,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	grpc2 "google.golang.org/grpc"
 )
 
 // ProjectInitializer creates a default hub and default image registry for a new project
@@ -24,28 +21,14 @@ func ProjectInitializer(ctx context.Context, project project.Project, role strin
 	var bl_true = true
 	currentTime := time.Now().UnixMilli()
 
-	// Use IMAGE_REGISTRY env var if set, fall back to docker.io
-	registryName := "docker.io"
-	registryType := "public"
-	var secretName *string
-	var secretNamespace *string
-	if reg := strings.TrimSpace(os.Getenv("IMAGE_REGISTRY")); reg != "" {
-		registryName = reg
-		registryType = "private"
-		sn := "jfrog-registry"
-		sns := "litmus"
-		secretName = &sn
-		secretNamespace = &sns
-	}
-
 	imageRegistry := image_registry.ImageRegistry{
 		ImageRegistryID:   uuid.New().String(),
 		ProjectID:         project.ID,
-		ImageRegistryName: registryName,
+		ImageRegistryName: "docker.io",
 		ImageRepoName:     "litmuschaos",
-		ImageRegistryType: registryType,
-		SecretName:        secretName,
-		SecretNamespace:   secretNamespace,
+		ImageRegistryType: "public",
+		SecretName:        nil,
+		SecretNamespace:   nil,
 		EnableRegistry:    &bl_true,
 		IsDefault:         true,
 		Audit: mongodb.Audit{
@@ -75,9 +58,7 @@ func ProjectEvents(projectEventChannel chan string, mongoClient *mongo.Client, m
 	if err != nil {
 		log.Error(err.Error())
 	}
-	var conn *grpc2.ClientConn
-	client, conn := grpc.GetAuthGRPCSvcClient(conn)
-	defer conn.Close()
+	client := grpc.GetAuthGRPCSvcClient()
 
 	for projectDetails.Next(context.Background()) {
 		var DbEvent project.ProjectCreationEvent
@@ -85,7 +66,7 @@ func ProjectEvents(projectEventChannel chan string, mongoClient *mongo.Client, m
 			log.Error(err.Error())
 		}
 		if DbEvent.OperationType == "insert" {
-			user, err := grpc.GetUserById(client, DbEvent.FullDocument.CreatedBy.UserID)
+			user, err := grpc.GetUserById(context.Background(), client, DbEvent.FullDocument.CreatedBy.UserID)
 			if err != nil {
 				log.Error(err)
 			}

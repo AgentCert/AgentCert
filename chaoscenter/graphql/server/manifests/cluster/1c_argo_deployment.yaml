@@ -9,6 +9,7 @@ data:
   executor: |
     imagePullPolicy: IfNotPresent
   instanceID: #{INFRA_ID}
+  workflowSA: argo-chaos
 ---
 apiVersion: v1
 kind: Service
@@ -38,6 +39,7 @@ spec:
       labels:
         app: workflow-controller
     spec:
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -69,5 +71,3 @@ spec:
               cpu: "225m"
               ephemeral-storage: "1Gi"
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}

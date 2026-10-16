@@ -129,6 +129,40 @@ rules:
     resources: [ "eventtrackerpolicies/status" ]
     verbs: [ "get","patch", "update" ]
 ---
+# Namespace discovery for the UI's target-application picker. `namespaces` is
+# a cluster-scoped resource type, so this cannot be a namespace-scoped Role
+# no matter how tightly the rest of this infra's permissions are kept to
+# INFRA_NAMESPACE -- a ClusterRole is unavoidable here. Kept least-privilege
+# via `get`-only + resourceNames (list/watch can't be resourceNames-scoped in
+# Kubernetes RBAC at all, so granting list would mean seeing every namespace
+# on the cluster). Allowed names are this infra's own namespace plus every
+# application currently known to ACE's app-charts catalog -- substituted
+# dynamically by ManifestParser (infra_utils.go, via
+# apphub.GetKnownApplicationNamespaces) at manifest-generation time, never
+# hardcoded here.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: infra-namespace-discovery-role
+rules:
+  - apiGroups: [ "" ]
+    resources: [ "namespaces" ]
+    verbs: [ "get" ]
+    resourceNames: #{TARGET_NAMESPACE_RESOURCE_NAMES}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: infra-namespace-discovery-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: infra-namespace-discovery-role
+subjects:
+  - kind: ServiceAccount
+    name: #{INFRA_SERVICE_ACCOUNT}
+    namespace: #{INFRA_NAMESPACE}
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:

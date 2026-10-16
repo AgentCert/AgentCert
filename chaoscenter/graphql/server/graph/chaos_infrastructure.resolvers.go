@@ -83,22 +83,8 @@ func (r *mutationResolver) GetManifestWithInfraID(ctx context.Context, projectID
 		"chaosInfraId": infraID,
 	}
 
-	reqHeader, ok := ctx.Value("request-header").(http.Header)
-	if !ok {
-		return "", fmt.Errorf("unable to parse request header")
-	}
-
-	referrer := reqHeader.Get("Referer")
-	if referrer == "" {
-		return "", fmt.Errorf("unable to parse referer header")
-	}
-
-	referrerURL, err := url.Parse(referrer)
-	if err != nil {
-		return "", err
-	}
 	logrus.WithFields(logFields).Info("request received to get chaos infrastructure installation manifest")
-	manifest, err := r.chaosInfrastructureService.GetManifestWithInfraID(fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host), infraID, accessKey)
+	manifest, err := r.chaosInfrastructureService.GetManifestWithInfraID(resolveManifestHost(ctx), infraID, accessKey)
 	if err != nil {
 		return "", err
 	}
@@ -188,23 +174,8 @@ func (r *queryResolver) GetInfraManifest(ctx context.Context, infraID string, up
 		"projectId": projectID,
 	}
 
-	reqHeader, ok := ctx.Value("request-header").(http.Header)
-	if !ok {
-		return "", fmt.Errorf("unable to parse request header")
-	}
-
-	referrer := reqHeader.Get("Referer")
-	if referrer == "" {
-		return "", fmt.Errorf("unable to parse referer header")
-	}
-
-	referrerURL, err := url.Parse(referrer)
-	if err != nil {
-		return "", err
-	}
-
 	logrus.WithFields(logFields).Info("request received to get chaos infrastructure manifest")
-	err = authorization.ValidateRole(ctx, projectID,
+	err := authorization.ValidateRole(ctx, projectID,
 		authorization.MutationRbacRules[authorization.GetManifest],
 		model.InvitationAccepted.String())
 	if err != nil {
@@ -216,9 +187,7 @@ func (r *queryResolver) GetInfraManifest(ctx context.Context, infraID string, up
 		return "", err
 	}
 
-	gcaResponse, err := chaos_infrastructure.GetK8sInfraYaml(
-		fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host),
-		getInfra)
+	gcaResponse, err := chaos_infrastructure.GetK8sInfraYaml(resolveManifestHost(ctx), getInfra)
 
 	if err != nil {
 		logrus.WithFields(logFields).Error(err)
@@ -380,3 +349,23 @@ func (r *subscriptionResolver) GetKubeNamespace(ctx context.Context, request mod
 func (r *Resolver) Subscription() generated.SubscriptionResolver { return &subscriptionResolver{r} }
 
 type subscriptionResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//     it when you're done.
+//   - You have helper methods in this file. Move them out to keep these resolver files clean.
+func resolveManifestHost(ctx context.Context) string {
+	if reqHeader, ok := ctx.Value("request-header").(http.Header); ok {
+		if referrer := reqHeader.Get("Referer"); referrer != "" {
+			if referrerURL, err := url.Parse(referrer); err == nil && referrerURL.Host != "" {
+				return fmt.Sprintf("%s://%s", referrerURL.Scheme, referrerURL.Host)
+			}
+		}
+	}
+	if requestHost, ok := ctx.Value("request-host").(string); ok && requestHost != "" {
+		return fmt.Sprintf("http://%s", requestHost)
+	}
+	return ""
+}

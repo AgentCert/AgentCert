@@ -81,6 +81,10 @@ func getAgentChartsPath() string {
 	return filepath.Join(path, "charts")
 }
 
+// ChartsPath exposes the agent-charts working copy to other packages that need
+// an agent's declared metadata, so the path convention stays in one place.
+func ChartsPath() string { return getAgentChartsPath() }
+
 // getAgentClonePath returns the filesystem path for the agent hub clone.
 func getAgentClonePath() string {
 	path := strings.TrimSpace(utils.Config.DefaultAgentHubPath)

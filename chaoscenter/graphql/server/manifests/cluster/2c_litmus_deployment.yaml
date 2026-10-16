@@ -31,8 +31,7 @@ spec:
         name: chaos-operator
     spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -42,7 +41,7 @@ spec:
             - chaos-operator
           args:
             - -leader-elect=true
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 2000
             allowPrivilegeEscalation: false
@@ -90,13 +89,12 @@ spec:
         app: chaos-exporter
         release: prometheus-stack
     spec:
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
         - image: #{LITMUS_CHAOS_EXPORTER}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           name: chaos-exporter
           securityContext:
             runAsUser: 2000

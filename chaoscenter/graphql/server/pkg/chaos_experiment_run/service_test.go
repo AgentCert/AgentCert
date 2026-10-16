@@ -229,3 +229,62 @@ func Test_chaosExperimentRunService_ProcessCompletedExperimentRun(t *testing.T) 
 		})
 	}
 }
+
+// Test_chaosExperimentRunService_ProcessCompletedExperimentRun_ExcludesTeardown verifies
+// that ITBench teardown steps (uninstall-agent / uninstall-application), even when they
+// are still present in a stored revision's weightages and show up as Failed ChaosEngine
+// nodes at runtime, do not enter the resiliency-score denominator or the pass/fail
+// tallies. See HANDOFF §102.
+func Test_chaosExperimentRunService_ProcessCompletedExperimentRun_ExcludesTeardown(t *testing.T) {
+	experimentID := uuid.New().String()
+	revisionID := uuid.New().String()
+
+	doc := bson.D{
+		{Key: "experiment_id", Value: experimentID},
+		{Key: "revision", Value: bson.A{
+			bson.D{
+				{Key: "revision_id", Value: revisionID},
+				{Key: "weightages", Value: bson.A{
+					bson.D{{Key: "fault_name", Value: "scaled-to-zero-kubernetes-workload"}, {Key: "weightage", Value: 10}},
+					bson.D{{Key: "fault_name", Value: "uninstall-agent"}, {Key: "weightage", Value: 10}},
+					bson.D{{Key: "fault_name", Value: "uninstall-application"}, {Key: "weightage", Value: 10}},
+				}},
+			},
+		}},
+	}
+	singleResult := mongo.NewSingleResultFromDocument(doc, nil, nil)
+	mongodbMockOperator.On("Get", mock.Anything, mongodb.ChaosExperimentCollection, mock.Anything).Return(singleResult, nil).Once()
+
+	execData := ExecutionData{
+		ExperimentID: experimentID,
+		RevisionID:   revisionID,
+		Nodes: map[string]Node{
+			"n1": {Type: "ChaosEngine", ChaosExp: &ChaosData{
+				EngineName: "scaled-to-zero-kubernetes-workload-mol-abc12", ExperimentVerdict: "Pass", ProbeSuccessPercentage: "100",
+			}},
+			"n2": {Type: "ChaosEngine", ChaosExp: &ChaosData{
+				EngineName: "uninstall-agent-wgy-def34", ExperimentVerdict: "Fail", ProbeSuccessPercentage: "0",
+			}},
+			"n3": {Type: "ChaosEngine", ChaosExp: &ChaosData{
+				EngineName: "uninstall-application-chn-ghi56", ExperimentVerdict: "Fail", ProbeSuccessPercentage: "0",
+			}},
+		},
+	}
+
+	metrics, err := chaosExperimentRunTestService.ProcessCompletedExperimentRun(execData, experimentID, uuid.New().String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if metrics.TotalExperiments != 1 {
+		t.Errorf("TotalExperiments = %d, want 1 (teardown steps excluded)", metrics.TotalExperiments)
+	}
+	if metrics.ResiliencyScore != 100 {
+		t.Errorf("ResiliencyScore = %v, want 100 (only the real fault, which passed at 100%%)", metrics.ResiliencyScore)
+	}
+	if metrics.ExperimentsPassed != 1 {
+		t.Errorf("ExperimentsPassed = %d, want 1", metrics.ExperimentsPassed)
+	}
+	if metrics.ExperimentsFailed != 0 {
+		t.Errorf("ExperimentsFailed = %d, want 0 (teardown Fail verdicts must not count)", metrics.ExperimentsFailed)
+	}
+}

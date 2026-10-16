@@ -9,6 +9,10 @@ import type { AppInfoData, TargetApplicationData } from '@controllers/TargetAppl
 interface TargetApplicationViewProps {
   appInfoData: AppInfoData;
   namespaceData: string[];
+  pendingNamespaces?: string[];
+  // Restricts the App Kind dropdown to these gvrData resource names, per
+  // agents/FAULT_APPLICATION_COMPATIBILITY.md. Undefined = unrestricted.
+  allowedAppKinds?: string[];
   targetApp: TargetApplicationData | undefined;
   setTargetApp: React.Dispatch<React.SetStateAction<TargetApplicationData>>;
   engineCR: ChaosEngine | undefined;
@@ -22,6 +26,8 @@ interface TargetApplicationViewProps {
 export default function TargetApplicationTab({
   appInfoData,
   namespaceData,
+  pendingNamespaces = [],
+  allowedAppKinds,
   targetApp,
   setTargetApp,
   engineCR,
@@ -33,7 +39,8 @@ export default function TargetApplicationTab({
   const { getString } = useStrings();
 
   function getAppKindItems(): SelectOption[] {
-    return gvrData.map(data => ({
+    const source = allowedAppKinds ? gvrData.filter(data => allowedAppKinds.includes(data.resource)) : gvrData;
+    return source.map(data => ({
       label: data.resource,
       value: data.resource
     }));
@@ -41,10 +48,21 @@ export default function TargetApplicationTab({
 
   function getAppNamespaceItems(): SelectOption[] {
     if (loadingNamespace) return [];
-    return namespaceData.map(data => ({
+    const liveItems = namespaceData.map(data => ({
       label: data,
       value: data
     }));
+    // Namespaces an earlier install-app step in this same, not-yet-run
+    // workflow will create — offered ahead of time since the live cluster
+    // can't know about them yet. Tagged so they're distinguishable from
+    // namespaces that already exist.
+    const pendingItems = pendingNamespaces
+      .filter(ns => !namespaceData.includes(ns))
+      .map(ns => ({
+        label: `${ns} (pending install)`,
+        value: ns
+      }));
+    return [...liveItems, ...pendingItems];
   }
 
   function getAppLabelItems(): SelectOption[] {
@@ -68,12 +86,23 @@ export default function TargetApplicationTab({
               items={getAppKindItems()}
               value={targetApp?.appkind}
               onChange={selectedItem => {
-                setTargetApp({
-                  appkind: selectedItem.label,
-                  applabel: '',
-                  appns: ''
-                });
-                if (engineCR?.spec?.appinfo?.appkind !== undefined) engineCR.spec.appinfo.appkind = selectedItem.label;
+                const newKind = selectedItem.label;
+                // A dropdown re-fires onChange even when the user re-selects the
+                // already-active value (e.g. clicking through to confirm a
+                // pre-filled default like "deployment"). Only reset Namespace/Label
+                // -- and only when the kind has genuinely changed, since a live
+                // namespace/object query keyed to the old kind is no longer valid,
+                // but re-picking the same kind shouldn't silently discard work
+                // already entered in the other two fields below.
+                const kindChanged = newKind !== targetApp?.appkind;
+                setTargetApp(kindChanged ? { appkind: newKind, applabel: '', appns: '' } : { ...targetApp, appkind: newKind });
+                if (engineCR?.spec?.appinfo) {
+                  engineCR.spec.appinfo.appkind = newKind;
+                  if (kindChanged) {
+                    if (engineCR.spec.appinfo.appns !== undefined) engineCR.spec.appinfo.appns = '';
+                    if (engineCR.spec.appinfo.applabel !== undefined) engineCR.spec.appinfo.applabel = '';
+                  }
+                }
                 setFaultData(faultData => {
                   if (faultData?.faultName) return { ...faultData, engineCR: faultData?.engineCR };
                 });
@@ -90,9 +119,16 @@ export default function TargetApplicationTab({
               items={getAppNamespaceItems()}
               value={targetApp?.appns}
               onChange={selectedItem => {
-                const tmp = { ...targetApp, appns: selectedItem.label, applabel: '' };
+                // "Pending install" namespace options display a decorated
+                // label (`${ns} (pending install)`) but carry the real
+                // namespace name in `value` — falling back to `.label` here
+                // (as opposed to the App Label dropdown below, which already
+                // does this correctly) wrote the decorated string itself into
+                // appns, which is never a real namespace.
+                const selectedNamespace = selectedItem.value ?? selectedItem.label;
+                const tmp = { ...targetApp, appns: selectedNamespace, applabel: '' };
                 setTargetApp(tmp);
-                if (engineCR?.spec?.appinfo?.appns !== undefined) engineCR.spec.appinfo.appns = selectedItem.label;
+                if (engineCR?.spec?.appinfo?.appns !== undefined) engineCR.spec.appinfo.appns = selectedNamespace;
                 setFaultData(faultData => {
                   if (faultData?.faultName) return { ...faultData, engineCR: faultData?.engineCR };
                 });

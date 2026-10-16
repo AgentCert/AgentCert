@@ -21,6 +21,13 @@ type LangfuseClient interface {
 	// TraceExperiment logs a fault/experiment execution trace to Langfuse
 	TraceExperiment(ctx context.Context, trace *ExperimentTrace) error
 
+	// GetTraceMetadata fetches the current metadata for a trace. Langfuse's
+	// trace endpoint replaces the whole metadata object on every write rather
+	// than merging, so callers that want to add a single field to an existing
+	// trace's metadata must read it first and merge client-side. Returns an
+	// empty (non-nil) map, not an error, if the trace doesn't exist yet.
+	GetTraceMetadata(ctx context.Context, traceID string) (map[string]interface{}, error)
+
 	// CreateObservation logs an observation/event against a trace
 	CreateObservation(ctx context.Context, payload *LangfuseObservationPayload) error
 
@@ -181,6 +188,55 @@ func (c *langfuseClientImpl) DeleteUser(ctx context.Context, agentID string) err
 	}
 
 	return c.CreateOrUpdateUser(ctx, payload)
+}
+
+// GetTraceMetadata fetches a trace's current metadata via GET /api/public/traces/{id}.
+// Returns an empty map (not an error) when the trace doesn't exist yet (404) --
+// callers merge into this and write it back, so "nothing there yet" is a valid
+// starting point, not a failure.
+func (c *langfuseClientImpl) GetTraceMetadata(ctx context.Context, traceID string) (map[string]interface{}, error) {
+	if c.baseURL == "" || c.publicKey == "" || c.secretKey == "" {
+		return nil, fmt.Errorf("Langfuse client not configured: baseURL, publicKey, or secretKey is empty")
+	}
+	if traceID == "" {
+		return nil, fmt.Errorf("trace ID is required")
+	}
+
+	url := fmt.Sprintf("%s/api/public/traces/%s", c.baseURL, traceID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.SetBasicAuth(c.publicKey, c.secretKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return map[string]interface{}{}, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("Langfuse API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var parsed struct {
+		Metadata map[string]interface{} `json:"metadata"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("failed to parse trace response: %w", err)
+	}
+	if parsed.Metadata == nil {
+		return map[string]interface{}{}, nil
+	}
+	return parsed.Metadata, nil
 }
 
 // TraceExperiment logs a fault/experiment execution trace to Langfuse.

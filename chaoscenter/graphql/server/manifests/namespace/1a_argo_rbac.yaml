@@ -4,8 +4,6 @@ kind: ServiceAccount
 metadata:
   name: argo-chaos
   namespace: #{INFRA_NAMESPACE}
-imagePullSecrets:
-- name: #{IMAGE_PULL_SECRET_NAME}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -30,6 +28,23 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: infra-ops-role
+subjects:
+  - kind: ServiceAccount
+    name: argo-chaos
+    namespace: #{INFRA_NAMESPACE}
+---
+# cluster-admin is required so the Helm install-app/install-agent steps can
+# create ClusterRole and ClusterRoleBinding objects shipped by app charts
+# (e.g. Prometheus and kube-state-metrics RBAC in the sock-shop chart).
+# Name is namespace-scoped to remain unique across multiple infra registrations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argo-chaos-admin-#{INFRA_NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
 subjects:
   - kind: ServiceAccount
     name: argo-chaos

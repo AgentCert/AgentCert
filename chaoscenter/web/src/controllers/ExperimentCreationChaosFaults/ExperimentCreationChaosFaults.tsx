@@ -5,6 +5,7 @@ import { replaceHyphen, replaceSpace } from '@utils';
 import ExperimentCreationChaosFaultsView from '@views/ExperimentCreationSelectFault/ExperimentCreationChaosFaults';
 import { getChaosFaultLazyQuery } from '@api/core';
 import type { ChaosHub, Chart } from '@api/entities';
+import { useFaultCatalog } from '@hooks';
 import type { FaultData } from '@models';
 
 interface ExperimentCreationChaosFaultsControllerProps {
@@ -16,6 +17,7 @@ interface ExperimentCreationChaosFaultsControllerProps {
     listChaosFaults: boolean;
   };
   searchParam: string;
+  targetApplicationKey?: string;
 }
 
 export default function ExperimentCreationChaosFaultsController({
@@ -23,9 +25,11 @@ export default function ExperimentCreationChaosFaultsController({
   selectedHub,
   chaosCharts,
   loading,
-  searchParam
+  searchParam,
+  targetApplicationKey
 }: ExperimentCreationChaosFaultsControllerProps): React.ReactElement {
   const { showError } = useToaster();
+  const faultCatalog = useFaultCatalog();
 
   const [getChaosFaultQuery, { loading: getChaosFaultLoading }] = getChaosFaultLazyQuery({
     onError: err => showError(err.message),
@@ -37,7 +41,10 @@ export default function ExperimentCreationChaosFaultsController({
     const updatedSearchTerm = replaceHyphen(replaceSpace(searchParam)).toLowerCase();
     const filteredChartsWithFilteredExperiments = deepCopyOfCharts?.map(chart => {
       const filteredExperiments = chart.spec.faults.filter(fault => {
-        return replaceHyphen(replaceSpace(fault.name)).toLowerCase().includes(updatedSearchTerm);
+        const matchesSearch = replaceHyphen(replaceSpace(fault.name)).toLowerCase().includes(updatedSearchTerm);
+        // A fault the catalogue does not know is left listed, so onboarding a
+        // fault does not require a catalogue entry before it can be used.
+        return matchesSearch && faultCatalog.isFaultCompatible(fault.name, targetApplicationKey);
       });
       return {
         ...chart,
@@ -48,7 +55,7 @@ export default function ExperimentCreationChaosFaultsController({
       };
     });
     return filteredChartsWithFilteredExperiments;
-  }, [searchParam, chaosCharts]);
+  }, [searchParam, chaosCharts, faultCatalog, targetApplicationKey]);
 
   return (
     <ExperimentCreationChaosFaultsView

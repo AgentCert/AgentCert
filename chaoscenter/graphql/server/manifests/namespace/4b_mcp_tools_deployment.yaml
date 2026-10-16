@@ -22,6 +22,15 @@ type: Opaque
 stringData:
   PLACEHOLDER: "unused"
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubernetes-mcp-config
+  namespace: #{INFRA_NAMESPACE}
+data:
+  config.toml: |
+    port = "8081"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,17 +49,15 @@ spec:
         app: kubernetes-mcp-server
     spec:
       serviceAccountName: mcp-server
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
         - name: mcp-server
           image: #{KUBERNETES_MCP_SERVER_IMAGE}
           args:
-            - "--port"
-            - "8081"
-            - "--stateless"
+            - "--config"
+            - "/etc/mcp/config.toml"
           ports:
             - containerPort: 8081
               name: http
@@ -79,6 +86,14 @@ spec:
           securityContext:
             runAsUser: 65532
             allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: mcp-config
+              mountPath: /etc/mcp
+              readOnly: true
+      volumes:
+        - name: mcp-config
+          configMap:
+            name: kubernetes-mcp-config
 ---
 apiVersion: v1
 kind: Service
@@ -115,8 +130,7 @@ spec:
         app: prometheus-mcp-server
     spec:
       serviceAccountName: prometheus-mcp-server
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -174,3 +188,4 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+ 

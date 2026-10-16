@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -48,6 +49,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	corev1 "k8s.io/api/core/v1"
 	k8srbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -99,6 +101,28 @@ var dynamicAppHelmRBACRequirements = []rbacRequirement{
 	{APIGroup: "", Resource: "secrets", Verb: "patch"},
 	{APIGroup: "", Resource: "secrets", Verb: "delete"},
 }
+
+const (
+	perExperimentChaosRoleName     = "ace-per-experiment-chaos-runner"
+	perExperimentChaosRBACNameBase = "ace-chaos-runner"
+)
+
+// perExperimentChaosRBACEnabled gates the §99 per-experiment sandbox ServiceAccount.
+//
+// DISABLED. Every chaos experiment currently runs under its authored
+// chaosServiceAccount (litmus-admin), cluster-wide -- the same model as `main`. The
+// sandbox's rule set (perExperimentChaosRules) only covers the generic pod-level
+// LitmusChaos catalog, and several fault families ACE runs -- the ITBench SDK faults,
+// node faults, and the uninstall-agent/uninstall-application teardown steps -- need
+// cross-namespace / cluster-scoped access that a namespaced RoleBinding structurally
+// cannot grant. Until the sandbox is completed to cover every fault, it stays off.
+//
+// The scaffold is intentionally left in place: perExperimentChaosServiceAccountName,
+// perExperimentChaosRules, ensurePerExperimentChaosRBAC, cleanupPerExperimentChaosRBAC,
+// and utils.UsesUnscopedChaosServiceAccount (which marks the families that must keep
+// litmus-admin even once the sandbox is re-enabled). Flipping this to true resumes the
+// per-run SA rewrite for everything the helper does not exempt. See innovation.md §7.5.
+const perExperimentChaosRBACEnabled = false
 
 // NewChaosExperimentRunHandler returns a new instance of ChaosWorkflowHandler
 func NewChaosExperimentRunHandler(
@@ -257,6 +281,28 @@ func normalizeRBACNamePart(in string) string {
 	return out
 }
 
+// discoverWorkflowSA reads the "workflowSA" key from workflow-controller-configmap in
+// the infra namespace. That key is stamped at infra-setup time by the chaos-enable manifest,
+// so handler.go never needs to know the SA name out-of-band. Falls back to the subscriber
+// SA (infra.ServiceAccount) when the key is absent for backward compatibility with older installs.
+func discoverWorkflowSA(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, fallback string) string {
+	cm, err := clientset.CoreV1().ConfigMaps(infraNamespace).Get(ctx, "workflow-controller-configmap", metav1.GetOptions{})
+	if err != nil {
+		return fallback
+	}
+	if sa := strings.TrimSpace(cm.Data["workflowSA"]); sa != "" {
+		return sa
+	}
+	return fallback
+}
+
+func infraNamespaceOrDefault(namespace *string) string {
+	if namespace != nil && strings.TrimSpace(*namespace) != "" {
+		return strings.TrimSpace(*namespace)
+	}
+	return "litmus"
+}
+
 func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccount string) error {
 	const roleName = "litmus-dynamic-app-helm"
 
@@ -329,6 +375,175 @@ func ensureDynamicAppHelmRBAC(ctx context.Context, clientset *kubernetes.Clients
 	return nil
 }
 
+func perExperimentChaosServiceAccountName(runID string) string {
+	name := "ace-chaos-" + normalizeRBACNamePart(runID)
+	if len(name) > 63 {
+		name = name[:63]
+		name = strings.TrimRight(name, "-")
+	}
+	if name == "ace-chaos" || name == "ace-chaos-" {
+		return "ace-chaos-run"
+	}
+	return name
+}
+
+func perExperimentChaosRBACLabels(serviceAccountName string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/managed-by": "agentcert",
+		"agentcert.io/rbac-scope":      "experiment-run",
+		"agentcert.io/chaos-sa":        serviceAccountName,
+	}
+}
+
+func appendUniqueNonEmpty(values []string, more ...string) []string {
+	seen := make(map[string]struct{}, len(values)+len(more))
+	uniq := make([]string, 0, len(values)+len(more))
+	for _, value := range append(values, more...) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		uniq = append(uniq, value)
+	}
+	return uniq
+}
+
+func perExperimentChaosRules() []k8srbacv1.PolicyRule {
+	return []k8srbacv1.PolicyRule{
+		{APIGroups: []string{"", "apps", "batch", "extensions", "litmuschaos.io"}, Resources: []string{"pods", "pods/exec", "pods/eviction", "jobs", "cronjobs", "events", "chaosresults", "chaosengines"}, Verbs: []string{"create", "delete", "get", "list", "patch", "update", "deletecollection", "watch"}},
+		{APIGroups: []string{"litmuschaos.io"}, Resources: []string{"chaosexperiments"}, Verbs: []string{"create", "list", "get", "patch", "update", "delete"}},
+		{APIGroups: []string{""}, Resources: []string{"pods/log", "pods/status"}, Verbs: []string{"get", "list", "watch"}},
+		{APIGroups: []string{""}, Resources: []string{"pods/ephemeralcontainers"}, Verbs: []string{"get", "patch", "update"}},
+		{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"create", "get", "list", "patch"}},
+		{APIGroups: []string{""}, Resources: []string{"services"}, Verbs: []string{"create", "get", "list", "delete", "patch", "update"}},
+		{APIGroups: []string{""}, Resources: []string{"endpoints"}, Verbs: []string{"create", "get", "list", "patch", "update"}},
+		{APIGroups: []string{""}, Resources: []string{"serviceaccounts", "secrets"}, Verbs: []string{"create", "get", "list", "delete", "patch"}},
+		{APIGroups: []string{""}, Resources: []string{"resourcequotas"}, Verbs: []string{"create", "delete", "get", "list", "patch", "update"}},
+		{APIGroups: []string{"apps"}, Resources: []string{"deployments", "statefulsets", "replicasets", "daemonsets"}, Verbs: []string{"create", "get", "list", "delete", "patch", "update", "watch"}},
+		{APIGroups: []string{"apps"}, Resources: []string{"deployments/scale", "deployments/rollback", "statefulsets/scale"}, Verbs: []string{"get", "list", "patch", "update"}},
+		{APIGroups: []string{"autoscaling"}, Resources: []string{"horizontalpodautoscalers"}, Verbs: []string{"get", "list", "patch", "update"}},
+		{APIGroups: []string{"networking.k8s.io"}, Resources: []string{"networkpolicies"}, Verbs: []string{"create", "delete", "get", "list"}},
+		{APIGroups: []string{""}, Resources: []string{"persistentvolumeclaims"}, Verbs: []string{"create", "get", "list", "delete", "patch", "update"}},
+	}
+}
+
+func ensurePerExperimentChaosRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccountName string, targetNamespaces []string) error {
+	labels := perExperimentChaosRBACLabels(serviceAccountName)
+	requiredRole := &k8srbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   perExperimentChaosRoleName,
+			Labels: map[string]string{"app.kubernetes.io/managed-by": "agentcert"},
+		},
+		Rules: perExperimentChaosRules(),
+	}
+	if existingRole, err := clientset.RbacV1().ClusterRoles().Get(ctx, perExperimentChaosRoleName, metav1.GetOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed getting clusterrole %s: %w", perExperimentChaosRoleName, err)
+		}
+		if _, createErr := clientset.RbacV1().ClusterRoles().Create(ctx, requiredRole, metav1.CreateOptions{}); createErr != nil {
+			return fmt.Errorf("failed creating clusterrole %s: %w", perExperimentChaosRoleName, createErr)
+		}
+	} else {
+		requiredRole.ResourceVersion = existingRole.ResourceVersion
+		if _, updateErr := clientset.RbacV1().ClusterRoles().Update(ctx, requiredRole, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("failed updating clusterrole %s: %w", perExperimentChaosRoleName, updateErr)
+		}
+	}
+
+	serviceAccount := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: serviceAccountName, Namespace: infraNamespace, Labels: labels}}
+	if existingSA, err := clientset.CoreV1().ServiceAccounts(infraNamespace).Get(ctx, serviceAccountName, metav1.GetOptions{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed getting serviceaccount %s/%s: %w", infraNamespace, serviceAccountName, err)
+		}
+		if _, createErr := clientset.CoreV1().ServiceAccounts(infraNamespace).Create(ctx, serviceAccount, metav1.CreateOptions{}); createErr != nil {
+			return fmt.Errorf("failed creating serviceaccount %s/%s: %w", infraNamespace, serviceAccountName, createErr)
+		}
+	} else {
+		serviceAccount.ResourceVersion = existingSA.ResourceVersion
+		if _, updateErr := clientset.CoreV1().ServiceAccounts(infraNamespace).Update(ctx, serviceAccount, metav1.UpdateOptions{}); updateErr != nil {
+			return fmt.Errorf("failed updating serviceaccount %s/%s: %w", infraNamespace, serviceAccountName, updateErr)
+		}
+	}
+
+	for _, namespace := range appendUniqueNonEmpty([]string{infraNamespace}, targetNamespaces...) {
+		if _, err := clientset.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed getting namespace %s: %w", namespace, err)
+			}
+			if _, createErr := clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}, metav1.CreateOptions{}); createErr != nil && !apierrors.IsAlreadyExists(createErr) {
+				return fmt.Errorf("failed creating target namespace %s for per-experiment RBAC: %w", namespace, createErr)
+			}
+		}
+
+		bindingName := perExperimentChaosRBACNameBase + "-" + serviceAccountName
+		if len(bindingName) > 63 {
+			bindingName = strings.TrimRight(bindingName[:63], "-")
+		}
+		requiredBinding := &k8srbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: bindingName, Namespace: namespace, Labels: labels},
+			Subjects: []k8srbacv1.Subject{{
+				Kind:      "ServiceAccount",
+				Name:      serviceAccountName,
+				Namespace: infraNamespace,
+			}},
+			RoleRef: k8srbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: perExperimentChaosRoleName},
+		}
+		if existingBinding, err := clientset.RbacV1().RoleBindings(namespace).Get(ctx, bindingName, metav1.GetOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed getting rolebinding %s/%s: %w", namespace, bindingName, err)
+			}
+			if _, createErr := clientset.RbacV1().RoleBindings(namespace).Create(ctx, requiredBinding, metav1.CreateOptions{}); createErr != nil {
+				return fmt.Errorf("failed creating rolebinding %s/%s: %w", namespace, bindingName, createErr)
+			}
+		} else {
+			requiredBinding.ResourceVersion = existingBinding.ResourceVersion
+			if _, updateErr := clientset.RbacV1().RoleBindings(namespace).Update(ctx, requiredBinding, metav1.UpdateOptions{}); updateErr != nil {
+				return fmt.Errorf("failed updating rolebinding %s/%s: %w", namespace, bindingName, updateErr)
+			}
+		}
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"serviceAccount":   serviceAccountName,
+		"serviceAccountNs": infraNamespace,
+		"targetNamespaces": appendUniqueNonEmpty(nil, targetNamespaces...),
+		"clusterRole":      perExperimentChaosRoleName,
+	}).Info("ensured per-experiment chaos RBAC")
+
+	return nil
+}
+
+func cleanupPerExperimentChaosRBAC(ctx context.Context, clientset *kubernetes.Clientset, infraNamespace, serviceAccountName string) {
+	if serviceAccountName == "" {
+		return
+	}
+	labelSelector := "agentcert.io/rbac-scope=experiment-run,agentcert.io/chaos-sa=" + serviceAccountName
+	if namespaces, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{}); err == nil {
+		for _, namespace := range namespaces.Items {
+			bindings, bindErr := clientset.RbacV1().RoleBindings(namespace.Name).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+			if bindErr != nil {
+				logrus.WithField("namespace", namespace.Name).WithError(bindErr).Warn("failed listing per-experiment chaos RoleBindings for cleanup")
+				continue
+			}
+			for _, binding := range bindings.Items {
+				if err := clientset.RbacV1().RoleBindings(namespace.Name).Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+					logrus.WithFields(logrus.Fields{"namespace": namespace.Name, "roleBinding": binding.Name}).WithError(err).Warn("failed deleting per-experiment chaos RoleBinding")
+				}
+			}
+		}
+	} else {
+		logrus.WithError(err).Warn("failed listing namespaces for per-experiment chaos RBAC cleanup")
+	}
+
+	if err := clientset.CoreV1().ServiceAccounts(infraNamespace).Delete(ctx, serviceAccountName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		logrus.WithFields(logrus.Fields{"namespace": infraNamespace, "serviceAccount": serviceAccountName}).WithError(err).Warn("failed deleting per-experiment chaos ServiceAccount")
+	}
+}
+
 func normalizeInstallTemplateArgs(args []string) ([]string, bool) {
 	const timeoutArg = "-timeout={{workflow.parameters.installTimeout}}"
 
@@ -390,7 +605,9 @@ func normalizeInstallTemplates(templates []v1alpha1.Template) bool {
 	updated := false
 
 	for i := range templates {
-		if templates[i].Container == nil {
+		// The onExit cleanup handler shares the install-agent image and older
+		// revisions carry an install-type annotation on it; it is not an install step.
+		if templates[i].Container == nil || templates[i].Name == ops.UninstallAllTemplateName {
 			continue
 		}
 
@@ -524,7 +741,7 @@ func applyPreCleanupWaitPatchToWorkflowSpec(spec *v1alpha1.WorkflowSpec) {
 	waitTpl := v1alpha1.Template{
 		Name: waitTemplateName,
 		Container: &corev1.Container{
-			Image:   "busybox:1.36",
+			Image:   ops.WorkflowImage("busybox:1.36"),
 			Command: []string{"sh", "-c"},
 			Args:    []string{fmt.Sprintf("echo '[pre-cleanup-wait] sleeping for %d seconds'; sleep %d; echo '[pre-cleanup-wait] done'", waitSec, waitSec)},
 		},
@@ -552,6 +769,12 @@ func applyPreCleanupWaitPatchToWorkflowSpec(spec *v1alpha1.WorkflowSpec) {
 		"wait_seconds":        waitSec,
 		"insert_before_index": insertIdx,
 	}).Info("[Pre-Cleanup Wait Patch] Injected dynamic pre-cleanup wait step in run handler")
+}
+
+// ensureAgentFolderParam also restores the other generated install parameters
+// for older stored revisions before submission.
+func ensureAgentFolderParam(spec *v1alpha1.WorkflowSpec) {
+	ops.EnsureInstallStepParameters(spec)
 }
 
 // applyUninstallAllPatchToWorkflowSpec appends a final uninstall-all step that runs
@@ -924,18 +1147,31 @@ func detectNodeContainerRuntime(clientset *kubernetes.Clientset) (runtime, socke
 		return "", ""
 	}
 
-	// ContainerRuntimeVersion format: "docker://28.2.2", "containerd://1.7.x", "cri-o://..."
+	// ContainerRuntimeVersion format: "docker://28.2.2", "containerd://1.7.x", "containerd://1.7.x-k3s2...", "cri-o://..."
 	rv := nodes.Items[0].Status.NodeInfo.ContainerRuntimeVersion
 	switch {
 	case strings.HasPrefix(rv, "docker://"):
-		return "docker", "/run/docker.sock"
+		runtime, socketPath = "docker", "/run/docker.sock"
 	case strings.HasPrefix(rv, "containerd://"):
-		return "containerd", "/run/containerd/containerd.sock"
+		// k3s bundles containerd at a different socket path
+		if strings.Contains(rv, "-k3s") {
+			runtime, socketPath = "containerd", "/run/k3s/containerd/containerd.sock"
+		} else {
+			runtime, socketPath = "containerd", "/run/containerd/containerd.sock"
+		}
 	case strings.HasPrefix(rv, "cri-o://"):
-		return "cri-o", "/var/run/crio/crio.sock"
+		runtime, socketPath = "cri-o", "/var/run/crio/crio.sock"
 	default:
 		return "", ""
 	}
+
+	// CONTAINER_SOCKET_PATH allows operators to override the auto-detected path
+	// for non-standard distributions without rebuilding the image.
+	if override := os.Getenv("CONTAINER_SOCKET_PATH"); override != "" {
+		socketPath = override
+	}
+
+	return runtime, socketPath
 }
 
 // normalizeContainerRuntimeInYAML injects or updates CONTAINER_RUNTIME and SOCKET_PATH
@@ -1043,14 +1279,14 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 		return errors.New("infra not found for RBAC preflight")
 	}
 
-	infraNamespace := "litmus"
-	if infra.InfraNamespace != nil && *infra.InfraNamespace != "" {
-		infraNamespace = *infra.InfraNamespace
-	}
+	infraNamespace := infraNamespaceOrDefault(infra.InfraNamespace)
 
-	serviceAccount := "argo-chaos"
+	// subscriberSA is the SA the subscriber pod runs as (stored in infra.ServiceAccount).
+	// workflowSA is the SA Argo actually uses to execute workflow steps — discovered from
+	// workflow-controller-configmap so this code never needs to know the name out-of-band.
+	subscriberSA := "argo-chaos"
 	if infra.ServiceAccount != nil && *infra.ServiceAccount != "" {
-		serviceAccount = *infra.ServiceAccount
+		subscriberSA = *infra.ServiceAccount
 	}
 
 	clientset, err := buildKubeClientset()
@@ -1058,10 +1294,13 @@ func (c *ChaosExperimentRunHandler) preflightInfraRBAC(ctx context.Context, infr
 		return fmt.Errorf("failed RBAC preflight: unable to create kubernetes client: %w", err)
 	}
 
-	if err := ensureDynamicAppHelmRBAC(ctx, clientset, infraNamespace, serviceAccount); err != nil {
+	workflowSA := discoverWorkflowSA(ctx, clientset, infraNamespace, subscriberSA)
+	serviceAccount := workflowSA
+
+	if err := ensureDynamicAppHelmRBAC(ctx, clientset, infraNamespace, workflowSA); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"infraNamespace": infraNamespace,
-			"serviceAccount": serviceAccount,
+			"workflowSA":     workflowSA,
 		}).WithError(err).Warn("RBAC preflight auto-remediation skipped; continuing with RBAC validation")
 	}
 
@@ -2036,8 +2275,67 @@ func scoreExperimentRun(ctx context.Context, traceID string, experimentName stri
 	})
 }
 
+// modelAliasManifestAnnotation is where a run-scoped agent-model pick from the
+// Chaos Studio "Agent model" selector is persisted so every backend-triggered run
+// of the same experiment (the [Multi-Run] loop, re-runs) reuses it rather than
+// falling back to the GraphQL server's environment default.
+var modelAliasManifestAnnotation = "metadata.annotations." + strings.ReplaceAll(ops.RunModelAliasAnnotation, ".", `\.`)
+
+// resolveEffectiveModelAlias implements the agent-model precedence for a run:
+//
+//	explicit per-run override (Chaos Studio selector) > alias persisted on the
+//	experiment manifest from an earlier picked run > "" (the experiment's own
+//	agent model setting, else the environment default, both resolved later
+//	inside ops.InjectExperimentContextArgs).
+//
+// persist is true only when an explicit override is present and differs from what
+// is already stored, i.e. the caller should write it onto the manifest annotation.
+func resolveEffectiveModelAlias(override, latestManifest string) (effective string, persist bool) {
+	effective = strings.TrimSpace(override)
+	persisted := strings.TrimSpace(gjson.Get(latestManifest, modelAliasManifestAnnotation).String())
+	if effective == "" {
+		return persisted, false
+	}
+	return effective, effective != persisted
+}
+
+// resolveRunModelAlias preserves an explicit API model pick across later runs.
+// Both Workflow and CronWorkflow dispatch use the same precedence.
+func (c *ChaosExperimentRunHandler) resolveRunModelAlias(ctx context.Context, workflow *dbChaosExperiment.ChaosExperimentRequest, modelAliasOverride string) string {
+	latestManifest := workflow.Revision[0].ExperimentManifest
+	effectiveModelAlias, persistModelAlias := resolveEffectiveModelAlias(modelAliasOverride, latestManifest)
+	if persistModelAlias {
+		if updated, serr := sjson.Set(latestManifest, modelAliasManifestAnnotation, effectiveModelAlias); serr != nil {
+			logrus.WithError(serr).Warn("[Model Selector] could not write modelAlias annotation into manifest; this run uses the selected model but multi-run may revert to the default")
+		} else {
+			workflow.Revision[0].ExperimentManifest = updated
+			// Persist with revisions back in ascending-UpdatedAt order — the
+			// [Multi-Run] loop indexes Revision[len-1] as the newest one.
+			revisionsAsc := make([]dbChaosExperiment.ExperimentRevision, len(workflow.Revision))
+			copy(revisionsAsc, workflow.Revision)
+			sort.Slice(revisionsAsc, func(i, j int) bool {
+				return revisionsAsc[i].UpdatedAt < revisionsAsc[j].UpdatedAt
+			})
+			filter := bson.D{{"experiment_id", workflow.ExperimentID}}
+			update := bson.D{{"$set", bson.D{
+				{"revision", revisionsAsc},
+				{"updated_at", time.Now().UnixMilli()},
+			}}}
+			if uerr := c.chaosExperimentOperator.UpdateChaosExperiment(ctx, filter, update); uerr != nil {
+				logrus.WithError(uerr).Warn("[Model Selector] failed to persist modelAlias annotation; this run uses the selected model but multi-run may revert to the default")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"experimentId": workflow.ExperimentID,
+					"modelAlias":   effectiveModelAlias,
+				}).Info("[Model Selector] persisted agent model alias for all runs of this experiment")
+			}
+		}
+	}
+	return effectiveModelAlias
+}
+
 // RunChaosWorkFlow sends workflow run request(single run workflow only) to chaos_infra on workflow re-run request
-func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData) (*model.RunChaosExperimentResponse, error) {
+func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData, modelAliasOverride string) (*model.RunChaosExperimentResponse, error) {
 	var notifyID string
 	infra, err := dbChaosInfra.NewInfrastructureOperator(c.mongodbOperator).GetInfra(workflow.InfraID)
 	if err != nil {
@@ -2047,25 +2345,52 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, errors.New("experiment re-run failed due to inactive infra")
 	}
 
+	// A run is only ever dispatched by pushing the manifest onto this infra's
+	// subscription channel; with no subscriber attached that push is a silent
+	// no-op and the run sits in Queued forever, holding any multi-run batch
+	// behind it shut. Fail here instead, so the caller — including the
+	// multi-run chain, which releases its dispatch slot on error — can react.
+	if r != nil {
+		r.Mutex.Lock()
+		_, subscriberConnected := r.ConnectedInfra[workflow.InfraID]
+		r.Mutex.Unlock()
+		if !subscriberConnected {
+			return nil, fmt.Errorf("experiment run failed: no subscriber is connected for infrastructure %s", workflow.InfraID)
+		}
+	}
+
 	if err := c.preflightInfraRBAC(ctx, &infra); err != nil {
 		return nil, err
 	}
 
-	// Check if this is a multi-run experiment and block concurrent runs
+	// Check if this is a multi-run experiment and block concurrent runs.
+	// Revisions are stored oldest-first, so the newest manifest — the one that
+	// decides whether multi-run is on right now — is the last element.
 	if len(workflow.Revision) > 0 {
-		manifest := workflow.Revision[0].ExperimentManifest
+		manifest := workflow.Revision[len(workflow.Revision)-1].ExperimentManifest
 		multiRunEnabled := gjson.Get(manifest, "metadata.annotations.litmuschaos\\.io/multiRunEnabled").String()
 
 		if multiRunEnabled == "true" {
-			// Query for any running experiment runs for this experiment
+			// Queued counts as in-flight: a run that has been created but not yet
+			// picked up by the subscriber is still a pending run of this batch.
 			runningRuns, err := dbChaosExperimentRun.NewChaosExperimentRunOperator(c.mongodbOperator).GetExperimentRuns(bson.D{
 				{"experiment_id", workflow.ExperimentID},
 				{"is_removed", false},
 				{"completed", false},
-				{"phase", string(model.ExperimentRunStatusRunning)},
+				{"phase", bson.D{{"$in", bson.A{
+					string(model.ExperimentRunStatusRunning),
+					string(model.ExperimentRunStatusQueued),
+				}}}},
 			})
 			if err == nil && len(runningRuns) > 0 {
 				return nil, errors.New("multi-run experiment already has a running instance. Please wait for it to complete before starting another run")
+			}
+			// A run the user starts (not one the batch dispatches for itself)
+			// opens a new batch; nothing is in flight at this point.
+			if !isMultiRunContinuation(ctx) {
+				if err := c.beginMultiRunBatch(ctx, workflow.ExperimentID, time.Now().UnixMilli()); err != nil {
+					return nil, fmt.Errorf("could not start a new multi-run batch: %w", err)
+				}
 			}
 		}
 	}
@@ -2080,11 +2405,11 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	traceAgentID := infra.InfraID
 	traceAgentName := infra.Name
 	traceAgentPlatform := infra.PlatformName
-	if c.agentRegistryOperator != nil && infra.InfraNamespace != nil {
-		agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, *infra.InfraNamespace)
-		if agentErr != nil {
-			logrus.WithError(agentErr).Warn("failed to lookup agent for observability trace identity")
-		} else if agent != nil {
+	// The agent lives in the application namespace its install step targets,
+	// never in the infra namespace, so resolve it from the manifest.
+	if c.agentRegistryOperator != nil && len(workflow.Revision) > 0 {
+		agent := ops.ResolveManifestAgent(ctx, c.agentRegistryOperator, workflow.Revision[len(workflow.Revision)-1].ExperimentManifest, "")
+		if agent != nil {
 			if strings.TrimSpace(agent.AgentID) != "" {
 				traceAgentID = agent.AgentID
 			}
@@ -2110,7 +2435,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 
 	resKind := gjson.Get(workflow.Revision[0].ExperimentManifest, "kind").String()
 	if strings.ToLower(resKind) == "cronworkflow" {
-		return &model.RunChaosExperimentResponse{NotifyID: notifyID}, c.RunCronExperiment(ctx, projectID, workflow, r)
+		return &model.RunChaosExperimentResponse{NotifyID: notifyID}, c.runCronExperiment(ctx, projectID, workflow, r, modelAliasOverride)
 	}
 
 	err = json.Unmarshal([]byte(workflow.Revision[0].ExperimentManifest), &workflowManifest)
@@ -2121,8 +2446,24 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	if normalizeInstallTemplates(workflowManifest.Spec.Templates) {
 		ensureInstallTimeoutParam(&workflowManifest.Spec.Arguments)
 	}
+	ops.ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
+	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
+	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
+	ops.ApplyRegistryImageOverrides(&workflowManifest.Spec)
+	if err := ops.ValidateExperimentStructure(&workflowManifest.Spec); err != nil {
+		return nil, fmt.Errorf("workflow composition is not runnable: %w", err)
+	}
+	if err := c.preflightChaosTargets(ctx, projectID, &infra, workflowManifest.Spec.Templates); err != nil {
+		return nil, err
+	}
+
+	effectiveModelAlias := c.resolveRunModelAlias(ctx, &workflow, modelAliasOverride)
+	ops.InjectExperimentContextArgs(workflowManifest.Spec.Templates, effectiveModelAlias)
 	applyPreCleanupWaitPatchToWorkflowSpec(&workflowManifest.Spec)
-	applyUninstallAllPatchToWorkflowSpec(&workflowManifest.Spec)
+	ensureAgentFolderParam(&workflowManifest.Spec)
+	if err := ops.ApplyGuaranteedCleanupPatch(&workflowManifest.Spec); err != nil {
+		return nil, fmt.Errorf("apply guaranteed cleanup patch: %w", err)
+	}
 
 	// Emit "fault: <name>" SPAN observations to Langfuse for certifier fault bucketing.
 	// Also emits a preceding "experiment_context" SPAN carrying agent/experiment identity
@@ -2163,15 +2504,11 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	if c.agentRegistryOperator != nil {
 		agentIDStr := ""
 		if infra.InfraNamespace != nil {
-			agentNS := ops.ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)
-			if agentNS == "" {
-				agentNS = *infra.InfraNamespace
-			}
-			if agent, agentErr := c.agentRegistryOperator.GetAgentByNamespace(ctx, agentNS); agentErr == nil && agent != nil {
+			if agent := ops.ResolveWorkflowAgent(ctx, c.agentRegistryOperator, workflowManifest.Spec.Templates, *infra.InfraNamespace); agent != nil {
 				agentIDStr = agent.AgentID
-				logrus.WithField("agentId", agentIDStr).Info("resolved agentId from registry (re-run)")
+				logrus.WithFields(logrus.Fields{"agentId": agentIDStr, "agent": agent.Name}).Info("resolved agentId from registry (re-run)")
 			} else {
-				logrus.WithField("namespace", agentNS).Info("no agent record found for re-run; agentId will be empty")
+				logrus.WithField("namespace", ops.ExtractInstallAgentNamespace(workflowManifest.Spec.Templates)).Info("no agent record found for re-run; agentId will be empty")
 			}
 		}
 		found := false
@@ -2197,7 +2534,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, errors.New("failed to rerun the chaos experiment due to invalid metadata/labels. Check the troubleshooting guide or contact support")
 	}
 	workflowManifest.Labels["notify_id"] = notifyID
-	workflowManifest.Name = workflowManifest.Name + "-" + strconv.FormatInt(currentTime, 10)
+	workflowManifest.Name = utils.SuffixedK8sName(workflowManifest.Name, strconv.FormatInt(currentTime, 10))
 
 	// Detect container runtime once for all ChaosEngine templates in this workflow
 	var (
@@ -2209,6 +2546,23 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		clusterRuntime, clusterSocketPath = detectNodeContainerRuntime(cs)
 	}
 	wfParams := buildWorkflowParameterMap(workflowManifest.Spec.Arguments)
+	infraNamespace := infraNamespaceOrDefault(infra.InfraNamespace)
+	chaosServiceAccount := perExperimentChaosServiceAccountName(notifyID)
+	targetNamespaces := make([]string, 0)
+
+	// Serialize workflows that target the same app namespace: LitmusChaos fault
+	// injection is scoped by ChaosEngine appns/applabel, not by workflow, so two
+	// concurrent runs against the same namespace corrupt each other's fault
+	// injection and the agent metrics observed during it. An Argo mutex keyed on
+	// the resolved appNamespace holds the second workflow in Pending until the
+	// first completes, while different namespaces still run concurrently.
+	if appNS := wfParams["appNamespace"]; appNS != "" {
+		workflowManifest.Spec.Synchronization = &v1alpha1.Synchronization{
+			Mutex: &v1alpha1.Mutex{
+				Name: "ace-app-ns-" + appNS,
+			},
+		}
+	}
 
 	var probes []dbChaosExperimentRun.Probes
 	for i, template := range workflowManifest.Spec.Templates {
@@ -2245,16 +2599,9 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 				annotation = meta.Annotations
 			}
 
-			var annotationArray []string
-			for _, key := range annotation {
-				var manifestAnnotation []dbChaosExperiment.ProbeAnnotations
-				err := json.Unmarshal([]byte(key), &manifestAnnotation)
-				if err != nil {
-					return nil, errors.New("failed to unmarshal experiment annotation object")
-				}
-				for _, annotationKey := range manifestAnnotation {
-					annotationArray = append(annotationArray, annotationKey.Name)
-				}
+			annotationArray, perr := probeUtils.ParseProbeRefNames(annotation)
+			if perr != nil {
+				return nil, perr
 			}
 			probes = append(probes, dbChaosExperimentRun.Probes{
 				artifacts[j].Name,
@@ -2262,21 +2609,34 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 			})
 
 			meta.Annotations = annotation
+			// step_pod_name carries the full Argo pod name ({{pod.name}}), which
+			// routinely exceeds Kubernetes's 63-byte label *value* limit and would
+			// make the ChaosEngine create call fail outright. Annotation values have
+			// no such length limit, and nothing selects on step_pod_name via label
+			// selector (only workflow_run_id is used that way), so it belongs there.
+			meta.Annotations["step_pod_name"] = "{{pod.name}}"
 
 			if meta.Labels == nil {
 				meta.Labels = map[string]string{
 					"infra_id":        workflow.InfraID,
-					"step_pod_name":   "{{pod.name}}",
 					"workflow_run_id": "{{workflow.uid}}",
 				}
 			} else {
 				meta.Labels["infra_id"] = workflow.InfraID
-				meta.Labels["step_pod_name"] = "{{pod.name}}"
 				meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
 			}
 
 			meta.Spec.Appinfo.Appns = resolveWorkflowParameterValue(meta.Spec.Appinfo.Appns, wfParams)
 			meta.Spec.Appinfo.Applabel = resolveWorkflowParameterValue(meta.Spec.Appinfo.Applabel, wfParams)
+			// §99 per-experiment sandbox is gated off (perExperimentChaosRBACEnabled) --
+			// every fault keeps its authored SA (litmus-admin). When re-enabled, the
+			// generic pod-level faults get the per-run SA; the families in
+			// utils.UsesUnscopedChaosServiceAccount stay on litmus-admin. See innovation.md §7.5.
+			if perExperimentChaosRBACEnabled &&
+				(len(meta.Spec.Experiments) == 0 || !utils.UsesUnscopedChaosServiceAccount(meta.Spec.Experiments[0].Name)) {
+				meta.Spec.ChaosServiceAccount = chaosServiceAccount
+				targetNamespaces = appendUniqueNonEmpty(targetNamespaces, meta.Spec.Appinfo.Appns)
+			}
 
 			// Normalize appkind by detecting actual resource type from cluster
 			if clusterClientset != nil {
@@ -2312,6 +2672,15 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 				return nil, errors.New("failed to marshal chaosengine")
 			}
 			workflowManifest.Spec.Templates[i].Inputs.Artifacts[j].Raw.Data = string(res)
+		}
+	}
+
+	if len(targetNamespaces) > 0 {
+		if clusterClientset == nil {
+			return nil, errors.New("failed to prepare per-experiment chaos RBAC: kubernetes client unavailable")
+		}
+		if err := ensurePerExperimentChaosRBAC(ctx, clusterClientset, infraNamespace, chaosServiceAccount, targetNamespaces); err != nil {
+			return nil, err
 		}
 	}
 
@@ -2485,6 +2854,17 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 		return nil, fmt.Errorf("failed to generate probes in workflow manifest, err: %v", err)
 	}
 
+	// Sanitize WF metadata labels: Kubernetes label values must be ≤ 63 bytes.
+	// Long experiment names (e.g. itbench-flash-agent-scenario-46-postgresql-...) can
+	// exceed this and cause the subscriber's Kubernetes create call to be rejected
+	// silently (the subscriber logs the error but the handler has already returned 200).
+	// Truncate any label value that exceeds 63 bytes before serializing the manifest.
+	for k, v := range workflowManifest.Labels {
+		if len(v) > 63 {
+			workflowManifest.Labels[k] = v[:63]
+		}
+	}
+
 	manifest, err := yaml.Marshal(workflowManifest)
 	if err != nil {
 		return nil, err
@@ -2506,6 +2886,10 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 }
 
 func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData) error {
+	return c.runCronExperiment(ctx, projectID, workflow, r, "")
+}
+
+func (c *ChaosExperimentRunHandler) runCronExperiment(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData, modelAliasOverride string) error {
 	var (
 		cronExperimentManifest v1alpha1.CronWorkflow
 	)
@@ -2525,8 +2909,21 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 	if normalizeInstallTemplates(cronExperimentManifest.Spec.WorkflowSpec.Templates) {
 		ensureInstallTimeoutParam(&cronExperimentManifest.Spec.WorkflowSpec.Arguments)
 	}
+	ops.ApplyInstallAgentTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ops.ApplyInstallApplicationTemplateOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	if err := ops.ValidateExperimentStructure(&cronExperimentManifest.Spec.WorkflowSpec); err != nil {
+		return fmt.Errorf("cron workflow composition is not runnable: %w", err)
+	}
+
+	effectiveModelAlias := c.resolveRunModelAlias(ctx, &workflow, modelAliasOverride)
+	ops.InjectCronExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates, effectiveModelAlias)
+	ops.ApplyLitmusHelperImageOverrides(cronExperimentManifest.Spec.WorkflowSpec.Templates)
+	ops.ApplyRegistryImageOverrides(&cronExperimentManifest.Spec.WorkflowSpec)
 	applyPreCleanupWaitPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
-	applyUninstallAllPatchToWorkflowSpec(&cronExperimentManifest.Spec.WorkflowSpec)
+	ensureAgentFolderParam(&cronExperimentManifest.Spec.WorkflowSpec)
+	if err := ops.ApplyGuaranteedCleanupPatch(&cronExperimentManifest.Spec.WorkflowSpec); err != nil {
+		return fmt.Errorf("apply guaranteed cleanup patch: %w", err)
+	}
 
 	// Detect container runtime once for all ChaosEngine templates in this cron workflow
 	var (
@@ -2538,6 +2935,25 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 		cronRuntime, cronSocketPath = detectNodeContainerRuntime(cs)
 	}
 	cronParams := buildWorkflowParameterMap(cronExperimentManifest.Spec.WorkflowSpec.Arguments)
+	infraNamespace := "litmus"
+	if infra, infraErr := dbChaosInfra.NewInfrastructureOperator(c.mongodbOperator).GetInfra(workflow.InfraID); infraErr == nil {
+		infraNamespace = infraNamespaceOrDefault(infra.InfraNamespace)
+	} else {
+		logrus.WithField("infraID", workflow.InfraID).WithError(infraErr).Warn("failed to lookup infra namespace for cron per-experiment RBAC; falling back to litmus")
+	}
+	chaosServiceAccount := perExperimentChaosServiceAccountName(workflow.ExperimentID)
+	targetNamespaces := make([]string, 0)
+
+	// See matching comment in RunChaosWorkFlow: serialize per app namespace so a
+	// cron-triggered run can't overlap fault injection with another run (cron or
+	// manual) targeting the same namespace.
+	if appNS := cronParams["appNamespace"]; appNS != "" {
+		cronExperimentManifest.Spec.WorkflowSpec.Synchronization = &v1alpha1.Synchronization{
+			Mutex: &v1alpha1.Mutex{
+				Name: "ace-app-ns-" + appNS,
+			},
+		}
+	}
 
 	for i, template := range cronExperimentManifest.Spec.WorkflowSpec.Templates {
 		artifacts := template.Inputs.Artifacts
@@ -2568,23 +2984,42 @@ func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, proje
 				annotation = meta.Annotations
 			}
 			meta.Annotations = annotation
+			// step_pod_name carries the full Argo pod name ({{pod.name}}), which
+			// routinely exceeds Kubernetes's 63-byte label *value* limit and would
+			// make the ChaosEngine create call fail outright. Annotation values have
+			// no such length limit, and nothing selects on step_pod_name via label
+			// selector (only workflow_run_id is used that way), so it belongs there.
+			meta.Annotations["step_pod_name"] = "{{pod.name}}"
 
 			if meta.Labels == nil {
 				meta.Labels = map[string]string{
 					"infra_id":        workflow.InfraID,
-					"step_pod_name":   "{{pod.name}}",
 					"workflow_run_id": "{{workflow.uid}}",
 				}
 			} else {
 				meta.Labels["infra_id"] = workflow.InfraID
-				meta.Labels["step_pod_name"] = "{{pod.name}}"
 				meta.Labels["workflow_run_id"] = "{{workflow.uid}}"
 			}
 
 			meta.Spec.Appinfo.Appns = resolveWorkflowParameterValue(meta.Spec.Appinfo.Appns, cronParams)
 			meta.Spec.Appinfo.Applabel = resolveWorkflowParameterValue(meta.Spec.Appinfo.Applabel, cronParams)
+			// §99 sandbox gated off -- see RunChaosWorkFlow / perExperimentChaosRBACEnabled.
+			if perExperimentChaosRBACEnabled &&
+				(len(meta.Spec.Experiments) == 0 || !utils.UsesUnscopedChaosServiceAccount(meta.Spec.Experiments[0].Name)) {
+				meta.Spec.ChaosServiceAccount = chaosServiceAccount
+				targetNamespaces = appendUniqueNonEmpty(targetNamespaces, meta.Spec.Appinfo.Appns)
+			}
 
 			// Normalize appkind by detecting actual resource type from cluster
+
+			if len(targetNamespaces) > 0 {
+				if cronClientset == nil {
+					return errors.New("failed to prepare per-experiment chaos RBAC: kubernetes client unavailable")
+				}
+				if err := ensurePerExperimentChaosRBAC(ctx, cronClientset, infraNamespace, chaosServiceAccount, targetNamespaces); err != nil {
+					return err
+				}
+			}
 			if cronClientset != nil {
 				if normalizeChaosEngineAppKind(cronClientset, &meta) {
 					logrus.WithField("experiment", meta.Spec.Experiments[0].Name).Debug("Updated appkind for ChaosEngine in cron")
@@ -2696,6 +3131,58 @@ func (c *ChaosExperimentRunHandler) GetExperimentRunStats(ctx context.Context, p
 	}, nil
 }
 
+// runPhaseCompletedWithProbeFailure is the phase used for a run whose workflow
+// finished cleanly but whose chaos faults did not pass. It matches the string
+// the subscriber and the web UI already use (ExperimentRunStatus in
+// web/src/api/entities/common.ts); it is deliberately not in the GraphQL
+// ExperimentRunStatus enum, which only types the status *filter* input.
+const runPhaseCompletedWithProbeFailure = "Completed_With_Probe_Failure"
+
+// runPhaseCompletedNotGraded is the phase for a run that finished cleanly but
+// produced no gradeable fault at all -- every fault reported verdict N/A.
+//
+// Such a run is neither a pass nor a failure, and both of the other phases
+// misreport it: "Completed" reads as a clean success next to a 0% resiliency
+// score (the score is 0 because the denominator was empty, not because the agent
+// scored nothing), and "Completed_With_Probe_Failure" would blame the agent for
+// what is actually a measurement gap on our side.
+const runPhaseCompletedNotGraded = "Completed_Not_Graded"
+
+// reconcileRunPhase corrects a terminal run phase that disagrees with the
+// graded fault verdicts.
+//
+// The phase reported by the subscriber is, at bottom, the Argo workflow phase:
+// it says every step exited, not that the chaos succeeded. A run whose probes
+// all failed still finishes with every step exit-0, so it was stored -- and
+// shown -- as a clean "Completed" while its resiliency score sat at 0. The
+// verdict tallies computed by ProcessCompletedExperimentRun are the
+// authoritative signal, so they win here.
+//
+// Only the success phases are reconciled: a run already reported as failed,
+// errored or stopped keeps the more specific phase it arrived with.
+func reconcileRunPhase(phase string, metrics types.ExperimentRunMetrics) string {
+	if !strings.EqualFold(phase, "Completed") && !strings.EqualFold(phase, "Succeeded") {
+		return phase
+	}
+	// A run with no *graded* fault -- a teardown-only workflow, or one whose
+	// faults the orchestrator reported N/A because it could not assert on them --
+	// has no verdict to contradict the workflow phase.
+	if metrics.TotalExperiments-metrics.ExperimentsNA <= 0 {
+		// Faults ran, but not one of them could be graded: say so rather than
+		// letting a 0% score read as a failed run or a clean pass.
+		if metrics.TotalExperiments > 0 {
+			return runPhaseCompletedNotGraded
+		}
+		return phase
+	}
+	// ExperimentsPassed == 0 also catches the all-Awaited case, where no graded
+	// fault ever produced a verdict — that is not a pass either.
+	if metrics.ExperimentsFailed > 0 || metrics.ExperimentsStopped > 0 || metrics.ExperimentsPassed == 0 {
+		return runPhaseCompletedWithProbeFailure
+	}
+	return phase
+}
+
 func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.ExperimentRunRequest) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -2760,6 +3247,22 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 			return "", err
 		}
 
+		if reconciled := reconcileRunPhase(executionData.Phase, workflowRunMetrics); reconciled != executionData.Phase {
+			logrus.WithFields(logFields).Infof(
+				"[Verdict] run phase %q does not match fault verdicts (passed=%d failed=%d stopped=%d awaited=%d na=%d total=%d); persisting %q",
+				executionData.Phase, workflowRunMetrics.ExperimentsPassed, workflowRunMetrics.ExperimentsFailed,
+				workflowRunMetrics.ExperimentsStopped, workflowRunMetrics.ExperimentsAwaited,
+				workflowRunMetrics.ExperimentsNA, workflowRunMetrics.TotalExperiments, reconciled)
+			executionData.Phase = reconciled
+			// executionData is persisted verbatim as the run's execution_data and
+			// drives the run-detail view, so it has to carry the same phase as the
+			// top-level column.
+			if reEncoded, mErr := json.Marshal(executionData); mErr == nil {
+				exeData = reEncoded
+			} else {
+				logrus.WithFields(logFields).WithError(mErr).Warn("[Verdict] failed to re-encode execution data with the reconciled phase")
+			}
+		}
 	}
 
 	traceID := strings.TrimSpace(event.ExperimentRunID)
@@ -2826,6 +3329,9 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 						faultName = node.ChaosExp.EngineName
 					}
 					if faultName != "" {
+						if utils.IsTeardownExperiment(faultName) {
+							continue
+						}
 						faultNames = append(faultNames, faultName)
 					}
 				}
@@ -2856,10 +3362,14 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				if faultName == "" {
 					continue
 				}
+				if utils.IsTeardownExperiment(faultName) {
+					continue
+				}
 
 				details := observability.FaultInjectionDetails{
 					FaultName:                faultName,
 					EngineName:               node.ChaosExp.ExperimentName,
+					EngineUID:                node.ChaosExp.EngineUID,
 					Namespace:                node.ChaosExp.Namespace,
 					StartedAt:                node.StartedAt,
 					FinishedAt:               node.FinishedAt,
@@ -2929,6 +3439,9 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					if faultName == "" {
 						faultName = node.ChaosExp.EngineName
 					}
+					if faultName == "" || utils.IsTeardownExperiment(faultName) {
+						continue
+					}
 					_ = tracer.TraceExperimentObservation(ctx, &observability.ExperimentObservationDetails{
 						TraceID:   langfuseTraceID,
 						Name:      fmt.Sprintf("fault-verdict: %s", faultName),
@@ -2975,37 +3488,38 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 			}
 		}
 		scoreExperimentRun(ctx, traceID, expName, expStart, metricsPtr, executionData.Phase)
+
+		cleanupKey := notifyID
+		if cleanupKey == "" {
+			cleanupKey = event.ExperimentRunID
+		}
+		if cleanupKey != "" {
+			if clientset, kubeErr := buildKubeClientset(); kubeErr == nil {
+				infraNamespace := "litmus"
+				if infra, infraErr := dbChaosInfra.NewInfrastructureOperator(c.mongodbOperator).GetInfra(experiment.InfraID); infraErr == nil {
+					infraNamespace = infraNamespaceOrDefault(infra.InfraNamespace)
+				} else {
+					logrus.WithField("infraID", experiment.InfraID).WithError(infraErr).Warn("failed to lookup infra namespace for per-experiment chaos RBAC cleanup; falling back to litmus")
+				}
+				cleanupPerExperimentChaosRBAC(ctx, clientset, infraNamespace, perExperimentChaosServiceAccountName(cleanupKey))
+			} else {
+				logrus.WithError(kubeErr).Warn("failed to create kubernetes client for per-experiment chaos RBAC cleanup")
+			}
+		}
+
 		// Auto-trigger certification (bucketing-extraction) on terminal phase.
 		// Mirrors the manual `generateCertification` mutation so that the
 		// certifier pipeline starts without requiring a UI/API caller.
 		if c.certificationService != nil {
 			projectID := ""
+			infraID := ""
 			agentID := ""
 			agentName := ""
 			if event.ExperimentRunID != "" {
 				if wfRun, dbErr := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{{"experiment_run_id", event.ExperimentRunID}}); dbErr == nil {
 					projectID = wfRun.ProjectID
-					agentID = wfRun.InfraID
+					infraID = wfRun.InfraID
 				}
-			}
-			if c.agentRegistryOperator != nil && executionData.Namespace != "" {
-				if a, e := c.agentRegistryOperator.GetAgentByNamespace(ctx, executionData.Namespace); e == nil && a != nil {
-					if agentID == "" {
-						agentID = a.AgentID
-					}
-					agentName = a.Name
-				}
-			}
-			// Fallback: look up agent by ID if namespace lookup didn't yield a name.
-			if agentName == "" && c.agentRegistryOperator != nil && agentID != "" {
-				if a, e := c.agentRegistryOperator.GetAgent(ctx, agentID); e == nil && a != nil {
-					agentName = a.Name
-				}
-			}
-			// Certifier rejects empty agent_name (422 string_too_short).
-			// Use the agentID as a last-resort label so the pipeline still runs.
-			if agentName == "" {
-				agentName = agentID
 			}
 			// Read the user-declared planned run count from the parent
 			// chaos-experiment document. Defaults to 1 when unset so the
@@ -3017,7 +3531,27 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 					if exp.PlannedRuns > 0 {
 						plannedRuns = exp.PlannedRuns
 					}
+					// The agent under test is the one the experiment's install-agent
+					// step deploys. executionData.Namespace is the Argo workflow's own
+					// namespace (the infra namespace), where no agent is ever
+					// registered, which is why certificates used to be keyed by the
+					// chaos infra id instead of the agent.
+					if len(exp.Revision) > 0 {
+						if a := ops.ResolveManifestAgent(ctx, c.agentRegistryOperator, exp.Revision[len(exp.Revision)-1].ExperimentManifest, ""); a != nil {
+							agentID, agentName = a.AgentID, a.Name
+						}
+					}
 				}
+			}
+			// Experiments without a registered agent keep the previous identity
+			// (the infra id) so their certification still runs.
+			if agentID == "" {
+				agentID = infraID
+			}
+			// Certifier rejects empty agent_name (422 string_too_short).
+			// Use the agentID as a last-resort label so the pipeline still runs.
+			if agentName == "" {
+				agentName = agentID
 			}
 			certIn := certification.StartInput{
 				ProjectID:       projectID,
@@ -3026,6 +3560,15 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				ExperimentID:    event.ExperimentID,
 				ExperimentRunID: event.ExperimentRunID,
 				ExpectedRuns:    plannedRuns,
+				// traceID is the canonical notify_id-preferred trace key computed
+				// above (line ~2765) -- the same value agent-sidecar stamps as
+				// Langfuse's trace_id on every LLM call for this run.
+				NotifyID: traceID,
+				// FaultWindows lets the certifier split this run's trace into
+				// per-fault buckets by timestamp when it carries no `fault: *`
+				// spans (blind-observer agents). Empty for single-fault or
+				// non-Argo-orchestrated runs -- fully backward compatible.
+				FaultWindows: computeFaultWindows(executionData.Nodes),
 			}
 			lf := logFields
 			go func(in certification.StartInput) {
@@ -3141,17 +3684,27 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				return err
 			}
 		} else if experimentRunCount > 0 {
+			// Build the $elemMatch conditions for the positional update.
+			// Two separate array.field conditions without $elemMatch would give an
+			// ambiguous positional $ index when multiple elements match — this is the
+			// classic MongoDB positional operator bug.
+			//
+			// Terminal events (event.Completed=true) intentionally skip the
+			// "completed=false" guard so that the UI is updated even when the run was
+			// already marked Stopped by ProcessExperimentRunStop. Without this,
+			// completed=true on chaosExperimentRuns would cause the UpdateExperimentRun
+			// guard to return count=0, abort the whole transaction, and permanently
+			// strand recent_experiment_run_details in a stale "Running" state.
+			expRunElemMatch := bson.D{{"experiment_run_id", event.ExperimentRunID}}
+			if event.NotifyID != nil {
+				expRunElemMatch = bson.D{{"notify_id", event.NotifyID}}
+			}
+			if !event.Completed {
+				expRunElemMatch = append(expRunElemMatch, bson.E{"completed", false})
+			}
 			filter := bson.D{
 				{"experiment_id", event.ExperimentID},
-				{"recent_experiment_run_details.experiment_run_id", event.ExperimentRunID},
-				{"recent_experiment_run_details.completed", false},
-			}
-			if event.NotifyID != nil {
-				filter = bson.D{
-					{"experiment_id", event.ExperimentID},
-					{"recent_experiment_run_details.completed", false},
-					{"recent_experiment_run_details.notify_id", event.NotifyID},
-				}
+				{"recent_experiment_run_details", bson.D{{"$elemMatch", expRunElemMatch}}},
 			}
 			updatedByModel := mongodb.UserDetailResponse{
 				Username: string(updatedBy),
@@ -3213,8 +3766,19 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 		}
 
 		if count == 0 {
-			err := fmt.Sprintf("experiment run has been discarded due the duplicate event, workflowId: %s, workflowRunId: %s", event.ExperimentID, event.ExperimentRunID)
-			return errors.New(err)
+			if !event.Completed {
+				// Non-terminal event for an already-stopped run — discard.
+				return errors.New(fmt.Sprintf("experiment run has been discarded due the duplicate event, workflowId: %s, workflowRunId: %s", event.ExperimentID, event.ExperimentRunID))
+			}
+			// Terminal event for an already-stopped run: chaosExperimentRuns already has
+			// completed=true so the guard returned count=0, but we still commit here so
+			// the recent_experiment_run_details update above is persisted and the UI
+			// reflects the final phase rather than staying stuck on "Running".
+			if err = session.CommitTransaction(sessionContext); err != nil {
+				logrus.WithFields(logFields).Errorf("failed to commit session transaction for terminal event on stopped run %v", err)
+				return err
+			}
+			return nil
 		}
 
 		if err = session.CommitTransaction(sessionContext); err != nil {
@@ -3234,143 +3798,247 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 
 	session.EndSession(ctx)
 
-	// Multi-run triggering: if experiment completed successfully and is a multi-run experiment, trigger next run
+	// Multi-run: advance the sequential chain when a run reaches a terminal phase.
 	if isCompleted && len(experiment.Revision) > 0 {
 		manifest := experiment.Revision[len(experiment.Revision)-1].ExperimentManifest
 
-		// Debug: Log raw annotation values
-		logrus.WithFields(logFields).Infof("[Multi-Run Debug] Checking manifest for multi-run annotations...")
-
 		multiRunEnabled := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunEnabled`).String()
 		maxRunsStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/maxRuns`).String()
-		currentRunStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/currentRun`).String()
-
-		logrus.WithFields(logFields).Infof("[Multi-Run Debug] multiRunEnabled='%s', maxRuns='%s', currentRun='%s'",
-			multiRunEnabled, maxRunsStr, currentRunStr)
 
 		if multiRunEnabled == "true" {
 			maxRuns := 1
 			if parsed, err := strconv.Atoi(maxRunsStr); err == nil && parsed > 1 {
 				maxRuns = parsed
 			}
-
-			currentRun := 0
-			if parsed, err := strconv.Atoi(currentRunStr); err == nil {
-				currentRun = parsed
-			}
-			// This completed run means currentRun should be incremented
-			currentRun++
-
-			logrus.WithFields(logFields).Infof("[Multi-Run] Experiment completed. multiRunEnabled=%s, currentRun=%d, maxRuns=%d",
-				multiRunEnabled, currentRun, maxRuns)
-
-			if currentRun < maxRuns {
-				// More runs needed - update manifest with new currentRun and trigger next
-				logrus.WithFields(logFields).Infof("[Multi-Run] Triggering run %d/%d...", currentRun+1, maxRuns)
-
-				// Update the experiment manifest with incremented currentRun
-				updatedManifest, err := sjson.Set(manifest, "metadata.annotations.litmuschaos\\.io/currentRun", strconv.Itoa(currentRun))
-				if err != nil {
-					logrus.WithFields(logFields).Errorf("[Multi-Run] Failed to update manifest currentRun: %v", err)
-				} else {
-					// Update revision in database
-					experiment.Revision[len(experiment.Revision)-1].ExperimentManifest = updatedManifest
-
-					filter := bson.D{{"experiment_id", experiment.ExperimentID}}
-					update := bson.D{
-						{"$set", bson.D{
-							{"revision", experiment.Revision},
-							{"updated_at", time.Now().UnixMilli()},
-						}},
-					}
-					if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx, filter, update); err != nil {
-						logrus.WithFields(logFields).Errorf("[Multi-Run] Failed to update experiment revision: %v", err)
-					}
-				}
-
-				// Trigger next run in a goroutine after a delay
-				// Capture values for goroutine
-				expID := experiment.ExperimentID
-				projID := experiment.ProjectID
-				nextRun := currentRun + 1
-				totalRuns := maxRuns
-				handler := c
-				// Extract auth token from context and store it for the goroutine
-				// We cannot use the original context because it will be canceled when this function returns
-				var authToken string
-				if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok {
-					authToken = tkn
-				}
-
-				// Read configurable delay from annotation (default: 120 seconds = 2 minutes)
-				delaySeconds := 120
-				if delayStr := gjson.Get(manifest, `metadata.annotations.litmuschaos\.io/multiRunDelay`).String(); delayStr != "" {
-					if parsed, err := strconv.Atoi(delayStr); err == nil && parsed > 0 {
-						delaySeconds = parsed
-					}
-				}
-				delayDuration := time.Duration(delaySeconds) * time.Second
-
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							logrus.Errorf("[Multi-Run] PANIC in trigger goroutine: %v", r)
-						}
-					}()
-
-					logrus.Infof("[Multi-Run] Goroutine started, waiting %v before triggering run %d/%d for experiment %s", delayDuration, nextRun, totalRuns, expID)
-
-					// Wait configured delay between runs
-					time.Sleep(delayDuration)
-
-					logrus.Infof("[Multi-Run] %v delay complete, fetching experiment %s", delayDuration, expID)
-
-					// Re-fetch experiment with updated manifest
-					updatedExperiment, err := handler.chaosExperimentOperator.GetExperiment(context.Background(), bson.D{{"experiment_id", expID}})
-					if err != nil {
-						logrus.Errorf("[Multi-Run] Failed to fetch updated experiment %s: %v", expID, err)
-						return
-					}
-
-					logrus.Infof("[Multi-Run] Experiment fetched, calling RunChaosWorkFlow for %s", expID)
-
-					// Create a fresh context with the auth token for the new run
-					// Using context.Background() ensures the context won't be canceled
-					newCtx := context.Background()
-					if authToken != "" {
-						newCtx = context.WithValue(newCtx, authorization.AuthKey, authToken)
-					}
-
-					// Trigger next run using fresh context with auth token
-					// IMPORTANT: Must pass store.Store (not nil) to actually send the workflow to subscriber
-					_, err = handler.RunChaosWorkFlow(newCtx, projID, updatedExperiment, store.Store)
-					if err != nil {
-						logrus.Errorf("[Multi-Run] Failed to trigger run %d for %s: %v", nextRun, expID, err)
-					} else {
-						logrus.Infof("[Multi-Run] Successfully triggered run %d/%d for %s", nextRun, totalRuns, expID)
-					}
-				}()
-			} else {
-				logrus.WithFields(logFields).Infof("[Multi-Run] All %d runs completed!", maxRuns)
-
-				// Reset currentRun to 0 for next batch
-				updatedManifest, err := sjson.Set(manifest, "metadata.annotations.litmuschaos\\.io/currentRun", "0")
-				if err == nil {
-					experiment.Revision[len(experiment.Revision)-1].ExperimentManifest = updatedManifest
-					filter := bson.D{{"experiment_id", experiment.ExperimentID}}
-					update := bson.D{
-						{"$set", bson.D{
-							{"revision", experiment.Revision},
-							{"updated_at", time.Now().UnixMilli()},
-						}},
-					}
-					_ = c.chaosExperimentOperator.UpdateChaosExperiment(ctx, filter, update)
-				}
-			}
+			c.advanceMultiRunChain(ctx, experiment, event.ExperimentRunID, maxRuns, manifest, logFields)
 		}
 	}
 
 	return fmt.Sprintf("Experiment run received for for ExperimentID: %s, ExperimentRunID: %s", event.ExperimentID, event.ExperimentRunID), nil
+}
+
+// advanceMultiRunChain advances a sequential multi-run batch by one step when a
+// run reaches a terminal phase, dispatching the next run if one is due.
+//
+// Progress lives in first-class BSON fields and every transition is a
+// conditional update, because completion events for a single experiment can
+// arrive concurrently: the subscriber re-delivers terminal events, and a batch
+// that has already forked has more than one run outstanding. Four guards:
+//
+//  1. De-duplication — a run ID is counted at most once, so a re-delivered
+//     event cannot advance the chain twice.
+//  2. In-flight gate — the next run is dispatched only when no run of this
+//     experiment is still Running or Queued, which is what keeps a batch
+//     sequential and lets an already-forked chain collapse back to one.
+//  3. Dispatch ceiling — the chain claims a slot with $inc under a hard cap of
+//     maxRuns-1. This, not the in-flight gate, is what bounds the batch: the
+//     gate cannot see a run during the delay window before it is created, so
+//     two completions can still both reach dispatch, and only the ceiling
+//     stops that from compounding.
+//  4. Terminal latch — on reaching maxRuns the batch latches BatchDone and the
+//     counter is never rewound. The previous implementation reset the counter
+//     to 0 here, which let any late completion event restart the whole batch;
+//     combined with a forked chain that produced unbounded runs.
+//
+// A claimed slot is released again if the dispatch does not happen, so a
+// cancelled or failed dispatch does not silently shorten the batch.
+func (c *ChaosExperimentRunHandler) advanceMultiRunChain(
+	ctx context.Context,
+	experiment dbChaosExperiment.ChaosExperimentRequest,
+	runID string,
+	maxRuns int,
+	manifest string,
+	logFields logrus.Fields,
+) {
+	expID := experiment.ExperimentID
+	projID := experiment.ProjectID
+
+	var authToken string
+	if tkn, ok := ctx.Value(authorization.AuthKey).(string); ok {
+		authToken = tkn
+	}
+
+	// ChaosExperimentRunEvent runs on a 10s request context, and the Langfuse
+	// calls, RBAC cleanup and mongo transaction that precede this call routinely
+	// outlive it. On an expired context every conditional update below fails,
+	// the completion is never recorded and the batch stalls at one run -- which
+	// is what made run 2 of a 2-run batch silently never start. The chain owns
+	// its own deadline instead.
+	chainCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// A re-delivered terminal event of a run from an earlier batch must not be
+	// counted toward the current one, or the batch would finish short.
+	if experiment.MultiRunState != nil && experiment.MultiRunState.StartedAt > 0 {
+		if run, err := c.chaosExperimentRunOperator.GetExperimentRun(bson.D{{"experiment_run_id", runID}}); err == nil &&
+			runPredatesBatch(experiment.MultiRunState, run.CreatedAt) {
+			logrus.WithFields(logFields).Infof("[Multi-Run] run %s belongs to an earlier batch; chain not advanced", runID)
+			return
+		}
+	}
+
+	// Guard 1: count this completion exactly once. MatchedCount==0 means the
+	// run was already counted, or the batch has already finished.
+	res, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(chainCtx,
+		bson.D{
+			{"experiment_id", expID},
+			{"multi_run_state.completed_run_ids", bson.D{{"$ne", runID}}},
+			{"multi_run_state.batch_done", bson.D{{"$ne", true}}},
+		},
+		bson.D{
+			{"$addToSet", bson.D{{"multi_run_state.completed_run_ids", runID}}},
+			{"$set", bson.D{{"updated_at", time.Now().UnixMilli()}}},
+		},
+	)
+	if err != nil {
+		logrus.WithFields(logFields).Errorf("[Multi-Run] failed to record completion of %s: %v", runID, err)
+		return
+	}
+	if res.MatchedCount == 0 {
+		logrus.WithFields(logFields).Infof("[Multi-Run] run %s already counted or batch finished; chain not advanced", runID)
+		return
+	}
+
+	updated, err := c.chaosExperimentOperator.GetExperiment(chainCtx, bson.D{{"experiment_id", expID}})
+	if err != nil {
+		logrus.WithFields(logFields).Errorf("[Multi-Run] failed to re-read experiment %s: %v", expID, err)
+		return
+	}
+	completed := 0
+	if updated.MultiRunState != nil {
+		completed = len(updated.MultiRunState.CompletedRunIDs)
+	}
+
+	// Guard 3: terminal latch.
+	if completed >= maxRuns {
+		logrus.WithFields(logFields).Infof("[Multi-Run] batch complete for %s: %d/%d runs", expID, completed, maxRuns)
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(chainCtx,
+			bson.D{{"experiment_id", expID}},
+			bson.D{{"$set", bson.D{
+				{"multi_run_state.batch_done", true},
+				{"updated_at", time.Now().UnixMilli()},
+			}}},
+		); err != nil {
+			logrus.WithFields(logFields).Errorf("[Multi-Run] failed to latch batch completion for %s: %v", expID, err)
+		}
+		return
+	}
+
+	// Guard 2: in-flight gate. The just-completed run is already persisted in a
+	// terminal phase by this point, so anything still Running or Queued is a
+	// different run that will advance the chain when it finishes.
+	inFlight, err := c.chaosExperimentRunOperator.CountExperimentRuns(chainCtx, bson.D{
+		{"experiment_id", expID},
+		{"phase", bson.D{{"$in", bson.A{"Running", "Queued"}}}},
+		{"is_removed", false},
+	})
+	if err != nil {
+		logrus.WithFields(logFields).Errorf("[Multi-Run] in-flight check failed for %s: %v", expID, err)
+		return
+	}
+	if inFlight > 0 {
+		// A run wedged in Queued (its workflow never scheduled) never emits a
+		// completion event, so it holds the batch here. Deliberate — piling on
+		// more runs behind a wedged one is what produced the original runaway —
+		// and reconcileMultiRunBatch sweeps those stale runs so the batch is not
+		// stuck forever waiting for an event that will never arrive.
+		logrus.WithFields(logFields).Infof(
+			"[Multi-Run] %d run(s) still Running/Queued for %s; chain retires (completed=%d/%d)",
+			inFlight, expID, completed, maxRuns)
+		return
+	}
+
+	// Claim a dispatch slot. The chain only ever starts runs 2..maxRuns — run 1
+	// is started by whoever kicked the batch off — so it owns at most
+	// maxRuns-1 dispatches. Claiming with $inc under that ceiling is what
+	// bounds the batch: however many completion events arrive, and however many
+	// chains are running, the chain cannot start more than the ceiling allows.
+	//
+	// The $exists arm is required, not defensive: $lt is type-bracketed and
+	// does NOT match a missing field, so without it every experiment predating
+	// this field would fail to claim and the batch would stall at one run.
+	maxDispatches := maxRuns - 1
+	claim, err := c.chaosExperimentOperator.UpdateChaosExperimentWithResult(chainCtx,
+		bson.D{
+			{"experiment_id", expID},
+			{"multi_run_state.batch_done", bson.D{{"$ne", true}}},
+			{"$or", bson.A{
+				bson.D{{"multi_run_state.launched", bson.D{{"$exists", false}}}},
+				bson.D{{"multi_run_state.launched", bson.D{{"$lt", maxDispatches}}}},
+			}},
+		},
+		bson.D{{"$inc", bson.D{{"multi_run_state.launched", 1}}}},
+	)
+	if err != nil {
+		logrus.WithFields(logFields).Errorf("[Multi-Run] failed to claim dispatch slot for %s: %v", expID, err)
+		return
+	}
+	if claim.MatchedCount == 0 {
+		logrus.WithFields(logFields).Infof("[Multi-Run] dispatch ceiling (%d) reached for %s; chain retires", maxDispatches, expID)
+		return
+	}
+
+	nextRun := completed + 1
+	// Hand the claimed slot back if the dispatch does not actually happen,
+	// so a cancelled or failed dispatch does not silently shorten the batch.
+	releaseSlot := func(reason string) {
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(context.Background(),
+			bson.D{{"experiment_id", expID}},
+			bson.D{{"$inc", bson.D{{"multi_run_state.launched", -1}}}},
+		); err != nil {
+			logrus.Errorf("[Multi-Run] failed to release dispatch slot for %s after %s: %v", expID, reason, err)
+		}
+	}
+
+	delayDuration := multiRunDelay(manifest)
+	handler := c
+
+	logrus.WithFields(logFields).Infof("[Multi-Run] dispatching run %d/%d for %s in %v", nextRun, maxRuns, expID, delayDuration)
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logrus.Errorf("[Multi-Run] PANIC in dispatch goroutine: %v", r)
+			}
+		}()
+
+		time.Sleep(delayDuration)
+
+		// The batch may have finished, or multi-run may have been switched off,
+		// while this goroutine was sleeping — re-check before dispatching so a
+		// disabled experiment cannot be restarted by an already-queued timer.
+		current, err := handler.chaosExperimentOperator.GetExperiment(context.Background(), bson.D{{"experiment_id", expID}})
+		if err != nil {
+			logrus.Errorf("[Multi-Run] failed to fetch experiment %s before dispatch: %v", expID, err)
+			releaseSlot("fetch error")
+			return
+		}
+		if current.MultiRunState != nil && current.MultiRunState.BatchDone {
+			logrus.Infof("[Multi-Run] batch for %s finished while waiting; dispatch cancelled", expID)
+			releaseSlot("batch already done")
+			return
+		}
+		if len(current.Revision) > 0 {
+			latest := current.Revision[len(current.Revision)-1].ExperimentManifest
+			if gjson.Get(latest, `metadata.annotations.litmuschaos\.io/multiRunEnabled`).String() != "true" {
+				logrus.Infof("[Multi-Run] multi-run disabled for %s while waiting; dispatch cancelled", expID)
+				releaseSlot("multi-run disabled")
+				return
+			}
+		}
+
+		newCtx := withMultiRunContinuation(context.Background())
+		if authToken != "" {
+			newCtx = context.WithValue(newCtx, authorization.AuthKey, authToken)
+		}
+
+		if _, err := handler.RunChaosWorkFlow(newCtx, projID, current, store.Store, ""); err != nil {
+			logrus.Errorf("[Multi-Run] failed to dispatch run %d/%d for %s: %v", nextRun, maxRuns, expID, err)
+			releaseSlot("dispatch error")
+			return
+		}
+		logrus.Infof("[Multi-Run] dispatched run %d/%d for %s", nextRun, maxRuns, expID)
+	}()
 }
 
 // loadFaultEnrichmentFromManifest parses the latest experiment manifest revision
@@ -3442,6 +4110,9 @@ func computeFaultCohort(nodes map[string]types.Node) (map[string][]string, strin
 		if fault == "" {
 			continue
 		}
+		if utils.IsTeardownExperiment(fault) {
+			continue
+		}
 		w := window{fault: fault}
 		if ts := observability.ParseArgoTime(node.StartedAt); ts != nil {
 			w.start = *ts
@@ -3510,4 +4181,88 @@ func computeFaultCohort(nodes map[string]types.Node) (map[string][]string, strin
 		mode = "parallel"
 	}
 	return cohorts, mode
+}
+
+// stdFaultStepNameRe / itbScenarioStepNameRe match this repo's fault-injection
+// Argo Workflow step naming convention for steps that do NOT go through a
+// ChaosEngine CR (see itbScenarioStepNameRe -- used by ITBench scenario
+// injectors): "std-<fault-name>" (e.g. "std-pod-delete") and
+// "itb-scenario-<N>-..." (e.g. "itb-scenario-42-kafka-preemption"). Matched
+// against the lowercased Argo node Name, which -- like the existing
+// strings.Contains(...,"install-agent") checks elsewhere in this file --
+// carries the step/template name as a substring even when wrapped in Argo's
+// own node-name/index formatting.
+var (
+	stdFaultStepNameRe    = regexp.MustCompile(`std-([a-z][a-z0-9-]*)`)
+	itbScenarioStepNameRe = regexp.MustCompile(`itb-scenario-(\d+)`)
+)
+
+// computeFaultWindows derives per-fault injection time windows from a
+// terminated run's Argo Workflow node map, for the certifier's
+// fault_windows request field (main/models/bucket_requests.py FaultWindow).
+// This lets Phase 0 fault-bucketing split a trace into per-fault buckets by
+// timestamp when the trace itself carries no `fault: *` OTel spans -- the
+// case for blind-observer agents like flash-agent, which are deliberately
+// never told which fault is running (see agent-sidecar/proxy.py).
+//
+// Two name sources are tried per node, in order:
+//  1. ChaosEngine nodes: node.ChaosExp.ExperimentName (falling back to
+//     EngineName) -- the same derivation already used elsewhere in this file
+//     (see computeFaultCohort, the fault-span emission loop above) and
+//     already a raw match for certifier/configs/fault_categories.json's
+//     sub-fault names (e.g. "pod-delete"), so no further transform is
+//     applied.
+//  2. Non-ChaosEngine workflow steps (e.g. ITBench scenario injectors that
+//     inject directly from a workflow step rather than a ChaosEngine CR):
+//     the node's Argo Name is matched against stdFaultStepNameRe /
+//     itbScenarioStepNameRe.
+//
+// Timestamps are normalized through observability.ParseArgoTime (which
+// already handles both epoch and RFC3339 forms coming from the subscriber)
+// and re-emitted as RFC3339 -- a valid ISO-8601 form -- so the certifier's
+// datetime.fromisoformat parsing never has to guess the source format.
+//
+// A node is skipped (not an error) when: its fault name can't be determined
+// by either source, or either timestamp is missing/unparseable. Callers
+// should treat a nil/empty result as "no known fault windows for this run"
+// -- the certifier falls back to its original single-bucket behavior in
+// that case, so this is always safe to leave empty.
+func computeFaultWindows(nodes map[string]types.Node) []certification.FaultWindow {
+	var windows []certification.FaultWindow
+	for _, node := range nodes {
+		faultName := ""
+		if node.Type == "ChaosEngine" && node.ChaosExp != nil {
+			faultName = node.ChaosExp.ExperimentName
+			if faultName == "" {
+				faultName = node.ChaosExp.EngineName
+			}
+		}
+		if faultName == "" {
+			lower := strings.ToLower(node.Name)
+			if m := itbScenarioStepNameRe.FindStringSubmatch(lower); m != nil {
+				faultName = "Scenario-" + m[1]
+			} else if m := stdFaultStepNameRe.FindStringSubmatch(lower); m != nil {
+				faultName = m[1]
+			}
+		}
+		if faultName == "" {
+			continue
+		}
+		if utils.IsTeardownExperiment(faultName) {
+			continue
+		}
+
+		start := observability.ParseArgoTime(node.StartedAt)
+		end := observability.ParseArgoTime(node.FinishedAt)
+		if start == nil || end == nil {
+			continue
+		}
+
+		windows = append(windows, certification.FaultWindow{
+			FaultName: faultName,
+			StartTime: start.Format(time.RFC3339),
+			EndTime:   end.Format(time.RFC3339),
+		})
+	}
+	return windows
 }

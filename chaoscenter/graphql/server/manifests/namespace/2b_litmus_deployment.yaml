@@ -30,8 +30,7 @@ spec:
         name: chaos-operator
     spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
@@ -44,7 +43,7 @@ spec:
             - chaos-operator
           args:
             - -leader-elect=true
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: CHAOS_RUNNER_IMAGE
               value: #{LITMUS_CHAOS_RUNNER}
@@ -91,11 +90,12 @@ spec:
         app: chaos-exporter
         release: prometheus-stack
     spec:
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
         - image: #{LITMUS_CHAOS_EXPORTER}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           name: chaos-exporter
           securityContext:
             runAsUser: 2000
@@ -120,8 +120,6 @@ spec:
               cpu: "225m"
               ephemeral-storage: "1Gi"
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}
 ---
 apiVersion: v1
 kind: Service

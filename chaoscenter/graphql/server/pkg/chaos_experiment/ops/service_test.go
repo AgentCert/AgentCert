@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
 )
 
@@ -39,7 +40,7 @@ var (
 	probeService               = probe.NewProbeService(probeOperator)
 )
 
-var chaosExperimentRunTestService = NewChaosExperimentService(chaosExperimentOperator, infraOperator, chaosExperimentRunOperator, probeService, nil)
+var chaosExperimentRunTestService = NewChaosExperimentService(chaosExperimentOperator, infraOperator, chaosExperimentRunOperator, probeService, nil, nil)
 
 func TestMain(m *testing.M) {
 	gin.SetMode(gin.TestMode)
@@ -85,12 +86,13 @@ func TestNewChaosExperimentService(t *testing.T) {
 				chaosExperimentRunOperator:  chaosExperimentRunOperator,
 				probeService:                probeService,
 				agentRegistryOperator:       nil,
+				faultCatalogService:         nil,
 			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := NewChaosExperimentService(tc.args.chaosWorkflowOperator, tc.args.clusterOperator, tc.args.chaosExperimentRunOperator, tc.args.probeService, nil); !reflect.DeepEqual(got, tc.want) {
+			if got := NewChaosExperimentService(tc.args.chaosWorkflowOperator, tc.args.clusterOperator, tc.args.chaosExperimentRunOperator, tc.args.probeService, nil, nil); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("NewChaosExperimentService() = %v, want %v", got, tc.want)
 			}
 		})
@@ -637,6 +639,71 @@ func Test_chaosExperimentService_ProcessExperimentUpdate(t *testing.T) {
 			tc.given()
 			if err := chaosExperimentRunTestService.ProcessExperimentUpdate(tc.args.workflow, username, &wfType, revisionID, tc.args.updateRevision, projectID, store); (err != nil) != tc.wantErr {
 				t.Errorf("chaosExperimentService.ProcessExperimentUpdate() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+// TestExtractInstallApplicationNamespace covers the appNamespace backend
+// fallback (processExperimentManifest): a blank-canvas experiment has no
+// predefined appNamespace parameter, so it must be recovered from the
+// install-application step's own -namespace arg, in whichever form the
+// frontend or a hand-built manifest used.
+func TestExtractInstallApplicationNamespace(t *testing.T) {
+	tests := []struct {
+		name      string
+		templates []v1alpha1.Template
+		want      string
+	}{
+		{
+			name: "combined form (-namespace=<x>), matches KubernetesYamlService.addInstallStepToManifest",
+			templates: []v1alpha1.Template{
+				{
+					Name: "install-application",
+					Container: &corev1.Container{
+						Image: "agentcert/agentcert-install-app:latest",
+						Args:  []string{"-folder=sock-shop", "-namespace=sock-shop", "-create-namespace", "-wait"},
+					},
+				},
+			},
+			want: "sock-shop",
+		},
+		{
+			name: "split form (-namespace <x>)",
+			templates: []v1alpha1.Template{
+				{
+					Name: "install-application",
+					Container: &corev1.Container{
+						Image: "agentcert/agentcert-install-app:latest",
+						Args:  []string{"-namespace", "book-info"},
+					},
+				},
+			},
+			want: "book-info",
+		},
+		{
+			name: "matched by image when template isn't named install-application",
+			templates: []v1alpha1.Template{
+				{
+					Name: "some-other-name",
+					Container: &corev1.Container{
+						Image: "agentcert/agentcert-install-app:latest",
+						Args:  []string{"--namespace=otel-demo"},
+					},
+				},
+			},
+			want: "otel-demo",
+		},
+		{
+			name:      "no install-application step present",
+			templates: []v1alpha1.Template{{Name: "install-agent", Container: &corev1.Container{Image: "agentcert/agentcert-install-agent:latest"}}},
+			want:      "",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ExtractInstallApplicationNamespace(tc.templates); got != tc.want {
+				t.Errorf("ExtractInstallApplicationNamespace() = %q, want %q", got, tc.want)
 			}
 		})
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
+	"github.com/sirupsen/logrus"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 
@@ -73,12 +74,15 @@ func (c *chaosExperimentRunService) ProcessExperimentRunDelete(ctx context.Conte
 
 // ProcessExperimentRunStop deletes a workflow entry and updates the database
 func (c *chaosExperimentRunService) ProcessExperimentRunStop(ctx context.Context, query bson.D, experimentRunID *string, experiment dbChaosExperiment.ChaosExperimentRequest, username string, projectID string, r *store.StateData) error {
+	now := time.Now().UnixMilli()
+	updatedBy := mongodb.UserDetailResponse{Username: username}
+
 	update := bson.D{
 		{"$set", bson.D{
-			{"updated_at", time.Now().UnixMilli()},
-			{"updated_by", mongodb.UserDetailResponse{
-				Username: username,
-			}},
+			{"phase", "Stopped"},
+			{"completed", true},
+			{"updated_at", now},
+			{"updated_by", updatedBy},
 		}},
 	}
 
@@ -86,6 +90,31 @@ func (c *chaosExperimentRunService) ProcessExperimentRunStop(ctx context.Context
 	if err != nil {
 		return err
 	}
+
+	// Also update the denormalized copy in chaosExperiments.recent_experiment_run_details
+	// so the UI reflects Stopped immediately without waiting for the Argo callback.
+	if experimentRunID != nil && *experimentRunID != "" {
+		expFilter := bson.D{
+			{"experiment_id", experiment.ExperimentID},
+			{"recent_experiment_run_details.experiment_run_id", *experimentRunID},
+		}
+		expUpdate := bson.D{
+			{"$set", bson.D{
+				{"recent_experiment_run_details.$.phase", "Stopped"},
+				{"recent_experiment_run_details.$.completed", true},
+				{"recent_experiment_run_details.$.updated_at", now},
+				{"recent_experiment_run_details.$.updated_by", updatedBy},
+			}},
+		}
+		// Non-fatal but always logged: without this update the UI reads stale "Running"
+		// from recent_experiment_run_details even though chaosExperimentRuns is Stopped.
+		// Note: the subscriber's terminal event cannot reconcile this on its own because
+		// the completed=true guard on chaosExperimentRuns causes the transaction to abort.
+		if err := c.chaosExperimentOperator.UpdateChaosExperiment(ctx, expFilter, expUpdate); err != nil {
+			logrus.WithError(err).Warn("failed to update recent_experiment_run_details on stop; UI may show stale Running state")
+		}
+	}
+
 	if r != nil {
 		chaos_infrastructure.SendExperimentToSubscriber(projectID, &model.ChaosExperimentRequest{
 			InfraID: experiment.InfraID,
@@ -110,6 +139,13 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 	for _, rev := range chaosWorkflows.Revision {
 		if rev.RevisionID == execData.RevisionID {
 			for _, weights := range rev.Weightages {
+				// ITBench teardown steps (agent/app uninstall) can be present in an
+				// older revision's Weightages -- skip them so they never enter the
+				// resiliency-score denominator or the TotalExperiments count. See
+				// utils.IsTeardownExperiment / HANDOFF §102.
+				if utils.IsTeardownExperiment(weights.FaultName) {
+					continue
+				}
 				weightMap[weights.FaultName] = weights.Weightage
 				// Total weight calculated for all experiments
 				weightSum = weightSum + weights.Weightage
@@ -118,10 +154,23 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 	}
 
 	result.TotalExperiments = len(weightMap)
+	// ungradedWeight is the weight of faults the itbench orchestrator could not grade
+	// (verdict N/A -- no target resolved, or no built-in recovery assertion for the
+	// target's kind). They are removed from the denominator rather than scored: counting
+	// them as a pass used to award a free 100%, and counting them as a failure would
+	// punish the agent for a measurement gap.
+	ungradedWeight := 0
 	for _, value := range execData.Nodes {
 		if value.Type == "ChaosEngine" {
 			experimentName := ""
 			if value.ChaosExp == nil {
+				continue
+			}
+
+			// A ChaosEngine node that matches no weighted fault is not a graded fault
+			// (e.g. an ITBench teardown step) -- it must not affect the score or the
+			// pass/fail tallies.
+			if value.ChaosExp.EngineName == "" || utils.IsTeardownExperiment(value.ChaosExp.EngineName) {
 				continue
 			}
 
@@ -131,11 +180,17 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 				}
 			}
 			weight, ok := weightMap[experimentName]
-			// probeSuccessPercentage will be included only if chaosData is present
-			if ok {
-				x, _ := strconv.Atoi(value.ChaosExp.ProbeSuccessPercentage)
-				totalTestResult += weight * x
+			if !ok {
+				continue
 			}
+			if value.ChaosExp.ExperimentVerdict == "N/A" {
+				result.ExperimentsNA += 1
+				ungradedWeight += weight
+				continue
+			}
+			// probeSuccessPercentage will be included only if chaosData is present
+			x, _ := strconv.Atoi(value.ChaosExp.ProbeSuccessPercentage)
+			totalTestResult += weight * x
 			if value.ChaosExp.ExperimentVerdict == "Pass" {
 				result.ExperimentsPassed += 1
 			}
@@ -148,13 +203,13 @@ func (c *chaosExperimentRunService) ProcessCompletedExperimentRun(execData Execu
 			if value.ChaosExp.ExperimentVerdict == "Stopped" {
 				result.ExperimentsStopped += 1
 			}
-			if value.ChaosExp.ExperimentVerdict == "N/A" || value.ChaosExp.ExperimentVerdict == "" {
+			if value.ChaosExp.ExperimentVerdict == "" {
 				result.ExperimentsNA += 1
 			}
 		}
 	}
-	if weightSum != 0 {
-		result.ResiliencyScore = utils.Truncate(float64(totalTestResult) / float64(weightSum))
+	if gradedWeight := weightSum - ungradedWeight; gradedWeight > 0 {
+		result.ResiliencyScore = utils.Truncate(float64(totalTestResult) / float64(gradedWeight))
 	}
 
 	return result, nil

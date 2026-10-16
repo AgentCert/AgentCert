@@ -12,6 +12,11 @@ data:
   SKIP_SSL_VERIFY: "#{SKIP_SSL_VERIFY}"
   CUSTOM_TLS_CERT: "#{CUSTOM_TLS_CERT}"
   IS_INFRA_CONFIRMED: #{IS_INFRA_CONFIRMED}
+  # Comma-separated namespace allowlist the subscriber resolves via individual
+  # Get calls instead of a cluster-wide List (see infra-cluster-role in
+  # 3a_agents_rbac.yaml — RBAC only grants `get` on exactly these names).
+  # Populated dynamically by ManifestParser from the app-charts catalog.
+  TARGET_APP_NAMESPACES: "#{TARGET_APP_NAMESPACES}"
   COMPONENTS: |
     DEPLOYMENTS: #{INFRA_DEPLOYMENTS}
 ---
@@ -39,16 +44,25 @@ spec:
     metadata:
       labels:
         app: subscriber
+      annotations:
+        agentcert.io/infra-id: "#{INFRA_ID}"
     spec:
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       containers:
         - name: subscriber
           image: #{SUBSCRIBER_IMAGE}
-          imagePullPolicy: Always
+          # IfNotPresent (not Always): #{SUBSCRIBER_IMAGE} resolves to a fixed tag
+          # (agentcert/litmusportal-subscriber:<version>, not :latest), and local dev
+          # relies on `kind load docker-image` to get a freshly-built copy onto the
+          # node under that same tag. Always defeats that -- kubelet re-pulls from
+          # Docker Hub on every pod recreation, silently discarding the freshly
+          # loaded local image and replacing it with whatever's published under that
+          # tag upstream, even when a local rebuild just landed the fix moments
+          # earlier (see OPEN_WEIGHT_CERTIFICATION_HANDOFF.md).
+          imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 2000
             allowPrivilegeEscalation: false
@@ -89,14 +103,13 @@ spec:
       labels:
         app: event-tracker
     spec:
-      imagePullSecrets:
-        - name: #{IMAGE_PULL_SECRET_NAME}
+      #{IMAGE_PULL_SECRETS}
       #{TOLERATIONS}
       #{NODE_SELECTOR}
       serviceAccountName: #{INFRA_SERVICE_ACCOUNT}
       containers:
         - image: #{EVENT_TRACKER_IMAGE}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             runAsUser: 2000
             allowPrivilegeEscalation: false

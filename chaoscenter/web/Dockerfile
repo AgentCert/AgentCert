@@ -1,3 +1,15 @@
+# BUILD STAGE
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
+
+COPY . .
+RUN yarn build
+
+# SERVE STAGE
 FROM registry.access.redhat.com/ubi8/ubi-minimal:8.10
 
 # apply latest patches
@@ -7,8 +19,8 @@ RUN microdnf update --nodocs \
 && microdnf install --nodocs python3 \
 && pip3 install --no-cache-dir pyyaml \
 && microdnf clean all
-    
-COPY dist /opt/chaos
+
+COPY --from=build /app/dist /opt/chaos
 COPY nginx/nginx.conf /etc/nginx/
 COPY ./entrypoint.sh /opt
 

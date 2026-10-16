@@ -26,6 +26,7 @@ export interface ExperimentRunDetails {
   experimentID: string;
   experimentRunName: string;
   experimentRunID: string;
+  notifyID?: string;
   experimentStatus: ExperimentRunStatus;
   executedBy: UserDetails | undefined;
   resilienceScore: number | undefined;

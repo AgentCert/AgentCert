@@ -1,5 +1,5 @@
 import { gql, useQuery } from '@apollo/client';
-import type { AgentHubCategory } from '@api/entities';
+import { AgentHubCategory, CONFIG_FIELD_SELECTION } from '@api/entities';
 import type { GqlAPIQueryRequest, GqlAPIQueryResponse } from '@api/types';
 
 export interface ListAgentHubCategoriesRequest {
@@ -29,6 +29,10 @@ export function listAgentHubCategories({
             description
             version
             capabilities
+            compatibleApplications
+            configurations {
+              ${CONFIG_FIELD_SELECTION}
+            }
             isDeployed
             deploymentStatus
             agentID

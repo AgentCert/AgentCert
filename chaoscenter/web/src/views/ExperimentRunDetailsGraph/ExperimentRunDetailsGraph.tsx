@@ -2,7 +2,6 @@ import React from 'react';
 import { Color } from '@harnessio/design-system';
 import { Container } from '@harnessio/uicore';
 import { withErrorBoundary } from 'react-error-boundary';
-import { cloneDeep, keyBy, merge } from 'lodash-es';
 import { transformArgoData } from '@utils';
 import type { ExecutionData } from '@api/entities';
 import Loader from '@components/Loader';
@@ -13,6 +12,7 @@ import StartNodeStep from '@components/PipelineDiagram/Nodes/StartNode/StartNode
 import { DiagramFactory } from '@components/PipelineDiagram/DiagramFactory';
 import { Event as DiagramEvent } from '@components/PipelineDiagram/Constants';
 import { Fallback } from '@errors';
+import { mergeManifestAndRuntimeSteps } from './stepGraphMerge';
 import css from './ExperimentRunDetailsGraph.module.scss';
 
 interface ExperimentRunDetailsGraphProps {
@@ -47,10 +47,7 @@ function ExperimentRunDetailsGraph({
   };
   diagram.registerListeners(eventListeners);
 
-  const deepCopySteps = cloneDeep(steps);
-  const deepCopyGraphData = cloneDeep(graphData);
-
-  const mergedSteps = Object.values(merge(keyBy(deepCopySteps, 'name'), keyBy(deepCopyGraphData, 'name')));
+  const mergedSteps = mergeManifestAndRuntimeSteps(steps, graphData);
 
   return (
     <Container height={'100%'} className={css.graphContainer} background={Color.GREY_50}>

@@ -140,12 +140,21 @@ type AgentHubEntry struct {
 	Version string `json:"version"`
 	// List of capabilities this agent supports
 	Capabilities []string `json:"capabilities"`
+	// Keys of the TargetApplications this agent can be paired with.
+	//
+	// `null` means the agent declares no restriction and is offered for every
+	// application — a custom agent hub that predates this field keeps working.
+	// An empty list means the agent is deliberately not application-targeted
+	// (e.g. a cluster-wide compliance agent) and is never offered for one.
+	CompatibleApplications []string `json:"compatibleApplications,omitempty"`
 	// Template name used to identify the install step in workflow manifests
 	InstallTemplateName *string `json:"installTemplateName,omitempty"`
 	// Default container image for the install step
 	InstallImage *string `json:"installImage,omitempty"`
 	// Helm --set mappings for experiment context injection
 	ContextInjection []*ContextInjectionMapping `json:"contextInjection,omitempty"`
+	// Settings the agent's chart lets the user change in the experiment builder
+	Configurations []*ConfigField `json:"configurations"`
 	// Whether this agent is currently deployed in the cluster
 	IsDeployed bool `json:"isDeployed"`
 	// Current status if deployed (ACTIVE, INACTIVE, REGISTERED, etc.)
@@ -210,6 +219,13 @@ type AgentMetadataInput struct {
 	Annotations []*KeyValuePairInput `json:"annotations,omitempty"`
 }
 
+type AgentModelOption struct {
+	Alias     string `json:"alias"`
+	Label     string `json:"label"`
+	Provider  string `json:"provider"`
+	IsDefault bool   `json:"isDefault"`
+}
+
 // AgentStatusResponse provides health and sync status for an agent.
 type AgentStatusResponse struct {
 	// Agent ID
@@ -260,6 +276,8 @@ type AppHubEntry struct {
 	Namespace string `json:"namespace"`
 	// Microservices that comprise this application
 	Microservices []*Microservice `json:"microservices"`
+	// Settings the application's chart lets the user change in the experiment builder
+	Configurations []*ConfigField `json:"configurations"`
 	// Whether this application is currently deployed in the cluster
 	IsDeployed bool `json:"isDeployed"`
 	// Number of microservices running vs total (e.g., "11/13")
@@ -632,6 +650,32 @@ type ComparatorInput struct {
 	Criteria string `json:"criteria"`
 }
 
+// A setting a chart offers to the experiment builder, declared in the
+// `configurations` block of the chart's values.yaml. The builder sends the chosen
+// values to the install step as -values-json, and the server validates them
+// against these declarations on every save and run.
+type ConfigField struct {
+	// Helm values path, e.g. agent.config.SCAN_INTERVAL
+	Key         string          `json:"key"`
+	Label       string          `json:"label"`
+	Description *string         `json:"description,omitempty"`
+	Type        ConfigFieldType `json:"type"`
+	ValueKind   ConfigValueKind `json:"valueKind"`
+	// The chart's default value, as text
+	DefaultValue string   `json:"defaultValue"`
+	Required     bool     `json:"required"`
+	Min          *float64 `json:"min,omitempty"`
+	Max          *float64 `json:"max,omitempty"`
+	// Regular expression a STRING or TEXT value must match
+	Pattern *string `json:"pattern,omitempty"`
+	// Allowed values of a SELECT setting
+	Options []string `json:"options,omitempty"`
+	// Heading the setting is shown under
+	Group *string `json:"group,omitempty"`
+	// Shown only when the user expands the advanced settings
+	Advanced bool `json:"advanced"`
+}
+
 type ConfirmInfraRegistrationResponse struct {
 	IsInfraConfirmed bool    `json:"isInfraConfirmed"`
 	NewAccessKey     *string `json:"newAccessKey,omitempty"`
@@ -752,6 +796,9 @@ type DeleteAgentResponse struct {
 }
 
 // DeployAgentWithHelmRequest contains information to deploy an agent using Helm.
+// LLM provider credentials and any other agent-specific environment variables
+// are passed via the generic helmEnvVars list rather than provider-specific
+// fields, so any agent Helm chart can be targeted without schema changes.
 type DeployAgentWithHelmRequest struct {
 	// Unique name for the agent within the project
 	Name string `json:"name"`
@@ -775,16 +822,12 @@ type DeployAgentWithHelmRequest struct {
 	ChartData *string `json:"chartData,omitempty"`
 	// Kubeconfig for cluster access (optional)
 	Kubeconfig *string `json:"kubeconfig,omitempty"`
-	// Azure OpenAI API Key
-	AzureOpenAIKey *string `json:"azureOpenAIKey,omitempty"`
-	// Azure OpenAI Endpoint URL
-	AzureOpenAIEndpoint *string `json:"azureOpenAIEndpoint,omitempty"`
-	// Azure OpenAI Deployment Model Name
-	AzureOpenAIDeployment *string `json:"azureOpenAIDeployment,omitempty"`
-	// Azure OpenAI API Version
-	AzureOpenAIAPIVersion *string `json:"azureOpenAIAPIVersion,omitempty"`
-	// Azure OpenAI Embedding Deployment Name
-	AzureOpenAIEmbeddingDeployment *string `json:"azureOpenAIEmbeddingDeployment,omitempty"`
+	// Generic environment variables injected into the agent's Helm chart.
+	// Replaces the former provider-specific fields (azureOpenAIKey, etc.).
+	// Sensitive entries are stored in a Kubernetes Secret; others in a ConfigMap.
+	// Example: [{name: "OPENAI_API_KEY", value: "sk-…", sensitive: true},
+	//           {name: "OPENAI_BASE_URL", value: "https://…", sensitive: false}]
+	HelmEnvVars []*HelmEnvVarInput `json:"helmEnvVars,omitempty"`
 }
 
 // DeployAgentWithHelmResponse returned after successful Helm deployment.
@@ -1132,6 +1175,33 @@ type Experiments struct {
 	Name string `json:"name"`
 	CSV  string `json:"CSV"`
 	Desc string `json:"desc"`
+}
+
+// The whole catalog in one payload — the builder needs the application registry and
+// the fault matrix together to gate a single step, so they are fetched together.
+type FaultCatalog struct {
+	Applications []*TargetApplication  `json:"applications"`
+	Faults       []*FaultCompatibility `json:"faults"`
+}
+
+// Resolved compatibility for a single fault.
+//
+// `compatibleApps` is DERIVED, not restated in the catalog per fault: a `generic`
+// fault is compatible with every application in the catalog, an
+// `application-specific` fault only with the one it pins via requiredApp.
+type FaultCompatibility struct {
+	// Fault name, matching the fault's chart directory.
+	FaultName string `json:"faultName"`
+	// `generic` or `application-specific`.
+	Classification string `json:"classification"`
+	// Keys of the TargetApplications this fault may be pointed at.
+	CompatibleApps []string `json:"compatibleApps"`
+	// Kubernetes kinds the fault acts on; empty means unrestricted.
+	WorkloadKinds []string `json:"workloadKinds"`
+	// Microservices the fault hardcodes; empty means any service of the app.
+	RequiredServices []string `json:"requiredServices"`
+	// `<app>/<service>` pairs known to fail this fault, for a build-time warning.
+	KnownFailingTargets []string `json:"knownFailingTargets"`
 }
 
 // Fault Detail consists of all the fault related details
@@ -1496,6 +1566,21 @@ type HealthCheckResult struct {
 	ResponseTime int `json:"responseTime"`
 	// Timestamp when the check was performed
 	CheckedAt string `json:"checkedAt"`
+}
+
+// HelmEnvVarInput passes an environment variable into the agent's Helm chart.
+// Sensitive variables (API keys, tokens) are injected via a Kubernetes Secret
+// (--set-string secrets.<name>=<value>); non-sensitive ones via a ConfigMap
+// (--set configMap.<name>=<value>).  The target agent's Helm chart must expose
+// a `secrets` map and a `configMap` map in its values.yaml for this to work.
+type HelmEnvVarInput struct {
+	// Environment variable name, e.g. OPENAI_API_KEY
+	Name string `json:"name"`
+	// Environment variable value
+	Value string `json:"value"`
+	// When true the value is stored in a Kubernetes Secret (masked in UI and logs).
+	// When false (default) it is stored in a ConfigMap.
+	Sensitive *bool `json:"sensitive,omitempty"`
 }
 
 // HelmValidationResponse returned from Helm deployment validation.
@@ -2664,6 +2749,13 @@ type RegisterInfraResponse struct {
 	Name string `json:"name"`
 	// Infra Manifest
 	Manifest string `json:"manifest"`
+	// Fully-qualified URL for `kubectl apply -f <url>` / curl, pointing at the
+	// `/file/<token>.yaml` download route. Computed server-side (preferring
+	// CHAOS_CENTER_PUBLIC_ENDPOINT when configured) rather than left for the
+	// frontend to derive from the browser's own address bar, so it stays
+	// correct regardless of what host:port the browser was reached through
+	// (SSH tunnel, VS Code port-forward, etc.).
+	ManifestDownloadURL string `json:"manifestDownloadURL"`
 }
 
 type ResilienceScoreCategory struct {
@@ -2755,6 +2847,23 @@ type SyncResponse struct {
 	SyncedAt *string `json:"syncedAt,omitempty"`
 	// Message describing the sync result
 	Message string `json:"message"`
+}
+
+// A target application the AppsHub can install, and how a ChaosEngine addresses its
+// workloads. Mirrors one entry of spec.applications in the fault capability catalog.
+type TargetApplication struct {
+	// Catalog key, e.g. "sock-shop".
+	Key string `json:"key"`
+	// Every `-folder=` value an install-application step may carry for this app.
+	Folders []string `json:"folders"`
+	// Namespace the chart installs into by default.
+	Namespace string `json:"namespace"`
+	// Label key whose value is the microservice name, e.g. "name" or "app".
+	LabelKey string `json:"labelKey"`
+	// Microservices the application is made of, from its chart entry. Used to offer
+	// target labels before the application has been deployed and its real labels can
+	// be read from the cluster.
+	Services []string `json:"services"`
 }
 
 // ToggleFaultResponse is returned after enabling/disabling a fault in a studio.
@@ -2980,6 +3089,106 @@ func (e *AuthType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e AuthType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// How the experiment builder renders a chart setting.
+type ConfigFieldType string
+
+const (
+	ConfigFieldTypeString  ConfigFieldType = "STRING"
+	ConfigFieldTypeText    ConfigFieldType = "TEXT"
+	ConfigFieldTypeInteger ConfigFieldType = "INTEGER"
+	ConfigFieldTypeNumber  ConfigFieldType = "NUMBER"
+	ConfigFieldTypeBoolean ConfigFieldType = "BOOLEAN"
+	ConfigFieldTypeSelect  ConfigFieldType = "SELECT"
+	// An LLM model alias picked from listAgentModelOptions
+	ConfigFieldTypeModel ConfigFieldType = "MODEL"
+)
+
+var AllConfigFieldType = []ConfigFieldType{
+	ConfigFieldTypeString,
+	ConfigFieldTypeText,
+	ConfigFieldTypeInteger,
+	ConfigFieldTypeNumber,
+	ConfigFieldTypeBoolean,
+	ConfigFieldTypeSelect,
+	ConfigFieldTypeModel,
+}
+
+func (e ConfigFieldType) IsValid() bool {
+	switch e {
+	case ConfigFieldTypeString, ConfigFieldTypeText, ConfigFieldTypeInteger, ConfigFieldTypeNumber, ConfigFieldTypeBoolean, ConfigFieldTypeSelect, ConfigFieldTypeModel:
+		return true
+	}
+	return false
+}
+
+func (e ConfigFieldType) String() string {
+	return string(e)
+}
+
+func (e *ConfigFieldType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ConfigFieldType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ConfigFieldType", str)
+	}
+	return nil
+}
+
+func (e ConfigFieldType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// The JSON type a setting's value is written as. It is the type of the chart's
+// own default, so a setting stored as "60" (an env var) stays a string.
+type ConfigValueKind string
+
+const (
+	ConfigValueKindString  ConfigValueKind = "STRING"
+	ConfigValueKindInteger ConfigValueKind = "INTEGER"
+	ConfigValueKindNumber  ConfigValueKind = "NUMBER"
+	ConfigValueKindBoolean ConfigValueKind = "BOOLEAN"
+)
+
+var AllConfigValueKind = []ConfigValueKind{
+	ConfigValueKindString,
+	ConfigValueKindInteger,
+	ConfigValueKindNumber,
+	ConfigValueKindBoolean,
+}
+
+func (e ConfigValueKind) IsValid() bool {
+	switch e {
+	case ConfigValueKindString, ConfigValueKindInteger, ConfigValueKindNumber, ConfigValueKindBoolean:
+		return true
+	}
+	return false
+}
+
+func (e ConfigValueKind) String() string {
+	return string(e)
+}
+
+func (e *ConfigValueKind) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ConfigValueKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ConfigValueKind", str)
+	}
+	return nil
+}
+
+func (e ConfigValueKind) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
