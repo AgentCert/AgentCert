@@ -26,7 +26,7 @@ func TestFaultAPIResolvesBothCatalogs(t *testing.T) {
 	service := NewService(nil)
 	for _, tc := range []struct{ category, name, key string }{
 		{"itbench", "modified-target-port-kubernetes-service", "BROKEN_TARGET_PORT"},
-		{"kubernetes", "pod-cpu-hog", "CPU_CORES"},
+		{"kubernetes", "pod-cpu-hog", "TOTAL_CHAOS_DURATION"},
 	} {
 		response, err := service.GetChaosFault(context.Background(), model.ExperimentRequest{HubID: DefaultHubID, Category: tc.category, ExperimentName: tc.name}, "project")
 		if err != nil {

@@ -9,7 +9,7 @@ import (
 )
 
 func TestMaterializeTargets(t *testing.T) {
-	for _, kind := range []string{"", "deployment", "statefulset", "daemonset", "deploymentconfig", "rollout"} {
+	for _, kind := range []string{"", "pod", "deployment", "statefulset", "daemonset", "deploymentconfig", "rollout"} {
 		t.Run("unchanged "+kind, func(t *testing.T) {
 			engine := chaosTypes.ChaosEngine{}
 			engine.Spec.Appinfo.AppKind = kind
@@ -50,9 +50,25 @@ func TestMaterializeTargets(t *testing.T) {
 	}
 }
 
+func TestMaterializeTargetsWithoutSelector(t *testing.T) {
+	// ITBench feature-flag faults name a ConfigMap kind with an empty label and
+	// address the flag through their own settings.
+	engine := chaosTypes.ChaosEngine{}
+	engine.Spec.Appinfo = chaosTypes.ApplicationParams{AppKind: "configmap", Appns: "otel-demo"}
+	engine.Spec.Experiments = []chaosTypes.ExperimentList{{Name: "test"}}
+	engine.Spec.Experiments[0].Spec.Components.ENV = []corev1.EnvVar{{Name: "FLAG_NAME", Value: "cartFailure"}}
+	before := engine.Spec.Experiments[0].Spec.Components.ENV
+	changed, err := MaterializeTargets(&engine)
+	if err != nil || !changed || engine.Spec.Appinfo != (chaosTypes.ApplicationParams{}) {
+		t.Fatalf("selector-less target not cleared: %v, %v, %#v", changed, err, engine.Spec.Appinfo)
+	}
+	if !reflect.DeepEqual(before, engine.Spec.Experiments[0].Spec.Components.ENV) {
+		t.Fatalf("TARGETS added without a selector: %#v", engine.Spec.Experiments[0].Spec.Components.ENV)
+	}
+}
+
 func TestMaterializeTargetsRejectsAmbiguousTargets(t *testing.T) {
 	for _, app := range []chaosTypes.ApplicationParams{
-		{AppKind: "service", Appns: "test"},
 		{AppKind: "service", Applabel: "app=test"},
 		{AppKind: "service", Appns: "test", Applabel: "app=test;service:other:[all]"},
 	} {

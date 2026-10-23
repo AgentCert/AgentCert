@@ -34,13 +34,16 @@ type Source struct {
 }
 
 type Definition struct {
-	Source    Source
-	CSV       string
-	Fault     string
-	Fields    []chartconfig.Field
-	Defaults  map[string]corev1.EnvVar
-	HasSchema bool
-	Revision  string
+	Source Source
+	CSV    string
+	Fault  string
+	// Experiment is fault.yaml's metadata.name, the name engines use. It need
+	// not match the hub directory: several ITBench faults use a shorter one.
+	Experiment string
+	Fields     []chartconfig.Field
+	Defaults   map[string]corev1.EnvVar
+	HasSchema  bool
+	Revision   string
 }
 
 // Cache is bounded and keyed by content, not by a TTL. A mounted file or hub
@@ -77,13 +80,15 @@ func Directory(root, category, name string) (string, error) {
 	return dir, nil
 }
 
+// Load treats a missing metadata or fault file as empty: older and third-party
+// hubs have faults without them, and those faults simply have no schema.
 func (c *Cache) Load(dir, name string) (*Definition, error) {
 	csv, err := ReadFile(dir, name+".chartserviceversion.yaml")
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read fault metadata: %w", err)
 	}
 	fault, err := ReadFile(dir, "fault.yaml")
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read fault definition: %w", err)
 	}
 	digest := sha256.New()
@@ -133,7 +138,10 @@ func Parse(csv, fault []byte) (*Definition, error) {
 		return nil, fmt.Errorf("invalid fault metadata: %w", err)
 	}
 	var experiment struct {
-		Kind string `json:"kind"`
+		Kind     string `json:"kind"`
+		Metadata struct {
+			Name string `json:"name"`
+		} `json:"metadata"`
 		Spec struct {
 			Definition struct {
 				Env []corev1.EnvVar `json:"env"`
@@ -143,24 +151,38 @@ func Parse(csv, fault []byte) (*Definition, error) {
 	if err := yaml.Unmarshal(fault, &experiment); err != nil {
 		return nil, fmt.Errorf("invalid fault.yaml: %w", err)
 	}
-	if experiment.Kind != "ChaosExperiment" {
-		return nil, errors.New("fault.yaml must contain a ChaosExperiment")
+	block, present := metadata.Spec["configurations"]
+	definition := &Definition{
+		CSV:        string(csv),
+		Fault:      string(fault),
+		Experiment: experiment.Metadata.Name,
+		Defaults:   make(map[string]corev1.EnvVar),
+		HasSchema:  present,
 	}
-	definition := &Definition{CSV: string(csv), Fault: string(fault), Defaults: make(map[string]corev1.EnvVar)}
 	values := make(map[string]interface{})
+	repeated := ""
 	for _, env := range experiment.Spec.Definition.Env {
 		if _, exists := definition.Defaults[env.Name]; exists {
-			return nil, fmt.Errorf("fault.yaml repeats environment variable %s", env.Name)
+			if repeated == "" {
+				repeated = env.Name
+			}
+			continue
 		}
 		definition.Defaults[env.Name] = env
 		if env.ValueFrom == nil {
 			values[env.Name] = env.Value
 		}
 	}
-	block, present := metadata.Spec["configurations"]
-	definition.HasSchema = present
 	if !present {
-		return definition, nil // Legacy hubs retain their existing tuning flow.
+		// Legacy hubs retain their existing tuning flow, so their files are
+		// not held to the rules a schema depends on.
+		return definition, nil
+	}
+	if experiment.Kind != "ChaosExperiment" {
+		return nil, errors.New("fault.yaml must contain a ChaosExperiment")
+	}
+	if repeated != "" {
+		return nil, fmt.Errorf("fault.yaml repeats environment variable %s", repeated)
 	}
 	if block == nil {
 		return nil, errors.New("spec.configurations must be a list, use [] to offer no settings")
@@ -223,6 +245,35 @@ func ValidateEnvironment(definition *Definition, envs []corev1.EnvVar) error {
 		if !exists || !reflect.DeepEqual(original, env) {
 			return fmt.Errorf("%s is not a setting this fault offers", env.Name)
 		}
+	}
+	return chartconfig.Validate(definition.Fields, values)
+}
+
+// validateDeclaredSettings is the check for engines not built from the current
+// definition: legacy workflows and engines saved from an older revision. Their
+// other variables were valid when written, so only declared settings holding a
+// literal are checked. Values resolved at run time (valueFrom, or a template
+// expression such as a ConfigMap-backed workflow parameter) are left as is.
+func validateDeclaredSettings(definition *Definition, envs []corev1.EnvVar) error {
+	if !definition.HasSchema {
+		return nil
+	}
+	declared := make(map[string]bool, len(definition.Fields))
+	values := make(map[string]interface{}, len(definition.Fields))
+	for _, field := range definition.Fields {
+		declared[field.Key] = true
+		values[field.Key] = field.Default
+	}
+	seen := make(map[string]bool, len(envs))
+	for _, env := range envs {
+		if !declared[env.Name] || env.ValueFrom != nil || strings.Contains(env.Value, "{{") {
+			continue
+		}
+		if seen[env.Name] {
+			return fmt.Errorf("environment variable %s is repeated", env.Name)
+		}
+		seen[env.Name] = true
+		values[env.Name] = env.Value
 	}
 	return chartconfig.Validate(definition.Fields, values)
 }

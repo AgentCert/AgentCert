@@ -27,11 +27,11 @@ The fastest, most reproducible way. Brings up MongoDB (shared `rs0`), LiteLLM,
 AgentCert, the agents, and the certifier in one go.
 
 ```bash
-# From the monorepo root
-cd /srv/projects/ace-monorepo
+# From the monorepo root (your own checkout)
+cd ace-monorepo
 
-./scripts/start-local-services.sh             # mongo (rs0) + AgentCert + LiteLLM
-./scripts/build-and-push.sh                   # rebuild custom images
+./scripts/start-local-services.sh --deploy    # MongoDB (rs0) + Langfuse + Ollama + LiteLLM + Certifier
+./scripts/build-and-push.sh                   # rebuild ACE images locally (--push publishes)
 ```
 
 ### Option B — Submodule standalone
@@ -97,16 +97,17 @@ make push-frontend              # docker.buildx + buildx.push.frontend
 | `web` | `agentcert/litmusportal-frontend` | `node:18` → `ubi8-minimal` + nginx |
 | `dex-server` | `agentcert/dex-server` | Go → ubi |
 
-The monorepo root provides convenience build scripts that orchestrate the
-agent / sidecar / installer / litellm images together:
+The monorepo provides per-component build wrappers for the agent / sidecar /
+installer images. They build through `scripts/build-and-push.sh`: locally by
+default, `--push` publishes, `--kind-load` loads KinD.
 
 ```bash
 # From the monorepo root
-./build-flash-agent.sh        # ../flash-agent
-./build-agent-sidecar.sh      # ../agent-sidecar
-./build-install-agent.sh      # ../agent-charts/install-agent
-./build-install-app.sh        # ../app-charts/install-app
-./build-litellm.sh            # ../agentcert-stack/litellm-setup
+agents/flash-agent/build-flash-agent.sh
+agent-sidecar/build-agent-sidecar.sh
+agent-charts/install-agent/build-install-agent.sh
+app-charts/install-app/build-install-app.sh
+agentcert-stack/litellm-setup/build-litellm.sh   # caches the LiteLLM image; --deploy deploys it
 ```
 
 ---
@@ -131,8 +132,8 @@ per-service `.env.example` files.
 |---|---|---|
 | `INFRA_DEPLOYMENTS` | `false` | Self-hosted (single-cluster) mode |
 | `SUBSCRIBER_IMAGE` | `agentcert/litmusportal-subscriber:3.0.0` | Image the server installs into target clusters |
-| `INSTALL_AGENT_IMAGE` | `agentcert/agentcert-install-agent:latest` | Synced by `agent-charts/install-agent/build-install-agent.sh` |
-| `INSTALL_APP_IMAGE` | `agentcert/agentcert-install-app:latest` | Synced by `app-charts/install-app/build-install-app.sh` |
+| `INSTALL_AGENT_IMAGE` | `agentcert/agentcert-install-agent:latest` | Written by the monorepo's `scripts/setup.sh` (resolved against `IMAGE_REGISTRY` / `ACE_IMAGE_TAG`); image built by `agent-charts/install-agent/build-install-agent.sh` |
+| `INSTALL_APP_IMAGE` | `agentcert/agentcert-install-app:latest` | Written by the monorepo's `scripts/setup.sh` (resolved against `IMAGE_REGISTRY` / `ACE_IMAGE_TAG`); image built by `app-charts/install-app/build-install-app.sh` |
 | `KUBERNETES_MCP_SERVER_IMAGE` | `agentcert/kubernetes-mcp-server:latest` | Image used in stage-4 MCP manifest |
 | `PROMETHEUS_MCP_SERVER_IMAGE` | `ghcr.io/pab1it0/prometheus-mcp-server:latest` | Image used in stage-4 MCP manifest |
 
@@ -171,11 +172,11 @@ Used by the subscriber when applying
 
 ## Common workflows
 
-### Reset a local environment
+### Restart a local environment
 
 ```bash
-cd /srv/projects/ace-monorepo
-./scripts/start-local-services.sh --reset       # nukes Mongo, restarts everything
+cd ace-monorepo
+./scripts/start-local-services.sh --restart     # restarts/recreates every service (data volumes are kept)
 ```
 
 ### Rebuild + push a single image fast

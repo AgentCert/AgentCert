@@ -20,11 +20,20 @@ func MaterializeTargets(engine *chaosTypes.ChaosEngine) (bool, error) {
 	app := engine.Spec.Appinfo
 	kind := strings.ToLower(strings.TrimSpace(app.AppKind))
 	switch kind {
-	case "", "deployment", "statefulset", "daemonset", "deploymentconfig", "rollout":
+	// "pod" stays in appinfo: the dispatcher's cluster detection rewrites it
+	// to the owning workload. TARGETS would address pods by name, not label.
+	case "", "pod", "deployment", "statefulset", "daemonset", "deploymentconfig", "rollout":
 		return false, nil
 	}
 	namespace, selector := strings.TrimSpace(app.Appns), strings.TrimSpace(app.Applabel)
-	if namespace == "" || selector == "" || len(engine.Spec.Experiments) == 0 {
+	if selector == "" {
+		// Faults that address their resource through their own settings (a
+		// ConfigMap feature flag, for example) name a kind but no selector.
+		// There is nothing to translate; drop the appinfo the operator rejects.
+		engine.Spec.Appinfo = chaosTypes.ApplicationParams{}
+		return true, nil
+	}
+	if namespace == "" || len(engine.Spec.Experiments) == 0 {
 		return false, errors.New("resource target requires a namespace, selector and experiment")
 	}
 	if strings.ContainsAny(kind+namespace+selector, ":;[]") {

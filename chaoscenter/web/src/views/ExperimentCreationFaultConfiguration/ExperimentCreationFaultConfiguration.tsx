@@ -94,6 +94,9 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
   });
   const definition = definitionData?.getChaosFault;
   const configurations = definition ? definition.configurations : initialFaultData?.configurations;
+  // Informational only: the form already validates against the current
+  // definition, and the server accepts engines from an older revision as long
+  // as their declared settings are still valid.
   const definitionChanged = Boolean(source && definition && source.revision !== definition.configurationRevision);
 
   const experimentHandler = experimentYamlService.getInfrastructureTypeHandler(InfrastructureType.KUBERNETES);
@@ -161,8 +164,8 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
   const confirmationDialog = <ConfirmationDialog isOpen={isOpenTuneConfirmDialog} {...confirmationDialogProps} />;
 
   const applyChanges = async (): Promise<void> => {
-    if (source && (definitionLoading || definitionError || definitionChanged)) {
-      showError(definitionError?.message ?? getString(definitionChanged ? 'faultDefinitionChanged' : 'loading'));
+    if (source && (definitionLoading || definitionError)) {
+      showError(definitionError?.message ?? getString('loading'));
       return;
     }
     const errors = await tuneExperimentRef.current?.validateForm();
@@ -220,7 +223,7 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
           size={ButtonSize.SMALL}
           text={getString('applyChanges')}
           onClick={applyChanges}
-          disabled={Boolean(source && (definitionLoading || definitionError || definitionChanged))}
+          disabled={Boolean(source && (definitionLoading || definitionError))}
         />
         <Button
           variation={ButtonVariation.TERTIARY}

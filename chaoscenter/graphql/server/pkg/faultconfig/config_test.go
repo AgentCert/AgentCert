@@ -182,30 +182,41 @@ func TestWorkflowUsesCanonicalSchemaAndRevision(t *testing.T) {
 		}
 		return definition, nil
 	}
+	stale := strings.Repeat("b", 64)
 	for _, tc := range []struct {
-		name, port, revision string
-		fail                 bool
+		name, experiment, port, revision, extra string
+		fail                                    bool
 	}{
-		{"valid", "4321", definition.Revision, false},
-		{"invalid", "70000", definition.Revision, true},
-		{"stale", "4321", strings.Repeat("b", 64), true},
+		{"valid", "service-port", "4321", definition.Revision, "", false},
+		{"invalid", "service-port", "70000", definition.Revision, "", true},
+		{"undeclared variable", "service-port", "4321", definition.Revision, "UNKNOWN", true},
+		{"other experiment", "pod-delete", "4321", definition.Revision, "", true},
+		// A hub update must not stop saved experiments from running; their
+		// declared settings are still checked against the current schema.
+		{"stale revision", "service-port", "4321", stale, "", false},
+		{"stale revision keeps old variables", "service-port", "4321", stale, "UNKNOWN", false},
+		{"stale revision invalid", "service-port", "70000", stale, "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source.Revision = tc.revision
 			rawSource, _ := json.Marshal(source)
+			extra := ""
+			if tc.extra != "" {
+				extra = fmt.Sprintf("\n            - name: %s\n              value: x", tc.extra)
+			}
 			engine := fmt.Sprintf(`kind: ChaosEngine
 metadata:
   annotations:
     %s: '%s'
 spec:
   experiments:
-    - name: service-port
+    - name: %s
       spec:
         components:
           env:
             - name: BROKEN_TARGET_PORT
-              value: '%s'
-`, SourceAnnotation, rawSource, tc.port)
+              value: '%s'%s
+`, SourceAnnotation, rawSource, tc.experiment, tc.port, extra)
 			templates := []v1alpha1.Template{{Name: "inject", Inputs: v1alpha1.Inputs{Artifacts: v1alpha1.Artifacts{{ArtifactLocation: v1alpha1.ArtifactLocation{Raw: &v1alpha1.RawArtifact{Data: engine}}}}}}}
 			if err := ValidateWorkflow(context.Background(), "project", &v1alpha1.WorkflowSpec{Templates: templates}, resolve); (err != nil) != tc.fail {
 				t.Fatalf("error = %v, want failure %v", err, tc.fail)
@@ -361,6 +372,117 @@ spec:
 		}
 		if got := engine.Spec.Experiments[0].Spec.Components.ENV[0].Value; got != want {
 			t.Fatalf("configured=%v: got duration %s, want %s", configured, got, want)
+		}
+	}
+}
+
+func TestSourceMatchesFaultExperimentName(t *testing.T) {
+	// The hub directory and fault.yaml's experiment name differ for several
+	// ITBench faults; the engine carries the experiment name.
+	fault := strings.Replace(testFault, "name: service-port", "name: short-name", 1)
+	definition, err := Parse([]byte(testCSV), []byte(fault))
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition.Revision = strings.Repeat("a", 64)
+	source, _ := json.Marshal(Source{HubID: "hub", Category: "itbench", Name: "long-directory-name", Revision: definition.Revision})
+	resolve := func(context.Context, Source, string) (*Definition, error) { return definition, nil }
+	for experiment, fail := range map[string]bool{"short-name": false, "long-directory-name": true} {
+		engine := fmt.Sprintf("kind: ChaosEngine\nmetadata:\n  annotations:\n    %s: '%s'\nspec:\n  experiments:\n    - name: %s\n", SourceAnnotation, source, experiment)
+		spec := &v1alpha1.WorkflowSpec{Templates: []v1alpha1.Template{{Name: "inject", Inputs: v1alpha1.Inputs{Artifacts: v1alpha1.Artifacts{{ArtifactLocation: v1alpha1.ArtifactLocation{Raw: &v1alpha1.RawArtifact{Data: engine}}}}}}}}
+		if err := ValidateWorkflow(context.Background(), "project", spec, resolve); (err != nil) != fail {
+			t.Fatalf("experiment %s: error = %v, want failure %v", experiment, err, fail)
+		}
+	}
+}
+
+func TestLegacyWorkflowsKeepRunning(t *testing.T) {
+	definition, err := Parse([]byte(testCSV), []byte(testFault))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolve := func(context.Context, Source, string) (*Definition, error) { return definition, nil }
+	for _, tc := range []struct {
+		name, env string
+		fail      bool
+	}{
+		{"variable the fault does not declare", "- name: CHAOS_KILL_COMMAND\n  value: kill -9 1", false},
+		{"hidden variable changed", "- name: CREDENTIAL\n  value: plain text", false},
+		{"parameter read from a ConfigMap", "- name: BROKEN_TARGET_PORT\n  value: '{{workflow.parameters.fromConfigMap}}'", false},
+		{"declared setting from a reference", "- name: BROKEN_TARGET_PORT\n  valueFrom:\n    configMapKeyRef: {name: settings, key: port}", false},
+		{"invalid declared setting", "- name: BROKEN_TARGET_PORT\n  value: '70000'", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := "            " + strings.ReplaceAll(tc.env, "\n", "\n            ")
+			engine := "kind: ChaosEngine\nspec:\n  experiments:\n    - name: service-port\n      spec:\n        components:\n          env:\n" + env + "\n"
+			spec := &v1alpha1.WorkflowSpec{
+				Templates: []v1alpha1.Template{{Name: "inject", Inputs: v1alpha1.Inputs{Artifacts: v1alpha1.Artifacts{{ArtifactLocation: v1alpha1.ArtifactLocation{Raw: &v1alpha1.RawArtifact{Data: engine}}}}}}},
+				Arguments: v1alpha1.Arguments{Parameters: []v1alpha1.Parameter{{Name: "fromConfigMap", ValueFrom: &v1alpha1.ValueFrom{ConfigMapKeyRef: &corev1.ConfigMapKeySelector{Key: "port"}}}}},
+			}
+			if err := ValidateWorkflow(context.Background(), "project", spec, resolve); (err != nil) != tc.fail {
+				t.Fatalf("error = %v, want failure %v", err, tc.fail)
+			}
+		})
+	}
+}
+
+func TestFaultsWithoutSchemaAreNotHeldToSchemaRules(t *testing.T) {
+	for _, fault := range []string{
+		"kind: ChaosExperiment\nspec:\n  definition:\n    env:\n      - {name: A, value: '1'}\n      - {name: A, value: '2'}\n",
+		"kind: SomethingElse\n",
+		"",
+	} {
+		definition, err := Parse([]byte("spec: {}"), []byte(fault))
+		if err != nil || definition.HasSchema {
+			t.Fatalf("legacy fault rejected: %q: %v", fault, err)
+		}
+		if _, err := Parse([]byte("spec: {configurations: []}"), []byte(fault)); err == nil {
+			t.Fatalf("schema accepted with an unusable fault.yaml: %q", fault)
+		}
+	}
+	dir := t.TempDir() // A fault folder with no metadata or fault file.
+	definition, err := NewCache().Load(dir, "bare")
+	if err != nil || definition.HasSchema {
+		t.Fatalf("bare fault folder: %#v, %v", definition, err)
+	}
+}
+
+// Every predefined experiment shipped in the hub must pass the validation that
+// save, run and cron dispatch apply, against the hub's own fault definitions.
+func TestHubExperimentsValidate(t *testing.T) {
+	hub := "../../../../../../chaos-charts"
+	files, err := filepath.Glob(filepath.Join(hub, "experiments", "*", "experiment*.yaml"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("hub experiments unavailable: %v", err)
+	}
+	cache := NewCache()
+	resolve := func(_ context.Context, ref Source, _ string) (*Definition, error) {
+		dirs, _ := filepath.Glob(filepath.Join(hub, "faults", "*", ref.Name))
+		if len(dirs) != 1 {
+			return nil, ErrNotFound
+		}
+		return cache.Load(dirs[0], ref.Name)
+	}
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spec *v1alpha1.WorkflowSpec
+		if strings.HasSuffix(file, "_cron.yaml") {
+			var cron v1alpha1.CronWorkflow
+			err = yaml.Unmarshal(data, &cron)
+			spec = &cron.Spec.WorkflowSpec
+		} else {
+			var workflow v1alpha1.Workflow
+			err = yaml.Unmarshal(data, &workflow)
+			spec = &workflow.Spec
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
+		if err := ValidateWorkflow(context.Background(), "project", spec, resolve); err != nil {
+			t.Errorf("%s: %v", strings.TrimPrefix(file, hub+"/"), err)
 		}
 	}
 }

@@ -63,7 +63,9 @@ export default function ExperimentCreationChaosFaultsView({
         ?.preProcessChaosEngineAndExperimentManifest(experimentKey, parsedEngineCR, parsedFaultCR as ChaosExperiment)
         .then(response => {
           if (response) {
-            stampFaultSource(response.chaosEngine, source);
+            // Only faults with a schema are configuration-enabled; schema-less
+            // faults keep the legacy flow, including its ON_DEMAND duration.
+            if (details.configurations) stampFaultSource(response.chaosEngine, source);
             onSelect({
               faultName: generateName,
               faultCR: response.chaosExperiment,

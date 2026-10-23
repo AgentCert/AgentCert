@@ -53,8 +53,6 @@ func ValidateWorkflow(ctx context.Context, projectID string, spec *v1alpha1.Work
 				ref := source
 				if rawSource == "" {
 					ref.Name = experiment.Name // Look up known built-in faults for legacy workflows.
-				} else if ref.Name != experiment.Name {
-					return fmt.Errorf("%s: fault source %q does not match experiment %q", template.Name, ref.Name, experiment.Name)
 				}
 				definition, found := resolved[ref]
 				if !found {
@@ -76,8 +74,25 @@ func ValidateWorkflow(ctx context.Context, projectID string, spec *v1alpha1.Work
 				if definition == nil {
 					continue
 				}
-				if rawSource != "" && ref.Revision != definition.Revision {
-					return fmt.Errorf("%s: fault definition changed in the hub; remove and re-add the fault before saving or running", template.Name)
+				if rawSource != "" {
+					// The source names the hub directory; the engine names the
+					// experiment fault.yaml declares, which can differ.
+					want := definition.Experiment
+					if want == "" {
+						want = ref.Name
+					}
+					if experiment.Name != want {
+						return fmt.Errorf("%s: fault source %q does not define experiment %q", template.Name, ref.Name, experiment.Name)
+					}
+				}
+				// Only an engine built from the current definition is held to
+				// it exactly. A hub update must not stop saved experiments and
+				// schedules from running, so engines from an older revision are
+				// checked like legacy ones: their declared settings must still
+				// be valid against the current schema.
+				validate := validateDeclaredSettings
+				if rawSource != "" && ref.Revision == definition.Revision {
+					validate = ValidateEnvironment
 				}
 				envs := experiment.Spec.Components.ENV
 				if rawSource == "" {
@@ -96,7 +111,7 @@ func ValidateWorkflow(ctx context.Context, projectID string, spec *v1alpha1.Work
 						}
 					}
 				}
-				if err := ValidateEnvironment(definition, envs); err != nil {
+				if err := validate(definition, envs); err != nil {
 					return fmt.Errorf("%s: invalid settings for %s: %w", template.Name, experiment.Name, err)
 				}
 			}

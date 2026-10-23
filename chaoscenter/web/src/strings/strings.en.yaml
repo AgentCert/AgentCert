@@ -198,7 +198,7 @@ clickDownload: >-
 clone: Clone
 cloneExperiment: Clone Experiment
 faultSettingsApplyToNextRun: Settings apply to newly submitted runs. Running faults keep their current settings.
-faultDefinitionChanged: The fault definition changed in the hub. Remove and re-add this fault to use the current definition.
+faultDefinitionChanged: The fault definition changed in the hub. These settings are checked against the current definition.
 closeTuneConfirmation: Close tune fault configuration?
 closeTuneConfirmationDescription: >-
   Changes to your tune fault configuration will be lost if you do not apply your
