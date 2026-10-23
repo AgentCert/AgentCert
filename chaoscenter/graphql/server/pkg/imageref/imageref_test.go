@@ -26,7 +26,7 @@ func TestResolve(t *testing.T) {
 		// No frozen copy (not a deploy/images.txt mirror row): keeps its upstream name.
 		{"", "agentcert", "nginx:1.25", "nginx:1.25"},
 		{"", "agentcert", "registry.example.com/team/app:v2", "registry.example.com/team/app:v2"},
-		{"", "agentcert", "devth/alpine-bench", "devth/alpine-bench:latest"}, // optional row, not mirrored
+		{"", "agentcert", "devth/alpine-bench", "agentcert/devth-alpine-bench:latest"}, // mirror row (no longer optional)
 		{jfrog, "agentcert", "nginx:1.25", jfrog + "/agentcert/nginx:1.25"},  // private registry: always under the namespace folder
 		{"", "", "mongo:5", "agentcert/mongo:5"},                             // empty namespace = default
 		{jfrog, "agentcert", "mongo:5", jfrog + "/agentcert/mongo:5"},
