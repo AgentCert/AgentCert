@@ -378,7 +378,9 @@ export interface StringsMap {
   'fault': unknown
   'faultActivity': unknown
   'faultConfiguration': unknown
+  'faultDefinitionChanged': unknown
   'faultDetails': unknown
+  'faultSettingsApplyToNextRun': unknown
   'faultShouldHaveAtleastOneProbe': unknown
   'faultSummary': unknown
   'faultVerdict': unknown

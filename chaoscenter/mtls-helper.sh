@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # delete crt and key file
 rm *.crt
 rm *.key

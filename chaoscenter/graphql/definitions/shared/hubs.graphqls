@@ -35,7 +35,7 @@ values to the install step as -values-json, and the server validates them
 against these declarations on every save and run.
 """
 type ConfigField {
-  """Helm values path, e.g. agent.config.SCAN_INTERVAL"""
+  """Helm values path, or a fault environment variable name."""
   key: String!
   label: String!
   description: String

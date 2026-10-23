@@ -16,7 +16,7 @@ import {
 import { Icon } from '@harnessio/icons';
 import { useParams } from 'react-router-dom';
 import type { FormikProps } from 'formik';
-import { cloneDeep, isEmpty, isEqual } from 'lodash-es';
+import { cloneDeep, isEqual } from 'lodash-es';
 import { DrawerTypes } from '@components/Drawer/Drawer';
 import Drawer from '@components/Drawer';
 import { useStrings } from '@strings';
@@ -25,6 +25,10 @@ import type { ChaosEngine, FaultData } from '@models';
 import { useSearchParams } from '@hooks';
 import { InfrastructureType } from '@api/entities';
 import experimentYamlService from '@services/experiment';
+import { getChaosFault } from '@api/core/chaoshubs/getChaosFault';
+import { getScope, getFaultTunableFromTuneExperimentFormValues } from '@utils';
+import { readFaultSource } from '@services/experiment/faultSettings';
+import { fromFormValues, ChartSettingsFormValues } from '@components/ChartSettingsForm/chartSettingsFormUtils';
 import type { GetFaultTunablesOperation } from '@services/experiment/ExperimentYamlService';
 import type { ServiceIdentifiers } from '@db';
 import SelectProbesTabController from '@controllers/SelectProbesTab';
@@ -78,6 +82,19 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
   const { experimentKey } = useParams<{ experimentKey: string }>();
   const [faultData, setFaultData] = React.useState<FaultData | undefined>(cloneDeep(initialFaultData));
   const [isModeSelected, setIsModeSelected] = React.useState<boolean>(false);
+  const source = readFaultSource(initialFaultData?.engineCR);
+  const {
+    data: definitionData,
+    loading: definitionLoading,
+    error: definitionError
+  } = getChaosFault({
+    projectID: getScope().projectID,
+    request: { hubID: source?.hubID ?? '', category: source?.category ?? '', experimentName: source?.name ?? '' },
+    options: { skip: !source, fetchPolicy: 'cache-and-network' }
+  });
+  const definition = definitionData?.getChaosFault;
+  const configurations = definition ? definition.configurations : initialFaultData?.configurations;
+  const definitionChanged = Boolean(source && definition && source.revision !== definition.configurationRevision);
 
   const experimentHandler = experimentYamlService.getInfrastructureTypeHandler(InfrastructureType.KUBERNETES);
 
@@ -144,11 +161,15 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
   const confirmationDialog = <ConfirmationDialog isOpen={isOpenTuneConfirmDialog} {...confirmationDialogProps} />;
 
   const applyChanges = async (): Promise<void> => {
-    // Submit the env tuning form
-    tuneExperimentRef.current?.handleSubmit();
-    // Check for errors in env tuning form
-    if (!isEmpty(tuneExperimentRef.current?.errors)) {
+    if (source && (definitionLoading || definitionError || definitionChanged)) {
+      showError(definitionError?.message ?? getString(definitionChanged ? 'faultDefinitionChanged' : 'loading'));
+      return;
+    }
+    const errors = await tuneExperimentRef.current?.validateForm();
+    if (errors && Object.keys(errors).length > 0) {
+      await tuneExperimentRef.current?.setTouched(Object.fromEntries(Object.keys(errors).map(key => [key, true])));
       showError(getString('errorApplyChanges'));
+      setSelectedTabId(TuneFaultTab.TuneFault);
       return;
     }
     // Block Apply if this fault's Target Application fields are required but left blank --
@@ -163,11 +184,27 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
     // before closing -- the parent's onClose re-reads the manifest to
     // refresh the canvas (node warning badges, missing-target banner), and
     // that read must not race the IndexedDB write it depends on.
-    if (faultData) {
-      await experimentHandler?.updateExperimentManifestWithFaultData(experimentKey, faultData);
-      await experimentHandler?.updateFaultWeight(experimentKey, faultData.faultName, faultWeight);
+    try {
+      if (faultData) {
+        const formValues = tuneExperimentRef.current?.values;
+        const values =
+          configurations && formValues
+            ? fromFormValues(configurations, formValues as ChartSettingsFormValues)
+            : formValues;
+        const updatedFaultData = values
+          ? experimentHandler?.updateFaultTunablesInFaultData(
+              cloneDeep(faultData),
+              getFaultTunableFromTuneExperimentFormValues(values)
+            )
+          : faultData;
+        if (updatedFaultData)
+          await experimentHandler?.updateExperimentManifestWithFaultData(experimentKey, updatedFaultData);
+        await experimentHandler?.updateFaultWeight(experimentKey, faultData.faultName, faultWeight);
+      }
+      onClose();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : getString('errorApplyChanges'));
     }
-    onClose();
   };
 
   const header = (
@@ -183,6 +220,7 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
           size={ButtonSize.SMALL}
           text={getString('applyChanges')}
           onClick={applyChanges}
+          disabled={Boolean(source && (definitionLoading || definitionError || definitionChanged))}
         />
         <Button
           variation={ButtonVariation.TERTIARY}
@@ -221,13 +259,21 @@ ExperimentCreationTuneFaultProps): React.ReactElement {
       id: TuneFaultTab.TuneFault,
       title: getString('tuneFault'),
       panel: (
-        <FaultTunablesTab
-          formRef={tuneExperimentRef}
-          faultData={faultData}
-          setFaultData={setFaultData}
-          initialFaultTunables={initialFaultTunables}
-          setFaultWeight={setFaultWeight}
-        />
+        <>
+          {source && (definitionLoading || definitionError || definitionChanged) && (
+            <Text padding="medium">
+              {definitionError?.message ?? getString(definitionChanged ? 'faultDefinitionChanged' : 'loading')}
+            </Text>
+          )}
+          <FaultTunablesTab
+            formRef={tuneExperimentRef}
+            faultData={faultData}
+            setFaultData={setFaultData}
+            initialFaultTunables={initialFaultTunables}
+            setFaultWeight={setFaultWeight}
+            configurations={configurations}
+          />
+        </>
       )
     },
     {

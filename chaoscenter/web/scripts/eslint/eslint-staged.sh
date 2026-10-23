@@ -1,14 +1,4 @@
-
-# lint-staged will pass all files in $1 $2 $3 etc. iterate and concat.
-for var in "$@"
-do
-    files="$files $var" 
-done
-
-# run lint on staged files
-eslint --ext .ts --ext .tsx --fix $files
-
-# capture exit code of eslint
-code=$?
-
-exit $code
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# -gt 0 ]] || exit 0
+exec eslint --ext .ts --ext .tsx --fix -- "$@"

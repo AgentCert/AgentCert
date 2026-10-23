@@ -14,8 +14,10 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub/handler"
 	chaosHubOps "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub/ops"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chartconfig"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	dbSchemaChaosHub "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_hub"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultconfig"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
@@ -38,6 +40,7 @@ type Service interface {
 	DeleteChaosHub(ctx context.Context, hubID string, projectID string) (bool, error)
 	ListChaosFaults(ctx context.Context, hubID string, projectID string) ([]*model.Chart, error)
 	GetChaosFault(ctx context.Context, request model.ExperimentRequest, projectID string) (*model.FaultDetails, error)
+	GetFaultConfiguration(ctx context.Context, source faultconfig.Source, projectID string) (*faultconfig.Definition, error)
 	GetChaosHub(ctx context.Context, chaosHubID string, projectID string) (*model.ChaosHubStatus, error)
 	ListChaosHubs(ctx context.Context, projectID string, request *model.ListChaosHubRequest) ([]*model.ChaosHubStatus, error)
 	ListPredefinedExperiments(ctx context.Context, hubID string, projectID string) ([]*model.PredefinedExperimentList, error)
@@ -50,13 +53,15 @@ type Service interface {
 }
 
 type chaosHubService struct {
-	chaosHubOperator *dbSchemaChaosHub.Operator
+	chaosHubOperator    *dbSchemaChaosHub.Operator
+	faultConfigurations *faultconfig.Cache
 }
 
 // NewService returns a new instance of Service
 func NewService(chaosHubOperator *dbSchemaChaosHub.Operator) Service {
 	return &chaosHubService{
-		chaosHubOperator: chaosHubOperator,
+		chaosHubOperator:    chaosHubOperator,
+		faultConfigurations: faultconfig.NewCache(),
 	}
 }
 
@@ -476,55 +481,94 @@ func (c *chaosHubService) ListChaosFaults(ctx context.Context, hubID string, pro
 
 // GetChaosFault is used for getting details of chartserviceversion.yaml.
 func (c *chaosHubService) GetChaosFault(ctx context.Context, request model.ExperimentRequest, projectID string) (*model.FaultDetails, error) {
-	chaosHub, err := c.getChaosHubDetails(ctx, request.HubID, projectID)
+	source := faultconfig.Source{HubID: request.HubID, Category: request.Category, Name: request.ExperimentName}
+	basePath, err := c.faultDirectory(ctx, &source, projectID)
 	if err != nil {
 		return nil, err
 	}
-	var basePath string
-	if chaosHub.IsDefault {
-		if handler.IsCustomHubMode() {
-			basePath = utils.Config.DefaultChaosHubPath + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
-		} else {
-			basePath = DefaultPath + "default/" + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
-		}
-	} else {
-		basePath = DefaultPath + projectID + "/" + chaosHub.Name + "/faults/" + request.Category + "/" + request.ExperimentName
-	}
-
-	//Get fault chartserviceversion.yaml data
-	csvPath := basePath + "/" + request.ExperimentName + ".chartserviceversion.yaml"
-	csvYaml, err := os.ReadFile(csvPath)
+	definition, err := c.faultConfigurations.Load(basePath, source.Name)
 	if err != nil {
-		csvYaml = []byte("")
+		return nil, err
 	}
-
-	//Get engine.yaml data
-	enginePath := basePath + "/" + "engine.yaml"
-	engineYaml, err := os.ReadFile(enginePath)
+	engineYaml, err := faultconfig.ReadFile(basePath, "engine.yaml")
 	if err != nil {
-		engineYaml = []byte("")
+		return nil, fmt.Errorf("read fault engine: %w", err)
 	}
-
-	//Get fault.yaml data
-	faultPath := basePath + "/" + "fault.yaml"
-	faultYaml, err := os.ReadFile(faultPath)
-	if err != nil {
-		faultYaml = []byte("")
+	groundTruthYaml, err := faultconfig.ReadFile(basePath, "ground_truth.yaml")
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read fault ground truth: %w", err)
 	}
-
-	//Get ground_truth.yaml data
-	groundTruthPath := basePath + "/" + "ground_truth.yaml"
-	groundTruthYaml, err := os.ReadFile(groundTruthPath)
-	if err != nil {
-		groundTruthYaml = []byte("")
+	var configurations []*model.ConfigField
+	if definition.HasSchema {
+		configurations = chartconfig.ToModel(definition.Fields)
 	}
-
 	return &model.FaultDetails{
-		CSV:         string(csvYaml),
-		Engine:      string(engineYaml),
-		Fault:       string(faultYaml),
-		GroundTruth: string(groundTruthYaml),
+		CSV:                   definition.CSV,
+		Engine:                string(engineYaml),
+		Fault:                 definition.Fault,
+		GroundTruth:           string(groundTruthYaml),
+		Configurations:        configurations,
+		ConfigurationRevision: definition.Revision,
 	}, nil
+}
+
+func (c *chaosHubService) GetFaultConfiguration(ctx context.Context, source faultconfig.Source, projectID string) (*faultconfig.Definition, error) {
+	dir, err := c.faultDirectory(ctx, &source, projectID)
+	if err != nil {
+		return nil, err
+	}
+	definition, err := c.faultConfigurations.Load(dir, source.Name)
+	if err != nil {
+		return nil, err
+	}
+	copy := *definition // Cached definitions are immutable and shared across requests.
+	copy.Source = source
+	return &copy, nil
+}
+
+func (c *chaosHubService) faultDirectory(ctx context.Context, source *faultconfig.Source, projectID string) (string, error) {
+	if source.HubID == "" {
+		source.HubID = DefaultHubID
+	}
+	hub, err := c.getChaosHubDetails(ctx, source.HubID, projectID)
+	if err != nil {
+		return "", err
+	}
+	root := handler.GetChartsPath(model.CloningInput{Name: hub.Name}, projectID, hub.IsDefault)
+	if source.Category != "" {
+		return faultconfig.Directory(root, source.Category, source.Name)
+	}
+	// Legacy manifests have no category. Discover it from the hub directories;
+	// no category list is compiled into the server.
+	categories, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", faultconfig.ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	var selected string
+	for _, category := range categories {
+		if !category.IsDir() || category.Name() == "icons" {
+			continue
+		}
+		dir, err := faultconfig.Directory(root, category.Name(), source.Name)
+		if errors.Is(err, faultconfig.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		if selected != "" {
+			return "", fmt.Errorf("fault %s exists in multiple categories; re-add it with an explicit source", source.Name)
+		}
+		selected = dir
+		source.Category = category.Name()
+	}
+	if selected == "" {
+		return "", faultconfig.ErrNotFound
+	}
+	return selected, nil
 }
 
 // ListChaosHubs returns the array of hub details with their current status.
@@ -1048,5 +1092,3 @@ func (c *chaosHubService) SyncDefaultChaosHubs() {
 		time.Sleep(DefaultHubSyncTimeInterval)
 	}
 }
-
-

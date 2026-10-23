@@ -6,6 +6,9 @@ import type { FaultData, FaultTunables } from '@models';
 import SearchEmptyState from '@images/SearchEmptyState.png';
 import { useStrings } from '@strings';
 import InputSlider from '@components/InputSlider';
+import ChartSettingsForm from '@components/ChartSettingsForm';
+import { buildSettingsSchema, toFormValues } from '@components/ChartSettingsForm/chartSettingsFormUtils';
+import { readFaultSettings } from '@services/experiment/faultSettings';
 import { useSearchParams, useUpdateSearchParams } from '@hooks';
 import experimentYamlService from '@services/experiment';
 import {
@@ -13,7 +16,7 @@ import {
   getInitialValueFromFaultTunable,
   getYupValidationFromFaultTunable
 } from '@utils';
-import { InfrastructureType } from '@api/entities';
+import { ConfigField, InfrastructureType } from '@api/entities';
 import { getTypeBasedFaultEnvInput } from './getTypeBasedFaultEnvInput';
 import type { TuneExperimentForm } from './types';
 
@@ -23,6 +26,7 @@ interface FaultTunablesTabProps {
   setFaultData: React.Dispatch<React.SetStateAction<FaultData | undefined>>;
   initialFaultTunables: FaultTunables | undefined;
   setFaultWeight: React.Dispatch<React.SetStateAction<number>>;
+  configurations?: ConfigField[] | null;
 }
 
 export default function FaultTunablesTab({
@@ -30,7 +34,8 @@ export default function FaultTunablesTab({
   faultData,
   setFaultData,
   initialFaultTunables,
-  setFaultWeight
+  setFaultWeight,
+  configurations
 }: FaultTunablesTabProps): React.ReactElement {
   const { getString } = useStrings();
   const searchParams = useSearchParams();
@@ -53,7 +58,20 @@ export default function FaultTunablesTab({
       style={{ overflowY: 'scroll' }}
     >
       <Layout.Vertical spacing={'large'} margin={{ bottom: 'large' }}>
-        {initialFaultTunables && faultTunableLength !== 0 ? (
+        {configurations ? (
+          <Formik
+            innerRef={formRef as React.Ref<FormikProps<Record<string, string | number | boolean>>>}
+            initialValues={toFormValues(configurations, readFaultSettings(faultData?.engineCR))}
+            validationSchema={buildSettingsSchema(configurations, getString)}
+            enableReinitialize
+            onSubmit={() => undefined}
+          >
+            <Form onChange={setUnsavedChanges}>
+              <Text margin={{ bottom: 'medium' }}>{getString('faultSettingsApplyToNextRun')}</Text>
+              <ChartSettingsForm fields={configurations} modelOptions={[]} />
+            </Form>
+          </Formik>
+        ) : initialFaultTunables && faultTunableLength !== 0 ? (
           <Formik<TuneExperimentForm>
             innerRef={formRef as React.Ref<FormikProps<TuneExperimentForm>>}
             initialValues={getInitialValueFromFaultTunable(initialFaultTunables)}
@@ -97,7 +115,6 @@ export default function FaultTunablesTab({
                       margin={{ top: 'medium', left: 'small', bottom: 'medium' }}
                       onClick={() => setCollapsed(!collapsed)}
                       icon={collapsed ? 'double-chevron-up' : 'double-chevron-down'}
-                      iconProps={{ color: Color.PRIMARY_7, size: 16 }}
                       color={Color.PRIMARY_7}
                       style={{ cursor: 'pointer' }}
                       font={{ weight: 'semi-bold' }}

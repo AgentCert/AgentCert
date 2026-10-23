@@ -568,6 +568,10 @@ input ListChaosHubRequest {
 Fault Detail consists of all the fault related details
 """
 type FaultDetails {
+  """Declared settings with defaults from fault.yaml; null means a legacy fault."""
+  configurations: [ConfigField!]
+  """Content revision used to detect a changed fault definition."""
+  configurationRevision: String!
   """
   fault consists of fault.yaml
   """

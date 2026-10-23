@@ -33,7 +33,7 @@ export default function ExperimentCreationChaosFaultsController({
 
   const [getChaosFaultQuery, { loading: getChaosFaultLoading }] = getChaosFaultLazyQuery({
     onError: err => showError(err.message),
-    fetchPolicy: 'cache-first'
+    fetchPolicy: 'cache-and-network'
   });
 
   const filteredCharts = React.useMemo(() => {

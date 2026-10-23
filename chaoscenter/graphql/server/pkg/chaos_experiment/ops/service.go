@@ -21,6 +21,7 @@ import (
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chartconfig"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultcatalog"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultconfig"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
@@ -64,10 +65,15 @@ type chaosExperimentService struct {
 	probeService                probe.Service
 	agentRegistryOperator       agentRegistry.Operator
 	faultCatalogService         faultcatalog.Service
+	faultConfigurationProvider  faultconfig.Provider
 }
 
-// NewChaosExperimentService returns a new instance of the chaos workflow service
-func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator, faultCatalogService faultcatalog.Service) Service {
+// NewChaosExperimentService returns a new instance of the chaos workflow service.
+// faultConfigurationProvider resolves a fault's declared settings from the hub;
+// it is required, not optional -- a nil provider makes every workflow carrying a
+// fault-source annotation fail to save or run. Tests that do not exercise fault
+// configuration may pass nil explicitly.
+func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator, faultCatalogService faultcatalog.Service, faultConfigurationProvider faultconfig.Provider) Service {
 	return &chaosExperimentService{
 		chaosExperimentOperator:     chaosWorkflowOperator,
 		chaosInfrastructureOperator: clusterOperator,
@@ -75,6 +81,7 @@ func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator
 		probeService:                probeService,
 		agentRegistryOperator:       agentRegOp,
 		faultCatalogService:         faultCatalogService,
+		faultConfigurationProvider:  faultConfigurationProvider,
 	}
 }
 
