@@ -655,7 +655,7 @@ type ComparatorInput struct {
 // values to the install step as -values-json, and the server validates them
 // against these declarations on every save and run.
 type ConfigField struct {
-	// Helm values path, e.g. agent.config.SCAN_INTERVAL
+	// Helm values path, or a fault environment variable name.
 	Key         string          `json:"key"`
 	Label       string          `json:"label"`
 	Description *string         `json:"description,omitempty"`
@@ -1206,6 +1206,10 @@ type FaultCompatibility struct {
 
 // Fault Detail consists of all the fault related details
 type FaultDetails struct {
+	// Declared settings with defaults from fault.yaml; null means a legacy fault.
+	Configurations []*ConfigField `json:"configurations,omitempty"`
+	// Content revision used to detect a changed fault definition.
+	ConfigurationRevision string `json:"configurationRevision"`
 	// fault consists of fault.yaml
 	Fault string `json:"fault"`
 	// engine consists engine.yaml

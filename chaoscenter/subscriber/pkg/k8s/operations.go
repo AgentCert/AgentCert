@@ -252,7 +252,12 @@ func applyRequest(requestType string, obj *unstructured.Unstructured) (*unstruct
 	if requestType == "create" {
 		response, err := dr.Create(ctx, obj, metav1.CreateOptions{})
 		if k8s_errors.IsAlreadyExists(err) {
-			// This doesn't ever happen even if it does already exist
+			// A CronWorkflow is re-sent whenever its schedule or spec changes,
+			// so "already exists" is the normal update path rather than a
+			// no-op: fold the new spec into the live object.
+			if obj.GetKind() == "CronWorkflow" {
+				return updateCronWorkflow(ctx, dr, obj)
+			}
 			logrus.Info("Already exists")
 			return nil, nil
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultcatalog"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultconfig"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
@@ -304,6 +305,9 @@ func (c *chaosExperimentService) validateExperimentComposition(
 		return err
 	}
 	templates := workflowSpec.Templates
+	if err := faultconfig.ValidateWorkflow(ctx, projectID, workflowSpec, c.faultConfigurationProvider); err != nil {
+		return err
+	}
 
 	var appFolders, appNamespaces []string
 	for _, t := range templates {

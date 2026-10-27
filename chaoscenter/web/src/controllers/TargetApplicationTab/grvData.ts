@@ -1,5 +1,15 @@
 export const gvrData = [
   {
+    group: '',
+    version: 'v1',
+    resource: 'service'
+  },
+  {
+    group: 'autoscaling',
+    version: 'v2',
+    resource: 'horizontalpodautoscaler'
+  },
+  {
     group: 'apps',
     version: 'v1',
     resource: 'deployment'

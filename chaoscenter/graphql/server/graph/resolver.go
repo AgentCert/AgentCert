@@ -10,14 +10,14 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/generated"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agent_registry"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/authorization"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/certification"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/handler"
 	chaos_experiment_run2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment_run"
 	runHandler "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment_run/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/agenthub"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/apphub"
-	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/certification"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaoshub"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/chaos_experiment"
@@ -80,7 +80,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	faultCatalogService := faultcatalog.NewService()
 	chaosHubService := chaoshub.NewService(chaosHubOperator)
 	chaosInfrastructureService := chaos_infrastructure.NewChaosInfrastructureService(chaosInfraOperator, EnvironmentOperator)
-	chaosExperimentService := chaos_experiment2.NewChaosExperimentService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator, probeService, agentRegistryOperator, faultCatalogService)
+	chaosExperimentService := chaos_experiment2.NewChaosExperimentService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator, probeService, agentRegistryOperator, faultCatalogService, chaosHubService.GetFaultConfiguration)
 	chaosExperimentRunService := chaos_experiment_run2.NewChaosExperimentRunService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator)
 	gitOpsService := gitops3.NewGitOpsService(gitopsOperator, chaosExperimentService, *chaosExperimentOperator)
 	imageRegistryService := image_registry.NewImageRegistryService(imageRegistryOperator)
@@ -118,6 +118,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	// Wire optional certification orchestrator so terminal experiment runs
 	// auto-trigger the bucketing-extraction pipeline (no UI call required).
 	choasExperimentRunHandler.SetCertificationService(certificationService)
+	choasExperimentRunHandler.SetFaultConfigurationProvider(chaosHubService.GetFaultConfiguration)
 
 	config := generated.Config{
 		Resolvers: &Resolver{

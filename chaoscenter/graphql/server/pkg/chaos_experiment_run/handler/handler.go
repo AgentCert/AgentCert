@@ -26,6 +26,7 @@ import (
 
 	ops "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_experiment/ops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/chaos_infrastructure"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultconfig"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/observability"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -74,6 +75,11 @@ type ChaosExperimentRunHandler struct {
 	mongodbOperator            mongodb.MongoOperator
 	agentRegistryOperator      agent_registry.Operator
 	certificationService       *certification.Service
+	faultConfigurationProvider faultconfig.Provider
+}
+
+func (c *ChaosExperimentRunHandler) SetFaultConfigurationProvider(provider faultconfig.Provider) {
+	c.faultConfigurationProvider = provider
 }
 
 // SetCertificationService wires the certification orchestrator used to
@@ -2448,11 +2454,19 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 	}
 	ops.ApplyInstallAgentTemplateOverrides(workflowManifest.Spec.Templates)
 	ops.ApplyInstallApplicationTemplateOverrides(workflowManifest.Spec.Templates)
-	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
-	ops.ApplyRegistryImageOverrides(&workflowManifest.Spec)
 	if err := ops.ValidateExperimentStructure(&workflowManifest.Spec); err != nil {
 		return nil, fmt.Errorf("workflow composition is not runnable: %w", err)
 	}
+	if err := faultconfig.ValidateWorkflow(ctx, projectID, &workflowManifest.Spec, c.faultConfigurationProvider); err != nil {
+		return nil, err
+	}
+	// Image resolution runs AFTER validation, matching the cron path below.
+	// ApplyRegistryImageOverrides rewrites "*_IMAGE" env values to registry
+	// copies; doing that first would present ValidateWorkflow with values the
+	// fault never declared, so a fault exposing an image tunable it does not
+	// also list in spec.configurations would fail only on the manual-run path.
+	ops.ApplyLitmusHelperImageOverrides(workflowManifest.Spec.Templates)
+	ops.ApplyRegistryImageOverrides(&workflowManifest.Spec)
 	if err := c.preflightChaosTargets(ctx, projectID, &infra, workflowManifest.Spec.Templates); err != nil {
 		return nil, err
 	}
@@ -2639,7 +2653,11 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 			}
 
 			// Normalize appkind by detecting actual resource type from cluster
-			if clusterClientset != nil {
+			materializedTargets, err := faultconfig.MaterializeTargets(&meta)
+			if err != nil {
+				return nil, fmt.Errorf("invalid chaos target: %w", err)
+			}
+			if !materializedTargets && clusterClientset != nil {
 				if normalizeChaosEngineAppKind(clusterClientset, &meta) {
 					logrus.WithField("experiment", meta.Spec.Experiments[0].Name).Debug("Updated appkind for ChaosEngine")
 				}
@@ -2649,17 +2667,7 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 				meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
 			}
 
-			// ON_DEMAND injection: reduce TOTAL_CHAOS_DURATION to prevent fault re-injection
-			if meta.Annotations["litmuschaos.io/injectionType"] == "ON_DEMAND" {
-				for expIdx := range meta.Spec.Experiments {
-					for envIdx, envVar := range meta.Spec.Experiments[expIdx].Spec.Components.ENV {
-						if envVar.Name == "TOTAL_CHAOS_DURATION" {
-							meta.Spec.Experiments[expIdx].Spec.Components.ENV[envIdx].Value = "30"
-							logrus.WithField("experiment", meta.Spec.Experiments[expIdx].Name).Info("ON_DEMAND: set TOTAL_CHAOS_DURATION=30s")
-						}
-					}
-				}
-			}
+			faultconfig.ApplyLegacyOnDemandDuration(&meta)
 
 			// Fault spans are emitted at injection time via EmitFaultSpanAtInjection.
 			// The manifest-build hook that pre-registered an OTEL fault span here was
@@ -2914,6 +2922,9 @@ func (c *ChaosExperimentRunHandler) runCronExperiment(ctx context.Context, proje
 	if err := ops.ValidateExperimentStructure(&cronExperimentManifest.Spec.WorkflowSpec); err != nil {
 		return fmt.Errorf("cron workflow composition is not runnable: %w", err)
 	}
+	if err := faultconfig.ValidateWorkflow(ctx, projectID, &cronExperimentManifest.Spec.WorkflowSpec, c.faultConfigurationProvider); err != nil {
+		return err
+	}
 
 	effectiveModelAlias := c.resolveRunModelAlias(ctx, &workflow, modelAliasOverride)
 	ops.InjectCronExperimentContextArgs(cronExperimentManifest.Spec.WorkflowSpec.Templates, effectiveModelAlias)
@@ -3020,7 +3031,11 @@ func (c *ChaosExperimentRunHandler) runCronExperiment(ctx context.Context, proje
 					return err
 				}
 			}
-			if cronClientset != nil {
+			materializedTargets, err := faultconfig.MaterializeTargets(&meta)
+			if err != nil {
+				return fmt.Errorf("invalid chaos target: %w", err)
+			}
+			if !materializedTargets && cronClientset != nil {
 				if normalizeChaosEngineAppKind(cronClientset, &meta) {
 					logrus.WithField("experiment", meta.Spec.Experiments[0].Name).Debug("Updated appkind for ChaosEngine in cron")
 				}
@@ -3030,17 +3045,7 @@ func (c *ChaosExperimentRunHandler) runCronExperiment(ctx context.Context, proje
 				meta.Spec.Experiments[0].Spec.Probe = utils.TransformProbe(meta.Spec.Experiments[0].Spec.Probe)
 			}
 
-			// ON_DEMAND injection: reduce TOTAL_CHAOS_DURATION to prevent fault re-injection
-			if meta.Annotations["litmuschaos.io/injectionType"] == "ON_DEMAND" {
-				for expIdx := range meta.Spec.Experiments {
-					for envIdx, envVar := range meta.Spec.Experiments[expIdx].Spec.Components.ENV {
-						if envVar.Name == "TOTAL_CHAOS_DURATION" {
-							meta.Spec.Experiments[expIdx].Spec.Components.ENV[envIdx].Value = "30"
-							logrus.WithField("experiment", meta.Spec.Experiments[expIdx].Name).Info("ON_DEMAND: set TOTAL_CHAOS_DURATION=30s")
-						}
-					}
-				}
-			}
+			faultconfig.ApplyLegacyOnDemandDuration(&meta)
 
 			res, err := yaml.Marshal(&meta)
 			if err != nil {

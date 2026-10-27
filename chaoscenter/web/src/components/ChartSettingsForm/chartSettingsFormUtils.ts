@@ -59,6 +59,10 @@ export function fromFormValues(fields: ConfigField[], form: ChartSettingsFormVal
     if (raw === '' && (field.type === ConfigFieldType.INTEGER || field.type === ConfigFieldType.NUMBER)) {
       raw = field.defaultValue;
     }
+    if (raw === '' && field.valueKind === ConfigValueKind.STRING && !field.required) {
+      values[field.key] = '';
+      return;
+    }
 
     switch (field.valueKind) {
       case ConfigValueKind.BOOLEAN:

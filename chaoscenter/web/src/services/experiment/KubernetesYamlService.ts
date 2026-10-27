@@ -297,10 +297,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
   // Both are therefore re-derived from the install steps on every install-step
   // edit, in one place, rather than only when the application step happens to be
   // the one being added.
-  private seedInstallStepParameters(
-    spec: WorkflowSpec | undefined,
-    templates: Template[] | undefined
-  ): void {
+  private seedInstallStepParameters(spec: WorkflowSpec | undefined, templates: Template[] | undefined): void {
     if (!spec || !templates) return;
 
     const appArgs = parseInstallStepArgs(
@@ -477,8 +474,9 @@ export class KubernetesYamlService extends ExperimentYamlService {
 
       await store.put({ ...experiment }, key);
       await tx.done;
-    } catch (_) {
+    } catch (error) {
       this.handleIDBFailure();
+      throw error;
     }
   }
 
@@ -1240,7 +1238,7 @@ export class KubernetesYamlService extends ExperimentYamlService {
           type: ref,
           valueFrom: {
             name: env.valueFrom?.[ref].name,
-            key: env.valueFrom?.[ref].name
+            key: env.valueFrom?.[ref].key
           }
         };
       }
@@ -1353,8 +1351,21 @@ export class KubernetesYamlService extends ExperimentYamlService {
       };
     });
 
-    if (chaosEngine.spec?.experiments?.[0].spec.components?.env)
-      chaosEngine.spec.experiments[0].spec.components.env = envs;
+    const spec = chaosEngine.spec?.experiments?.[0]?.spec;
+    if (spec) {
+      const existing = spec.components?.env ?? [];
+      const replacements = new Map(
+        envs.filter(env => env.value !== undefined || env.valueFrom).map(env => [env.name, env])
+      );
+      const names = new Set(existing.map(env => env.name));
+      spec.components = {
+        ...spec.components,
+        env: [
+          ...existing.map(env => replacements.get(env.name) ?? env),
+          ...Array.from(replacements.values()).filter(env => !names.has(env.name))
+        ]
+      };
+    }
 
     return faultData;
   }

@@ -5,6 +5,7 @@ import type {
   GqlAPILazyQueryResponse,
   GqlAPILazyQueryRequest
 } from '@api/types';
+import type { ConfigField } from '@api/entities';
 
 export interface ExperimentRequest {
   category: string;
@@ -21,6 +22,8 @@ export interface FaultDetails {
   fault: string;
   engine: string;
   csv: string;
+  configurations: ConfigField[] | null;
+  configurationRevision: string;
 }
 
 export interface GetChaosFaultResponse {
@@ -44,6 +47,22 @@ export function getChaosFault({
           fault
           engine
           csv
+          configurationRevision
+          configurations {
+            key
+            label
+            description
+            type
+            valueKind
+            defaultValue
+            required
+            min
+            max
+            pattern
+            options
+            group
+            advanced
+          }
         }
       }
     `,
@@ -77,6 +96,22 @@ export function getChaosFaultLazyQuery({
           fault
           engine
           csv
+          configurationRevision
+          configurations {
+            key
+            label
+            description
+            type
+            valueKind
+            defaultValue
+            required
+            min
+            max
+            pattern
+            options
+            group
+            advanced
+          }
         }
       }
     `,

@@ -1,4 +1,4 @@
-import type { ProbeObj } from '@api/entities';
+import type { ConfigField, ProbeObj } from '@api/entities';
 import type { ChaosEngine, ProbeAttributes } from './chaosEngine';
 import type { ChaosExperiment } from './chaosFaults';
 import type { CronWorkflow } from './cronWorkflows';
@@ -13,6 +13,8 @@ export interface FaultData {
   faultCR?: ChaosExperiment;
   engineCR?: ChaosEngine;
   weight?: number;
+  // Null retains the legacy tuning form; [] explicitly offers no settings.
+  configurations?: ConfigField[] | null;
 }
 
 export interface InfraDetails {

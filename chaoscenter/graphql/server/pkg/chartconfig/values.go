@@ -118,6 +118,13 @@ func (f Field) checkValue(v interface{}) error {
 	if f.Required && strings.TrimSpace(text) == "" {
 		return errors.New("is required")
 	}
+	// Fault runners use an empty optional numeric env as "use the runner
+	// default". Trimmed to match the required-check directly above, so a
+	// whitespace-only value is treated as empty by both rather than falling
+	// through to ParseInt and failing with a confusing "whole number" error.
+	if !f.Required && strings.TrimSpace(text) == "" && (f.Type == TypeInteger || f.Type == TypeNumber) {
+		return nil
+	}
 
 	switch f.Type {
 	case TypeInteger:

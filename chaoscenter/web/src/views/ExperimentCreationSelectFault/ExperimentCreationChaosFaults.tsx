@@ -6,7 +6,8 @@ import { parse } from 'yaml';
 import { useParams } from 'react-router-dom';
 import { getHash, getScope, normalize } from '@utils';
 import config from '@config';
-import type { GetChaosFaultRequest, GetChaosFaultResponse } from '@api/core';
+import type { GetChaosFaultRequest, GetChaosFaultResponse, FaultDetails } from '@api/core/chaoshubs/getChaosFault';
+import { stampFaultSource, FaultSource } from '@services/experiment/faultSettings';
 import { useStrings } from '@strings';
 import type { LazyQueryFunction } from '@api/types';
 import Box from '@images/Box.svg';
@@ -49,7 +50,9 @@ export default function ExperimentCreationChaosFaultsView({
   const infrastructureType = searchParams.get('infrastructureType') as InfrastructureType | undefined;
   const experimentHandler = experimentYamlService.getInfrastructureTypeHandler(InfrastructureType.KUBERNETES);
 
-  function handleCRs(faultCR: string, engineCR: string): void {
+  function handleCRs(details: FaultDetails, source: FaultSource): void {
+    const faultCR = details.fault;
+    const engineCR = details.engine;
     const parsedFaultCR = parse(faultCR) as FaultData['faultCR'];
     const faultName = parsedFaultCR?.metadata?.name ?? '';
     const generateName = getHash(3, faultName);
@@ -60,11 +63,15 @@ export default function ExperimentCreationChaosFaultsView({
         ?.preProcessChaosEngineAndExperimentManifest(experimentKey, parsedEngineCR, parsedFaultCR as ChaosExperiment)
         .then(response => {
           if (response) {
+            // Only faults with a schema are configuration-enabled; schema-less
+            // faults keep the legacy flow, including its ON_DEMAND duration.
+            if (details.configurations) stampFaultSource(response.chaosEngine, source);
             onSelect({
               faultName: generateName,
               faultCR: response.chaosExperiment,
               engineCR: response.chaosEngine,
-              weight: 10
+              weight: 10,
+              configurations: details.configurations
             });
           }
         });
@@ -97,7 +104,12 @@ export default function ExperimentCreationChaosFaultsView({
       setIsShown(true);
 
       if (!viewOnly && data.data?.getChaosFault?.fault) {
-        handleCRs(data.data.getChaosFault.fault, data.data.getChaosFault.engine ?? '');
+        handleCRs(data.data.getChaosFault, {
+          hubID: selectedHub?.id ?? '',
+          category: chart.metadata.name,
+          name: fault.name,
+          revision: data.data.getChaosFault.configurationRevision
+        });
       }
     });
   };

@@ -1,31 +1,15 @@
-
-
-# this is needed because "When input files are specified on the command line, tsconfig.json files are ignored."
-# so this is the only way to run tsc with filenames and tsconfig together :'(
-# see "https://www.typescriptlang.org/docs/handbook/tsconfig-json.html"
-
-files="";
-
-# lint-staged will pass all files in $1 $2 $3 etc. iterate and concat.
-for var in "$@"
-do
-    files="$files \"$var\","
-done
-
-# create temporary tsconfig which includes only passed files
-str="{
-  \"extends\": \"./tsconfig.json\",
-  \"include\": [\"src/global.d.ts\", $files]
-}"
-echo $str > tsconfig.tmp
-
-# run typecheck using temp config
-tsc --pretty -p ./tsconfig.tmp
-
-# capture exit code of tsc
-code=$?
-
-# delete temp config
-rm ./tsconfig.tmp
-
-exit $code
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# -gt 0 ]] || exit 0
+# Keep the temporary config beside tsconfig.json so relative paths still resolve.
+config="$(mktemp "${PWD}/tsconfig.XXXXXX.json")"
+trap 'rm -f "$config"' EXIT
+node - "$config" "$@" <<'JS'
+const fs = require('fs');
+const [config, ...files] = process.argv.slice(2);
+fs.writeFileSync(config, JSON.stringify({
+  extends: './tsconfig.json',
+  include: ['src/global.d.ts', ...files]
+}));
+JS
+tsc --pretty -p "$config"

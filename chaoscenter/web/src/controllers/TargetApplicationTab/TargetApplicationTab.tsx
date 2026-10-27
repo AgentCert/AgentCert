@@ -58,6 +58,8 @@ export default function TargetApplicationTabController({
   const { experimentKey } = useParams<{ experimentKey: string }>();
   const experimentHandler = experimentYamlService.getInfrastructureTypeHandler(InfrastructureType.KUBERNETES);
   const faultCatalog = useFaultCatalog();
+  // Canvas node names include an instance suffix; capabilities use the definition name.
+  const faultDefinitionName = engineCR?.spec?.experiments?.[0]?.name ?? faultName;
   const [namespaceData, setNamespaceData] = React.useState<string[]>([]);
   const [pendingInstallApplications, setPendingInstallApplications] = React.useState<PendingInstallApplication[]>([]);
   const [appInfoData, setAppInfoData] = React.useState<AppInfoData>({ appLabels: [] });
@@ -147,7 +149,7 @@ export default function TargetApplicationTabController({
   // catalogue (AppsHub registry + chaos-charts capability catalogue). A fault or
   // application the catalogue has not heard of falls back to the unrestricted
   // lists computed above, so onboarding either one needs no change here.
-  const compatibleApps = faultCatalog.applications.filter(app => faultCatalog.isFaultCompatible(faultName, app.key));
+  const compatibleApps = faultCatalog.applications.filter(app => faultCatalog.isFaultCompatible(faultDefinitionName, app.key));
   const restrictsApps = compatibleApps.length !== faultCatalog.applications.length;
   const compatibleNamespaces = restrictsApps ? compatibleApps.map(app => app.namespace) : undefined;
 
@@ -174,7 +176,7 @@ export default function TargetApplicationTabController({
     .filter(pendingApp => {
       const app = faultCatalog.resolveApplication(pendingApp.folder, pendingApp.namespace);
       return app
-        ? faultCatalog.isFaultCompatible(faultName, app.key)
+        ? faultCatalog.isFaultCompatible(faultDefinitionName, app.key)
         : !compatibleNamespaces || compatibleNamespaces.includes(pendingApp.namespace);
     })
     .map(pendingApp => pendingApp.namespace);
@@ -182,7 +184,7 @@ export default function TargetApplicationTabController({
   // Which registered app the currently selected namespace corresponds to, so the
   // AppLabel picker can be narrowed to that app's service list.
   const currentApp = faultCatalog.resolveApplication(currentPendingApp?.folder, targetApp?.appns);
-  const requiredServices = faultCatalog.faultRequiredServices(faultName);
+  const requiredServices = faultCatalog.faultRequiredServices(faultDefinitionName);
   const compatibleServices = currentApp ? requiredServices ?? currentApp.services : undefined;
 
   // Exclude concrete services known to violate this fault's injection
@@ -190,7 +192,7 @@ export default function TargetApplicationTabController({
   // that is easily misreported as an agent failure.
   const knownFailingServices = new Set(
     faultCatalog
-      .faultKnownFailingTargets(faultName)
+      .faultKnownFailingTargets(faultDefinitionName)
       .filter(target => !currentApp || target.startsWith(`${currentApp.key}/`))
       .map(target => target.slice(target.indexOf('/') + 1))
   );
@@ -216,7 +218,7 @@ export default function TargetApplicationTabController({
       appInfoData={filteredAppInfoData}
       namespaceData={filteredNamespaceData}
       pendingNamespaces={filteredPendingNamespaces}
-      allowedAppKinds={faultCatalog.faultWorkloadKinds(faultName)}
+      allowedAppKinds={faultCatalog.faultWorkloadKinds(faultDefinitionName)}
       targetApp={targetApp}
       setTargetApp={setTargetApp}
       engineCR={engineCR}
