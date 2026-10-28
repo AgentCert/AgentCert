@@ -20,6 +20,7 @@ export interface UseRouteDefinitionsProps {
   toAgentDetail(params: { agentName: string }): string;
   toAppsHub(): string;
   toAppDetail(params: { appName: string }): string;
+  toModelConfiguration(): string;
   toChaosHub(params: { hubID: string }): string;
   toChaosProbes(): string;
   toChaosProbe(params: { probeName: string }): string;
@@ -64,6 +65,8 @@ export const paths: UseRouteDefinitionsProps = {
   // Apps Hub Routes
   toAppsHub: () => '/apps-hub',
   toAppDetail: ({ appName }) => `/apps-hub/${appName}`,
+  // LLM Models Route
+  toModelConfiguration: () => '/llm-models',
   toChaosHub: ({ hubID }) => `/chaos-hubs/${hubID}`,
   toPredefinedExperiment: ({ hubID, experimentName }) => `/chaos-hubs/${hubID}/experiment/${experimentName}`,
   toChaosFault: ({ hubID, faultName }) => `/chaos-hubs/${hubID}/fault/${faultName}`,

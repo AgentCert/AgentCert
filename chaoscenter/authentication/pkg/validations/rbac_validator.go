@@ -43,7 +43,9 @@ func RbacValidator(uid string, projectID string,
 		log.Errorf("authgRPC Error: %s", err)
 		return err
 	}
-	if project == nil {
+	// GetProjects returns an empty, non-nil slice when nothing matches, so a
+	// nil check here let every signed-in user pass for every project and role.
+	if len(project) == 0 {
 		return errors.New("auth gRPC - Unauthorized")
 	}
 

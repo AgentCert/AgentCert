@@ -1,5 +1,5 @@
 import { gql, useMutation, useQuery } from '@apollo/client';
-import type { GqlAPIMutationRequest, GqlAPIMutationResponse, GqlAPIQueryResponse } from '@api/types';
+import type { GqlAPIMutationRequest, GqlAPIMutationResponse, GqlAPIQueryRequest, GqlAPIQueryResponse } from '@api/types';
 
 export interface RunChaosExperimentRequest {
   projectID: string;
@@ -12,6 +12,10 @@ export interface AgentModelOption {
   label: string;
   provider: string;
   isDefault: boolean;
+}
+
+export interface ListAgentModelOptionsRequest {
+  projectID: string;
 }
 
 export interface ListAgentModelOptionsResponse {
@@ -41,11 +45,18 @@ export function runChaosExperiment(
   return [runChaosExperimentMutation, result];
 }
 
-export function listAgentModelOptions(): GqlAPIQueryResponse<ListAgentModelOptionsResponse, Record<string, never>> {
-  const { data, loading, ...rest } = useQuery<ListAgentModelOptionsResponse, Record<string, never>>(
+// The platform models plus the project's own, from the LLM Models registry.
+export function listAgentModelOptions({
+  projectID,
+  options = {}
+}: GqlAPIQueryRequest<ListAgentModelOptionsResponse, ListAgentModelOptionsRequest>): GqlAPIQueryResponse<
+  ListAgentModelOptionsResponse,
+  ListAgentModelOptionsRequest
+> {
+  const { data, loading, ...rest } = useQuery<ListAgentModelOptionsResponse, ListAgentModelOptionsRequest>(
     gql`
-      query listAgentModelOptions {
-        listAgentModelOptions {
+      query listAgentModelOptions($projectID: ID!) {
+        listAgentModelOptions(projectID: $projectID) {
           alias
           label
           provider
@@ -54,7 +65,12 @@ export function listAgentModelOptions(): GqlAPIQueryResponse<ListAgentModelOptio
       }
     `,
     {
-      fetchPolicy: 'cache-and-network'
+      variables: {
+        projectID
+      },
+      // A model added under LLM Models shows up the next time this is read.
+      fetchPolicy: options.fetchPolicy ?? 'cache-and-network',
+      ...options
     }
   );
 

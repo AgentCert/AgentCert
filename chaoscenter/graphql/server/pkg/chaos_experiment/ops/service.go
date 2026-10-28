@@ -66,14 +66,16 @@ type chaosExperimentService struct {
 	agentRegistryOperator       agentRegistry.Operator
 	faultCatalogService         faultcatalog.Service
 	faultConfigurationProvider  faultconfig.Provider
+	modelAliasValidator         ModelAliasValidator
 }
 
 // NewChaosExperimentService returns a new instance of the chaos workflow service.
 // faultConfigurationProvider resolves a fault's declared settings from the hub;
 // it is required, not optional -- a nil provider makes every workflow carrying a
 // fault-source annotation fail to save or run. Tests that do not exercise fault
-// configuration may pass nil explicitly.
-func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator, faultCatalogService faultcatalog.Service, faultConfigurationProvider faultconfig.Provider) Service {
+// configuration may pass nil explicitly. modelAliasValidator rejects agent
+// models the project may not use; nil skips that check.
+func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator, clusterOperator *dbChaosInfra.Operator, chaosExperimentRunOperator *dbChaosExperimentRun.Operator, probeService probe.Service, agentRegOp agentRegistry.Operator, faultCatalogService faultcatalog.Service, faultConfigurationProvider faultconfig.Provider, modelAliasValidator ModelAliasValidator) Service {
 	return &chaosExperimentService{
 		chaosExperimentOperator:     chaosWorkflowOperator,
 		chaosInfrastructureOperator: clusterOperator,
@@ -82,6 +84,7 @@ func NewChaosExperimentService(chaosWorkflowOperator *dbChaosExperiment.Operator
 		agentRegistryOperator:       agentRegOp,
 		faultCatalogService:         faultCatalogService,
 		faultConfigurationProvider:  faultConfigurationProvider,
+		modelAliasValidator:         modelAliasValidator,
 	}
 }
 
@@ -2439,20 +2442,9 @@ func InjectExperimentContextArgs(templates []v1alpha1.Template, modelAliasOverri
 		chaosNamespace = "litmus-exp"
 	}
 
-	// The platform default model. FLASH_AGENT_MODEL is what scripts/setup.sh
-	// actually prompts for and writes into .env / the ace-env secret (see
-	// setup.sh's OLLAMA/Azure/Gemini model selection flow). MODEL_ALIAS is kept
-	// as a back-compat override for anyone setting it directly on the
-	// graphql-server deployment. The run-time pick and the experiment's own
+	// The platform default model. The run-time pick and the experiment's own
 	// setting take precedence, per step (resolveAgentModelAlias).
-	modelAlias := strings.TrimSpace(os.Getenv("FLASH_AGENT_MODEL"))
-	if modelAlias == "" {
-		modelAlias = strings.TrimSpace(os.Getenv("MODEL_ALIAS"))
-	}
-	if modelAlias == "" {
-		// Fallback: derive from AZURE_OPENAI_DEPLOYMENT so any provider works
-		modelAlias = strings.TrimSpace(os.Getenv("AZURE_OPENAI_DEPLOYMENT"))
-	}
+	modelAlias := chartconfig.DefaultAgentModelAlias()
 
 	// Flash-agent mitigation knobs (see flash-agent/MITIGATION_PLAN.md). Without
 	// these the per-experiment pod runs in observe mode regardless of the image,

@@ -766,6 +766,13 @@ type CreateFaultStudioRequest struct {
 	IsActive *bool `json:"isActive,omitempty"`
 }
 
+type CreateModelConfigInput struct {
+	Alias string `json:"alias"`
+	// Display name; defaults to the alias
+	Label      *string               `json:"label,omitempty"`
+	Connection *ModelConnectionInput `json:"connection"`
+}
+
 type CreateRemoteChaosHub struct {
 	// Name of the chaos hub
 	Name string `json:"name"`
@@ -2326,6 +2333,59 @@ type Microservice struct {
 	ReadyReplicas *int `json:"readyReplicas,omitempty"`
 	// Number of desired replicas
 	DesiredReplicas *int `json:"desiredReplicas,omitempty"`
+}
+
+// An LLM model a project onboarded. Its alias is the name agents call it by.
+type ModelConfig struct {
+	ProjectID string `json:"projectID"`
+	// ID of the model, also its ID in LiteLLM
+	ModelID string `json:"modelID"`
+	// Name agents and Chaos Studio use for the model; unique across the platform
+	// and never reused
+	Alias string `json:"alias"`
+	// Display name
+	Label    string        `json:"label"`
+	Provider ModelProvider `json:"provider"`
+	// LiteLLM model string, e.g. azure/gpt-4o
+	Model      string  `json:"model"`
+	APIBase    *string `json:"apiBase,omitempty"`
+	APIVersion *string `json:"apiVersion,omitempty"`
+	// Masked API key, for display only; the key itself is never returned
+	APIKeyHint *string         `json:"apiKeyHint,omitempty"`
+	SyncStatus ModelSyncStatus `json:"syncStatus"`
+	// Last error reported by LiteLLM, if any
+	LastError *string      `json:"lastError,omitempty"`
+	CreatedAt *string      `json:"createdAt,omitempty"`
+	UpdatedAt *string      `json:"updatedAt,omitempty"`
+	CreatedBy *UserDetails `json:"createdBy,omitempty"`
+	UpdatedBy *UserDetails `json:"updatedBy,omitempty"`
+}
+
+func (ModelConfig) IsAudit()                        {}
+func (this ModelConfig) GetUpdatedAt() *string      { return this.UpdatedAt }
+func (this ModelConfig) GetCreatedAt() *string      { return this.CreatedAt }
+func (this ModelConfig) GetUpdatedBy() *UserDetails { return this.UpdatedBy }
+func (this ModelConfig) GetCreatedBy() *UserDetails { return this.CreatedBy }
+
+// How LiteLLM reaches a model
+type ModelConnectionInput struct {
+	Provider ModelProvider `json:"provider"`
+	// Model name; the provider prefix (e.g. azure/) is added when missing
+	Model string `json:"model"`
+	// Endpoint URL; optional for OpenAI, Gemini and OpenRouter
+	APIBase *string `json:"apiBase,omitempty"`
+	// Required for Azure OpenAI
+	APIVersion *string `json:"apiVersion,omitempty"`
+	// Write-only: forwarded to LiteLLM, never stored or returned by ACE.
+	// Optional for Ollama and OpenAI-compatible servers
+	APIKey *string `json:"apiKey,omitempty"`
+}
+
+// Outcome of sending a model one test prompt
+type ModelTestResult struct {
+	Ok        bool    `json:"ok"`
+	LatencyMs *int    `json:"latencyMs,omitempty"`
+	Error     *string `json:"error,omitempty"`
 }
 
 type Mutation struct {
@@ -3899,6 +3959,107 @@ func (e *Mode) UnmarshalGQL(v interface{}) error {
 }
 
 func (e Mode) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// LLM provider of a model in the LLM Models registry
+type ModelProvider string
+
+const (
+	ModelProviderAzureOpenai ModelProvider = "AZURE_OPENAI"
+	ModelProviderOpenai      ModelProvider = "OPENAI"
+	ModelProviderGemini      ModelProvider = "GEMINI"
+	ModelProviderOpenrouter  ModelProvider = "OPENROUTER"
+	ModelProviderOllama      ModelProvider = "OLLAMA"
+	// Any server with an OpenAI-compatible API, e.g. vLLM
+	ModelProviderOpenaiCompatible ModelProvider = "OPENAI_COMPATIBLE"
+)
+
+var AllModelProvider = []ModelProvider{
+	ModelProviderAzureOpenai,
+	ModelProviderOpenai,
+	ModelProviderGemini,
+	ModelProviderOpenrouter,
+	ModelProviderOllama,
+	ModelProviderOpenaiCompatible,
+}
+
+func (e ModelProvider) IsValid() bool {
+	switch e {
+	case ModelProviderAzureOpenai, ModelProviderOpenai, ModelProviderGemini, ModelProviderOpenrouter, ModelProviderOllama, ModelProviderOpenaiCompatible:
+		return true
+	}
+	return false
+}
+
+func (e ModelProvider) String() string {
+	return string(e)
+}
+
+func (e *ModelProvider) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModelProvider(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModelProvider", str)
+	}
+	return nil
+}
+
+func (e ModelProvider) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// Where a model stands between ACE's record and the LiteLLM gateway
+type ModelSyncStatus string
+
+const (
+	// Recorded; LiteLLM has not confirmed it yet
+	ModelSyncStatusPending ModelSyncStatus = "PENDING"
+	// LiteLLM serves the model
+	ModelSyncStatusActive ModelSyncStatus = "ACTIVE"
+	// Removal requested; LiteLLM has not confirmed it yet
+	ModelSyncStatusDeleting ModelSyncStatus = "DELETING"
+	// LiteLLM lost the model; re-entering the API key registers it again
+	ModelSyncStatusNeedsKey ModelSyncStatus = "NEEDS_KEY"
+)
+
+var AllModelSyncStatus = []ModelSyncStatus{
+	ModelSyncStatusPending,
+	ModelSyncStatusActive,
+	ModelSyncStatusDeleting,
+	ModelSyncStatusNeedsKey,
+}
+
+func (e ModelSyncStatus) IsValid() bool {
+	switch e {
+	case ModelSyncStatusPending, ModelSyncStatusActive, ModelSyncStatusDeleting, ModelSyncStatusNeedsKey:
+		return true
+	}
+	return false
+}
+
+func (e ModelSyncStatus) String() string {
+	return string(e)
+}
+
+func (e *ModelSyncStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModelSyncStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModelSyncStatus", str)
+	}
+	return nil
+}
+
+func (e ModelSyncStatus) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

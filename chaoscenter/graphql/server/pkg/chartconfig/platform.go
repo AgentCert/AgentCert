@@ -1,6 +1,7 @@
 package chartconfig
 
 import (
+	"os"
 	"regexp"
 	"strings"
 )
@@ -64,6 +65,21 @@ var platformOwnedKeys = map[string]bool{
 // (see ops.InjectExperimentContextArgs), so it is the one platform-owned value
 // a chart may offer.
 const ModelAliasKey = "agent.config.MODEL_ALIAS"
+
+// DefaultAgentModelAlias is the platform default model: an agent runs with it
+// when neither the run nor the experiment picks one. FLASH_AGENT_MODEL is
+// what scripts/setup.sh writes into .env; MODEL_ALIAS (set directly on the
+// graphql-server) and AZURE_OPENAI_DEPLOYMENT are older fallbacks. Both the
+// Studio model list and the install step read it here, so the default a user
+// sees is the one a run uses.
+func DefaultAgentModelAlias() string {
+	for _, key := range []string{"FLASH_AGENT_MODEL", "MODEL_ALIAS", "AZURE_OPENAI_DEPLOYMENT"} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
 
 // IsPlatformOwned reports whether the server or installer owns key.
 func IsPlatformOwned(key string) bool {

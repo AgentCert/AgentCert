@@ -11,10 +11,12 @@ interface PasswordInputProps {
   name: string;
   label: string | React.ReactElement;
   className?: string;
+  // e.g. "new-password" on a field that must not get a saved login password.
+  autoComplete?: string;
 }
 
 const PasswordInput = (props: PasswordInputProps): React.ReactElement => {
-  const { disabled, label, name, placeholder, className } = props;
+  const { disabled, label, name, placeholder, className, autoComplete } = props;
   const [showPassword, setShowPassword] = React.useState(false);
   const stateIcon: IconName = showPassword ? 'eye-off' : 'eye-open';
 
@@ -36,6 +38,7 @@ const PasswordInput = (props: PasswordInputProps): React.ReactElement => {
           name={name}
           inputGroup={{
             type: showPassword ? 'text' : 'password',
+            autoComplete,
             rightElement: <Icon name={stateIcon} size={20} onClick={handleToggleClick} className={style.eyeIcon} />
           }}
           placeholder={placeholder}

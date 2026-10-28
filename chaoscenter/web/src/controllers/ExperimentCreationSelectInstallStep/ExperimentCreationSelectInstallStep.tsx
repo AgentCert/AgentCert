@@ -38,7 +38,10 @@ export default function ExperimentCreationSelectInstallStepController({
     options: { onError: error => showError(error.message), skip: kind !== 'agent' }
   });
 
-  const { data: agentModelData } = listAgentModelOptions();
+  const { data: agentModelData } = listAgentModelOptions({
+    ...scope,
+    options: { onError: error => showError(error.message) }
+  });
   const modelOptions = React.useMemo<SelectOption[]>(
     () => (agentModelData?.listAgentModelOptions ?? []).map(model => ({ label: model.label, value: model.alias })),
     [agentModelData]

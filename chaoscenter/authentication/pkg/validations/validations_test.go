@@ -83,6 +83,16 @@ func TestRbacValidator(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			// What the real repository returns when nothing matches: an
+			// empty, non-nil slice (pkg/project/repository.go GetProjects).
+			name: "an empty project list is unauthorized",
+			svc: &fakeApplicationService{
+				user:     &entities.User{ID: "u1"},
+				projects: []*entities.Project{},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

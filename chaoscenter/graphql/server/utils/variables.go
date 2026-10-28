@@ -83,6 +83,16 @@ type Configuration struct {
 	HelmBinary                string   `split_words:"true" default:"helm"`
 	HelmTimeout               string   `split_words:"true" default:"5m"`
 	PreCleanupWaitSeconds     string   `split_words:"true" default:"0"`
+	// LitellmAdminUrl is where the LLM Models registry reaches LiteLLM's admin
+	// API. Optional: by default it is OpenaiBaseUrl without /v1, which is right
+	// in Kubernetes; the root docker-compose.yml sets it, since its
+	// OPENAI_BASE_URL is the address agents use from inside KinD.
+	LitellmAdminUrl string `split_words:"true"`
+	// LitellmMasterKey authenticates the registry to LiteLLM. It is the
+	// gateway's root credential: never logged, and every mutation that uses it
+	// is owner-only.
+	LitellmMasterKey          string   `split_words:"true"`
+	OpenaiBaseUrl             string   `split_words:"true" default:"http://litellm.ace.svc.cluster.local:14000/v1"`
 	CertifierBaseURL          string   `split_words:"true" default:"http://localhost:8088"`
 	CertificatePDFBaseURL     string   `split_words:"true" default:"http://localhost:8089"`
 	AllowedOrigins            []string `split_words:"true" default:"^(http://|https://|)litmuschaos.io(:[0-9]+|)?,^(http://|https://|)localhost(:[0-9]+|),^[a-z0-9.-]+\\.svc\\.cluster\\.local(:[0-9]+)?"`

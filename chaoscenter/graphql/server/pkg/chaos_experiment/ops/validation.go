@@ -308,6 +308,13 @@ func (c *chaosExperimentService) validateExperimentComposition(
 	if err := faultconfig.ValidateWorkflow(ctx, projectID, workflowSpec, c.faultConfigurationProvider); err != nil {
 		return err
 	}
+	// Cron experiments then run on the cluster with no server in the loop, so
+	// for them this is the only point a model the project cannot use is caught.
+	if c.modelAliasValidator != nil {
+		if err := c.modelAliasValidator(ctx, projectID, ResolvedModelAliases(templates, "")); err != nil {
+			return err
+		}
+	}
 
 	var appFolders, appNamespaces []string
 	for _, t := range templates {

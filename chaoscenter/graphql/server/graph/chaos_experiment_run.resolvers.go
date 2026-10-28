@@ -7,7 +7,6 @@ package graph
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/graph/model"
@@ -85,56 +84,14 @@ func (r *mutationResolver) StopExperimentRuns(ctx context.Context, projectID str
 }
 
 // ListAgentModelOptions is the resolver for the listAgentModelOptions field.
-func (r *queryResolver) ListAgentModelOptions(ctx context.Context) ([]*model.AgentModelOption, error) {
-	defaultAlias := resolveDefaultAgentModelAlias()
-	seen := map[string]bool{}
-	models := make([]*model.AgentModelOption, 0, 6)
-
-	addModel := func(alias, label, provider string) {
-		alias = strings.TrimSpace(alias)
-		if alias == "" || seen[alias] {
-			return
-		}
-		seen[alias] = true
-		models = append(models, &model.AgentModelOption{
-			Alias:     alias,
-			Label:     label,
-			Provider:  provider,
-			IsDefault: alias == defaultAlias,
-		})
+func (r *queryResolver) ListAgentModelOptions(ctx context.Context, projectID string) ([]*model.AgentModelOption, error) {
+	err := authorization.ValidateRole(ctx, projectID,
+		authorization.MutationRbacRules[authorization.ListAgentModelOptions],
+		model.InvitationAccepted.String())
+	if err != nil {
+		return nil, err
 	}
-
-	if ollamaModel := strings.TrimSpace(os.Getenv("OLLAMA_MODEL")); ollamaModel != "" {
-		ollamaAlias := strings.ReplaceAll(ollamaModel, ":", "-")
-		addModel(ollamaAlias, ollamaAlias+" (Ollama)", "Ollama")
-	}
-
-	if strings.TrimSpace(os.Getenv("AZURE_OPENAI_KEY")) != "" || strings.TrimSpace(os.Getenv("AZURE_OPENAI_API_KEY")) != "" {
-		azureAlias := strings.TrimSpace(os.Getenv("AZURE_OPENAI_DEPLOYMENT"))
-		if azureAlias == "" {
-			azureAlias = strings.TrimSpace(os.Getenv("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"))
-		}
-		if azureAlias == "" {
-			azureAlias = "gpt-4o"
-		}
-		addModel(azureAlias, azureAlias+" (Azure OpenAI)", "Azure OpenAI")
-	}
-
-	if strings.TrimSpace(os.Getenv("GEMINI_API_KEY")) != "" {
-		addModel("gemini-3-flash", "gemini-3-flash (Gemini)", "Gemini")
-		addModel("gemini-2.5-flash", "gemini-2.5-flash (Gemini)", "Gemini")
-		addModel("gemini-2.5-flash-lite", "gemini-2.5-flash-lite (Gemini)", "Gemini")
-	}
-
-	if strings.TrimSpace(os.Getenv("OPENROUTER_API_KEY")) != "" {
-		addModel("auto-free", "auto-free (OpenRouter)", "OpenRouter")
-	}
-
-	if len(models) == 0 && defaultAlias != "" {
-		addModel(defaultAlias, defaultAlias+" (configured default)", "Configured")
-	}
-
-	return models, nil
+	return r.modelConfigService.AgentModelOptions(ctx, projectID), nil
 }
 
 // GetExperimentRun is the resolver for the getExperimentRun field.
@@ -201,25 +158,4 @@ func (r *queryResolver) GetExperimentRunStats(ctx context.Context, projectID str
 		return nil, err
 	}
 	return uiResponse, err
-}
-
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//     it when you're done.
-//   - You have helper methods in this file. Move them out to keep these resolver files clean.
-func resolveDefaultAgentModelAlias() string {
-	for _, key := range []string{"FLASH_AGENT_MODEL", "MODEL_ALIAS", "AZURE_OPENAI_DEPLOYMENT"} {
-		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-func valueOrEmpty(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
 }

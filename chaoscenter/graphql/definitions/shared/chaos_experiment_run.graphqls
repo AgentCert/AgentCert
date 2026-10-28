@@ -1,8 +1,9 @@
 extend type Query {
   """
-  Returns the agent LLM model aliases currently configured for experiment runs
+  Returns the LLM models an agent in this project can run with: the platform
+  models plus the project's active models from the LLM Models registry
   """
-  listAgentModelOptions: [AgentModelOption!]!
+  listAgentModelOptions(projectID: ID!): [AgentModelOption!]! @authorized
 
   """
   Returns experiment run based on experiment run ID

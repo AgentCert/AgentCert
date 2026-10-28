@@ -1,0 +1,152 @@
+"""
+LLM provider of a model in the LLM Models registry
+"""
+enum ModelProvider {
+  AZURE_OPENAI
+  OPENAI
+  GEMINI
+  OPENROUTER
+  OLLAMA
+  """
+  Any server with an OpenAI-compatible API, e.g. vLLM
+  """
+  OPENAI_COMPATIBLE
+}
+
+"""
+Where a model stands between ACE's record and the LiteLLM gateway
+"""
+enum ModelSyncStatus {
+  """
+  Recorded; LiteLLM has not confirmed it yet
+  """
+  PENDING
+  """
+  LiteLLM serves the model
+  """
+  ACTIVE
+  """
+  Removal requested; LiteLLM has not confirmed it yet
+  """
+  DELETING
+  """
+  LiteLLM lost the model; re-entering the API key registers it again
+  """
+  NEEDS_KEY
+}
+
+"""
+An LLM model a project onboarded. Its alias is the name agents call it by.
+"""
+type ModelConfig implements Audit {
+  projectID: ID!
+  """
+  ID of the model, also its ID in LiteLLM
+  """
+  modelID: ID!
+  """
+  Name agents and Chaos Studio use for the model; unique across the platform
+  and never reused
+  """
+  alias: String!
+  """
+  Display name
+  """
+  label: String!
+  provider: ModelProvider!
+  """
+  LiteLLM model string, e.g. azure/gpt-4o
+  """
+  model: String!
+  apiBase: String
+  apiVersion: String
+  """
+  Masked API key, for display only; the key itself is never returned
+  """
+  apiKeyHint: String
+  syncStatus: ModelSyncStatus!
+  """
+  Last error reported by LiteLLM, if any
+  """
+  lastError: String
+  createdAt: String
+  updatedAt: String
+  createdBy: UserDetails
+  updatedBy: UserDetails
+}
+
+"""
+How LiteLLM reaches a model
+"""
+input ModelConnectionInput {
+  provider: ModelProvider!
+  """
+  Model name; the provider prefix (e.g. azure/) is added when missing
+  """
+  model: String!
+  """
+  Endpoint URL; optional for OpenAI, Gemini and OpenRouter
+  """
+  apiBase: String
+  """
+  Required for Azure OpenAI
+  """
+  apiVersion: String
+  """
+  Write-only: forwarded to LiteLLM, never stored or returned by ACE.
+  Optional for Ollama and OpenAI-compatible servers
+  """
+  apiKey: String
+}
+
+input CreateModelConfigInput {
+  alias: String!
+  """
+  Display name; defaults to the alias
+  """
+  label: String
+  connection: ModelConnectionInput!
+}
+
+"""
+Outcome of sending a model one test prompt
+"""
+type ModelTestResult {
+  ok: Boolean!
+  latencyMs: Int
+  error: String
+}
+
+extend type Query {
+  """
+  Returns the project's models from the LLM Models registry
+  """
+  listModelConfigs(projectID: ID!): [ModelConfig!]! @authorized
+}
+
+extend type Mutation {
+  """
+  Registers a model with LiteLLM. It can be used straight away.
+  """
+  createModelConfig(projectID: ID!, request: CreateModelConfigInput!): ModelConfig! @authorized
+
+  """
+  Removes a model from LiteLLM. Its alias stays reserved.
+  """
+  deleteModelConfig(projectID: ID!, modelID: ID!): Boolean! @authorized
+
+  """
+  Replaces a model's API key; also how a NEEDS_KEY model is registered again
+  """
+  updateModelConfigKey(projectID: ID!, modelID: ID!, apiKey: String!): ModelConfig! @authorized
+
+  """
+  Sends a test prompt with the given connection without registering anything
+  """
+  testModelConnection(projectID: ID!, request: ModelConnectionInput!): ModelTestResult! @authorized
+
+  """
+  Sends a test prompt to a registered model
+  """
+  testModelConfig(projectID: ID!, modelID: ID!): ModelTestResult! @authorized
+}

@@ -31,6 +31,7 @@ import AgentOnboardingController from '@controllers/AgentOnboarding';
 import AppsOnboardingController from '@controllers/AppsOnboarding';
 import AgentHubController from '@controllers/AgentHub';
 import AppsHubController from '@controllers/AppsHub';
+import ModelConfigurationController from '@controllers/ModelConfiguration';
 import AgentDetailController from '@controllers/AgentDetail';
 import AppDetailController from '@controllers/AppDetail';
 
@@ -123,6 +124,8 @@ export function RoutesWithAuthentication(): React.ReactElement {
       {/* Apps Hub */}
       <Route exact path={projectMatchPaths.toAppsHub()} component={AppsHubController} />
       <Route exact path={projectMatchPaths.toAppDetail({ appName })} component={AppDetailController} />
+      {/* LLM Models */}
+      <Route exact path={projectMatchPaths.toModelConfiguration()} component={ModelConfigurationController} />
       {/*Environments */}
       <Route exact path={projectMatchPaths.toEnvironments()} component={EnvironmentController} />
       {/* Kubernetes Chaos Infrastructure */}

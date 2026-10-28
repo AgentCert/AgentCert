@@ -76,10 +76,17 @@ type ChaosExperimentRunHandler struct {
 	agentRegistryOperator      agent_registry.Operator
 	certificationService       *certification.Service
 	faultConfigurationProvider faultconfig.Provider
+	modelAliasValidator        ops.ModelAliasValidator
 }
 
 func (c *ChaosExperimentRunHandler) SetFaultConfigurationProvider(provider faultconfig.Provider) {
 	c.faultConfigurationProvider = provider
+}
+
+// SetModelAliasValidator wires the check that every agent model a run
+// resolves to is one its project may use. Optional: if nil, runs skip it.
+func (c *ChaosExperimentRunHandler) SetModelAliasValidator(validator ops.ModelAliasValidator) {
+	c.modelAliasValidator = validator
 }
 
 // SetCertificationService wires the certification orchestrator used to
@@ -2340,9 +2347,30 @@ func (c *ChaosExperimentRunHandler) resolveRunModelAlias(ctx context.Context, wo
 	return effectiveModelAlias
 }
 
+// validateRunModelAliases rejects a run whose agent would call a model its
+// project may not use (deleted, another project's, or not registered yet). It
+// reads the newest revision with the run's own model precedence
+// (resolveEffectiveModelAlias), and runs before anything is dispatched, so
+// every run of a multi-run batch is checked before its chaos starts.
+func (c *ChaosExperimentRunHandler) validateRunModelAliases(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, modelAliasOverride string) error {
+	if c.modelAliasValidator == nil || len(workflow.Revision) == 0 {
+		return nil
+	}
+	newest := workflow.Revision[0]
+	for _, revision := range workflow.Revision[1:] {
+		if revision.UpdatedAt > newest.UpdatedAt {
+			newest = revision
+		}
+	}
+	return c.modelAliasValidator(ctx, projectID, ops.ManifestModelAliases(newest.ExperimentManifest, modelAliasOverride))
+}
+
 // RunChaosWorkFlow sends workflow run request(single run workflow only) to chaos_infra on workflow re-run request
 func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData, modelAliasOverride string) (*model.RunChaosExperimentResponse, error) {
 	var notifyID string
+	if err := c.validateRunModelAliases(ctx, projectID, workflow, modelAliasOverride); err != nil {
+		return nil, err
+	}
 	infra, err := dbChaosInfra.NewInfrastructureOperator(c.mongodbOperator).GetInfra(workflow.InfraID)
 	if err != nil {
 		return nil, err
@@ -2894,6 +2922,9 @@ func (c *ChaosExperimentRunHandler) RunChaosWorkFlow(ctx context.Context, projec
 }
 
 func (c *ChaosExperimentRunHandler) RunCronExperiment(ctx context.Context, projectID string, workflow dbChaosExperiment.ChaosExperimentRequest, r *store.StateData) error {
+	if err := c.validateRunModelAliases(ctx, projectID, workflow, ""); err != nil {
+		return err
+	}
 	return c.runCronExperiment(ctx, projectID, workflow, r, "")
 }
 

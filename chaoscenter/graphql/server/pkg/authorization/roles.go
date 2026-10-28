@@ -69,6 +69,14 @@ const (
 	ListFaultStudios  RoleQuery = "ListFaultStudios"
 	GetFaultStudio    RoleQuery = "GetFaultStudio"
 
+	// LLM Models. CreateModelConfig also gates testModelConnection.
+	ListModelConfigs      RoleQuery = "ListModelConfigs"
+	ListAgentModelOptions RoleQuery = "ListAgentModelOptions"
+	CreateModelConfig     RoleQuery = "CreateModelConfig"
+	DeleteModelConfig     RoleQuery = "DeleteModelConfig"
+	UpdateModelConfigKey  RoleQuery = "UpdateModelConfigKey"
+	TestModelConfig       RoleQuery = "TestModelConfig"
+
 	MemberRoleOwnerString              = string(model.MemberRoleOwner)
 	MemberRoleExecutorString           = string(model.MemberRoleExecutor)
 	MemberRoleViewerString             = string(model.MemberRoleViewer)
@@ -118,4 +126,10 @@ var MutationRbacRules = map[RoleQuery][]string{
 	DeleteFaultStudio:     {MemberRoleOwnerString},
 	ListFaultStudios:      {MemberRoleOwnerString, MemberRoleExecutorString, MemberRoleViewerString},
 	GetFaultStudio:        {MemberRoleOwnerString, MemberRoleExecutorString, MemberRoleViewerString},
+	ListModelConfigs:      {MemberRoleOwnerString, MemberRoleExecutorString, MemberRoleViewerString},
+	ListAgentModelOptions: {MemberRoleOwnerString, MemberRoleExecutorString, MemberRoleViewerString},
+	CreateModelConfig:     {MemberRoleOwnerString},
+	DeleteModelConfig:     {MemberRoleOwnerString},
+	UpdateModelConfigKey:  {MemberRoleOwnerString},
+	TestModelConfig:       {MemberRoleOwnerString},
 }

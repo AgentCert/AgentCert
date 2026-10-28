@@ -26,6 +26,7 @@ activeMembers: Active members
 actualResilienceScore: Actual Resilience Score
 add: Add
 addExperimentToChaosHub: Add Experiment to ChaosHub
+addModel: Add Model
 addNewCluster: Add new cluster (Coming soon!)
 addNewCustomizedProbes: Add new customized probes to the fault
 addNewProbes: Select or Add new probes
@@ -140,6 +141,40 @@ chartSettingsDescription: Applied when this step installs the chart. A setting y
 agentOnboarding: Agents
 agentHub: Agent Hub
 agentHubDescription: Browse and manage available agents from the Agent Hub catalog
+deleteModelConfirm: 'Delete {{alias}}? Experiments can no longer run with it, and its alias stays reserved: a deleted alias is never reused.'
+llmModels: LLM Models
+llmModelsDescription: Models this project's experiments can run with. Add one with its own API key; it can be picked on the agent node in Chaos Studio straight away.
+modelAdded: 'Model {{alias}} added. Pick it on the agent node in Chaos Studio.'
+modelAlias: Alias
+modelAliasHelp: The name agents and Chaos Studio call the model by. It is never reused, even after the model is deleted.
+modelAliasInvalid: 2-63 lowercase letters, digits, dots, dashes or underscores, starting with a letter or digit
+modelApiBase: API base URL
+modelApiBaseInvalid: 'Enter an http:// or https:// URL'
+modelApiKey: API key
+modelApiKeyHelp: Sent to the gateway once and stored there, encrypted. ACE never shows it again.
+modelApiKeyOptional: API key (optional)
+modelApiVersion: API version
+modelDeleted: 'Model {{alias}} deleted'
+modelDeploymentName: Deployment name
+modelDisplayName: Display name
+modelKeyRotated: 'API key replaced for {{alias}}'
+modelName: Model
+modelProvider: Provider
+modelSaveAnyway: Save anyway
+modelStatusDeleting: Deleting
+modelStatusNeedsKey: Needs key
+modelStatusPending: Registering
+modelTest: Test
+modelTestFailed: Test failed
+modelTestPassed: 'The model answered in {{latency}} ms'
+modelTesting: Sending a test prompt...
+noModelsMessage: Add a model with your own API key to benchmark an agent against it.
+noModelsTitle: No models yet
+platformModelHelp: Configured for the whole platform (in .env); every project can use it.
+rotateKey: Rotate key
+rotateKeyDescription: 'Enter the new API key for {{alias}}. It replaces the old one at once.'
+rotateKeyNoKeyHelp: This endpoint needs no key. Leave the field empty to register the model again.
+testModel: Test model
 totalAgents: Total Agents
 deployedAgents: Deployed Agents
 agentCapabilities: Capabilities

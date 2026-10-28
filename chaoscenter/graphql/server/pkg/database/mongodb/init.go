@@ -32,6 +32,7 @@ const (
 	CertificateExperimentsCollection
 	CertificateRunWorkflowsCollection
 	CertificateAggregationWorkflowsCollection
+	ModelConfigCollection
 )
 
 // MongoInterface requires a MongoClient that implements the Initialize method to create the Mongo DB client
@@ -61,6 +62,7 @@ type MongoClient struct {
 	CertificateExperimentsCollection          *mongo.Collection
 	CertificateRunWorkflowsCollection         *mongo.Collection
 	CertificateAggregationWorkflowsCollection *mongo.Collection
+	ModelConfigCollection                     *mongo.Collection
 }
 
 var (
@@ -83,6 +85,7 @@ var (
 		CertificateExperimentsCollection:          "certificate_experiments",
 		CertificateRunWorkflowsCollection:         "certificate_run_workflows",
 		CertificateAggregationWorkflowsCollection: "certificate_aggregation_workflows",
+		ModelConfigCollection:                     "modelConfig",
 	}
 
 	DbName            = "litmus"
@@ -404,6 +407,27 @@ func (m *MongoClient) initAllCollection() {
 	// Certification workflow collections (poller-based orchestrator).
 	// See docs/certification-flow.md for the data model.
 	m.initCertificationCollections()
+
+	m.initModelConfigCollection()
+}
+
+// initModelConfigCollection creates the LLM model registry collection. The
+// alias index covers deleted rows too: it keeps aliases from being reused,
+// and two concurrent creates of one alias collide on it before either
+// reaches LiteLLM.
+func (m *MongoClient) initModelConfigCollection() {
+	if err := m.Database.CreateCollection(backgroundContext, Collections[ModelConfigCollection], nil); err != nil &&
+		!strings.Contains(err.Error(), "already exists") {
+		logrus.WithError(err).Error("failed to create modelConfig collection")
+	}
+	m.ModelConfigCollection = m.Database.Collection(Collections[ModelConfigCollection])
+	if _, err := m.ModelConfigCollection.Indexes().CreateMany(backgroundContext, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "alias", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "model_id", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "project_id", Value: 1}, {Key: "is_removed", Value: 1}, {Key: "sync_status", Value: 1}}},
+	}); err != nil {
+		logrus.WithError(err).Error("failed to create indexes for modelConfig collection")
+	}
 }
 
 // initCertificationCollections creates the three certification-related

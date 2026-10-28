@@ -50,6 +50,8 @@ func (g *GetCollectionStruct) getCollection(collectionType int) (*mongo.Collecti
 		return mongoClient.(*MongoClient).CertificateRunWorkflowsCollection, nil
 	case CertificateAggregationWorkflowsCollection:
 		return mongoClient.(*MongoClient).CertificateAggregationWorkflowsCollection, nil
+	case ModelConfigCollection:
+		return mongoClient.(*MongoClient).ModelConfigCollection, nil
 	default:
 		return nil, errors.New("unknown collection name")
 	}

@@ -30,6 +30,7 @@ export interface StringsMap {
   'actualResilienceScore': unknown
   'add': unknown
   'addExperimentToChaosHub': unknown
+  'addModel': unknown
   'addNewCluster': unknown
   'addNewCustomizedProbes': unknown
   'addNewProbes': unknown
@@ -237,6 +238,7 @@ export interface StringsMap {
   'deleteExperiment': unknown
   'deleteExperimentDesc': unknown
   'deleteExperimentHeading': unknown
+  'deleteModelConfirm': PrimitiveObject<'alias'>
   'deleteProbe': unknown
   'deleteProbeDesc': unknown
   'deleteProbeHeading': unknown
@@ -507,6 +509,8 @@ export interface StringsMap {
   'litmus': unknown
   'litmusChaos': unknown
   'litmuschaos': unknown
+  'llmModels': unknown
+  'llmModelsDescription': unknown
   'loading': unknown
   'local': unknown
   'logErrorMessage': unknown
@@ -536,6 +540,30 @@ export interface StringsMap {
   'minutesLabel': unknown
   'minutesParentheses': unknown
   'mode': unknown
+  'modelAdded': PrimitiveObject<'alias'>
+  'modelAlias': unknown
+  'modelAliasHelp': unknown
+  'modelAliasInvalid': unknown
+  'modelApiBase': unknown
+  'modelApiBaseInvalid': unknown
+  'modelApiKey': unknown
+  'modelApiKeyHelp': unknown
+  'modelApiKeyOptional': unknown
+  'modelApiVersion': unknown
+  'modelDeleted': PrimitiveObject<'alias'>
+  'modelDeploymentName': unknown
+  'modelDisplayName': unknown
+  'modelKeyRotated': PrimitiveObject<'alias'>
+  'modelName': unknown
+  'modelProvider': unknown
+  'modelSaveAnyway': unknown
+  'modelStatusDeleting': unknown
+  'modelStatusNeedsKey': unknown
+  'modelStatusPending': unknown
+  'modelTest': unknown
+  'modelTestFailed': unknown
+  'modelTestPassed': PrimitiveObject<'latency'>
+  'modelTesting': unknown
   'moduleName': unknown
   'monitorCluster': unknown
   'monitorNamespace': unknown
@@ -624,6 +652,8 @@ export interface StringsMap {
   'noInvitationsFound': unknown
   'noKubernetesChaosInfrastructureFound': PrimitiveObject<'value'>
   'noLogs': unknown
+  'noModelsMessage': unknown
+  'noModelsTitle': unknown
   'noMonitoredService': unknown
   'noProbeDescription': unknown
   'noProbeExecution': unknown
@@ -716,6 +746,7 @@ export interface StringsMap {
   'phase': unknown
   'platform': unknown
   'platformDefaultModel': unknown
+  'platformModelHelp': unknown
   'pleaseComplete': unknown
   'pleaseSelectLeastOneExperiment': unknown
   'pleaseSpecifyYAMLValues': unknown
@@ -877,6 +908,9 @@ export interface StringsMap {
   'revertSchedule': unknown
   'revertScheduleText': unknown
   'role': unknown
+  'rotateKey': unknown
+  'rotateKeyDescription': PrimitiveObject<'alias'>
+  'rotateKeyNoKeyHelp': unknown
   'run': unknown
   'runAllExperiment': unknown
   'runAt': unknown
@@ -1028,6 +1062,7 @@ export interface StringsMap {
   'templateFromProjectDescription': unknown
   'templateFromProjectTitle': unknown
   'testConnection': unknown
+  'testModel': unknown
   'testSuccess': unknown
   'testYour1': unknown
   'testYour2': unknown

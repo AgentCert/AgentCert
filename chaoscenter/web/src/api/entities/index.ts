@@ -11,3 +11,4 @@ export * from './agentHub';
 export * from './appHub';
 export * from './faultCatalog';
 export * from './chartConfig';
+export * from './modelConfig';

@@ -1,6 +1,8 @@
 package ops
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -235,4 +237,65 @@ func resolveAgentModelAlias(runOverride string, t v1alpha1.Template, platformDef
 		return configured
 	}
 	return platformDefault
+}
+
+// ModelAliasValidator rejects the model aliases a project may not run with
+// (pkg/model_config). It is injected rather than imported because that package
+// imports this one.
+type ModelAliasValidator func(ctx context.Context, projectID string, aliases []string) error
+
+// ResolvedModelAliases returns the model alias each agent install step runs
+// with, by resolveAgentModelAlias's precedence. A step left on the platform
+// default contributes nothing: the default is always available.
+func ResolvedModelAliases(templates []v1alpha1.Template, runOverride string) []string {
+	var aliases []string
+	seen := map[string]bool{}
+	for _, t := range templates {
+		if t.Container == nil || !IsAgentInstallStep(t) {
+			continue
+		}
+		alias := strings.TrimSpace(resolveAgentModelAlias(runOverride, t, ""))
+		if alias == "" || seen[alias] {
+			continue
+		}
+		seen[alias] = true
+		aliases = append(aliases, alias)
+	}
+	return aliases
+}
+
+// ManifestModelAliases returns the model aliases a run of this stored
+// Workflow or CronWorkflow manifest resolves to: runOverride, else the pick
+// persisted on the manifest (RunModelAliasAnnotation), else each agent step's
+// own setting. A manifest that does not parse yields none; the save and run
+// paths report it themselves.
+func ManifestModelAliases(manifest, runOverride string) []string {
+	var head struct {
+		Kind     string `json:"kind"`
+		Metadata struct {
+			Annotations map[string]string `json:"annotations"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal([]byte(manifest), &head); err != nil {
+		return nil
+	}
+	var templates []v1alpha1.Template
+	if strings.EqualFold(head.Kind, "CronWorkflow") {
+		var cron v1alpha1.CronWorkflow
+		if err := json.Unmarshal([]byte(manifest), &cron); err != nil {
+			return nil
+		}
+		templates = cron.Spec.WorkflowSpec.Templates
+	} else {
+		var workflow v1alpha1.Workflow
+		if err := json.Unmarshal([]byte(manifest), &workflow); err != nil {
+			return nil
+		}
+		templates = workflow.Spec.Templates
+	}
+	override := strings.TrimSpace(runOverride)
+	if override == "" {
+		override = strings.TrimSpace(head.Metadata.Annotations[RunModelAliasAnnotation])
+	}
+	return ResolvedModelAliases(templates, override)
 }

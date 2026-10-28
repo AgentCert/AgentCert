@@ -1,0 +1,83 @@
+// uicore's Text resets margin, padding and background with a two-class
+// selector (:not(.StyledProps--main) .StyledProps--main), hence !important on
+// the badges below.
+.description {
+  max-width: 720px;
+}
+
+.dialog {
+  position: relative;
+  width: 620px !important;
+  padding: 32px 40px 40px 40px !important;
+}
+
+.smallDialog {
+  width: 520px !important;
+  padding: 24px 32px 32px 32px !important;
+}
+
+// Inputs are content-box at 100% width, so their padding pushed them past the
+// dialog's edge.
+.dialog,
+.smallDialog {
+  input {
+    box-sizing: border-box;
+  }
+}
+
+.formInput {
+  width: 100%;
+}
+
+.status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: var(--spacing-xsmall);
+  padding: 2px 8px !important;
+  border-radius: 4px;
+  font-size: 12px !important;
+  white-space: nowrap;
+}
+
+.active {
+  background: var(--green-50) !important;
+  color: var(--green-700) !important;
+}
+
+.working {
+  background: var(--blue-50) !important;
+  color: var(--blue-700) !important;
+}
+
+.needsKey {
+  background: var(--orange-50) !important;
+  color: var(--orange-700) !important;
+}
+
+.platform {
+  background: var(--grey-100) !important;
+  color: var(--grey-700) !important;
+}
+
+.defaultTag {
+  padding: 0 6px !important;
+  border-radius: 4px;
+  background: var(--primary-1) !important;
+  color: var(--primary-7) !important;
+  font-size: 11px !important;
+}
+
+.testResult {
+  padding: var(--spacing-small) var(--spacing-medium) !important;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.testPassed {
+  background: var(--green-50);
+}
+
+.testFailed {
+  background: var(--red-50) !important;
+}

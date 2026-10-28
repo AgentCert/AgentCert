@@ -28,12 +28,14 @@ import (
 	dbSchemaFaultStudio "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/fault_studio"
 	gitops2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/gitops"
 	image_registry2 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/image_registry"
+	dbModelConfig "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/model_config"
 	dbSchemaProbe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/database/mongodb/probe"
 	envHandler "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/environment/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/fault_studio"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/faultcatalog"
 	gitops3 "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/gitops"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/image_registry"
+	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/model_config"
 	probe "github.com/litmuschaos/litmus/chaoscenter/graphql/server/pkg/probe/handler"
 	"github.com/litmuschaos/litmus/chaoscenter/graphql/server/utils"
 )
@@ -59,6 +61,7 @@ type Resolver struct {
 	agentHubService            agenthub.Service
 	appHubService              apphub.Service
 	certificationService       *certification.Service
+	modelConfigService         model_config.Service
 }
 
 func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
@@ -80,7 +83,15 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	faultCatalogService := faultcatalog.NewService()
 	chaosHubService := chaoshub.NewService(chaosHubOperator)
 	chaosInfrastructureService := chaos_infrastructure.NewChaosInfrastructureService(chaosInfraOperator, EnvironmentOperator)
-	chaosExperimentService := chaos_experiment2.NewChaosExperimentService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator, probeService, agentRegistryOperator, faultCatalogService, chaosHubService.GetFaultConfiguration)
+	// LLM Models registry: MongoDB holds the record, LiteLLM the keys. Its
+	// alias check gates experiment save and run.
+	modelConfigService := model_config.NewService(
+		dbModelConfig.NewModelConfigOperator(mongodbOperator),
+		model_config.NewLiteLLMClient(model_config.AdminURL(utils.Config.LitellmAdminUrl, utils.Config.OpenaiBaseUrl), utils.Config.LitellmMasterKey),
+		chaosExperimentRunOperator,
+		chaosExperimentOperator,
+	)
+	chaosExperimentService := chaos_experiment2.NewChaosExperimentService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator, probeService, agentRegistryOperator, faultCatalogService, chaosHubService.GetFaultConfiguration, modelConfigService.ValidateAliases)
 	chaosExperimentRunService := chaos_experiment_run2.NewChaosExperimentRunService(chaosExperimentOperator, chaosInfraOperator, chaosExperimentRunOperator)
 	gitOpsService := gitops3.NewGitOpsService(gitopsOperator, chaosExperimentService, *chaosExperimentOperator)
 	imageRegistryService := image_registry.NewImageRegistryService(imageRegistryOperator)
@@ -119,6 +130,10 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 	// auto-trigger the bucketing-extraction pipeline (no UI call required).
 	choasExperimentRunHandler.SetCertificationService(certificationService)
 	choasExperimentRunHandler.SetFaultConfigurationProvider(chaosHubService.GetFaultConfiguration)
+	choasExperimentRunHandler.SetModelAliasValidator(modelConfigService.ValidateAliases)
+	// Finishes registry writes LiteLLM did not confirm, and notices models it
+	// lost. Runs for the life of the server.
+	go modelConfigService.RunReconciler(context.Background())
 
 	config := generated.Config{
 		Resolvers: &Resolver{
@@ -138,6 +153,7 @@ func NewConfig(mongodbOperator mongodb.MongoOperator) generated.Config {
 			faultCatalogService:        faultCatalogService,
 			agentHubService:            agentHubService,
 			appHubService:              appHubService,
+			modelConfigService:         modelConfigService,
 		}}
 
 	config.Directives.Authorized = func(ctx context.Context, obj interface{}, next graphql.Resolver) (interface{}, error) {
