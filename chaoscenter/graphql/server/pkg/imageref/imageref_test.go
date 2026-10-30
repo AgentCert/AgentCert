@@ -128,7 +128,7 @@ spec:
         value: "60"
       - name: DEBUG_IMAGE
         value: busybox:1.36
-    image: agentcert/itbench-experiment:dev
+    image: agentcert/itbench-experiment:latest
 `
 
 func TestRewriteText(t *testing.T) {
@@ -142,7 +142,7 @@ func TestRewriteText(t *testing.T) {
 		`value: 'quay.io/it-bench/hello-bench-invalid:1.0.0'`, // intentionally broken: untouched
 		`value: arm64v8/busybox:1.36.1-musl`,                  // intentionally broken: untouched
 		`value: "60"`,                                         // not an image setting
-		`image: agentcert/itbench-experiment:dev`,             // skipped by the caller
+		`image: agentcert/itbench-experiment:latest`,             // skipped by the caller
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("rewritten text missing %q:\n%s", want, got)
@@ -151,7 +151,7 @@ func TestRewriteText(t *testing.T) {
 	// Open-source frozen copies.
 	got = New("", "agentcert").RewriteText(faultText, nil)
 	if !strings.Contains(got, `value: agentcert/gaiadocker-iproute2:latest`) ||
-		!strings.Contains(got, `image: agentcert/itbench-experiment:dev`) {
+		!strings.Contains(got, `image: agentcert/itbench-experiment:latest`) {
 		t.Errorf("frozen-copy rewrite wrong:\n%s", got)
 	}
 	// Nothing configured: byte-identical.

@@ -67,7 +67,7 @@ test.each(['Workflow', 'CronWorkflow'])('typed fault settings persist and reopen
                 raw: {
                   data: JSON.stringify({
                     kind: 'ChaosExperiment',
-                    spec: { definition: { image: 'agentcert/itbench-experiment:dev', env: [] } }
+                    spec: { definition: { image: 'agentcert/itbench-experiment:latest', env: [] } }
                   })
                 }
               }

@@ -48,6 +48,9 @@ type Application struct {
 	Namespace string
 	LabelKey  string
 	Services  []string
+	// ResourceKinds are resources the application chart actually installs.
+	// An empty declaration is unknown, not evidence that an HPA or Service exists.
+	ResourceKinds []string
 }
 
 // Fault is one fault's resolved compatibility. CompatibleApps is derived against
@@ -200,6 +203,13 @@ func Build(apps []Application, faults map[string]rawFault) *Catalog {
 		for _, inc := range raw.IncompatibleWith {
 			fault.KnownFailingTargets = append(fault.KnownFailingTargets, inc.KnownFailingTargets...)
 		}
+		eligible := fault.CompatibleApps[:0]
+		for _, appKey := range fault.CompatibleApps {
+			if hasUsableTarget(c.byAppKey[appKey], appKey, fault) {
+				eligible = append(eligible, appKey)
+			}
+		}
+		fault.CompatibleApps = eligible
 		c.Faults = append(c.Faults, fault)
 		c.faultIndex[name] = fault
 	}
@@ -227,6 +237,63 @@ func deriveCompatibleApps(raw rawFault, appKeys []string, known map[string]Appli
 }
 
 func normalize(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+
+func contains(values []string, value string) bool {
+	for _, candidate := range values {
+		if normalize(candidate) == normalize(value) {
+			return true
+		}
+	}
+	return false
+}
+
+func supportsKind(available, required []string) bool {
+	// An application that declares no resource kinds has not been described yet,
+	// which is not evidence that it installs none. Pruning on that would make
+	// onboarding an application silently remove every fault from the builder.
+	if len(required) == 0 || len(available) == 0 {
+		return true
+	}
+	for _, kind := range required {
+		if contains(available, kind) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasUsableTarget reports whether an application offers at least one target this
+// fault can actually act on: a resource kind it can address, and a service that is
+// not already known to fail. An application that lists no services is undescribed
+// rather than empty, so it is not pruned on that basis.
+func hasUsableTarget(app Application, appKey string, fault Fault) bool {
+	if !supportsKind(app.ResourceKinds, fault.WorkloadKinds) {
+		return false
+	}
+	// Same rule as resource kinds: an application that lists no services has not
+	// been described, so there is nothing to prune against.
+	if len(app.Services) == 0 {
+		return true
+	}
+	services := app.Services
+	if len(fault.RequiredServices) > 0 {
+		services = nil
+		for _, required := range fault.RequiredServices {
+			if contains(app.Services, required) {
+				services = append(services, required)
+			}
+		}
+		if len(services) == 0 {
+			return false
+		}
+	}
+	for _, service := range services {
+		if !contains(fault.KnownFailingTargets, appKey+"/"+service) {
+			return true
+		}
+	}
+	return false
+}
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -265,6 +332,9 @@ func (c *Catalog) Lookup(faultName string) (Fault, bool) {
 func (c *Catalog) IsFaultCompatible(faultName, appKey string) bool {
 	fault, ok := c.Lookup(faultName)
 	if !ok {
+		// A fault with no catalog entry is unclassified, not unusable: a custom
+		// hub need not ship a catalog at all. The Save/Run validator stays the
+		// authoritative gate, so this only decides what the builder offers.
 		return true
 	}
 	for _, app := range fault.CompatibleApps {

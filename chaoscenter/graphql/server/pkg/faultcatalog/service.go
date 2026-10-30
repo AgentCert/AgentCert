@@ -68,11 +68,12 @@ func registeredApplications() ([]Application, error) {
 			}
 		}
 		apps = append(apps, Application{
-			Key:       entry.Name,
-			Folders:   append([]string{entry.Name}, entry.Aliases...),
-			Namespace: entry.Namespace,
-			LabelKey:  labelKey,
-			Services:  services,
+			Key:           entry.Name,
+			Folders:       append([]string{entry.Name}, entry.Aliases...),
+			Namespace:     entry.Namespace,
+			LabelKey:      labelKey,
+			Services:      services,
+			ResourceKinds: append([]string(nil), entry.ResourceKinds...),
 		})
 	}
 	return apps, nil

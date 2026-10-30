@@ -374,13 +374,12 @@ func (c *chaosExperimentService) validateExperimentComposition(
 	if err != nil {
 		// The catalogue is advisory for compatibility; the structural checks
 		// above are what prevent the Argo rejection, and those already passed.
-		log.WithError(err).Warn("[Validation] fault catalogue unavailable; skipping compatibility checks")
-		return nil
+		return fmt.Errorf("cannot verify fault applicability: %w", err)
 	}
 
 	app, known := catalog.ResolveApplication(appFolders[0], appNamespaces[0])
 	if !known {
-		return nil // an application the registry has not heard of restricts nothing
+		return fmt.Errorf("cannot verify fault applicability: application %q is not registered", appFolders[0])
 	}
 
 	faults, err := chaosFaultNames(templates)

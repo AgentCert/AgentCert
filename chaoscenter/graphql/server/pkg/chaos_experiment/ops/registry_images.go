@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"os"
 	"strings"
 
 	"github.com/argoproj/argo-workflows/v3/pkg/apis/workflow/v1alpha1"
@@ -28,6 +29,58 @@ import (
 // from INSTALL_*_IMAGE, which setup.sh already resolved, and are left alone.
 
 const itbenchExperimentRepo = "agentcert/itbench-experiment"
+
+// itbenchPullPolicy returns the pull policy the shared ITBench experiment image
+// must run with. The charts ship Never because the default source builds the
+// image from the checkout and side-loads it, so a missing side-load has to fail
+// loudly rather than try to pull a repository that was never published. Pulling
+// it from a registry inverts that: the :dev tag moves, so a node that already
+// cached it would otherwise keep running an old build forever.
+func itbenchPullPolicy() string {
+	if override := strings.TrimSpace(os.Getenv("ITBENCH_EXPERIMENT_IMAGE_PULL_POLICY")); override != "" {
+		return override
+	}
+	if imageref.SourceIsRegistry("ITBENCH_EXPERIMENT_IMAGE_SOURCE", "local") {
+		return string(corev1.PullAlways)
+	}
+	return string(corev1.PullNever)
+}
+
+// rewriteItbenchPullPolicy sets that policy on every ChaosExperiment definition
+// that runs the ITBench image. The definitions travel as raw YAML artifacts, so
+// this edits the imagePullPolicy key beside the image it belongs to and leaves
+// every other container alone.
+func rewriteItbenchPullPolicy(text, policy string) (string, int) {
+	lines := strings.Split(text, "\n")
+	changed := 0
+	for i, line := range lines {
+		if !strings.Contains(line, "image:") || !strings.Contains(line, itbenchExperimentRepo+":") {
+			continue
+		}
+		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		for j := i + 1; j < len(lines); j++ {
+			trimmed := strings.TrimSpace(lines[j])
+			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+				continue
+			}
+			// A shallower or deeper key means this mapping is finished.
+			if lines[j][:len(lines[j])-len(strings.TrimLeft(lines[j], " \t"))] != indent {
+				break
+			}
+			if strings.HasPrefix(trimmed, "imagePullPolicy:") {
+				if replacement := indent + "imagePullPolicy: " + policy; lines[j] != replacement {
+					lines[j] = replacement
+					changed++
+				}
+				break
+			}
+		}
+	}
+	if changed == 0 {
+		return text, 0
+	}
+	return strings.Join(lines, "\n"), changed
+}
 
 // workflowRuntimeFromRegistry reports whether third-party workflow images are
 // pulled from the registry at run time.
@@ -124,6 +177,22 @@ func ApplyRegistryImageOverrides(spec *v1alpha1.WorkflowSpec) {
 					raw.Data = n
 					changed++
 				}
+			}
+		}
+	}
+
+	// Independent of the registry: the ITBench image's pull policy follows where
+	// that image comes from, which is also true with no registry configured.
+	policy := itbenchPullPolicy()
+	for i := range spec.Templates {
+		for j := range spec.Templates[i].Inputs.Artifacts {
+			raw := spec.Templates[i].Inputs.Artifacts[j].Raw
+			if raw == nil || raw.Data == "" {
+				continue
+			}
+			if n, count := rewriteItbenchPullPolicy(raw.Data, policy); count > 0 {
+				raw.Data = n
+				changed += count
 			}
 		}
 	}

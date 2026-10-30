@@ -91,7 +91,7 @@ func TestApplyRegistryImageOverridesPrivateRegistry(t *testing.T) {
 			t.Errorf("template image not resolved: %q", img)
 		}
 	}
-	if !strings.Contains(raw, testRegistry+"/agentcert/itbench-experiment:dev") {
+	if !strings.Contains(raw, testRegistry+"/agentcert/itbench-experiment:latest") {
 		t.Errorf("itbench-experiment (registry source) not resolved in fault definitions")
 	}
 	if strings.Contains(raw, testRegistry+"/agentcert/quay.io/it-bench/hello-bench-invalid") ||

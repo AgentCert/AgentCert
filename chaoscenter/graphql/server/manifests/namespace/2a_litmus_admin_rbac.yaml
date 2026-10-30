@@ -37,6 +37,11 @@ rules:
   - apiGroups: [""]
     resources: ["endpoints"]
     verbs: ["create", "get", "list", "patch", "update"]
+  # Service-targeting faults confirm a Service really routes again after they
+  # restore it, which is read from EndpointSlices on current clusters.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list"]
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["delete", "get", "list", "patch"]
@@ -115,6 +120,11 @@ rules:
   - apiGroups: [""]
     resources: ["endpoints"]
     verbs: ["create", "get", "list", "patch", "update"]
+  # Service-targeting faults confirm a Service really routes again after they
+  # restore it, which is read from EndpointSlices on current clusters.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list"]
   - apiGroups: ["litmuschaos.io"]
     resources: ["chaosengines", "chaosexperiments", "chaosresults"]
     verbs: ["create", "delete", "get", "list", "patch", "update"]

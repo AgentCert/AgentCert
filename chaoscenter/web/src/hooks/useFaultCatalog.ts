@@ -57,9 +57,9 @@ function buildResolver(catalog: FaultCatalog | undefined, loading: boolean): Fau
     resolveApplication: (folder, namespace) =>
       byFolder.get(normalize(folder)) ?? byNamespace.get(normalize(namespace)),
     isFaultCompatible: (faultName, appKey) => {
-      if (!faultName || !appKey) return true;
+      if (!faultName || !appKey || !catalog || loading) return false;
       const fault = byFault.get(faultName);
-      if (!fault) return true;
+      if (!fault) return false;
       return fault.compatibleApps.includes(appKey);
     },
     faultWorkloadKinds: faultName => {

@@ -32,6 +32,7 @@ type AppEntry struct {
 	// charts that have been renamed.
 	Aliases       []string            `yaml:"aliases"`
 	Microservices []MicroserviceEntry `yaml:"microservices"`
+	ResourceKinds []string `yaml:"resourceKinds"`
 }
 
 // AppCSVSpec is the spec section of the application chartserviceversion YAML.
