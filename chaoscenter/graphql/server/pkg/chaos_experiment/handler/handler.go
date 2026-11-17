@@ -75,6 +75,46 @@ func NewChaosExperimentHandler(
 	}
 }
 
+// refreshRecentRunDetails keeps the dashboard's cached last-ten list aligned
+// with the run records used by the run-detail page. It makes one indexed,
+// projected lookup for the entire page instead of fetching each run separately.
+func (c *ChaosExperimentHandler) refreshRecentRunDetails(projectID string, batches ...[]dbChaosExperiment.ExperimentRunDetail) error {
+	ids := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, batch := range batches {
+		for _, detail := range batch {
+			if detail.ExperimentRunID == "" {
+				continue
+			}
+			if _, exists := seen[detail.ExperimentRunID]; !exists {
+				seen[detail.ExperimentRunID] = struct{}{}
+				ids = append(ids, detail.ExperimentRunID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	runs, err := c.chaosExperimentRunOperator.GetRunSummaries(projectID, ids)
+	if err != nil {
+		return err
+	}
+	byID := make(map[string]dbChaosExperimentRun.ChaosExperimentRun, len(runs))
+	for _, run := range runs {
+		byID[run.ExperimentRunID] = run
+	}
+	for _, batch := range batches {
+		for i := range batch {
+			if run, found := byID[batch[i].ExperimentRunID]; found && run.Phase != "" {
+				batch[i].Phase = run.Phase
+				batch[i].ResiliencyScore = run.ResiliencyScore
+			}
+		}
+	}
+	return nil
+}
+
 func (c *ChaosExperimentHandler) SaveChaosExperiment(ctx context.Context, request model.SaveChaosExperimentRequest, projectID string, username string) (string, error) {
 
 	var revID = uuid.New().String()
@@ -412,6 +452,9 @@ func (c *ChaosExperimentHandler) GetExperiment(ctx context.Context, projectID st
 	}
 
 	exp := expDetails[0]
+	if err := c.refreshRecentRunDetails(projectID, exp.RecentExperimentRunDetails); err != nil {
+		return nil, fmt.Errorf("failed to load current run statuses: %w", err)
+	}
 	if len(exp.KubernetesInfraDetails) == 0 {
 		return nil, errors.New("no matching infra found for given expDetails")
 	}
@@ -789,6 +832,13 @@ func (c *ChaosExperimentHandler) ListExperiment(projectID string, request model.
 			TotalNoOfExperiments: 0,
 			Experiments:          result,
 		}, nil
+	}
+	recentBatches := make([][]dbChaosExperiment.ExperimentRunDetail, 0, len(workflows[0].ScheduledExperiments))
+	for _, workflow := range workflows[0].ScheduledExperiments {
+		recentBatches = append(recentBatches, workflow.RecentExperimentRunDetails)
+	}
+	if err := c.refreshRecentRunDetails(projectID, recentBatches...); err != nil {
+		return nil, fmt.Errorf("failed to load current run statuses: %w", err)
 	}
 
 	for _, workflow := range workflows[0].ScheduledExperiments {

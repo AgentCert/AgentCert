@@ -3725,12 +3725,9 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 			// ambiguous positional $ index when multiple elements match — this is the
 			// classic MongoDB positional operator bug.
 			//
-			// Terminal events (event.Completed=true) intentionally skip the
-			// "completed=false" guard so that the UI is updated even when the run was
-			// already marked Stopped by ProcessExperimentRunStop. Without this,
-			// completed=true on chaosExperimentRuns would cause the UpdateExperimentRun
-			// guard to return count=0, abort the whole transaction, and permanently
-			// strand recent_experiment_run_details in a stale "Running" state.
+			// Terminal events skip the summary's completed guard. The run update
+			// below decides whether the event is new; a duplicate rolls back this
+			// summary update with the rest of the transaction.
 			expRunElemMatch := bson.D{{"experiment_run_id", event.ExperimentRunID}}
 			if event.NotifyID != nil {
 				expRunElemMatch = bson.D{{"notify_id", event.NotifyID}}
@@ -3806,12 +3803,10 @@ func (c *ChaosExperimentRunHandler) ChaosExperimentRunEvent(event model.Experime
 				// Non-terminal event for an already-stopped run — discard.
 				return errors.New(fmt.Sprintf("experiment run has been discarded due the duplicate event, workflowId: %s, workflowRunId: %s", event.ExperimentID, event.ExperimentRunID))
 			}
-			// Terminal event for an already-stopped run: chaosExperimentRuns already has
-			// completed=true so the guard returned count=0, but we still commit here so
-			// the recent_experiment_run_details update above is persisted and the UI
-			// reflects the final phase rather than staying stuck on "Running".
-			if err = session.CommitTransaction(sessionContext); err != nil {
-				logrus.WithFields(logFields).Errorf("failed to commit session transaction for terminal event on stopped run %v", err)
+			// A completed run is immutable. Do not let a later terminal event
+			// change only the dashboard summary while the run detail stays final.
+			if err = session.AbortTransaction(sessionContext); err != nil {
+				logrus.WithFields(logFields).Errorf("failed to abort duplicate terminal event %v", err)
 				return err
 			}
 			return nil

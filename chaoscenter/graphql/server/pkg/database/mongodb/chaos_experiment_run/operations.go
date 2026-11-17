@@ -49,6 +49,34 @@ func (c *Operator) GetExperimentRuns(query bson.D) ([]ChaosExperimentRun, error)
 	return experiments, nil
 }
 
+// GetRunSummaries reads only the fields needed by the experiment dashboard.
+func (c *Operator) GetRunSummaries(projectID string, runIDs []string) ([]ChaosExperimentRun, error) {
+	ctx, cancel := context.WithTimeout(backgroundContext, 10*time.Second)
+	defer cancel()
+
+	pipeline := mongo.Pipeline{
+		bson.D{{"$match", bson.D{
+			{"project_id", projectID},
+			{"experiment_run_id", bson.D{{"$in", runIDs}}},
+		}}},
+		bson.D{{"$project", bson.D{
+			{"_id", 0},
+			{"experiment_run_id", 1},
+			{"phase", 1},
+			{"resiliency_score", 1},
+		}}},
+	}
+	cursor, err := c.operator.Aggregate(ctx, mongodb.ChaosExperimentRunsCollection, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	var runs []ChaosExperimentRun
+	if err := cursor.All(ctx, &runs); err != nil {
+		return nil, err
+	}
+	return runs, nil
+}
+
 func (c *Operator) CountExperimentRuns(ctx context.Context, query bson.D) (int64, error) {
 	results, err := c.operator.CountDocuments(ctx, mongodb.ChaosExperimentRunsCollection, query)
 	if err != nil {
